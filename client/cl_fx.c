@@ -119,7 +119,8 @@ void CL_SetLightstyle (int i)
 
 	cl_lightstyle[i].length = j;
 
-	numLightStyles = max(i, numLightStyles);
+	if (i > numLightStyles)
+		numLightStyles = i;
 
 	for (k=0 ; k<j ; k++)
 		cl_lightstyle[i].map[k] = (float)(s[k]-'a')/(float)('m'-'a');

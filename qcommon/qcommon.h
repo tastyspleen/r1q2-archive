@@ -590,6 +590,8 @@ void	EXPORT Cvar_SetValue (const char *var_name, float value);
 float	Cvar_VariableValue (const char *var_name);
 // returns 0 if not defined or non numeric
 
+int Cvar_IntValue (const char *var_name);
+
 char	*Cvar_VariableString (const char *var_name);
 // returns an empty string if not defined
 

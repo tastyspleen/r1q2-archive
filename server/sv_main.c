@@ -915,7 +915,8 @@ void SVC_DirectConnect (void)
 
 	if (!SV_UserinfoValidate (userinfo))
 	{
-		Com_Printf ("WARNING: SV_UserinfoValidate failed for %s (%s)\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr), MakePrintable (userinfo));
+		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s (%s)\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr), MakePrintable (userinfo));
+		Com_Printf ("EXPLOIT: Client %s supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), MakePrintable (userinfo));
 		Blackhole (adr, true, "illegal userinfo string");
 		return;
 	}
@@ -923,12 +924,14 @@ void SVC_DirectConnect (void)
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
 	if (strchr(userinfo, '\xFF'))
 	{
-		char *ptr;
+		char *ptr, *p;
 		ptr = strchr (userinfo, '\xFF');
 		ptr -= 8;
 		if (ptr < userinfo)
 			ptr = userinfo;
-		Blackhole (adr, true, "0xFF in userinfo (%.32s)", MakePrintable(ptr));
+		p = MakePrintable (ptr);
+		Com_Printf ("EXPLOIT: Client %s supplied userinfo string containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), p);
+		Blackhole (adr, true, "0xFF in userinfo (%.32s)", p);
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
 		return;
 	}
@@ -983,7 +986,10 @@ void SVC_DirectConnect (void)
 	}
 	else if (Info_KeyExists (userinfo, "ip"))
 	{
-		Blackhole (adr, true, "attempted to spoof ip '%s'", Info_ValueForKey(userinfo, "ip"));
+		char	*p;
+		p = Info_ValueForKey(userinfo, "ip");
+		Com_Printf ("EXPLOIT: Client %s attempted to spoof IP address: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), p);
+		Blackhole (adr, true, "attempted to spoof ip '%s'", p);
 		return;
 	}
 
@@ -2183,19 +2189,22 @@ void SV_UserinfoChanged (client_t *cl)
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
 	if (strchr (cl->userinfo, '\xFF'))
 	{
-		char *ptr;
+		char *ptr, *p;
 		ptr = strchr (cl->userinfo, '\xFF');
 		ptr -= 8;
 		if (ptr < cl->userinfo)
 			ptr = cl->userinfo;
-		Blackhole (&cl->netchan.remote_address, true, "0xFF in userinfo (%.32s)", MakePrintable (ptr));
+		p = MakePrintable (ptr);
+		Com_Printf ("EXPLOIT: Client %s[%s] supplied userinfo string containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), p);
+		Blackhole (&cl->netchan.remote_address, true, "0xFF in userinfo (%.32s)", p);
 		SV_KickClient (cl, "illegal userinfo", NULL);
 		return;
 	}
 
 	if (!SV_UserinfoValidate (cl->userinfo))
 	{
-		Com_Printf ("WARNING: SV_UserinfoValidate failed for %s[%s] (%s)\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
+		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s[%s] (%s)\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
+		Com_Printf ("EXPLOIT: Client %s[%s] supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
 		Blackhole (&cl->netchan.remote_address, true, "illegal userinfo string");
 		return;
 	}
@@ -2205,7 +2214,7 @@ void SV_UserinfoChanged (client_t *cl)
 		if (!Info_CheckBytes (cl->userinfo))
 		{
 			Com_Printf ("Warning, illegal userinfo bytes from %s.\n", LOG_SERVER|LOG_WARNING, cl->name);
-			SV_KickClient (cl, "illegal userinfo", "Userinfo contains illegal bytes. Please disable any color-names and similar features.\n");
+			SV_KickClient (cl, "illegal userinfo string", "Userinfo contains illegal bytes. Please disable any color-names and similar features.\n");
 			return;
 		}
 	}

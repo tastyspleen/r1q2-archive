@@ -90,6 +90,20 @@ float Cvar_VariableValue (const char *var_name)
 	return var->value;
 }
 
+int Cvar_IntValue (const char *var_name)
+{
+	cvar_t	*var;
+
+	Q_assert (var_name != NULL);
+	
+	var = Cvar_FindVar (var_name);
+	
+	if (!var)
+		return 0;
+
+	return var->intvalue;
+}
+
 char dateBuff[32];
 
 /*
@@ -264,7 +278,7 @@ to them such as disallowing serverinfo set by mod.
 */
 cvar_t * EXPORT Cvar_GameGet (const char *var_name, const char *var_value, int flags)
 {
-	if (Cvar_VariableValue("sv_no_game_serverinfo"))
+	if (Cvar_IntValue("sv_no_game_serverinfo"))
 		flags &= ~CVAR_SERVERINFO;
 
 	return Cvar_Get (var_name, var_value, flags);
@@ -306,7 +320,7 @@ cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
 
 	if (!force)
 	{
-		if (var->flags & CVAR_NOSET && !Cvar_VariableValue ("developer"))
+		if (var->flags & CVAR_NOSET && !Cvar_IntValue ("developer"))
 		{
 			Com_Printf ("%s is write protected.\n", LOG_GENERAL, var_name);
 			return var;

@@ -25,8 +25,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern	unsigned	sys_msg_time;
 
+qboolean	input_active;
+
 cvar_t	*in_mouse;
+cvar_t	*in_dinputkeyboard;
+
 cvar_t	*m_directinput;
+
+extern int			key_repeatrate;
+extern int			key_repeatdelay;
 
 #ifdef JOYSTICK
 // joystick defines and variables
@@ -40,7 +47,6 @@ cvar_t	*m_directinput;
 #define JOY_AXIS_R			3
 #define JOY_AXIS_U			4
 #define JOY_AXIS_V			5
-
 enum _ControlList
 {
 	AxisNada = 0, AxisForward, AxisLook, AxisSide, AxisTurn, AxisUp
@@ -148,40 +154,243 @@ RECT		window_rect;
 //-----------------------------------------------------------------------------
 // Defines, constants, and global variables
 //-----------------------------------------------------------------------------
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-LPDIRECTINPUT8       g_pDI    = NULL;   
-LPDIRECTINPUTDEVICE8 g_pMouse = NULL;    
+
+LPDIRECTINPUT8			g_pDI    = NULL;
+LPDIRECTINPUTDEVICE8	g_pMouse = NULL;
+LPDIRECTINPUTDEVICE8	g_pKeyboard = NULL;
+
+#define	DX_KEYBOARD_BUFFER_SIZE	16
+#define	DX_MOUSE_BUFFER_SIZE	32
+
+void IN_InitDInput (void)
+{
+	HRESULT	hr;
+
+	if (g_pDI)
+		Com_Error (ERR_FATAL, "Trying to init DirectInput when already initialized!");
+
+    // Create a DInput object
+	Com_Printf ("...creating DirectInput object: ", LOG_CLIENT);
+	
+	//extern HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
+	//DirectInput8Create(hTheInstance, DIRECTINPUT_VERSION, , NULL);
+    if( FAILED( hr = DirectInput8Create( global_hInstance, DIRECTINPUT_VERSION, (const GUID *)&IID_IDirectInput8,
+                                         (VOID**)&g_pDI, NULL ) ) )
+    {
+		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
+    }
+	else
+	{
+		Com_Printf ("ok\n", LOG_CLIENT);
+	}
+}
 
 //-----------------------------------------------------------------------------
 // Name: FreeDirectInput()
 // Desc: Initialize the DirectInput variables.
 //-----------------------------------------------------------------------------
-void FreeDirectInput(int totalShutdown)
+void IN_FreeDirectInput (void)
 {
-    // Unacquire the device one last time just in case 
-    // the app tried to exit while the device is still acquired.
-	if( g_pMouse )
+	if (!g_pDI)
+		return;
+
+	if (g_pMouse)
 	{
-        //g_pMouse->Unacquire();
-		//Com_Printf ("Unacquire() free\n");
 		IDirectInputDevice8_Unacquire (g_pMouse);
-	}
-    
-    // Release any DirectInput objects.
-	if( g_pMouse && totalShutdown)
-	{
 		IDirectInputDevice8_Release (g_pMouse);
 		g_pMouse = NULL;
 	}
 
-	if (g_pDI && totalShutdown)
+	if (g_pKeyboard)
 	{
-		IDirectInput8_Release (g_pDI);
-		g_pDI = NULL;
+		IDirectInputDevice8_Unacquire (g_pKeyboard);
+		IDirectInputDevice8_Release (g_pKeyboard);
+		g_pKeyboard = NULL;
 	}
+
+	IDirectInput8_Release (g_pDI);
+	g_pDI = NULL;
+}
+
+int IN_InitDInputKeyboard (void)
+{
+    HRESULT hr;
+    BOOL    bExclusive;
+    BOOL    bForeground;
+    BOOL    bImmediate;
+    BOOL    bDisableWindowsKey;
+    DWORD   dwCoopFlags;
+
+	if (!in_dinputkeyboard->intvalue)
+		return 0;
+
+	if (!g_pDI)
+	{
+		Com_Printf ("DirectInput unavailable.\n", LOG_CLIENT);
+		return 0;
+	}
+
+	// Detrimine where the buffer would like to be allocated 
+    bExclusive         = 0;//( IsDlgButtonChecked( hDlg, IDC_EXCLUSIVE  ) == BST_CHECKED );
+    bForeground        = 1;//( IsDlgButtonChecked( hDlg, IDC_FOREGROUND ) == BST_CHECKED );
+    bImmediate         = 0;//( IsDlgButtonChecked( hDlg, IDC_IMMEDIATE  ) == BST_CHECKED );
+    bDisableWindowsKey = 1;//( IsDlgButtonChecked( hDlg, IDC_WINDOWSKEY ) == BST_CHECKED );
+
+    if( bExclusive )
+        dwCoopFlags = DISCL_EXCLUSIVE;
+    else
+        dwCoopFlags = DISCL_NONEXCLUSIVE;
+
+    if( bForeground )
+        dwCoopFlags |= DISCL_FOREGROUND;
+    else
+        dwCoopFlags |= DISCL_BACKGROUND;
+
+    // Disabling the windows key is only allowed only if we are in foreground nonexclusive
+    if( bDisableWindowsKey && !bExclusive && bForeground )
+        dwCoopFlags |= DISCL_NOWINKEY;
+
+    
+    // Obtain an interface to the system keyboard device.
+    if( FAILED( hr = IDirectInput_CreateDevice (g_pDI, (const GUID *)&GUID_SysKeyboard, &g_pKeyboard, NULL ) ) )
+		return 0;
+
+    // Set the data format to "keyboard format" - a predefined data format 
+    //
+    // A data format specifies which controls on a device we
+    // are interested in, and how they should be reported.
+    //
+    // This tells DirectInput that we will be passing an array
+    // of 256 bytes to IDirectInputDevice::GetDeviceState.
+    if( FAILED( hr = IDirectInputDevice_SetDataFormat (g_pKeyboard, &c_dfDIKeyboard ) ) )
+		goto fail;
+
+    // Set the cooperativity level to let DirectInput know how
+    // this device should interact with the system and with other
+    // DirectInput applications.
+    hr = IDirectInputDevice_SetCooperativeLevel (g_pKeyboard, cl_hwnd, dwCoopFlags );
+
+    if( FAILED(hr))
+		goto fail;
+
+    if( !bImmediate )
+    {
+        // IMPORTANT STEP TO USE BUFFERED DEVICE DATA!
+        //
+        // DirectInput uses unbuffered I/O (buffer size = 0) by default.
+        // If you want to read buffered data, you need to set a nonzero
+        // buffer size.
+        //
+        // Set the buffer size to DINPUT_BUFFERSIZE (defined above) elements.
+        //
+        // The buffer size is a DWORD property associated with the device.
+        DIPROPDWORD dipdw;
+
+        dipdw.diph.dwSize       = sizeof(DIPROPDWORD);
+        dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
+        dipdw.diph.dwObj        = 0;
+        dipdw.diph.dwHow        = DIPH_DEVICE;
+        dipdw.dwData            = DX_KEYBOARD_BUFFER_SIZE; // Arbitary buffer size
+
+        if( FAILED( hr = IDirectInputDevice_SetProperty (g_pKeyboard, DIPROP_BUFFERSIZE, &dipdw.diph ) ) )
+			goto fail;
+	}
+
+	//dinput has no concept of repeated key messages so we need to do it ourselves.
+
+	if (!SystemParametersInfo (SPI_GETKEYBOARDSPEED, 0, &key_repeatrate, 0))
+		key_repeatrate = 31;
+	
+	if (!SystemParametersInfo (SPI_GETKEYBOARDDELAY, 0, &key_repeatdelay, 0))
+		key_repeatdelay = 0;
+
+	//windows -> msecs
+	key_repeatdelay = key_repeatdelay * 250 + 250;
+
+	//windows -> msecs between repeat
+	key_repeatrate = 1000.0f / (2.51f + ((float)key_repeatrate * 0.88709677419354838709677419354839f));
+
+    // Acquire the newly created device
+	IDirectInputDevice8_Acquire (g_pKeyboard);
+	return 1;
+
+fail:
+	IDirectInputDevice_Release (g_pKeyboard);
+	g_pKeyboard = NULL;
+    return 0;
 }
 
 DIMOUSESTATE2 old_state;
+
+void IN_ReadKeyboard (void)
+{
+    DIDEVICEOBJECTDATA didod[ DX_KEYBOARD_BUFFER_SIZE ];  // Receives buffered data 
+    DWORD              dwElements;
+    DWORD              i;
+    HRESULT            hr;
+
+    if( NULL == g_pKeyboard ) 
+        return;
+    
+    dwElements = DX_KEYBOARD_BUFFER_SIZE;
+    hr = IDirectInputDevice8_GetDeviceData (g_pKeyboard, sizeof(DIDEVICEOBJECTDATA),
+                                     didod, &dwElements, 0 );
+    if( hr != DI_OK ) 
+    {
+        // We got an error or we got DI_BUFFEROVERFLOW.
+        //
+        // Either way, it means that continuous contact with the
+        // device has been lost, either due to an external
+        // interruption, or because the buffer overflowed
+        // and some events were lost.
+        //
+        // Consequently, if a button was pressed at the time
+        // the buffer overflowed or the connection was broken,
+        // the corresponding "up" message might have been lost.
+        //
+        // But since our simple sample doesn't actually have
+        // any state associated with button up or down events,
+        // there is no state to reset.  (In a real game, ignoring
+        // the buffer overflow would result in the game thinking
+        // a key was held down when in fact it isn't; it's just
+        // that the "up" event got lost because the buffer
+        // overflowed.)
+        //
+        // If we want to be cleverer, we could do a
+        // GetDeviceState() and compare the current state
+        // against the state we think the device is in,
+        // and process all the states that are currently
+        // different from our private state.
+
+        hr = IDirectInputDevice8_Acquire (g_pKeyboard);
+        while( hr == DIERR_INPUTLOST ) 
+            hr = IDirectInputDevice8_Acquire (g_pKeyboard);
+
+        // hr may be DIERR_OTHERAPPHASPRIO or other errors.  This
+        // may occur when the app is minimized or in the process of 
+        // switching, so just try again later 
+        return; 
+    }
+
+	if (dwElements)
+		sys_msg_time = timeGetTime();
+
+	Key_GenerateRepeats ();
+
+    // Study each of the buffer elements and process them.
+    //
+    // Since we really don't do anything, our "processing"
+    // consists merely of squirting the name into our
+    // local buffer.
+    for( i = 0; i < dwElements; i++ ) 
+    {
+        // this will display then scan code of the key
+        // plus a 'D' - meaning the key was pressed 
+        //   or a 'U' - meaning the key was released
+		//Com_Printf ("scancode: %d\n", LOG_GENERAL, didod[i].dwOfs);
+		Key_Event ( scantokey[didod[i].dwOfs], (didod[i].dwData & 0x80) ? true : false, sys_msg_time);
+    }
+}
 
 int IN_InitDInputMouse (void)
 {
@@ -193,10 +402,16 @@ int IN_InitDInputMouse (void)
 
     // Cleanup any previous call first
     //KillTimer( cl_hwnd, 0 );    
-    FreeDirectInput(1);
+    //FreeDirectInput(1);
+
+	if (!g_pDI)
+	{
+		Com_Printf ("DirectInput unavailable.\n", LOG_CLIENT);
+		return 0;
+	}
 
     // Detrimine where the buffer would like to be allocated 
-    bExclusive         = 1;//( IsDlgButtonChecked( hDlg, IDC_EXCLUSIVE  ) == BST_CHECKED );
+    bExclusive         = 0;//( IsDlgButtonChecked( hDlg, IDC_EXCLUSIVE  ) == BST_CHECKED );
     bForeground        = 1;//( IsDlgButtonChecked( hDlg, IDC_FOREGROUND ) == BST_CHECKED );
     bImmediate         = 0;//( IsDlgButtonChecked( hDlg, IDC_IMMEDIATE  ) == BST_CHECKED );
 
@@ -209,26 +424,13 @@ int IN_InitDInputMouse (void)
         dwCoopFlags |= DISCL_FOREGROUND;
     else
         dwCoopFlags |= DISCL_BACKGROUND;
-
-    // Create a DInput object
-	Com_Printf ("...creating DirectInput object: ", LOG_CLIENT);
-	
-	//extern HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
-	//DirectInput8Create(hTheInstance, DIRECTINPUT_VERSION, , NULL);
-    if( FAILED( hr = DirectInput8Create( global_hInstance, DIRECTINPUT_VERSION, (const GUID *)&IID_IDirectInput8,
-                                         (VOID**)&g_pDI, NULL ) ) )
-    {
-		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
-        return 1;
-    }
-	Com_Printf ("ok\n", LOG_CLIENT);
     
     // Obtain an interface to the system mouse device.
 	Com_Printf ("...creating device interface: ", LOG_CLIENT);
-    if( FAILED( hr = IDirectInput8_CreateDevice(g_pDI, (const GUID *)&GUID_SysMouse, &g_pMouse, NULL ) ) )
+    if( FAILED( hr = IDirectInput_CreateDevice(g_pDI, (const GUID *)&GUID_SysMouse, &g_pMouse, NULL ) ) )
     {
 		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
-        return 1;
+        return 0;
     }
 	Com_Printf ("ok\n", LOG_CLIENT);
     
@@ -240,10 +442,10 @@ int IN_InitDInputMouse (void)
     // This tells DirectInput that we will be passing a
     // DIMOUSESTATE2 structure to IDirectInputDevice::GetDeviceState.
 	Com_DPrintf ("...setting data format: ");
-	if( FAILED( hr = IDirectInputDevice8_SetDataFormat(g_pMouse, &c_dfDIMouse2 ) ) )
+	if( FAILED( hr = IDirectInputDevice_SetDataFormat(g_pMouse, &c_dfDIMouse2 ) ) )
     {
 		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
-        return 1;
+        return 0;
     }
 	Com_DPrintf ("ok\n");
 
@@ -251,15 +453,18 @@ int IN_InitDInputMouse (void)
     // this device should interact with the system and with other
     // DirectInput applications.
 	Com_DPrintf ("...setting DISCL_EXCLUSIVE coop level: ");
-    hr = IDirectInputDevice8_SetCooperativeLevel (g_pMouse, cl_hwnd, dwCoopFlags );
+    hr = IDirectInputDevice_SetCooperativeLevel (g_pMouse, cl_hwnd, dwCoopFlags );
     if( hr == DIERR_UNSUPPORTED && !bForeground && bExclusive )
     {
-        FreeDirectInput(1);
+		IDirectInputDevice_Release (g_pMouse);
+		g_pMouse = NULL;
 		Com_Printf ("failed: DIERR_UNSUPPORTED\n", LOG_CLIENT);
-        return 1;
+        return 0;
     } else if (FAILED (hr)) {
+		IDirectInputDevice_Release (g_pMouse);
+		g_pMouse = NULL;
 		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
-        return 1;
+        return 0;
     }
 	Com_DPrintf ("ok\n");
 
@@ -279,30 +484,24 @@ int IN_InitDInputMouse (void)
         dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
         dipdw.diph.dwObj        = 0;
         dipdw.diph.dwHow        = DIPH_DEVICE;
-        dipdw.dwData            = 16; // Arbitary buffer size
+        dipdw.dwData            = DX_MOUSE_BUFFER_SIZE; // Arbitary buffer size
 
-        if( FAILED( hr = IDirectInputDevice8_SetProperty(g_pMouse, DIPROP_BUFFERSIZE, &dipdw.diph ) ) )
-            return hr;
+        if( FAILED( hr = IDirectInputDevice_SetProperty(g_pMouse, DIPROP_BUFFERSIZE, &dipdw.diph ) ) )
+		{
+			IDirectInputDevice_Release (g_pMouse);
+			g_pMouse = NULL;
+            return 0;
+		}
     }
 
 	memset (&old_state, 0, sizeof(old_state));
-
-	//mouseactive = true;
-
-
-    // Set a timer to go off 12 times a second, to read input
-    // Note: Typically an application would poll the mouse
-    //       much faster than this, but this slow rate is simply 
-    //       for the purposes of demonstration
-    //SetTimer( cl_hwnd, 0, 1, NULL );
-
-    return 0;
+    return 1;
 }
 #define MAX_MOUSE_BUTTONS 8
 
 void IN_ReadBufferedData( usercmd_t *cmd )
 {
-    DIDEVICEOBJECTDATA didod[ 32 ];  // Receives buffered data 
+    DIDEVICEOBJECTDATA didod[ DX_MOUSE_BUFFER_SIZE ];  // Receives buffered data 
     DWORD              dwElements;
     DWORD              i;
     HRESULT            hr;
@@ -312,10 +511,8 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 
     if( NULL == g_pMouse ) 
         return;
-
-	sys_msg_time = timeGetTime();
-    
-    dwElements = 32;
+   
+    dwElements = DX_MOUSE_BUFFER_SIZE;
 	hr = IDirectInputDevice8_GetDeviceData (g_pMouse, sizeof(DIDEVICEOBJECTDATA),
                                      didod, &dwElements, 0);
     if( hr != DI_OK ) 
@@ -359,6 +556,9 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 
 	if (m_show->intvalue)
 		Com_Printf ("%d dwElements\n", LOG_CLIENT, dwElements);
+
+	if (dwElements)
+		sys_msg_time = timeGetTime();
 
     // Study each of the buffer elements and process them.
     //
@@ -641,7 +841,6 @@ void IN_ReadImmediateData (usercmd_t *cmd)
 
 	return;
 }
-#endif
 
 /*
 ===========
@@ -668,14 +867,12 @@ void IN_ActivateMouse (void)
 
 	//Com_Printf ("******************* IN_ActivateMouse\n");
 
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-	if (g_pDI) {
-		//Com_Printf ("Acquire() from activatemouse\n");
+	if (g_pDI)
+	{
 		IDirectInputDevice8_Acquire (g_pMouse);
 	}
 	else if (!m_directinput->intvalue)
 	{
-#endif
 		if (mouseparmsvalid)
 		{
 			if (m_winxp_fix->intvalue)
@@ -683,37 +880,35 @@ void IN_ActivateMouse (void)
 			else
 				restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
 		}
-
-		width = GetSystemMetrics (SM_CXSCREEN);
-		height = GetSystemMetrics (SM_CYSCREEN);
-
-		GetWindowRect ( cl_hwnd, &window_rect);
-
-		if (window_rect.left < 0)
-			window_rect.left = 0;
-
-		if (window_rect.top < 0)
-			window_rect.top = 0;
-
-		if (window_rect.right >= width)
-			window_rect.right = width-1;
-
-		if (window_rect.bottom >= height-1)
-			window_rect.bottom = height-1;
-
-		window_center_x = (window_rect.right + window_rect.left)/2;
-		window_center_y = (window_rect.top + window_rect.bottom)/2;
-
-		SetCursorPos (window_center_x, window_center_y);
-
-		old_x = window_center_x;
-		old_y = window_center_y;
-
-		SetCapture ( cl_hwnd );
-		ClipCursor (&window_rect);
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
 	}
-#endif
+
+	width = GetSystemMetrics (SM_CXSCREEN);
+	height = GetSystemMetrics (SM_CYSCREEN);
+
+	GetWindowRect ( cl_hwnd, &window_rect);
+
+	if (window_rect.left < 0)
+		window_rect.left = 0;
+
+	if (window_rect.top < 0)
+		window_rect.top = 0;
+
+	if (window_rect.right >= width)
+		window_rect.right = width-1;
+
+	if (window_rect.bottom >= height-1)
+		window_rect.bottom = height-1;
+
+	window_center_x = (window_rect.right + window_rect.left)/2;
+	window_center_y = (window_rect.top + window_rect.bottom)/2;
+
+	SetCursorPos (window_center_x, window_center_y);
+
+	old_x = window_center_x;
+	old_y = window_center_y;
+
+	SetCapture ( cl_hwnd );
+	ClipCursor (&window_rect);
 
 	if (cl_hidewindowtitle->intvalue)
 	{
@@ -745,21 +940,18 @@ void IN_DeactivateMouse (void)
 
 	//Com_Printf ("******************* IN_DeactivateMouse\n");
 
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-	if (g_pDI) {
-		FreeDirectInput(0);
+	if (g_pMouse)
+	{
+		IDirectInputDevice8_Unacquire (g_pMouse);
 	}
 	else if (!m_directinput->intvalue)
-#endif
 	{
 		if (restore_spi)
 			SystemParametersInfo (SPI_SETMOUSE, 0, originalmouseparms, 0);
-
-		ClipCursor (NULL);
-		ReleaseCapture ();	
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
 	}
-#endif
+
+	ClipCursor (NULL);
+	ReleaseCapture ();
 
 	if (cl_hidewindowtitle->intvalue)
 	{
@@ -783,10 +975,9 @@ void IN_StartupMouse (void)
 	if (!in_mouse->intvalue)
 		return;
 
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
 	if (m_directinput->intvalue)
 	{
-		if (IN_InitDInputMouse())
+		if (!IN_InitDInputMouse())
 		{
 			Com_Printf ("Falling back to standard mouse support.\n", LOG_CLIENT);
 			Cvar_ForceSet ("m_directinput", "0");
@@ -797,7 +988,7 @@ void IN_StartupMouse (void)
 			return;
 		}
 	}
-#endif
+
 	mouseparmsvalid = SystemParametersInfo (SPI_GETMOUSE, 0, originalmouseparms, 0);
 
 	/*cv = Cvar_Get ("in_initmouse", "1", CVAR_NOSET);
@@ -811,6 +1002,9 @@ void IN_StartupMouse (void)
 
 void IN_Restart_f (void)
 {
+	if (!input_active)
+		return;
+
 	IN_Shutdown ();
 
 	mouseactive = false;
@@ -820,7 +1014,12 @@ void IN_Restart_f (void)
 	IN_StartupJoystick ();
 #endif
 
+	IN_InitDInput ();
+
+	IN_InitDInputKeyboard ();
 	IN_StartupMouse ();
+
+	input_active = true;
 }
 
 /*
@@ -832,11 +1031,7 @@ void IN_MouseEvent (int mstate)
 {
 	int		i;
 
-	if (!mouseinitialized
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-		|| g_pDI
-#endif
-		)
+	if (!mouseinitialized || m_directinput->intvalue)
 		return;
 
 // perform button actions
@@ -871,7 +1066,6 @@ void IN_MouseMove (usercmd_t *cmd)
 	if (!mouseactive)
 		return;
 
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
 	if (g_pDI)
 	{
 		if (m_directinput->intvalue == 1)
@@ -883,7 +1077,6 @@ void IN_MouseMove (usercmd_t *cmd)
 
 	if (m_directinput->intvalue)
 		return;
-#endif
 
 	// find mouse movement
 	if (!GetCursorPos (&current_pos))
@@ -971,8 +1164,11 @@ void IN_Init (void)
 	m_directinput			= Cvar_Get ("m_directinput",			"0",		0);
     in_mouse				= Cvar_Get ("in_mouse",					"1",		0);
 
+	in_dinputkeyboard		= Cvar_Get ("in_dinputkeyboard",		"1",		0);
+
 	cl_hidewindowtitle		= Cvar_Get ("cl_hidewindowtitle",		"0",		0);
 
+	in_dinputkeyboard->changed = IN_CvarModified;
 	m_winxp_fix->changed = IN_CvarModified;
 	in_mouse->changed = IN_CvarModified;
 	m_directinput->changed = IN_CvarModified;
@@ -1014,7 +1210,13 @@ void IN_Init (void)
 	IN_StartupJoystick ();
 #endif
 
+	IN_InitDInput ();
+
+	IN_InitDInputKeyboard();
+
 	IN_StartupMouse ();
+
+	input_active = true;
 }
 
 /*
@@ -1025,9 +1227,7 @@ IN_Shutdown
 void IN_Shutdown (void)
 {
 	IN_DeactivateMouse ();
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-	FreeDirectInput(1);
-#endif
+	IN_FreeDirectInput ();
 }
 
 

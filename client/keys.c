@@ -33,13 +33,18 @@ int	anykeydown;
 int		edit_line=0;
 int		history_line=0;
 
-int		key_waiting;
+//int		key_waiting;
 char	*keybindings[256];
 qboolean	consolekeys[256];	// if true, can't be rebound while in console
 qboolean	menubound[256];	// if true, can't be rebound while in menu
-int		keyshift[256];		// key to map to if shift held down in console
-int		key_repeats[256];	// if > 1, it is autorepeating
+int			keyshift[256];		// key to map to if shift held down in console
+int			key_repeats[256];	// if > 1, it is autorepeating
 qboolean	keydown[256];
+
+int			key_lastrepeat[256];
+
+int			key_repeatrate;
+int			key_repeatdelay;
 
 cvar_t	*cl_cmdcomplete;
 
@@ -690,9 +695,11 @@ void Key_Console (int key)
 //============================================================================
 
 qboolean	chat_team;
-char		chat_buffer[MAXCMDLINE];
+char		chat_buffer[8][MAXCMDLINE];
+int			chat_curbuffer = 0;
 int			chat_bufferlen = 0;
 int			chat_cursorpos = 0;
+int			chat_editbuffer = 0;
 
 void Key_Message (int key)
 {
@@ -704,13 +711,48 @@ void Key_Message (int key)
 			Cbuf_AddText ("say_team \"");
 		else
 			Cbuf_AddText ("say \"");
-		Cbuf_AddText(chat_buffer);
+		Cbuf_AddText(chat_buffer[chat_curbuffer]);
 		Cbuf_AddText("\"\n");
 
 		cls.key_dest = key_game;
+
+		chat_curbuffer = (chat_curbuffer + 1) & 7;
+		chat_editbuffer = chat_curbuffer;
+
 		chat_bufferlen = 0;
-		chat_buffer[0] = 0;
+		chat_buffer[chat_curbuffer][0] = 0;
 		chat_cursorpos = 0;
+		return;
+	}
+
+	if (key == K_UPARROW)
+	{
+		chat_curbuffer--;
+		if (chat_curbuffer < 0)
+			chat_curbuffer = 7;
+
+		//ugly :E
+		if (chat_curbuffer == chat_editbuffer)
+		{
+			chat_curbuffer++;
+			if (chat_curbuffer > 7)
+				chat_curbuffer = 0;
+		}
+
+		chat_bufferlen = chat_cursorpos = strlen(chat_buffer[chat_curbuffer]);
+		return;
+	}
+
+	if (key == K_DOWNARROW)
+	{
+		if (chat_curbuffer == chat_editbuffer)
+			return;
+
+		chat_curbuffer++;
+		if (chat_curbuffer > 7)
+			chat_curbuffer = 0;
+
+		chat_bufferlen = chat_cursorpos = strlen(chat_buffer[chat_curbuffer]);
 		return;
 	}
 
@@ -719,7 +761,7 @@ void Key_Message (int key)
 		cls.key_dest = key_game;
 		chat_cursorpos = 0;
 		chat_bufferlen = 0;
-		chat_buffer[0] = 0;
+		chat_buffer[chat_curbuffer][0] = 0;
 		return;
 	}
 
@@ -729,7 +771,7 @@ void Key_Message (int key)
 		{
 			//chat_bufferlen--;
 			//chat_buffer[chat_bufferlen] = 0;
-			memmove (chat_buffer + chat_cursorpos - 1, chat_buffer + chat_cursorpos, chat_bufferlen - chat_cursorpos + 1);
+			memmove (chat_buffer[chat_curbuffer] + chat_cursorpos - 1, chat_buffer[chat_curbuffer] + chat_cursorpos, chat_bufferlen - chat_cursorpos + 1);
 			chat_cursorpos--;
 			chat_bufferlen--;
 		}
@@ -740,7 +782,7 @@ void Key_Message (int key)
 	{
 		if (chat_bufferlen && chat_cursorpos != chat_bufferlen)
 		{
-			memmove (chat_buffer + chat_cursorpos, chat_buffer + chat_cursorpos + 1, chat_bufferlen - chat_cursorpos + 1);
+			memmove (chat_buffer[chat_curbuffer] + chat_cursorpos, chat_buffer[chat_curbuffer] + chat_cursorpos + 1, chat_bufferlen - chat_cursorpos + 1);
 			chat_bufferlen--;
 		}
 		return;
@@ -767,7 +809,7 @@ void Key_Message (int key)
 
 	if (key == K_RIGHTARROW)
 	{
-		if (chat_buffer[chat_cursorpos])
+		if (chat_buffer[chat_curbuffer][chat_cursorpos])
 			chat_cursorpos++;
 		return;
 	}
@@ -775,21 +817,21 @@ void Key_Message (int key)
 	if (key < 32 || key > 127)
 		return;	// non printable
 
-	if (chat_bufferlen == sizeof(chat_buffer)-1)
+	if (chat_bufferlen == sizeof(chat_buffer[chat_curbuffer])-1)
 		return; // all full
 
-	memmove (chat_buffer + chat_cursorpos + 1, chat_buffer + chat_cursorpos, chat_bufferlen - chat_cursorpos + 1);
+	memmove (chat_buffer[chat_curbuffer] + chat_cursorpos + 1, chat_buffer[chat_curbuffer] + chat_cursorpos, chat_bufferlen - chat_cursorpos + 1);
 
-	last = chat_buffer[chat_cursorpos];
+	last = chat_buffer[chat_curbuffer][chat_cursorpos];
 
-	chat_buffer[chat_cursorpos] = key;
+	chat_buffer[chat_curbuffer][chat_cursorpos] = key;
 
 	chat_bufferlen++;
 	chat_cursorpos++;
 
 	if (!last)
 	{
-		chat_buffer[chat_cursorpos] = 0;
+		chat_buffer[chat_curbuffer][chat_cursorpos] = 0;
 	}
 }
 
@@ -1090,6 +1132,23 @@ void Key_Init (void)
 	cl_cmdcomplete = Cvar_Get ("cl_cmdcomplete", "2", 0);
 }
 
+void Key_GenerateRepeats (void)
+{
+	int		i;
+
+	for (i = 0; i < 256; i++)
+	{
+		if (keydown[i])
+		{
+			if (curtime >= key_lastrepeat[i] + key_repeatrate)
+			{
+				Key_Event (i, true, curtime);
+				key_lastrepeat[i] = curtime;
+			}
+		}
+	}
+}
+
 /*
 ===================
 Key_Event
@@ -1104,12 +1163,12 @@ void Key_Event (int key, qboolean down, unsigned time)
 	char		cmd[1024];
 
 	// hack for modal presses
-	if (key_waiting == -1)
+	/*if (key_waiting == -1)
 	{
 		if (down)
 			key_waiting = key;
 		return;
-	}
+	}*/
 
 	// update auto-repeat status
 	if (down)
@@ -1177,6 +1236,9 @@ void Key_Event (int key, qboolean down, unsigned time)
 		}
 		return;
 	}
+
+	if (!keydown[key])
+		key_lastrepeat[key] = curtime + key_repeatdelay;
 
 	// track if any key is down for BUTTON_ANY
 	keydown[key] = down;
@@ -1299,7 +1361,7 @@ void Key_ClearStates (void)
 Key_GetKey
 ===================
 */
-int Key_GetKey (void)
+/*int Key_GetKey (void)
 {
 	key_waiting = -1;
 
@@ -1307,5 +1369,5 @@ int Key_GetKey (void)
 		Sys_SendKeyEvents ();
 
 	return key_waiting;
-}
+}*/
 

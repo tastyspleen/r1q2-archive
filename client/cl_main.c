@@ -481,7 +481,7 @@ CL_Pause_f
 void CL_Pause_f (void)
 {
 	// never pause in multiplayer
-	if (Cvar_VariableValue ("maxclients") > 1 || !Com_ServerState ())
+	if (Cvar_IntValue ("maxclients") > 1 || !Com_ServerState ())
 	{
 		Cvar_Set ("paused", "0");
 		return;
@@ -1136,8 +1136,8 @@ void CL_Skins_f (void)
 			continue;
 		//if (developer->intvalue)
 		Com_Printf ("client %i: %s\n", LOG_CLIENT, i, cl.configstrings[CS_PLAYERSKINS+i]); 
-		SCR_UpdateScreen ();
-		Sys_SendKeyEvents ();	// pump message loop
+		//SCR_UpdateScreen ();
+		//Sys_SendKeyEvents ();	// pump message loop
 		CL_ParseClientinfo (i);
 	}
 	//Com_Printf ("Precached all skins.\n", LOG_CLIENT);

@@ -227,7 +227,7 @@ void NET_OpenIP (int flags)
 
 	ip = Cvar_Get ("ip", "localhost", CVAR_NOSET);
 
-	dedicated = Cvar_VariableValue ("dedicated");
+	dedicated = Cvar_IntValue ("dedicated");
 
 	if (flags & NET_SERVER)
 	{

@@ -159,7 +159,7 @@ void EXPORT VID_Error (int err_level, char *fmt, ...)
 
 //==========================================================================
 
-byte        scantokey[128] = 
+const byte        scantokey[256] = 
 					{ 
 //  0           1       2       3       4       5       6       7 
 //  8           9       A       B       C       D       E       F 
@@ -178,8 +178,25 @@ byte        scantokey[128] =
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
-}; 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,         // 7 
+	//--------------------dinput key mappings below here------------------------
+	0,0,	0,		0,		0,		0,		0,		0,		0,			//136
+	0,		0,		0,		0,		0,		0,		0,		0,			//144
+	0,		0,		0,		0,		0,		0,		0,		0,			//152
+	0,		0,		0,		K_KP_ENTER,K_CTRL,0,	0,		0,			//160
+	0,		0,		0,		0,		0,		0,		0,		0,			//168
+	0,		0,		0,		0,		0,		0,		0,		0,			//176
+	0,		0,		0,		0,		K_KP_SLASH,0,	0,		K_ALT,		//184
+	0,		0,		0,		0,		0,		0,		0,		K_HOME,		//192
+	0,		0,		0,		0,		K_PAUSE,0,		0,		K_UPARROW,	//200
+	K_PGUP,	0,		K_LEFTARROW,0,	K_RIGHTARROW,0,	K_END,	K_DOWNARROW,//208
+	K_PGDN,	K_INS,	K_DEL,	0,		0,		0,		0,		0,			//216
+	0,		0,		0,		0,		0,		0,		0,		0,			//224
+	0,		0,		0,		0,		0,		0,		0,		0,			//232
+	0,		0,		0,		0,		0,		0,		0,		0,			//240
+	0,		0,		0,		0,		0,		0,		0,		0,			//248
+	0,		0,		0,		0,		0,		0,		0					//255
+};
 
 /*
 =======
@@ -317,7 +334,7 @@ LONG WINAPI MainWndProc (
 		return DefWindowProc( hWnd, uMsg, wParam, lParam );
 	}
 
-	if ( uMsg == MSH_MOUSEWHEEL )
+	if ( uMsg == MSH_MOUSEWHEEL && !g_pMouse)
 	{
 		if ( ( ( int ) wParam ) > 0 )
 		{
@@ -355,6 +372,9 @@ LONG WINAPI MainWndProc (
 		** this chunk of code theoretically only works under NT4 and Win98
 		** since this message doesn't exist under Win95
 		*/
+		if (g_pMouse)
+			break;
+
 		if ( ( short ) HIWORD( wParam ) > 0 )
 		{
 			if (cls.key_dest == key_console || cls.state <= ca_connected) {
@@ -382,18 +402,13 @@ LONG WINAPI MainWndProc (
 			}
 		}
 		break;
-    /*case WM_TIMER:
-		IN_ReadImmediateData (NULL);
-		return 0;*/
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
+    
     case WM_ENTERMENULOOP:
         // Release the device, so if we are in exclusive mode the 
         // cursor will reappear
         if( g_pMouse )
         {
-			//Com_Printf ("Unacquire() from menu loop\n");
 			IDirectInputDevice8_Unacquire (g_pMouse);
-            //KillTimer( hWnd, 0 );  // Stop timer, so device is not re-acquired
         }
         break;
 
@@ -401,12 +416,10 @@ LONG WINAPI MainWndProc (
         // Make sure the device is acquired when coming out of a menu loop
         if( g_pMouse )
         {
-			//Com_Printf ("Acquire() from menu loop\n");
 			IDirectInputDevice8_Acquire (g_pMouse);
-            //SetTimer( hWnd, 0, 1, NULL ); // Start timer again
         }
         break;
-#endif
+
 	case WM_HOTKEY:
 		return 0;
 
@@ -420,8 +433,9 @@ LONG WINAPI MainWndProc (
 		SCR_DirtyScreen ();	// force entire screen to update next frame
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
 
+	case WM_QUIT:
 	case WM_CLOSE:
-		CL_Quit_f ();
+		Com_Quit ();
 		return 0;
 
 	case WM_DESTROY:
@@ -496,6 +510,9 @@ LONG WINAPI MainWndProc (
 		{
 			int	temp;
 
+			if (g_pMouse)
+				break;
+
 			temp = 0;
 
 			if (wParam & MK_LBUTTON)
@@ -536,12 +553,14 @@ LONG WINAPI MainWndProc (
 		}
 		// fall through
 	case WM_KEYDOWN:
-		Key_Event( MapKey( lParam ), true, sys_msg_time);
+		if (!g_pKeyboard)
+			Key_Event( MapKey( lParam ), true, sys_msg_time);
 		break;
 
 	case WM_SYSKEYUP:
 	case WM_KEYUP:
-		Key_Event( MapKey( lParam ), false, sys_msg_time);
+		if (!g_pKeyboard)
+			Key_Event( MapKey( lParam ), false, sys_msg_time);
 		break;
 
 #ifdef CD_AUDIO

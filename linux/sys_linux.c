@@ -40,21 +40,24 @@ qboolean stdin_active = true;
 void Sys_ConsoleOutput (const char *string)
 {
 	char	text[2048];
-	int		i;
+	int		i, j;
 
 	if (nostdout && nostdout->intvalue)
 		return;
 
 	i = 0;
+	j = 0;
 
 	//strip high bits
-	while (string[i])
+	while (string[j])
 	{
-		text[i] = string[i] & 127;
+		text[i] = string[j] & 127;
 
 		//strip low bits
 		if (text[i] >= 32 || text[i] == '\n' || text[i] == '\t')
 			i++;
+
+		j++;
 
 		if (i == sizeof(text)-2)
 		{

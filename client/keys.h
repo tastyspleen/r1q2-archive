@@ -139,15 +139,17 @@ extern char		*keybindings[256];
 extern	int		key_repeats[256];
 
 extern	int	anykeydown;
-extern	char chat_buffer[MAXCMDLINE];
+extern	char chat_buffer[8][MAXCMDLINE];
 extern	int chat_bufferlen;
+extern	int	chat_curbuffer;
 extern	int	chat_cursorpos;
 extern	qboolean	chat_team;
 
+void Key_GenerateRepeats (void);
 void Key_Event (int key, qboolean down, unsigned time);
 void Key_Init (void);
 void Key_WriteBindings (FILE *f);
 void Key_SetBinding (int keynum, char *binding);
 void Key_ClearStates (void);
-int Key_GetKey (void);
+//int Key_GetKey (void);
 

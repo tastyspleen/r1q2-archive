@@ -1447,7 +1447,7 @@ static void Options_MenuInit( void )
 
 	//win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
 
-	squality = Cvar_VariableValue ("s_khz");
+	squality = Cvar_IntValue ("s_khz");
 
 	switch (squality)	{
 		case 11:
@@ -2874,7 +2874,7 @@ static void StartServer_MenuInit( void )
 		s_rules_box.itemnames = dm_coop_names;
 //PGM
 
-	if (Cvar_VariableValue("coop"))
+	if (Cvar_IntValue("coop"))
 		s_rules_box.curvalue = 1;
 	else
 		s_rules_box.curvalue = 0;
@@ -2914,7 +2914,7 @@ static void StartServer_MenuInit( void )
 	s_maxclients_field.generic.statusbar = NULL;
 	s_maxclients_field.length = 3;
 	s_maxclients_field.visible_length = 3;
-	if ( Cvar_VariableValue( "maxclients" ) == 1)
+	if ( Cvar_IntValue( "maxclients" ) == 1)
 		strcpy( s_maxclients_field.buffer, "8");
 	else 
 		strncpy( s_maxclients_field.buffer, Cvar_VariableString("maxclients"), sizeof(s_maxclients_field.buffer)-1);
@@ -3029,7 +3029,7 @@ static void DMFlagCallback( void *self )
 	int flags;
 	int bit = 0;
 
-	flags = Cvar_VariableValue( "dmflags" );
+	flags = Cvar_IntValue( "dmflags" );
 
 	if ( f == &s_friendlyfire_box )
 	{
@@ -3176,7 +3176,7 @@ static void DMOptions_MenuInit( void )
 	{
 		"disabled", "by skin", "by model", 0
 	};
-	int dmflags = Cvar_VariableValue( "dmflags" );
+	int dmflags = Cvar_IntValue( "dmflags" );
 	int y = 0;
 
 	s_dmoptions_menu.x = viddef.width * 0.50;
@@ -3978,7 +3978,7 @@ static qboolean PlayerConfig_MenuInit( void )
 	s_player_handedness_box.itemnames = handedness;
 
 	for (i = 0; i < sizeof(rate_tbl) / sizeof(*rate_tbl) - 1; i++)
-		if (Cvar_VariableValue("rate") == rate_tbl[i])
+		if (Cvar_IntValue("rate") == rate_tbl[i])
 			break;
 
 	s_player_rate_title.generic.type = MTYPE_SEPARATOR;

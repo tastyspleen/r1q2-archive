@@ -42,7 +42,7 @@ void CL_AddToDownloadQueue (char *path)
 
 	return;
 
-	if (!Cvar_VariableValue ("allow_download"))
+	if (!Cvar_IntValue ("allow_download"))
 		return;
 
 	while (dlq->next) {
@@ -396,7 +396,7 @@ void CL_Passive_f (void)
 
 		if (cls.passivemode) {
 			NET_Config (NET_CLIENT);
-			Com_Printf ("Listening for passive connections on port %d\n", LOG_CLIENT, (int)Cvar_VariableValue ("ip_clientport"));
+			Com_Printf ("Listening for passive connections on port %d\n", LOG_CLIENT, Cvar_IntValue ("ip_clientport"));
 		} else {
 			Com_Printf ("No longer listening for passive connections.\n", LOG_CLIENT);
 		}

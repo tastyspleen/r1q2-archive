@@ -281,7 +281,8 @@ void Sys_InstallService(char *servername, char *cmdline)
 
 	char srvName[MAX_OSPATH];
 	char srvDispName[MAX_OSPATH];
-	char lpszBinaryPathName[1024];
+	char lpszBinaryPathName[2048];
+
 	GetModuleFileName(NULL, lpszBinaryPathName, sizeof(lpszBinaryPathName));
  
 	while (*cmdline != ' ') {
@@ -903,15 +904,24 @@ Send Key_Event calls
 */
 void Sys_SendKeyEvents (void)
 {
-    MSG        msg;
-
-	while (PeekMessage (&msg, NULL, 0, 0, PM_NOREMOVE))
+	if (g_pKeyboard)
 	{
-		if (!GetMessage (&msg, NULL, 0, 0))
-			Sys_Quit ();
-		sys_msg_time = msg.time;
-      	TranslateMessage (&msg);
-      	DispatchMessage (&msg);
+		IN_ReadKeyboard ();
+	}
+	else
+	{
+		MSG        msg;
+
+		//Com_Printf ("sske\n", LOG_GENERAL);
+
+		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
+		{
+			//if (GetMessage (&msg, NULL, 0, 0) == -1)
+			//	Com_Quit ();
+			sys_msg_time = msg.time;
+      		TranslateMessage (&msg);
+      		DispatchMessage (&msg);
+		}
 	}
 
 	// grab frame time 
@@ -1299,10 +1309,10 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				Sleep (1);
 			}
 
-			while (PeekMessage (&msg, NULL, 0, 0, PM_NOREMOVE))
+			while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 			{
-				if (!GetMessage (&msg, NULL, 0, 0))
-					Com_Quit ();
+				//if (GetMessage (&msg, NULL, 0, 0) == -1)
+				//	Com_Quit ();
 				sys_msg_time = msg.time;
 
 	#ifndef NO_SERVER

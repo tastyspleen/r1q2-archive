@@ -594,7 +594,7 @@ static void SV_GameMap_f (void)
 	strncpy (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd)-1);
 
 	// copy off the level to the autosave slot
-	if (!dedicated->intvalue && !Cvar_VariableValue ("deathmatch"))
+	if (!dedicated->intvalue && !Cvar_IntValue ("deathmatch"))
 	{
 		SV_WriteServerFile (true);
 		SV_CopySaveGame ("current", "save0");
@@ -737,7 +737,7 @@ static void SV_Savegame_f (void)
 		return;
 	}
 
-	if (Cvar_VariableValue("deathmatch"))
+	if (Cvar_IntValue("deathmatch"))
 	{
 		Com_Printf ("Can't savegame in a deathmatch\n", LOG_GENERAL);
 		return;

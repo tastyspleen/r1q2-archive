@@ -23,13 +23,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <windows.h>
 
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-#define DIRECTINPUT_VERSION 0x0800
+//DInput 8
+#define DIRECTINPUT_VERSION	0x0800
+
 #include <dinput.h>
 
-extern LPDIRECTINPUT8       g_pDI;
-extern LPDIRECTINPUTDEVICE8 g_pMouse;
-#endif
+extern LPDIRECTINPUT8		g_pDI;
+extern LPDIRECTINPUTDEVICE8	g_pMouse;
+extern LPDIRECTINPUTDEVICE8	g_pKeyboard;
 
 #define	WINDOW_STYLE	(WS_OVERLAPPED|WS_BORDER|WS_CAPTION|WS_VISIBLE)
 
@@ -40,8 +41,11 @@ extern DWORD gSndBufSize;
 extern HWND			cl_hwnd;
 extern qboolean		ActiveApp, Minimized;
 
+extern const byte        scantokey[256];
+
 void IN_ReadImmediateData (usercmd_t *cmd);
 void IN_ReadBufferedData( usercmd_t *cmd );
+void IN_ReadKeyboard (void);
 
 void IN_Activate (qboolean active);
 void IN_MouseEvent (int mstate);

@@ -38,6 +38,7 @@ usercmd_t		null_usercmd = {0};
 cvar_t			uninitialized_cvar = {0};
 
 cvar_t			*z_debug;
+cvar_t			*z_buggygame;
 
 static int		com_argc;
 static char	*com_argv[MAX_NUM_ARGVS+1];
@@ -372,7 +373,7 @@ void Com_Error (int code, char *fmt, ...)
 	static char		msg[MAXPRINTMSG];
 	static	qboolean	recursive;
 
-	if (recursive)
+	if (recursive && code != ERR_DIE)
 		Sys_Error ("recursive error after: %s", msg);
 	recursive = true;
 
@@ -1557,6 +1558,8 @@ typedef struct zhead_s
 typedef struct z_memloc_s
 {
 	void				*address;
+	unsigned int		time;
+	unsigned int		size;
 	struct	z_memloc_s	*next;
 } z_memloc_t;
 
@@ -1813,7 +1816,7 @@ void *Z_TagMallocRelease (int size, int tag)
 
 	z_count++;
 
-	if (tag < TAGMALLOC_MAX_TAGS)
+	if ((unsigned)tag < TAGMALLOC_MAX_TAGS)
 		tagmalloc_tags[tag].allocs++;
 
 	z_bytes += size;
@@ -1833,11 +1836,16 @@ void *Z_TagMallocRelease (int size, int tag)
 void * EXPORT Z_TagMallocGame (int size, int tag)
 {
 	z_memloc_t	*loc, *last, *newentry;
-	void		*b;
+	byte		*b;
 
-	b = Z_TagMalloc (size, tag);
+	//aieeeee.
+	if (z_buggygame->intvalue)
+		size *= 2;
+
+	b = Z_TagMalloc (size+4, tag);
 
 	memset (b, 0, size);
+	*(int *)(b + size) = 0xFDFEFDFE;
 
 	if (tag == TAG_LEVEL)
 		z_level_allocs++;
@@ -1848,10 +1856,12 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 	last = loc->next;
 	newentry = malloc (sizeof(*loc));
 	newentry->address = b;
+	newentry->size = size;
 	newentry->next = last;
+	newentry->time = curtime;
 	loc->next = newentry;
 
-	return b;
+	return (void *)b;
 }
 
 void EXPORT Z_FreeGame (void *buf)
@@ -1865,6 +1875,11 @@ void EXPORT Z_FreeGame (void *buf)
 		loc = loc->next;
 		if (buf == loc->address)
 		{
+			if (*(int *)((byte *)buf + loc->size) != 0xFDFEFDFE)
+			{
+				Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
+				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %.8p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
+			}
 			free_from_game = true;
 			Z_Free (buf);
 			free_from_game = false;
@@ -1876,12 +1891,35 @@ void EXPORT Z_FreeGame (void *buf)
 		last = loc;
 	}
 
-	Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at %.8p", buf);
+	if (z_buggygame->intvalue)
+	{
+		Com_Printf ("ERROR: Game DLL tried to free non-existant/freed memory at %.8p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf);
+	}
+	else
+	{
+		Com_Printf ("Memory management problem detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
+		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at %.8p", buf);
+	}
 }
 
 void EXPORT Z_FreeTagsGame (int tag)
 {
 	zhead_t	*z, *next;
+
+	z_memloc_t	*loc, *last;
+
+	loc = last = &z_game_locations;
+
+	while (loc->next)
+	{
+		loc = loc->next;
+
+		if (*(int *)((byte *)loc->address + loc->size) != 0xFDFEFDFE)
+		{
+			Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
+			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %.8p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
+		}
+	}
 
 	for (z=z_chain.next ; z != &z_chain ; z=next)
 	{
@@ -2132,6 +2170,8 @@ void Qcommon_Init (int argc, char **argv)
 	Cvar_Init ();
 
 	z_debug = Cvar_Get ("z_debug", "0", 0);
+	z_buggygame = Cvar_Get ("z_buggygame", "0", 0);
+
 	z_debug->changed = _z_debug_changed;
 	if (z_debug->intvalue)
 	{

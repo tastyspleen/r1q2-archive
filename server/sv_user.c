@@ -1155,6 +1155,7 @@ static void SV_BeginDownload_f(void)
 		MSG_WriteShort (-1);
 		MSG_WriteByte (0);
 		SV_AddMessage (sv_client, true);
+		Com_Printf ("EXPLOIT: Client %s[%s] tried to download illegal path: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address), name);
 		Blackhole (&sv_client->netchan.remote_address, true, "download exploit (path %s)", name);
 		SV_DropClient (sv_client, false);
 		return;
@@ -1167,6 +1168,7 @@ static void SV_BeginDownload_f(void)
 		MSG_WriteShort (-1);
 		MSG_WriteByte (0);
 		SV_AddMessage (sv_client, true);
+		Com_Printf ("EXPLOIT: Client %s[%s] supplied illegal download offset for %s: %d\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address), name, offset);
 		Blackhole (&sv_client->netchan.remote_address, true, "download exploit (offset %d)", offset);
 		SV_DropClient (sv_client, false);
 		return;
@@ -1573,7 +1575,7 @@ void SV_Nextserver (void)
 	char	*v;
 
 	//ZOID, ss_pic can be nextserver'd in coop mode
-	if (sv.state == ss_game || (sv.state == ss_pic && !Cvar_VariableValue("coop")))
+	if (sv.state == ss_game || (sv.state == ss_pic && !Cvar_IntValue("coop")))
 		return;		// can't nextserver while playing a normal game
 
 	svs.spawncount++;	// make sure another doesn't sneak in
@@ -1664,7 +1666,8 @@ void SV_ExecuteUserCommand (char *s)
 
 		if (strcmp (teststring, s))
 		{
-			Blackhole (&net_from, true, "attempted command expansion: %s", s);
+			//Blackhole (&net_from, true, "attempted command expansion: %s", s);
+			Com_Printf ("EXPLOIT: Client %s[%s] attempted macro-expansion: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), MakePrintable(s));
 			SV_KickClient (sv_client, "attempted server exploit", NULL);
 			return;
 		}
@@ -1673,12 +1676,14 @@ void SV_ExecuteUserCommand (char *s)
 	//r1: catch end-of-message exploit
 	if (strchr (s, '\xFF'))
 	{
-		char *ptr;
+		char *ptr, *p;
 		ptr = strchr (s, '\xFF');
 		ptr -= 8;
 		if (ptr < s)
 			ptr = s;
-		Blackhole (&net_from, true, "0xFF in command packet (%.32s)", MakePrintable (ptr));
+		p = MakePrintable (ptr);
+		Blackhole (&net_from, true, "0xFF in command packet (%.32s)", p);
+		Com_Printf ("EXPLOIT: Client %s[%s] tried to use a command containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), p);
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
 		return;
 	}
@@ -1964,6 +1969,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//r1: normal q2 client caps at 250 internally so this is a nice hack check
 			if (cl->state == cs_spawned && newcmd.msec > 250)
 			{
+				Com_Printf ("EXPLOIT: Client %s[%s] tried to use illegal msec value: %d\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), newcmd.msec);
 				Blackhole (&cl->netchan.remote_address, true, "illegal msec value (%d)", newcmd.msec);
 				SV_KickClient (cl, "illegal pmove msec detected", NULL);
 				return;
