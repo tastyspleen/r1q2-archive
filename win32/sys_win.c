@@ -259,7 +259,7 @@ void Sys_ServiceStart (DWORD argc, LPTSTR *argv)
     return; 
 } 
 
-int __cdecl main(void) 
+int EXPORT main(void) 
 { 
     SERVICE_TABLE_ENTRY   DispatchTable[] = 
     { 
@@ -809,7 +809,7 @@ void Sys_ConsoleOutputOld (const char *string)
 		WriteFile(houtput, text, console_textlen+2, &dummy, NULL);
 	}
 
-	WriteFile(houtput, string, strlen(string), &dummy, NULL);
+	WriteFile(houtput, string, (DWORD)strlen(string), &dummy, NULL);
 
 	if (console_textlen)
 		WriteFile(houtput, console_text, console_textlen, &dummy, NULL);
@@ -866,10 +866,15 @@ void Sys_ConsoleOutput (const char *string)
 
 		//r1: strip high bits here
 		*s = (*p) & 127;
-		s++;
+
+		if (*s >= 32 || *s == '\n' || *s == '\t')
+			s++;
+
 		p++;
+
 		if ((s - text) >= sizeof(text)-2) {
 			*s++ = '\n';
+			break;
 		}
 	}
 	*s = '\0';
@@ -1023,7 +1028,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 
 #elif defined _WIN64
 
-	const char *gamename = "gameia64.dll";
+	const char *gamename = "gamex64.dll";
 
 #ifdef NDEBUG
 	const char *debugdir = "release";

@@ -51,13 +51,20 @@ void Sys_ConsoleOutput (const char *string)
 	while (string[i])
 	{
 		text[i] = string[i] & 127;
-		i++;
+
+		//strip low bits
+		if (text[i] >= 32 || text[i] == '\n' || text[i] == '\t')
+			i++;
+
 		if (i == sizeof(text)-2)
+		{
+			text[i++] = '\n';
 			break;
+		}
 	}
 	text[i] = 0;
 
-	fputs(string, stdout);
+	fputs(text, stdout);
 }
 #endif
 

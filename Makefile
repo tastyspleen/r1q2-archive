@@ -111,7 +111,7 @@ SHLIBEXT=so
 SHLIBCFLAGS=-fPIC
 SHLIBLDFLAGS=-shared
 
-DO_CC=$(CC) $(CFLAGS) -o $@ -c $<
+DO_CC=$(CC) $(CFLAGS) -DLINUX -o $@ -c $<
 
 DO_DED_CC=$(CC) $(CFLAGS) -DDEDICATED_ONLY -DNDEBUG -DLINUX -o $@ -c $<
 

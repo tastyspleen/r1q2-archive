@@ -94,7 +94,7 @@ void EXPORT Cbuf_AddText (const char *text)
 	if (!*text)
 		return;
 	
-	l = strlen (text);
+	l = (int)strlen (text);
 
 	if (cmd_text.cursize + l >= cmd_text.maxsize)
 	{
@@ -344,7 +344,7 @@ qboolean Cbuf_AddLateCommands (void)
 	argc = COM_Argc();
 	for (i=1 ; i<argc ; i++)
 	{
-		s += strlen (COM_Argv(i)) + 1;
+		s += (int)strlen (COM_Argv(i)) + 1;
 	}
 	if (!s)
 		return false;
@@ -483,7 +483,7 @@ void Cmd_Aliaslist_f (void)
 	int len, num;
 	cmdalias_t *sortedList;
 
-	argLen = strlen(Cmd_Argv(1));
+	argLen = (int)strlen(Cmd_Argv(1));
 
 	for (a = cmd_alias, i = 0; a ; a = a->next, i++);
 	num = i;
@@ -684,7 +684,7 @@ char *Cmd_MacroExpandString (char *text)
 	inquote = false;
 	scan = text;
 
-	len = strlen (scan);
+	len = (int)strlen (scan);
 	if (len >= MAX_STRING_CHARS)
 	{
 		Com_Printf ("Line exceeded %i chars, discarded.\n", LOG_GENERAL, MAX_STRING_CHARS);
@@ -737,10 +737,10 @@ char *Cmd_MacroExpandString (char *text)
 	
 		token = Cvar_VariableString (cvarname);
 
-		j = strlen(token);
+		j = (int)strlen(token);
 
 		if (extra)
-			k = strlen(extra);
+			k = (int)strlen(extra);
 
 		len += j + k;
 
@@ -838,7 +838,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 			strncpy (cmd_args, text, sizeof(cmd_args)-1);
 
 			// strip off any trailing whitespace
-			l = strlen(cmd_args) - 1;
+			l = (int)strlen(cmd_args) - 1;
 			if (l == MAX_STRING_CHARS - 1) {
 				Com_Printf ("Cmd_TokenizeString: overflowed, possible attack detected.\nargv[0] = %s, remote = %s, len = %d\n", LOG_GENERAL|LOG_EXPLOIT,
 					cmd_argv[0], NET_AdrToString(&net_from), net_message.cursize);
@@ -860,7 +860,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 			int len;
 			//cmd_argv[cmd_argc] = Z_TagMalloc (strlen(com_token)+1, TAGMALLOC_CMDTOKEN);
 			//strcpy (cmd_argv[cmd_argc], com_token);
-			len = strlen(com_token);
+			len = (int)strlen(com_token);
 			if (len+1 + cmd_pointer >= MAX_STRING_CHARS*2)
 			{
 				Com_Printf ("Cmd_TokenizeString: overflow\n", LOG_GENERAL);
@@ -972,7 +972,7 @@ const char *Cmd_CompleteCommandOld (const char *partial)
 	int				len;
 	cmdalias_t		*a;
 	
-	len = strlen(partial);
+	len = (int)strlen(partial);
 	
 	if (!len)
 		return NULL;
@@ -1136,7 +1136,7 @@ void Cmd_List_f (void)
 	int				argLen;
 	cmd_function_t	*sortedList;
 
-	argLen = strlen(Cmd_Argv(1));
+	argLen = (int)strlen(Cmd_Argv(1));
 
 	for (cmd = cmd_functions, i = 0; cmd ; cmd = cmd->next, i++);
 	num = i;

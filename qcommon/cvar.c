@@ -158,7 +158,7 @@ char *Cvar_CompleteVariable (const char *partial)
 
 	Q_assert (partial != NULL);
 	
-	len = strlen(partial);
+	len = (int)strlen(partial);
 	
 	if (!len)
 		return NULL;
@@ -652,7 +652,7 @@ void Cvar_List_f (void)
 	cvar_t	*sortedList;
 	int		argLen;
 
-	argLen = strlen(Cmd_Argv(1));
+	argLen = (int)strlen(Cmd_Argv(1));
 
 	for (var = cvar_vars, i = 0; var ; var = var->next, i++);
 	num = i;

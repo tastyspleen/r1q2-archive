@@ -230,7 +230,7 @@ void COM_InitArgv (int argc, char **argv);
 
 char *CopyString (const char *in, int tag);
 
-char *StripHighBits (const char *string, int highbits);
+void StripHighBits (char *string, int highbits);
 void ExpandNewLines (char *string);
 char *MakePrintable (const byte *s);
 
@@ -865,7 +865,7 @@ FILESYSTEM
 */
 
 void	FS_InitFilesystem (void);
-void	FS_SetGamedir (char *dir);
+void	FS_SetGamedir (const char *dir);
 char	*EXPORT FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
 void	FS_ExecAutoexec (void);

@@ -686,18 +686,18 @@ void SCR_Loading_f (void)
 SCR_TimeRefresh_f
 ================
 */
-int __cdecl entitycmpfnc( const entity_t *a, const entity_t *b )
+int EXPORT entitycmpfnc( const entity_t *a, const entity_t *b )
 {
 	/*
 	** all other models are sorted by model then skin
 	*/
 	if ( a->model == b->model )
 	{
-		return ( ( int ) a->skin - ( int ) b->skin );
+		return ( ( INTPTR ) a->skin - ( INTPTR ) b->skin );
 	}
 	else
 	{
-		return ( ( int ) a->model - ( int ) b->model );
+		return ( ( INTPTR ) a->model - ( INTPTR ) b->model );
 	}
 }
 
@@ -980,7 +980,7 @@ void SCR_DrawField (int x, int y, int color, int width, int value)
 	SCR_AddDirtyPoint (x+width*CHAR_WIDTH+2, y+23);
 
 	Com_sprintf (num, sizeof(num), "%i", value);
-	l = strlen(num);
+	l = (int)strlen(num);
 	if (l > width)
 		l = width;
 	x += 2 + CHAR_WIDTH*(width - l);

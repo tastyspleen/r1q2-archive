@@ -99,8 +99,8 @@ static void SV_New_f (void);
 static void SV_AddConfigstrings (void)
 {
 	int		start;
-	int		len;
 	int		wrote;
+	int		len;
 
 	if (sv_client->state != cs_connected)
 	{
@@ -120,7 +120,7 @@ plainStrings:
 		{
 			if (sv.configstrings[start][0])
 			{
-				len = strlen(sv.configstrings[start]);
+				len = (int)strlen(sv.configstrings[start]);
 
 				len = len > MAX_QPATH ? MAX_QPATH : len;
 
@@ -180,7 +180,7 @@ plainStrings:
 				{
 					if (sv.configstrings[index][0])
 					{
-						len = strlen(sv.configstrings[index]);
+						len = (int)strlen(sv.configstrings[index]);
 
 						MSG_BeginWriting (svc_configstring);
 						MSG_WriteShort (index);
@@ -1099,7 +1099,7 @@ static void SV_BeginDownload_f(void)
 {
 	char	*name;
 	int		offset = 0;
-	int		length;
+	size_t	length;
 
 	name = Cmd_Argv(1);
 
@@ -1685,7 +1685,7 @@ void SV_ExecuteUserCommand (char *s)
 
 	//r1: allow filter of high bit commands (eg \n\r in say cmds)
 	if (sv_filter_stringcmds->intvalue)
-		strcpy (s, StripHighBits(s, (int)sv_filter_stringcmds->intvalue == 2));
+		StripHighBits(s, (int)sv_filter_stringcmds->intvalue == 2);
 
 	Cmd_TokenizeString (s, false);
 	sv_player = sv_client->edict;

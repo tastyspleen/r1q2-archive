@@ -230,7 +230,7 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 	while ((p = strchr(cls.downloadname, '\\')))
 		*p = '/';
 
-	length = strlen(cls.downloadname);
+	length = (int)strlen(cls.downloadname);
 
 	//normalize path
 	if (cls.downloadname[0] == '.' && cls.downloadname[1] == '/')
@@ -471,6 +471,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		if (!*cls.downloadtempname)
 		{
 			Com_Printf ("Received download packet without request. Ignored.\n", LOG_CLIENT);
+			net_message.readcount += size;
 			return;
 		}
 		CL_DownloadFileName(name, sizeof(name), cls.downloadtempname);
@@ -739,7 +740,8 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	t = s;
 	while (*t)
 	{
-		if (!isprint (*t))
+		//if (!isprint (*t))
+		if (!(*t > 32 && *t < 128))
 		{
 			i = -1;
 			break;
@@ -930,7 +932,7 @@ void CL_ParseConfigString (void)
 		Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);*/
 
 	//r1: overflow may be desired by some mods in stats programs for example. who knows.
-	length = strlen(s);
+	length = (int)strlen(s);
 
 	if (length >= (sizeof(cl.configstrings[0]) * (MAX_CONFIGSTRINGS-i)) - 1)
 		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring %d exceeds available space", i);
@@ -991,7 +993,7 @@ void CL_ParseConfigString (void)
 	else if (i >= CS_IMAGES && i < CS_IMAGES+MAX_MODELS)
 	{
 		if (cl.refresh_prepped)
-			cl.image_precache[i-CS_IMAGES] = re.RegisterPic (cl.configstrings[i]);
+			re.RegisterPic (cl.configstrings[i]);
 	}
 	else if (i >= CS_PLAYERSKINS && i < CS_PLAYERSKINS+MAX_CLIENTS)
 	{
@@ -1005,7 +1007,7 @@ void CL_ParseConfigString (void)
 		}
 		else
 		{
-			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin '%s'\n", MakePrintable(s));
+			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin %d (%s)\n", i, MakePrintable(s));
 		}
 	}
 }
@@ -1204,7 +1206,7 @@ void CL_ParseServerMessage (void)
 				S_StartLocalSound ("misc/talk.wav");
 				if (cl_filterchat->intvalue)
 				{
-					strcpy (s, StripHighBits(s, (int)cl_filterchat->intvalue == 2));
+					StripHighBits(s, (int)cl_filterchat->intvalue == 2);
 					strcat (s, "\n");
 				}
 				con.ormask = 128;

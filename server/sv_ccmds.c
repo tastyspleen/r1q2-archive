@@ -209,7 +209,7 @@ qCopyFile
 static void qCopyFile (char *src, char *dst)
 {
 	FILE	*f1, *f2;
-	int		l;
+	size_t	l;
 	byte	buffer[65536];
 
 	Com_DPrintf ("qCopyFile (%s, %s)\n", src, dst);
@@ -228,7 +228,15 @@ static void qCopyFile (char *src, char *dst)
 	{
 		l = fread (buffer, 1, sizeof(buffer), f1);
 		if (!l)
+		{
 			break;
+		}
+		else if (l == -1)
+		{
+			Com_Printf ("WARNING: qCopyFile: fread() failed.\n", LOG_GENERAL|LOG_WARNING);
+			break;
+		}
+
 		fwrite (buffer, 1, l, f2);
 	}
 
@@ -245,7 +253,8 @@ SV_CopySaveGame
 static void SV_CopySaveGame (char *src, char *dst)
 {
 	char	name[MAX_OSPATH], name2[MAX_OSPATH];
-	int		l, len;
+	size_t	l;
+	size_t	len;
 	char	*found;
 
 	Com_DPrintf("SV_CopySaveGame(%s, %s)\n", src, dst);
@@ -1447,7 +1456,7 @@ void SV_DelStuffCmd_f (void)
 			s++;
 			dst++;
 
-			length = strlen(dst);
+			length = (int)strlen(dst);
 
 			memmove (p, dst, length+1);
 			Com_Printf ("Stuffcmd removed.\n", LOG_GENERAL);

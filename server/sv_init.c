@@ -492,8 +492,8 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 {
 	char	level[MAX_QPATH];
 	char	*ch;
-	int		l;
 	char	spawnpoint[MAX_QPATH];
+	size_t	l;
 
 	Z_Verify("SV_Map:START");
 

@@ -44,6 +44,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	DIRECTINPUT_MOUSE_SUPPORT	1
 // q_shared.h -- included first by ALL program modules
 
+#if _WIN64 || __x64
+#ifdef _WIN64
+typedef __int64		INTPTR;
+#else
+typedef long long	INTPTR;
+#endif
+#else
+typedef	int			INTPTR;
+#endif
+
 #ifdef _WIN32
 // unknown pragmas are SUPPOSED to be ignored, but....
 //#pragma warning(disable : 4244)     // MIPS

@@ -697,7 +697,7 @@ void FS_Read (void *buffer, int len, FILE *f)
 		if (block > MAX_READ)
 			block = MAX_READ;
 
-		read = fread (buf, 1, block, f);
+		read = (int)fread (buf, 1, block, f);
 		if (read == 0)
 		{
 			// we might have been trying to read from a CD
@@ -841,7 +841,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	if (fseek (packhandle, header.dirofs, SEEK_SET))
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %d in %s failed (corrupt packfile?)", header.dirofs, packfile);
 
-	if (fread (info, 1, header.dirlen, packhandle) != header.dirlen)
+	if ((int)fread (info, 1, header.dirlen, packhandle) != header.dirlen)
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %d bytes at %d)", packfile, header.dirofs, header.dirlen);
 
 	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
@@ -897,7 +897,7 @@ static void FS_AddGameDirectory (const char *dir)
 	int				i;
 	int				total;
 	int				totalpaks;
-	int				pakmatchlen;
+	size_t			pakmatchlen;
 
 	char			pakfile[MAX_OSPATH];
 	char			pakmatch[MAX_OSPATH];
@@ -951,7 +951,7 @@ static void FS_AddGameDirectory (const char *dir)
 	{
 		while (s)
 		{
-			i = strlen (s);
+			i = (int)strlen (s);
 			if (!Q_stricmp (s+(i-4), ".pak"))
 			{
 				if (!Q_strncasecmp (s, pakmatch, pakmatchlen))
@@ -1048,7 +1048,7 @@ FS_SetGamedir
 Sets the gamedir and path to a different directory.
 ================
 */
-void FS_SetGamedir (char *dir)
+void FS_SetGamedir (const char *dir)
 {
 	searchpath_t	*next;
 
@@ -1162,7 +1162,7 @@ static void FS_Link_f (void)
 	l->next = fs_links;
 	fs_links = l;
 	l->from = CopyString(Cmd_Argv(1), TAGMALLOC_LINK);
-	l->fromlength = strlen(l->from);
+	l->fromlength = (int)strlen(l->from);
 	l->to = CopyString(Cmd_Argv(2), TAGMALLOC_LINK);
 }
 

@@ -41,9 +41,9 @@ The .pak files are just a linear collapse of a directory tree
 
 typedef struct dpackheader_s
 {
-	int		ident;		// == IDPAKHEADER
-	size_t		dirofs;
-	size_t		dirlen;
+	long		ident;		// == IDPAKHEADER
+	long		dirofs;
+	long		dirlen;
 } dpackheader_t;
 
 #define	MAX_FILES_IN_PACK	4096

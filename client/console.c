@@ -258,7 +258,7 @@ void Con_MessageMode_f (void)
 		if (chat_buffer[0])
 		{
 			strcat (chat_buffer, " ");
-			chat_bufferlen = strlen(chat_buffer);
+			chat_bufferlen = (int)strlen(chat_buffer);
 			chat_cursorpos = chat_bufferlen;
 		}
 	}
@@ -281,7 +281,7 @@ void Con_MessageMode2_f (void)
 		if (chat_buffer[0])
 		{
 			strcat (chat_buffer, " ");
-			chat_bufferlen = strlen(chat_buffer);
+			chat_bufferlen = (int)strlen(chat_buffer);
 			chat_cursorpos = chat_bufferlen;
 		}
 	}
@@ -551,7 +551,7 @@ void Con_DrawInput (void)
 // draw it
 	//y = con.vislines-16;
 
-	length = strlen (text);
+	length = (int)strlen (text);
 
 	for (i=0 ; i<length; i++)
 		re.DrawChar ( (i+1)<<3, con.vislines - 22, text[i]);
@@ -679,7 +679,7 @@ void Con_DrawConsole (float frac)
 	SCR_AddDirtyPoint (0,0);
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
-	len = strlen(key_lines[edit_line]);
+	len = (int)strlen(key_lines[edit_line]);
 
 	i = Com_sprintf (version, sizeof(version), "r1q2 %s", VERSION);
 
@@ -694,7 +694,7 @@ void Con_DrawConsole (float frac)
 	t = time (NULL);
 	today = localtime(&t);
 
-	i = strftime (version, sizeof(version), "%H:%M:%S", today);
+	i = (int)strftime (version, sizeof(version), "%H:%M:%S", today);
 	for (x=0 ; x<i ; x++)
 		re.DrawChar (viddef.width-66+x*8, lines-22-offset, 128 + version[x] );
 
@@ -746,7 +746,7 @@ void Con_DrawConsole (float frac)
 			text = cls.downloadname;
 
 		x = con.linewidth - ((con.linewidth * 7) / 40);
-		y = x - strlen(text) - 20;
+		y = x - (int)strlen(text) - 20;
 		i = con.linewidth/3;
 		if (strlen(text) > i) {
 			y = x - i - 11;
@@ -755,7 +755,7 @@ void Con_DrawConsole (float frac)
 		} else
 			strcpy(dlbar, text);
 		strcat(dlbar, ": ");
-		i = strlen(dlbar);
+		i = (int)strlen(dlbar);
 		dlbar[i++] = '\x80';
 		// where's the dot go?
 		if (cls.downloadpercent == 0)
@@ -772,7 +772,7 @@ void Con_DrawConsole (float frac)
 
 		sprintf (dlbar + i, " %02d%% (%.02f KB)", cls.downloadpercent, (float)ftell(cls.download)/1024.0);
 
-		j = strlen(dlbar);
+		j = (int)strlen(dlbar);
 
 		// draw it
 		y = con.vislines-12;

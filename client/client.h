@@ -208,8 +208,7 @@ typedef struct client_state_s
 	char		gamedir[MAX_QPATH];
 	int			playernum;
 
-	char	configstrings[MAX_CONFIGSTRINGS][MAX_QPATH];
-	qboolean	configstrings_download_attempted[MAX_CONFIGSTRINGS];
+	char		configstrings[MAX_CONFIGSTRINGS][MAX_QPATH];
 
 	//
 	// locally derived information from server state
@@ -218,7 +217,7 @@ typedef struct client_state_s
 	struct cmodel_s	*model_clip[MAX_MODELS];
 
 	struct sfx_s	*sound_precache[MAX_SOUNDS];
-	struct image_s	*image_precache[MAX_IMAGES];
+	//struct image_s	*image_precache[MAX_IMAGES];
 
 	clientinfo_t	clientinfo[MAX_CLIENTS];
 	clientinfo_t	baseclientinfo;

@@ -183,7 +183,7 @@ void Key_CompleteCommandOld (void)
 	{
 		key_lines[edit_line][1] = '/';
 		strcpy (key_lines[edit_line]+2, cmd);
-		key_linepos = strlen(cmd)+2;
+		key_linepos = (int)strlen(cmd)+2;
 		key_lines[edit_line][key_linepos] = ' ';
 		key_linepos++;
 		key_lines[edit_line][key_linepos] = 0;
@@ -229,7 +229,7 @@ static void Key_CompleteCommand (void) {
 		offset += 4;
 	}
 
-	len = strlen (partial);
+	len = (int)strlen (partial);
 
 	if (!len)
 		return;
@@ -372,7 +372,7 @@ static void Key_CompleteCommand (void) {
 	if (cmdName)
 	{
 		int cmdLen;
-		cmdLen = strlen(cmdName);
+		cmdLen = (int)strlen(cmdName);
 		if (cmdLen + offset + 2 >= MAXCMDLINE)
 		{
 			Com_DPrintf ("Key_CompleteCommand: expansion would overflow command buffer\n");
@@ -455,7 +455,7 @@ void Key_Console (int key)
 
 			strtok( cbd, "\n\r\b" );
 
-			i = strlen( cbd );
+			i = (int)strlen( cbd );
 
 			//r1: save byte for null terminator!!
 			if ( i + key_linepos >= MAXCMDLINE - 1)
@@ -514,7 +514,7 @@ void Key_Console (int key)
 			const char *best = "~";
 			const char *least = "~";
 
-			len = strlen(key_lines[edit_line]);
+			len = (int)strlen(key_lines[edit_line]);
 			for (i = 0 ; i < len - 1 ; i++)
 			{
 				if (key_lines[edit_line][i] == ' ')
@@ -544,7 +544,7 @@ void Key_Console (int key)
 			}
 
 			sprintf(key_lines[edit_line], "]%s ", best);
-			key_linepos = strlen(key_lines[edit_line]);
+			key_linepos = (int)strlen(key_lines[edit_line]);
 		}
 		else if (cl_cmdcomplete->value == 2)
 		{
@@ -598,7 +598,7 @@ void Key_Console (int key)
 		if (history_line == edit_line)
 			history_line = (edit_line+1)&31;
 		strcpy(key_lines[edit_line], key_lines[history_line]);
-		key_linepos = strlen(key_lines[edit_line]);
+		key_linepos = (int)strlen(key_lines[edit_line]);
 		return;
 	}
 
@@ -621,7 +621,7 @@ void Key_Console (int key)
 		else
 		{
 			strcpy(key_lines[edit_line], key_lines[history_line]);
-			key_linepos = strlen(key_lines[edit_line]);
+			key_linepos = (int)strlen(key_lines[edit_line]);
 		}
 		return;
 	}
@@ -653,7 +653,7 @@ void Key_Console (int key)
 	{
 		int		len;
 
-		len = strlen(key_lines[edit_line]);
+		len = (int)strlen(key_lines[edit_line]);
 
 		if (keydown[K_CTRL] || !key_lines[edit_line][1] || key_linepos == len)
 			con.display = con.current;
@@ -670,7 +670,7 @@ void Key_Console (int key)
 		int		last;
 		int		length;
 
-		length = strlen(key_lines[edit_line]);
+		length = (int)strlen(key_lines[edit_line]);
 
 		if (length >= MAXCMDLINE-1)
 			return;
@@ -834,14 +834,15 @@ FIXME: handle quote special (general escape sequence?)
 char *Key_KeynumToString (int keynum)
 {
 	keyname_t	*kn;	
-	static	char	tinystr[2];
+	static	char	tinystr[2] = {0};
 	
 	if (keynum == -1)
 		return "<KEY NOT FOUND>";
+
 	if (keynum > 32 && keynum < 127)
 	{	// printable ascii
 		tinystr[0] = keynum;
-		tinystr[1] = 0;
+		//tinystr[1] = 0;
 		return tinystr;
 	}
 	

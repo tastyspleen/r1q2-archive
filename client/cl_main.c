@@ -807,7 +807,7 @@ void CL_Rcon_f (void)
 			last_rcon_to.port = ShortSwap (PORT_SERVER);
 	}
 	
-	NET_SendPacket (NS_CLIENT, strlen(message)+1, message, &last_rcon_to);
+	NET_SendPacket (NS_CLIENT, (int)strlen(message)+1, message, &last_rcon_to);
 }
 
 
@@ -996,7 +996,7 @@ void CL_Packet_f (void)
 
 	*(int *)send = -1;
 
-	l = strlen (in);
+	l = (int)strlen (in);
 	for (i=0 ; i<l ; i++)
 	{
 		if (out - send >= sizeof(send)-1)
@@ -1534,21 +1534,17 @@ void CL_FreeLocs (void)
 
 qboolean CL_LoadLoc (const char *filename)
 {
+	char	*locBuffer;
 	cl_location_t	*loc = &cl_locations;
 	char *x, *y, *z, *name, *line;
-	char readLine[256];
 	int	linenum;
-	//int len;
-	FILE *fLoc;
+	int len;
 
 	CL_FreeLocs ();
 
-	FS_FOpenFile (filename, &fLoc, true);
+	len = FS_LoadFile ((char *)filename, &locBuffer);
 
-	if (!fLoc)
-		fLoc = fopen (filename, "rb");
-
-	if (!fLoc)
+	if (!locBuffer)
 	{
 		Com_DPrintf ("CL_LoadLoc: %s not found\n", filename);
 		return false;
@@ -1556,13 +1552,24 @@ qboolean CL_LoadLoc (const char *filename)
 
 	linenum = 0;
 
-	while ((line = (fgets (readLine, sizeof(readLine), fLoc))))
+	line = locBuffer;
+
+	for (;;)
 	{
+		//eof
+		if (line - locBuffer >= len)
+			break;
+
+		//skip whitespace
+		while (*line && (*line == ' ' || *line == '\t' || *line == '\r' || *line == '\n'))
+			line++;
+
+		//eof now?
+		if (line - locBuffer >= len)
+			break;
+
 		linenum++;
 		x = line;
-
-		if (x[0] == '\r' || x[0] == '\n' || x[0] == '\0')
-			continue;
 
 		name = y = z = NULL;
 
@@ -1618,9 +1625,14 @@ qboolean CL_LoadLoc (const char *filename)
 		VectorSet (loc->location, (float)atoi(x)/8.0, (float)atoi(y)/8.0, (float)atoi(z)/8.0);
 
 		Com_DPrintf ("CL_AddLoc: adding location '%s'\n", name);
+
+		//advance past \0
+		line++;
 	}
 
-	FS_FCloseFile (fLoc);
+	Com_DPrintf ("CL_AddLoc: read %d locations from '%s'\n", linenum, filename);
+
+	Z_Free (locBuffer);
 	return true;
 }
 
@@ -1739,8 +1751,8 @@ void CL_Say_Preprocessor (void)
 						location_name = CL_Loc_Get (end);
 				}
 
-				cmd_len = strlen(Cmd_Args());
-				location_len = strlen(location_name);
+				cmd_len = (int)strlen(Cmd_Args());
+				location_len = (int)strlen(location_name);
 
 				if (cmd_len + location_len >= MAX_STRING_CHARS-1)
 				{
@@ -1822,9 +1834,6 @@ void CL_RequestNextDownload (void)
 				//new model, try downloading it
 				if (precache_model_skin == 0)
 				{
-					if (strlen(cl.configstrings[precache_check]) >= MAX_OSPATH-1)
-						Com_Error (ERR_DROP, "Bad model confistring '%s'", cl.configstrings[precache_check]);
-
 					if (!CL_CheckOrDownloadFile(cl.configstrings[precache_check]))
 					{
 						precache_model_skin = 1;
@@ -1907,7 +1916,7 @@ void CL_RequestNextDownload (void)
 						{
 							Com_Printf ("Warning, model %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
 						}
-						else if (strlen(skinname) >= MAX_SKINNAME-1)
+						else if (strlen(skinname) > MAX_SKINNAME-1)
 						{
 							Com_Error (ERR_DROP, "Model %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
 						}
@@ -1936,7 +1945,7 @@ void CL_RequestNextDownload (void)
 						{
 							Com_Printf ("Warning, sprite %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
 						}
-						else if (strlen(skinname) >= MAX_SKINNAME-1)
+						else if (strlen(skinname) > MAX_SKINNAME-1)
 						{
 							Com_Error (ERR_DROP, "Sprite %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
 						}
@@ -2054,7 +2063,7 @@ void CL_RequestNextDownload (void)
 				}
 					//*skin = 0;
 
-				length = strlen (model);
+				length = (int)strlen (model);
 				for (j = 0; j < length; j++)
 				{
 					if (!isalnum(model[j]) && model[j] != '_')
@@ -2066,7 +2075,7 @@ void CL_RequestNextDownload (void)
 					}
 				}
 
-				length = strlen (skin);
+				length = (int)strlen (skin);
 				for (j = 0; j < length; j++)
 				{
 					if (!isalnum(skin[j]) && skin[j] != '_')

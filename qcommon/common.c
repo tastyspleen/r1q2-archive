@@ -433,7 +433,7 @@ void Com_Error (int code, char *fmt, ...)
 
 	if (logfile)
 	{
-		fprintf (logfile, "*****************************\n"
+		fprintf (logfile, "Fatal Error\n*****************************\n"
 						  "Server fatal crashed: %s\n"
 						  "*****************************\n", msg);
 		fclose (logfile);
@@ -638,7 +638,7 @@ void MSG_WriteString (const char *s)
 	if (!s)
 		SZ_Write (&msgbuff, "", 1);
 	else
-		SZ_Write (&msgbuff, s, strlen(s)+1);
+		SZ_Write (&msgbuff, s, (int)strlen(s)+1);
 }
 
 void MSG_Write (const void *data, int length)
@@ -650,7 +650,7 @@ void MSG_Print (const char *data)
 {
 	int		len;
 	
-	len = strlen(data)+1;
+	len = (int)strlen(data)+1;
 
 	Q_assert (len > 1);
 
@@ -1371,7 +1371,7 @@ void SZ_Print (sizebuf_t /*@out@*/*buf, const char *data)
 {
 	int		len;
 	
-	len = strlen(data)+1;
+	len = (int)strlen(data)+1;
 
 	Q_assert (len > 1);
 
@@ -1485,7 +1485,7 @@ char *CopyString (const char *in, int tag)
 {
 	char	*out;
 	
-	out = Z_TagMalloc (strlen(in)+1, tag);
+	out = Z_TagMalloc ((int)strlen(in)+1, tag);
 	strcpy (out, in);
 	return out;
 }
@@ -2444,34 +2444,28 @@ int ZLibCompressChunk(byte *in, int len_in, byte *out, int len_out, int method, 
 }
 #endif
 
-char *StripHighBits (const char *string, int highbits)
+void StripHighBits (char *string, int highbits)
 {
-	int c;
-	static char stripped[4096];
-	char *p = stripped;
+	byte		high;
+	byte		c;
+	char		*p;
+
+	p = string;
+
+	if (highbits)
+		high = 127;
+	else
+		high = 255;
 
 	while (*string)
 	{
 		c = *(string++);
-		if (highbits) {
-			//c &= 127;		// strip high bits
-			if (c >= 32 && c <= 127)
-				*p++ = c;
-		} else {
-			if (c >= 32)
-				*p++ = c;
-		}
 
-		if (p - stripped == sizeof(stripped)-2) {
-			Com_Printf ("StripHighBits: overflow\n", LOG_GENERAL);
-			stripped[sizeof(stripped)-1] = '\0';
-			break;
-		}
+		if (c >= 32 && c <= high)
+			*p++ = c;
 	}
 
 	*p = '\0';
-
-	return stripped;
 }
 
 void ExpandNewLines (char *string)
@@ -2501,12 +2495,12 @@ void ExpandNewLines (char *string)
 
 char *StripQuotes (char *string)
 {
-	int		i;
+	size_t	i;
+
+	if (!string[0])
+		return string;
 
 	i = strlen(string);
-
-	if (!i)
-		return string;
 
 	if (string[0] == '"' && string[i-1] == '"')
 	{

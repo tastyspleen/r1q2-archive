@@ -370,7 +370,7 @@ void CL_PrepRefresh (void)
 	SCR_UpdateScreen ();
 	for (i=1 ; i<MAX_IMAGES && cl.configstrings[CS_IMAGES+i][0] ; i++)
 	{
-		cl.image_precache[i] = re.RegisterPic (cl.configstrings[CS_IMAGES+i]);
+		re.RegisterPic (cl.configstrings[CS_IMAGES+i]);
 		Sys_SendKeyEvents ();	// pump message loop
 	}
 	
@@ -381,20 +381,21 @@ void CL_PrepRefresh (void)
 	else
 		maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
 
+	Com_Printf ("clients\r", LOG_CLIENT, i);
+	SCR_UpdateScreen ();
+
 	for (i=0 ; i<maxclients ; i++)
 	{
 		if (!cl.configstrings[CS_PLAYERSKINS+i][0])
 			continue;
 
-		Com_Printf ("client %i  \r", LOG_CLIENT, i); 
-		SCR_UpdateScreen ();
+		//SCR_UpdateScreen ();
 		Sys_SendKeyEvents ();	// pump message loop
 		CL_ParseClientinfo (i);
 	}
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
-	Com_Printf ("base client     \r", LOG_CLIENT, i); 
 	CL_LoadClientinfo (&cl.baseclientinfo, "");
 
 	// set sky textures and speed
@@ -528,7 +529,7 @@ char frameMsg[] = "OLDFRAME";
 char parseMsg[] = "OLDPARSE";
 char overflowMsg[] = "OVERFLOW";
 
-extern int __cdecl entitycmpfnc( const entity_t *, const entity_t * );
+extern int EXPORT entitycmpfnc( const entity_t *, const entity_t * );
 extern int			scr_draw_loading;
 /*
 ==================
@@ -636,7 +637,7 @@ void V_RenderView(void)
 		cl.refdef.rdflags = cl.frame.playerstate.rdflags;
 
 		// sort entities for better cache locality
-        qsort( cl.refdef.entities, cl.refdef.num_entities, sizeof( cl.refdef.entities[0] ), (int (__cdecl *)(const void *, const void *))entitycmpfnc );
+        qsort( cl.refdef.entities, cl.refdef.num_entities, sizeof( cl.refdef.entities[0] ), (int (EXPORT *)(const void *, const void *))entitycmpfnc );
 	
 		re.RenderFrame (&cl.refdef);
 	}

@@ -178,8 +178,8 @@ int CharVerify (char c)
 
 int NameColorFilterCheck (const char *newname)
 {
-	int length;
-	int i;
+	size_t	length;
+	size_t	i;
 
 	if (!sv_filter_q3names->intvalue)
 		return 0;
@@ -511,7 +511,7 @@ char	*SV_StatusString (void)
 
 	strcpy (status, serverinfo);
 	strcat (status, "\n");
-	statusLength = strlen(status);
+	statusLength = (int)strlen(status);
 
 	if (!sv_hideplayers->intvalue)
 	{
@@ -527,7 +527,7 @@ char	*SV_StatusString (void)
 					Com_sprintf (player, sizeof(player), "%i %i \"%s\"\n", 
 						((struct gclient_old_s *)(cl->edict->client))->ps.stats[STAT_FRAGS], cl->ping, cl->name);
 	#endif
-				playerLength = strlen(player);
+				playerLength = (int)strlen(player);
 				if (statusLength + playerLength >= sizeof(status) )
 					break;		// can't hold any more
 				strcpy (status + statusLength, player);
@@ -945,7 +945,7 @@ void SVC_DirectConnect (void)
 
 	//r1ch: allow filtering of stupid "fun" names etc.
 	if (sv_filter_userinfo->intvalue)
-		strcpy (userinfo, StripHighBits(userinfo, (int)sv_filter_userinfo->intvalue == 2));
+		StripHighBits(userinfo, (int)sv_filter_userinfo->intvalue == 2);
 
 	//r1ch: simple userinfo validation
 	/*if (!CheckUserInfoFields(userinfo)) {
@@ -1188,7 +1188,7 @@ gotnewcl:
 	memset (newcl->messageListData, 0, sizeof(messagelist_t) * MAX_MESSAGES_PER_LIST);
 
 	newcl->msgListEnd = newcl->msgListStart = newcl->messageListData;
-	newcl->msgListStart->data = ((void *)0xDEADC0DE);
+	newcl->msgListStart->data = NULL;
 
 	newcl->lastlines = Z_TagMalloc (sizeof(entity_state_t) * MAX_EDICTS, TAGMALLOC_CL_BASELINES);
 	//memset (newcl->lastlines, 0, sizeof(entity_state_t) * MAX_EDICTS);
@@ -1356,7 +1356,7 @@ void SVC_RemoteCommand (void)
 		if (i == 2)
 		{
 			linkednamelist_t	*lrcon;
-			int					clen;
+			size_t				clen;
 
 			i = 0;
 
@@ -2212,7 +2212,7 @@ void SV_UserinfoChanged (client_t *cl)
 
 	//r1ch: allow filtering of stupid "fun" names etc.
 	if (sv_filter_userinfo->intvalue)
-		strncpy (cl->userinfo, StripHighBits(cl->userinfo, (int)sv_filter_userinfo->intvalue == 2), sizeof(cl->userinfo)-1);
+		StripHighBits(cl->userinfo, (int)sv_filter_userinfo->intvalue == 2);
 
 	val = Info_ValueForKey (cl->userinfo, "name");
 

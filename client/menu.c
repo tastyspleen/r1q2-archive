@@ -63,6 +63,12 @@ const char *(*m_keyfunc) (int key);
 
 #define	MAX_MENU_DEPTH	8
 
+static float ClampCvar( float min, float max, float value )
+{
+	if ( value < min ) return min;
+	if ( value > max ) return max;
+	return value;
+}
 
 typedef struct
 {
@@ -644,7 +650,7 @@ static void M_UnbindCommand (char *command)
 	int		l;
 	char	*b;
 
-	l = strlen(command);
+	l = (int)strlen(command);
 
 	for (j=0 ; j<256 ; j++)
 	{
@@ -664,7 +670,7 @@ static void M_FindKeysForCommand (char *command, int *twokeys)
 	char	*b;
 
 	twokeys[0] = twokeys[1] = -1;
-	l = strlen(command);
+	l = (int)strlen(command);
 	count = 0;
 
 	for (j=0 ; j<256 ; j++)
@@ -710,7 +716,7 @@ static void DrawKeyBindingFunc( void *self )
 
 		Menu_DrawString( a->generic.x + a->generic.parent->x + 16, a->generic.y + a->generic.parent->y, name );
 
-		x = strlen(name) * 8;
+		x = (int)strlen(name) * 8;
 
 		if (keys[1] != -1)
 		{
@@ -1110,6 +1116,25 @@ static void R1Q2_MenuInit (void)
 		0
 	};
 
+	static const char *xanianames[] = 
+	{
+		"disabled",
+		"red",
+		"green",
+		"blue",
+		"yellow",
+		"orange",
+		0
+	};
+
+	static const char *dinputnames[] = 
+	{
+		"disabled",
+		"buffered",
+		"immediate",
+		0
+	};
+
 	/*
 	** configure controls menu and menu items
 	*/
@@ -1134,8 +1159,8 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_dinput.generic.y	= 30;
 	s_r1q2_dinput.generic.name	= "directinput mouse";
 	s_r1q2_dinput.generic.callback = DirectInputFunc;
-	s_r1q2_dinput.itemnames = yesno_names;
-	s_r1q2_dinput.curvalue = Cvar_VariableValue ("m_directinput");
+	s_r1q2_dinput.itemnames = dinputnames;
+	s_r1q2_dinput.curvalue = ClampCvar (0, 2, Cvar_VariableValue ("m_directinput"));
 
 	s_r1q2_winxp.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_winxp.generic.x	= 0;
@@ -1143,7 +1168,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_winxp.generic.name	= "xp mouse acceleration fix";
 	s_r1q2_winxp.generic.callback = AccelFixFunc;
 	s_r1q2_winxp.itemnames = yesno_names;
-	s_r1q2_winxp.curvalue = Cvar_VariableValue ("m_fixaccel");
+	s_r1q2_winxp.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("m_fixaccel"));
 
 	s_r1q2_defer.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_defer.generic.x	= 0;
@@ -1151,7 +1176,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_defer.generic.name	= "defer model loading";
 	s_r1q2_defer.generic.callback = DeferFunc;
 	s_r1q2_defer.itemnames = yesno_names;
-	s_r1q2_defer.curvalue = Cvar_VariableValue ("cl_defermodels");
+	s_r1q2_defer.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("cl_defermodels"));
 
 	s_r1q2_async.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_async.generic.x	= 0;
@@ -1159,7 +1184,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_async.generic.name	= "asynchronous net/fps";
 	s_r1q2_async.generic.callback = AsyncFunc;
 	s_r1q2_async.itemnames = yesno_names;
-	s_r1q2_async.curvalue = Cvar_VariableValue ("cl_async");
+	s_r1q2_async.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("cl_async"));
 
 	s_r1q2_autorecord.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_autorecord.generic.x	= 0;
@@ -1167,15 +1192,15 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_autorecord.generic.name	= "automatic demo record";
 	s_r1q2_autorecord.generic.callback = AutoFunc;
 	s_r1q2_autorecord.itemnames = yesno_names;
-	s_r1q2_autorecord.curvalue = Cvar_VariableValue ("cl_autorecord");
+	s_r1q2_autorecord.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("cl_autorecord"));
 
 	s_r1q2_xaniarail.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_xaniarail.generic.x	= 0;
 	s_r1q2_xaniarail.generic.y	= 90;
 	s_r1q2_xaniarail.generic.name	= "\"xania\" railgun trail";
 	s_r1q2_xaniarail.generic.callback = RailTrailFunc;
-	s_r1q2_xaniarail.itemnames = yesno_names;
-	s_r1q2_xaniarail.curvalue = Cvar_VariableValue ("cl_railtrail");
+	s_r1q2_xaniarail.itemnames = xanianames;
+	s_r1q2_xaniarail.curvalue = ClampCvar (0, 5, Cvar_VariableValue ("cl_railtrail"));
 
 /*
 	s_options_invertmouse_box.generic.type = MTYPE_SPINCONTROL;
@@ -1267,12 +1292,6 @@ static void MouseSpeedFunc( void *unused )
 	Cvar_SetValue( "win_noalttab", s_options_noalttab_box.curvalue );
 }*/
 
-static float ClampCvar( float min, float max, float value )
-{
-	if ( value < min ) return min;
-	if ( value > max ) return max;
-	return value;
-}
 
 static void ControlsSetMenuItemValues( void )
 {
@@ -2810,7 +2829,7 @@ static void StartServer_MenuInit( void )
 		int		j, l;
 
 		strcpy( shortname, COM_Parse( &s ) );
-		l = strlen(shortname);
+		l = (int)strlen(shortname);
 		for (j=0 ; j<l ; j++)
 			shortname[j] = toupper(shortname[j]);
 		strcpy( longname, COM_Parse( &s ) );
@@ -3815,7 +3834,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 	return false;
 }
 
-static int __cdecl pmicmpfnc( const void *_a, const void *_b )
+static int EXPORT pmicmpfnc( const void *_a, const void *_b )
 {
 	const playermodelinfo_s *a = ( const playermodelinfo_s * ) _a;
 	const playermodelinfo_s *b = ( const playermodelinfo_s * ) _b;
@@ -3880,7 +3899,7 @@ static qboolean PlayerConfig_MenuInit( void )
 		strcpy( currentskin, "grunt" );
 	}
 
-	qsort( s_pmi, s_numplayermodels, sizeof( s_pmi[0] ), (int (__cdecl *)(const void *, const void *))pmicmpfnc );
+	qsort( s_pmi, s_numplayermodels, sizeof( s_pmi[0] ), (int (EXPORT *)(const void *, const void *))pmicmpfnc );
 
 	memset( s_pmnames, 0, sizeof( s_pmnames ) );
 	for ( i = 0; i < s_numplayermodels; i++ )
@@ -3915,7 +3934,7 @@ static qboolean PlayerConfig_MenuInit( void )
 	s_player_name_field.length	= 20;
 	s_player_name_field.visible_length = 20;
 	strncpy( s_player_name_field.buffer, name->string, sizeof(s_player_name_field.buffer)-1);
-	s_player_name_field.cursor = strlen( name->string );
+	s_player_name_field.cursor = (int)strlen( name->string );
 
 	s_player_model_title.generic.type = MTYPE_SEPARATOR;
 	s_player_model_title.generic.name = "model";

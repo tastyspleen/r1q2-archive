@@ -278,7 +278,7 @@ __inline char *SV_FixPlayerSkin (char *val, char *player_name)
 {
 	static char	fixed_skin[MAX_QPATH];
 
-	Com_DPrintf ("PF_Configstring: Overriding malformed playerskin '%s' with '%s\\male/grunt'\n", LOG_SERVER|LOG_WARNING, val, player_name);
+	Com_DPrintf ("PF_Configstring: Overriding malformed playerskin '%s' with '%s\\male/grunt'\n", val, player_name);
 
 	Q_strncpy (fixed_skin, player_name, MAX_QPATH - 12);
 	strcat (fixed_skin, "\\male/grunt");
@@ -294,10 +294,10 @@ PF_Configstring
 */
 void EXPORT PF_Configstring (int index, char *val)
 {
-	int length;
+	size_t	length;
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
-		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)", index, val);
+		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)", index, MakePrintable(val));
 
 	if (!val)
 		val = "";
@@ -310,8 +310,8 @@ void EXPORT PF_Configstring (int index, char *val)
 		char	*player_name;
 		char	*model_name;
 		char	*skin_name;
-		int		i;
 		char	pname[MAX_QPATH];
+		size_t	i;
 
 		Q_strncpy (pname, val, sizeof(pname)-1);
 
@@ -359,7 +359,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		{
 			if (!isalnum(model_name[i]) && model_name[i] != '_')
 			{
-				Com_DPrintf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", LOG_SERVER|LOG_WARNING, model_name[i], val);
+				Com_DPrintf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", model_name[i], val);
 				val = SV_FixPlayerSkin (val, player_name);
 				goto fixed;
 			}
@@ -370,7 +370,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		{
 			if (!isalnum(skin_name[i]) && skin_name[i] != '_')
 			{
-				Com_DPrintf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", LOG_SERVER|LOG_WARNING, skin_name[i], val);
+				Com_DPrintf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", skin_name[i], val);
 				val = SV_FixPlayerSkin (val, player_name);
 				break;
 			}

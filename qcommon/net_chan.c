@@ -141,7 +141,7 @@ void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, char *format, ...)
 		Com_Printf ("WARNING: Netchan_OutOfBandPrint: message overflow.\n", LOG_NET);
 	va_end (argptr);
 
-	Netchan_OutOfBand (net_socket, adr, strlen(string), (byte *)string);
+	Netchan_OutOfBand (net_socket, adr, (int)strlen(string), (byte *)string);
 }
 
 
