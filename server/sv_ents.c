@@ -355,7 +355,8 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 		pflags |= PS_BBOX;
 #endif
 
-	pflags |= PS_WEAPONINDEX;
+	if (ps->gunindex != ops->gunindex)
+		pflags |= PS_WEAPONINDEX;
 
 	//
 	// write it
