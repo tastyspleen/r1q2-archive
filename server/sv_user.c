@@ -870,7 +870,7 @@ static void SV_Begin_f (void)
 	//r1: could be abused to respawn or cause spam/other mod-specific problems
 	if (sv_client->state != cs_spawning)
 	{
-		Com_Printf ("EXPLOIT: Illegal 'begin' from %s (already spawned), client dropped.\n", LOG_SERVER|LOG_EXPLOIT, sv_client->name);
+		Com_Printf ("EXPLOIT: Illegal 'begin' from %s (already spawned), client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name);
 		SV_DropClient (sv_client, false);
 		return;
 	}
@@ -1694,7 +1694,7 @@ void SV_ExecuteUserCommand (char *s)
 	bannedcommands_t	*x;
 	linkednamelist_t	*y;
 	
-	//r1: catch attempted server exploits
+	//r1: catch attempted command expansions
 	if (strchr(s, '$'))
 	{
 		teststring = Cmd_MacroExpandString(s);
@@ -1704,7 +1704,10 @@ void SV_ExecuteUserCommand (char *s)
 		if (strcmp (teststring, s))
 		{
 			Com_Printf ("EXPLOIT: Client %s[%s] attempted macro-expansion: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), MakePrintable(s));
-			SV_KickClient (sv_client, "attempted server exploit", NULL);
+			//we no longer kick or blackhole for this since the new "cool" thing to do is to tell people
+			//to type "$GOD" FOR GOD MODE!!! and other stupid stuff that some server admins seem to fall for.
+			//we still return instead of processing the command though in case something else could expand it.
+			//SV_KickClient (sv_client, "attempted server exploit", NULL);
 			return;
 		}
 	}

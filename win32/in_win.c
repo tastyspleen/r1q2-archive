@@ -918,6 +918,7 @@ void IN_ActivateMouse (void)
 	height = GetSystemMetrics (SM_CYSCREEN);
 
 	GetWindowRect ( cl_hwnd, &window_rect);
+	//GetClientRect (cl_hwnd, &window_rect);
 
 	if (window_rect.left < 0)
 		window_rect.left = 0;
@@ -1065,7 +1066,7 @@ void IN_MouseEvent (int mstate)
 {
 	int		i;
 
-	if (!mouseinitialized || m_directinput->intvalue)
+	if (!mouseinitialized)
 		return;
 
 // perform button actions
@@ -1106,11 +1107,15 @@ void IN_MouseMove (usercmd_t *cmd)
 			IN_ReadBufferedData (cmd);
 		else
 			IN_ReadImmediateData (cmd);
+#ifdef _DEBUG
+		//fix non-exclusive mouse being able to click window titlebar
+		SetCursorPos (window_center_x, window_center_y);
+#endif
 		return;
 	}
 
 	if (m_directinput->intvalue)
-		return;
+		Com_Error (ERR_FATAL, "Shit happens");
 
 	// find mouse movement
 	if (!GetCursorPos (&current_pos))
@@ -1157,7 +1162,8 @@ void IN_MouseMove (usercmd_t *cmd)
 	}
 
 	// force the mouse to the center, so there's room to move
-	if (mx || my) {
+	if (mx || my)
+	{
 		//Com_Printf ("******** SETCURSORPOS\n");
 		SetCursorPos (window_center_x, window_center_y);
 	}
@@ -1320,9 +1326,8 @@ void IN_Frame (void)
 		|| cls.key_dest == key_menu)
 	{
 		// temporarily deactivate if in fullscreen
-		if (vid_fullscreen && vid_fullscreen->intvalue == 0)
+		if (Cvar_IntValue ("vid_fullscreen") == 0)
 		{
-			//Com_Printf ("vid fullscreen is zero!!!\n", LOG_GENERAL);
 			IN_DeactivateMouse ();
 			return;
 		}
@@ -1385,7 +1390,8 @@ void IN_StartupJoystick (void)
 	joy_avail = false; 
 
 	// abort startup if user requests no joystick
-	cv = Cvar_Get ("in_initjoy", "1", CVAR_NOSET);
+	cv = Cvar_Get ("in_initjoy", "0", CVAR_NOSET);
+
 	if ( !cv->intvalue ) 
 		return; 
  
@@ -1543,7 +1549,6 @@ void Joy_AdvancedUpdate_f (void)
 IN_Commands
 ===========
 */
-#ifdef JOYSTICK
 void IN_Commands (void)
 {
 	int		i, key_index;
@@ -1553,7 +1558,6 @@ void IN_Commands (void)
 	{
 		return;
 	}
-
 	
 	// loop through the joystick buttons
 	// key a joystick event or auxillary event for higher number buttons for each state change
@@ -1607,7 +1611,7 @@ void IN_Commands (void)
 		joy_oldpovstate = povstate;
 	}
 }
-#endif
+
 /* 
 =============== 
 IN_ReadJoystick

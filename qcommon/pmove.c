@@ -577,7 +577,7 @@ PM_AirMove
 */
 void PM_AirMove (void)
 {
-	int			i;
+	//int			i;
 	vec3_t		wishvel;
 	float		fmove, smove;
 	vec3_t		wishdir;
@@ -595,8 +595,9 @@ void PM_AirMove (void)
 	VectorNormalize (pml.right);
 #endif
 
-	for (i=0 ; i<2 ; i++)
-		wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
+	//for (i=0 ; i<2 ; i++)
+	wishvel[0] = pml.forward[0]*fmove + pml.right[0]*smove;
+	wishvel[1] = pml.forward[1]*fmove + pml.right[1]*smove;
 	wishvel[2] = 0;
 
 	PM_AddCurrents (wishvel);
@@ -720,7 +721,7 @@ void PM_CatagorizePosition (void)
 				// don't do landing time if we were just going down a slope
 				if (pml.velocity[2] < -200 && !pm->strafehack)
 				{
-					///Com_Printf ("Zoink! ms=%d\n", pm->cmd.msec);
+					//Com_Printf ("Zoink! ms=%d vel = %f\n", LOG_GENERAL, pm->cmd.msec, pml.velocity[2]);
 					pm->s.pm_flags |= PMF_TIME_LAND;
 					// don't allow another jump for a little while
 					if (pml.velocity[2] < -400)

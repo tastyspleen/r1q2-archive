@@ -1669,13 +1669,13 @@ void SV_GiveMsec (void)
 			else
 			{
 				//normal movement, drop counter a bit
-				cl->commandMsecOverflowCount *= 0.97;
+				cl->commandMsecOverflowCount *= 0.985;
 			}
 
 			if (cl->commandMsecOverflowCount > 1.0f)
 				Com_DPrintf ("%s has %.2f overflowCount\n", cl->name, cl->commandMsecOverflowCount);
 
-			if (sv_enforcetime->intvalue > 1 && cl->commandMsecOverflowCount >= sv_enforcetime->intvalue)
+			if (sv_enforcetime->intvalue > 1 && cl->commandMsecOverflowCount >= sv_enforcetime->value)
 			{
 				SV_KickClient (cl, "irregular movement", "You were kicked from the game for irregular movement. This could be caused by excessive lag or other network conditions.\n");
 				continue;

@@ -1277,79 +1277,47 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	_controlfp( _PC_24, _MCW_PC );
 
-/*#ifndef NO_SERVER
-
-	if (dedicated->intvalue)
+	oldtime = Sys_Milliseconds ();
+	/* main window message loop */
+	for (;;)
 	{
-		//_beginthreadex (NULL, 0, (unsigned int (__stdcall *)(void *))QuakeMain, NULL, 0, &handle);
-		CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)QuakeMain, NULL, 0, &handle);
+		// if at a full screen console, don't update unless needed
+		//if (Minimized
+/*#ifndef NO_SERVER			
+			|| (dedicated->intvalue)
+#endif*/
+		//)
+		//{
+		//	Sleep (1);
+		//}
 
-		while (GetMessage (&msg, NULL, 0, 0))
+		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 		{
+			//if (GetMessage (&msg, NULL, 0, 0) == -1)
+			//	Com_Quit ();
 			sys_msg_time = msg.time;
 
-			if (!IsDialogMessage(hwnd_Server, &msg)) {
+#ifndef NO_SERVER
+			if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
+			{
+#endif
 				TranslateMessage (&msg);
    				DispatchMessage (&msg);
-			}
-		}
-
-		Com_Quit ();
-	} else {
-#endif
-#ifndef DEDICATED_ONLY*/
-
-		oldtime = Sys_Milliseconds ();
-		/* main window message loop */
-		for (;;)
-		{
-			// if at a full screen console, don't update unless needed
-			if (Minimized
-	/*#ifndef NO_SERVER			
-				|| (dedicated->intvalue)
-	#endif*/
-			)
-			{
-				Sleep (1);
-			}
-
-			while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
-			{
-				//if (GetMessage (&msg, NULL, 0, 0) == -1)
-				//	Com_Quit ();
-				sys_msg_time = msg.time;
-
-	#ifndef NO_SERVER
-				if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
-				{
-	#endif
-					TranslateMessage (&msg);
-   					DispatchMessage (&msg);
-	#ifndef NO_SERVER
-				}
-	#endif
-			}
-
-			//for (;;)
-			//{
-			//	if (Minimized)
-			//		Sleep (1);
-
-				do
-				{
-					newtime = Sys_Milliseconds ();
-					time = newtime - oldtime;
-				} while (time < 1);
-
-				Qcommon_Frame (time);
-
-				oldtime = newtime;
-			//}
-		}
-/*#endif
 #ifndef NO_SERVER
+			}
+#endif
+		}
+
+		do
+		{
+			newtime = Sys_Milliseconds ();
+			time = newtime - oldtime;
+		} while (time < 1);
+
+		Qcommon_Frame (time);
+
+		oldtime = newtime;
 	}
-#endif*/
 
 	return 0;
 }

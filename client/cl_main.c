@@ -3557,9 +3557,6 @@ void CL_Frame (int msec)
 		CL_RunDLights ();
 		CL_RunLightStyles ();
 		SCR_RunConsole ();
-
-		if (cls.state <= ca_active)
-			NET_Client_Sleep (1);
 	}
 		//cls.framecount++;
 	//}

@@ -91,7 +91,7 @@ void EXPORT Cbuf_AddText (const char *text)
 {
 	int		l;
 
-	if (!*text)
+	if (!text[0])
 		return;
 	
 	l = (int)strlen (text);

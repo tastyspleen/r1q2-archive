@@ -214,10 +214,10 @@ static const char *Default_MenuKey( menuframework_s *m, int key )
 	case K_MOUSE1:
 	case K_MOUSE2:
 	case K_MOUSE3:
-/*	case K_JOY1:
+	case K_JOY1:
 	case K_JOY2:
 	case K_JOY3:
-	case K_JOY4:*/
+	case K_JOY4:
 	case K_AUX1:
 	case K_AUX2:
 	case K_AUX3:

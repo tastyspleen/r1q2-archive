@@ -259,7 +259,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	for (i=0 ; i<maxclients->intvalue ; i++)
 	{
 		// needs to reconnect
-		if (svs.clients[i].state > cs_connected)
+		if (svs.clients[i].state == cs_spawned)
 			svs.clients[i].state = cs_connected;
 		svs.clients[i].lastframe = -1;
 		svs.clients[i].packetCount = 0;

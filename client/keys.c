@@ -100,13 +100,13 @@ keyname_t keynames[] =
 	{"MOUSE8", K_MOUSE8},
 	{"MOUSE9", K_MOUSE9},
 
-/*	{"JOY1", K_JOY1},
+	{"JOY1", K_JOY1},
 	{"JOY2", K_JOY2},
 	{"JOY3", K_JOY3},
-	{"JOY4", K_JOY4},*/
+	{"JOY4", K_JOY4},
 
-	//{"AUX1", K_AUX1},
-	//{"AUX2", K_AUX2},
+	{"AUX1", K_AUX1},
+	{"AUX2", K_AUX2},
 	{"AUX3", K_AUX3},
 	{"AUX4", K_AUX4},
 	{"AUX5", K_AUX5},

@@ -574,13 +574,19 @@ LONG WINAPI MainWndProc (
 			}
 			return 0;
 		}
-		// fall through
+		if (!g_pKeyboard)
+			Key_Event( MapKey( lParam ), true, sys_msg_time);
+		return 0;
 	case WM_KEYDOWN:
 		if (!g_pKeyboard)
 			Key_Event( MapKey( lParam ), true, sys_msg_time);
 		break;
 
 	case WM_SYSKEYUP:
+		if (!g_pKeyboard)
+			Key_Event( MapKey( lParam ), false, sys_msg_time);
+		return 0;
+
 	case WM_KEYUP:
 		if (!g_pKeyboard)
 			Key_Event( MapKey( lParam ), false, sys_msg_time);
@@ -598,10 +604,10 @@ LONG WINAPI MainWndProc (
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
     }
 
-	return 0;
+	//return 0;
 
     /* return 0 if handled message, 1 if not */
-    //return DefWindowProc( hWnd, uMsg, wParam, lParam );
+    return DefWindowProc( hWnd, uMsg, wParam, lParam );
 }
 
 

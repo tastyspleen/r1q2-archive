@@ -122,6 +122,11 @@ struct edict_s
 	// this point in the structure
 };
 
+#else
+
+typedef player_state_old player_state_t;
+typedef struct gclient_s gclient_t;
+
 #endif		// GAME_INCLUDE
 
 //===============================================================

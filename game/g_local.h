@@ -510,6 +510,10 @@ extern	edict_t			*g_edicts;
 #define	LLOFS(x) (int)&(((level_locals_t *)0)->x)
 #define	CLOFS(x) (int)&(((gclient_t *)0)->x)
 
+#ifdef random
+#undef random
+#endif
+
 #define random()	((rand () & 0x7fff) / ((float)0x7fff))
 #define crandom()	(2.0 * (random() - 0.5))
 

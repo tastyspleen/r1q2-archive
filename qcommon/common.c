@@ -2359,10 +2359,10 @@ void Qcommon_Frame (int msec)
 	else if (timescale->intvalue)
 	{
 		msec *= timescale->value;
-	}
 
-	if (msec < 1)
-		msec = 1;
+		if (msec < 1)
+			msec = 1;
+	}
 
 #ifndef DEDICATED_ONLY
 	if (showtrace->intvalue)
