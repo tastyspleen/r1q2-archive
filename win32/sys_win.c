@@ -1023,31 +1023,31 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 	FILE	*newExists;
 
 #if defined _M_IX86
-	const char *gamename = "gamex86.dll";
+	const char gamename[] = "gamex86.dll";
 
 #ifdef NDEBUG
-	const char *debugdir = "release";
+	const char debugdir[] = "release";
 #else
-	const char *debugdir = "debug";
+	const char debugdir[] = "debug";
 #endif
 
 #elif defined _M_ALPHA
-	const char *gamename = "gameaxp.dll";
+	const char gamename[] = "gameaxp.dll";
 
 #ifdef NDEBUG
-	const char *debugdir = "releaseaxp";
+	const char debugdir[] = "releaseaxp";
 #else
-	const char *debugdir = "debugaxp";
+	const char debugdir[] = "debugaxp";
 #endif
 
 #elif defined _WIN64
 
-	const char *gamename = "gamex64.dll";
+	const char gamename[] = "gamex64.dll";
 
 #ifdef NDEBUG
-	const char *debugdir = "release";
+	const char debugdir[] = "release";
 #else
-	const char *debugdir = "debug";
+	const char debugdir[] = "debug";
 #endif
 
 #else

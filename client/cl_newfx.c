@@ -162,7 +162,7 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 		VectorClear (p->accel);
 		VectorClear (p->vel);
 		p->alpha = 1.0;
-		p->alphavel = -0.1;
+		p->alphavel = -0.1f;
 //		p->alphavel = 0;
 		p->color = 0x74 + (randomMT()&7);
 		VectorCopy (move, p->org);

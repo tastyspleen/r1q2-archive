@@ -676,6 +676,8 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	if (++sv_tracecount >= sv_max_traces_per_frame->intvalue)
 	{
 		Com_Printf ("GAME ERROR: Bad SV_Trace: %d calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
+		if (sv_gamedebug->intvalue >= 2)
+			Q_DEBUGBREAKPOINT;
 
 		clip.trace.fraction = 1.0;
 		clip.trace.ent = ge->edicts;

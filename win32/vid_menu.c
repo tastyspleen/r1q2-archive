@@ -464,7 +464,6 @@ VID_MenuKey
 const char *VID_MenuKey( int key )
 {
 	menuframework_s *m = s_current_menu;
-	static const char *sound = "misc/menu1.wav";
 
 	switch ( key )
 	{
@@ -496,7 +495,7 @@ const char *VID_MenuKey( int key )
 		break;
 	}
 
-	return sound;
+	return "misc/menu1.wav";
 }
 
 

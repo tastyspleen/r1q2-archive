@@ -27,6 +27,15 @@ cvar_t			*cvar_vars;
 
 static struct rbtree	*cvartree;
 
+//UGLY HACK for client locations
+#ifdef DEDICATED_ONLY
+const char *CL_Get_Loc_There (void) { return ""; }
+const char *CL_Get_Loc_Here (void) { return ""; }
+#else
+const char *CL_Get_Loc_There (void);
+const char *CL_Get_Loc_Here (void);
+#endif
+
 /*
 ============
 Cvar_InfoValidate
@@ -104,26 +113,18 @@ int Cvar_IntValue (const char *var_name)
 	return var->intvalue;
 }
 
-char dateBuff[32];
-
-/*
-============
-Cvar_VariableString
-============
-*/
-char *Cvar_VariableString (const char *var_name)
+const char *Cvar_GetMetaVar (const char *var_name)
 {
-	cvar_t *var;
-
-	Q_assert (var_name != NULL);
-	
-	var = Cvar_FindVar (var_name);
-
-	if (var)
-		return var->string;
+	static char dateBuff[32];
 
 	if (var_name[0] == '$')
 	{
+		const char	*varstring;
+
+		varstring = Cvar_VariableString (var_name + 1);
+		if (varstring[0])
+			return varstring;
+
 		if (!strcmp (var_name, "$timestamp"))
 		{
 			time_t now;
@@ -154,7 +155,41 @@ char *Cvar_VariableString (const char *var_name)
 			static unsigned int incNum = 0;
 			return va ("%u", ++incNum);
 		}
+		else if (!strcmp (var_name, "$loc_here"))
+		{
+			//aiee
+			return CL_Get_Loc_Here ();
+		}
+		else if (!strcmp (var_name, "$loc_there"))
+		{
+			//aiee
+			return CL_Get_Loc_There ();
+		}
 	}
+
+	return NULL;
+}
+
+/*
+============
+Cvar_VariableString
+============
+*/
+const char *Cvar_VariableString (const char *var_name)
+{
+	const char	*metavar;
+	cvar_t		*var;
+
+	Q_assert (var_name != NULL);
+
+	metavar = Cvar_GetMetaVar (var_name);
+	if (metavar)
+		return metavar;
+	
+	var = Cvar_FindVar (var_name);
+
+	if (var)
+		return var->string;
 
 	return "";
 }

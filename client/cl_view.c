@@ -293,7 +293,7 @@ void CL_PrepRefresh (void)
 	Q_strncpy (mapname, cl.configstrings[CS_MODELS+1] + 5, sizeof(mapname)-1);	// skip "maps/"
 	mapname[strlen(mapname)-4] = 0;		// cut off ".bsp"
 
-	Cvar_ForceSet ("$mapname", mapname);
+	Cvar_ForceSet ("$$mapname", mapname);
 
 	// register models, pics, and skins
 	Com_Printf ("Map: %s\r", LOG_CLIENT, mapname); 
@@ -537,10 +537,10 @@ int fps = 0;
 int frames_this_second = 0;
 unsigned int frames_seconds = 0;
 
-char rateMsg[] = "RATEDROP";
-char frameMsg[] = "OLDFRAME";
-char parseMsg[] = "OLDPARSE";
-char overflowMsg[] = "OVERFLOW";
+static const char rateMsg[] = "RATEDROP";
+static const char frameMsg[] = "OLDFRAME";
+static const char parseMsg[] = "OLDPARSE";
+static const char overflowMsg[] = "OVERFLOW";
 
 extern int EXPORT entitycmpfnc( const entity_t *, const entity_t * );
 extern int			scr_draw_loading;

@@ -1127,7 +1127,7 @@ void CL_AddPacketEntities (frame_t *frame)
 		// tweak the color of beams
 		if ( renderfx & RF_BEAM )
 		{	// the four beam colors are encoded in 32 bits of skinnum (hack)
-			ent.alpha = 0.30;
+			ent.alpha = 0.30f;
 			ent.skinnum = (s1->skinnum >> ((randomMT() % 4)*8)) & 0xff;
 			ent.model = NULL;
 		}
@@ -1180,7 +1180,7 @@ void CL_AddPacketEntities (frame_t *frame)
 
 		// r1: was ==, why?
 		if (renderfx & RF_TRANSLUCENT && !(renderfx & RF_BEAM))
-			ent.alpha = 0.70;
+			ent.alpha = 0.70f;
 
 		// render effects (fullbright, translucent, etc)
 		if ((effects & EF_COLOR_SHELL))
@@ -1228,13 +1228,13 @@ void CL_AddPacketEntities (frame_t *frame)
 			// FIXME: still pass to refresh
 
 			if (effects & EF_FLAG1)
-				V_AddLight (ent.origin, 225, 1.0, 0.1, 0.1);
+				V_AddLight (ent.origin, 225, 1.0, 0.1f, 0.1f);
 			else if (effects & EF_FLAG2)
-				V_AddLight (ent.origin, 225, 0.1, 0.1, 1.0);
+				V_AddLight (ent.origin, 225, 0.1f, 0.1f, 1.0);
 			else if (effects & EF_TAGTRAIL)						//PGM
-				V_AddLight (ent.origin, 225, 1.0, 1.0, 0.0);	//PGM
+				V_AddLight (ent.origin, 225, 1.0, 1.0, 0.0f);	//PGM
 			else if (effects & EF_TRACKERTRAIL)					//PGM
-				V_AddLight (ent.origin, 225, -1.0, -1.0, -1.0);	//PGM
+				V_AddLight (ent.origin, 225, -1.0f, -1.0f, -1.0f);	//PGM
 
 			continue;
 		}
@@ -1246,14 +1246,14 @@ void CL_AddPacketEntities (frame_t *frame)
 		if (effects & EF_BFG)
 		{
 			ent.flags |= RF_TRANSLUCENT;
-			ent.alpha = 0.30;
+			ent.alpha = 0.30f;
 		}
 
 		// RAFAEL
 		if (effects & EF_PLASMA)
 		{
 			ent.flags |= RF_TRANSLUCENT;
-			ent.alpha = 0.6;
+			ent.alpha = 0.6f;
 		}
 
 		if (effects & EF_SPHERETRANS)
@@ -1261,9 +1261,9 @@ void CL_AddPacketEntities (frame_t *frame)
 			ent.flags |= RF_TRANSLUCENT;
 			// PMM - *sigh*  yet more EF overloading
 			if (effects & EF_TRACKERTRAIL)
-				ent.alpha = 0.6;
+				ent.alpha = 0.6f;
 			else
-				ent.alpha = 0.3;
+				ent.alpha = 0.3f;
 		}
 
 		//Com_Printf ("%d %d:", s1->modelindex, s1->number);
@@ -1275,7 +1275,7 @@ void CL_AddPacketEntities (frame_t *frame)
 		if (effects & EF_COLOR_SHELL)
 		{
 			ent.flags = renderfx | RF_TRANSLUCENT;
-			ent.alpha = 0.30;
+			ent.alpha = 0.30f;
 			V_AddEntity (&ent);
 		}
 
@@ -1308,7 +1308,7 @@ void CL_AddPacketEntities (frame_t *frame)
 			// replaces the previous version which used the high bit on modelindex2 to determine transparency
 			if (!Q_stricmp (cl.configstrings[CS_MODELS+(s1->modelindex2)], "models/items/shell/tris.md2"))
 			{
-				ent.alpha = 0.32;
+				ent.alpha = 0.32f;
 				ent.flags = RF_TRANSLUCENT;
 			}
 			// pmm
@@ -1337,7 +1337,7 @@ void CL_AddPacketEntities (frame_t *frame)
 			ent.oldframe = 0;
 			ent.frame = 0;
 			ent.flags |= (RF_TRANSLUCENT | RF_SHELL_GREEN);
-			ent.alpha = 0.30;
+			ent.alpha = 0.30f;
 			V_AddEntity (&ent);
 		}
 
@@ -1350,7 +1350,7 @@ void CL_AddPacketEntities (frame_t *frame)
 			if (effects & EF_ROCKET)
 			{
 				CL_RocketTrail (cent->lerp_origin, ent.origin, cent);
-				V_AddLight (ent.origin, 200, 1, 0.23, 0);
+				V_AddLight (ent.origin, 200, 1, 0.23f, 0);
 			}
 			// PGM - Do not reorder EF_BLASTER and EF_HYPERBLASTER. 
 			// EF_BLASTER | EF_TRACKER is a special case for EF_BLASTER2... Cheese!
@@ -1419,17 +1419,17 @@ void CL_AddPacketEntities (frame_t *frame)
 				ent.origin[2] += 32;
 				CL_TrapParticles (&ent);
 				j = (randomMT()%100) + 100;
-				V_AddLight (ent.origin, j, 1, 0.8, 0.1);
+				V_AddLight (ent.origin, j, 1, 0.8f, 0.1f);
 			}
 			else if (effects & EF_FLAG1)
 			{
 				CL_FlagTrail (cent->lerp_origin, ent.origin, 242);
-				V_AddLight (ent.origin, 225, 1, 0.1, 0.1);
+				V_AddLight (ent.origin, 225, 1, 0.1f, 0.1f);
 			}
 			else if (effects & EF_FLAG2)
 			{
 				CL_FlagTrail (cent->lerp_origin, ent.origin, 115);
-				V_AddLight (ent.origin, 225, 0.1, 0.1, 1);
+				V_AddLight (ent.origin, 225, 0.1f, 0.1f, 1);
 			}
 //======
 //ROGUE

@@ -408,6 +408,9 @@ void S_EndRegistration (void)
 		}
 		else
 		{	// make sure it is paged in
+			if (openal_active)
+				continue;
+
 			if (sfx->cache)
 			{
 				size = sfx->cache->length*sfx->cache->width;
@@ -771,6 +774,8 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 
 			alindex[i].inuse = true;
 
+			strcpy (alindex[i].soundname, sfx->name);
+
 			if (origin)
 			{
 				alindex[i].fixed_origin = true;
@@ -1089,7 +1094,7 @@ void S_AddLoopSounds (void)
 		}
 
 		// find the total contribution of all sounds of this type
-		S_SpatializeOrigin (origin, 255.0, SOUND_LOOPATTENUATE,
+		S_SpatializeOrigin (origin, 255.0f, SOUND_LOOPATTENUATE,
 			&left_total, &right_total);
 		if (!openal_active)
 		{
@@ -1102,7 +1107,7 @@ void S_AddLoopSounds (void)
 				num = (cl.frame.parse_entities + j)&(MAX_PARSE_ENTITIES-1);
 				ent = &cl_parse_entities[num];
 
-				S_SpatializeOrigin (ent->origin, 255.0, SOUND_LOOPATTENUATE, 
+				S_SpatializeOrigin (ent->origin, 255.0f, SOUND_LOOPATTENUATE, 
 					&left, &right);
 				left_total += left;
 				right_total += right;
@@ -1124,6 +1129,7 @@ void S_AddLoopSounds (void)
 			{
 				if (alindex[k].inuse && alindex[k].entnum == ent->number)
 				{
+					Com_Printf ("loopsound %s (%d) still playing on ent %d\n", LOG_CLIENT, alindex[k].soundname, k, ent->number);
 					alindex[k].lastloopframe = cl.frame.serverframe;
 					goto skipsound;
 				}
@@ -1143,7 +1149,7 @@ void S_AddLoopSounds (void)
 			if (sourceNum == -1)
 			{
 				Com_DPrintf ("OpenAL: Loopsound: Warning: Out of sources!\n", LOG_CLIENT);
-				continue;
+				return;
 			}
 
 			VectorCopy (ent->origin, origin);
@@ -1177,6 +1183,8 @@ void S_AddLoopSounds (void)
 			alindex[k].entnum = ent->number;
 			alindex[k].attenuation = ATTN_STATIC;
 			alindex[k].lastloopframe = cl.frame.serverframe;
+			strcpy (alindex[k].soundname, sfx->name);
+			Com_Printf ("started a loop sound %s on ent %d\n", LOG_CLIENT, sfx->name);
 
 			alSourcePlay (g_Sources[sourceNum]);
 			OpenAL_CheckForError();
@@ -1371,7 +1379,7 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 				{
 					if (alindex[i].lastloopframe < cl.frame.serverframe)
 					{
-						Com_Printf ("Loopsound %d not in this frame, stopping.\n", LOG_CLIENT, i);
+						Com_Printf ("Loopsound %d %s on ent %d not in this frame, stopping.\n", LOG_CLIENT, i, alindex[i].soundname, alindex[i].entnum);
 						alindex[i].inuse = false;
 						alSourceStop (g_Sources[alindex[i].sourceIndex]);
 						OpenAL_CheckForError();
@@ -1390,6 +1398,10 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 
 				if (AL_Attenuated (i))
 				{
+					if (alindex[i].loopsound)
+					{
+						Com_Printf ("Loopsound %d %s on ent %d attenuated, stopping.\n", LOG_CLIENT, i, alindex[i].soundname, alindex[i].entnum);
+					}
 					Com_DPrintf ("Dropped %ssound %d, attenuated.\n", alindex[i].loopsound ? "loop" : "", i);
 					alindex[i].inuse = false;
 					alSourceStop (g_Sources[alindex[i].sourceIndex]);

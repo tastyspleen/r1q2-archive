@@ -751,7 +751,7 @@ qboolean SV_UserinfoValidate (const char *userinfo)
 		if (p)
 		{
 			//oversized key
-			if (p-s >= MAX_INFO_KEY - 1)
+			if (p-s >= MAX_INFO_KEY)
 				return false;
 		}
 		else
@@ -770,13 +770,13 @@ qboolean SV_UserinfoValidate (const char *userinfo)
 		if (s)
 		{
 			//oversized value
-			if (s-p >= MAX_INFO_VALUE - 1)
+			if (s-p >= MAX_INFO_VALUE)
 				return false;
 		}
 		else
 		{
 			//oversized value at end of string
-			if (strlen (p) >= MAX_INFO_VALUE - 1)
+			if (strlen (p) >= MAX_INFO_VALUE)
 				return false;
 		}
 	}
@@ -1669,7 +1669,7 @@ void SV_GiveMsec (void)
 			else
 			{
 				//normal movement, drop counter a bit
-				cl->commandMsecOverflowCount *= 0.985;
+				cl->commandMsecOverflowCount *= 0.985f;
 			}
 
 			if (cl->commandMsecOverflowCount > 1.0f)
@@ -2245,6 +2245,7 @@ void SV_UserinfoChanged (client_t *cl)
 		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s[%s] (%s)\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
 		Com_Printf ("EXPLOIT: Client %s[%s] supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
 		Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal userinfo string");
+		SV_KickClient (cl, "illegal userinfo", NULL);
 		return;
 	}
 

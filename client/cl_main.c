@@ -1058,8 +1058,8 @@ void CL_Disconnect (qboolean skipdisconnect)
 	cls.state = ca_disconnected;
 	cls.servername[0] = '\0';
 
-	Cvar_ForceSet ("$mapname", "");
-	Cvar_ForceSet ("$game", "");
+	Cvar_ForceSet ("$$mapname", "");
+	Cvar_ForceSet ("$$game", "");
 
 	//r1: swap games if needed
 	Cvar_GetLatchedVars();
@@ -1241,10 +1241,10 @@ CL_PingServers_f
 */
 void CL_PingServers_f (void)
 {
-	int			i;
-	netadr_t	adr;
-	char		name[16];
-	char		*adrstring;
+	int				i;
+	netadr_t		adr;
+	char			name[16];
+	const char		*adrstring;
 	//cvar_t		*noudp;
 	//cvar_t		*noipx;
 
@@ -1373,6 +1373,8 @@ void CL_ConnectionlessPacket (void)
 		if (incoming_allowed[i].time > cls.realtime && NET_CompareBaseAdr (&net_from, &incoming_allowed[i].remote))
 		{
 			type = incoming_allowed[i].type;
+			//invalidate
+			incoming_allowed[i].time = 0;
 			goto safe;
 		}
 	}
@@ -1446,6 +1448,13 @@ safe:
 		switch (type)
 		{
 			case CL_RCON:
+				//rcon can come in multiple packets
+				incoming_allowed[incoming_allowed_index & 15].remote = net_from;
+				incoming_allowed[incoming_allowed_index & 15].type = CL_RCON;
+				incoming_allowed[incoming_allowed_index & 15].time = cls.realtime + 2500;
+				incoming_allowed_index++;
+
+				//intentional fallthrough
 			case CL_SERVER_INFO:
 				Com_Printf ("%s", LOG_CLIENT, s);
 				break;
@@ -1654,7 +1663,7 @@ void CL_ReadPackets (void)
 
 		if (cls.netchan.got_reliable)
 		{
-			if ( cls.state == ca_connected)
+			if (cls.state == ca_connected)
 				send_packet_now = true;
 			else if (cl_instantack->intvalue)
 				Netchan_Transmit (&cls.netchan, 0, NULL);
@@ -1962,7 +1971,7 @@ qboolean CL_LoadLoc (const char *filename)
 	return true;
 }
 
-char *CL_Loc_Get (vec3_t org)
+const char *CL_Loc_Get (vec3_t org)
 {
 	vec3_t			distance;
 	unsigned int	length, bestlength = 0xFFFFFFFF;
@@ -2043,7 +2052,36 @@ void CL_SaveLoc_f (void)
 }
 
 void vectoangles2 (vec3_t value1, vec3_t angles);
-void CL_Say_Preprocessor (void)
+
+const char *CL_Get_Loc_There (void)
+{
+	trace_t		tr;
+	vec3_t		end;
+
+	if (!cl_locations.next)
+		return "";
+
+	end[0] = cl.refdef.vieworg[0] + cl.v_forward[0] * 65556 + cl.v_right[0];
+	end[1] = cl.refdef.vieworg[1] + cl.v_forward[1] * 65556 + cl.v_right[1];
+	end[2] = cl.refdef.vieworg[2] + cl.v_forward[2] * 65556 + cl.v_right[2];
+
+	tr = CM_BoxTrace (cl.refdef.vieworg, end, vec3_origin, vec3_origin, 0, MASK_SOLID);
+
+	if (tr.fraction != 1.0)
+		return CL_Loc_Get (tr.endpos);
+
+	return CL_Loc_Get (end);
+}
+
+const char *CL_Get_Loc_Here (void)
+{
+	if (!cl_locations.next)
+		return "";
+
+	return CL_Loc_Get (cl.refdef.vieworg);
+}
+
+/*void CL_Say_Preprocessor (void)
 {
 	char *location_name, *p;
 	char *say_text;
@@ -2097,7 +2135,7 @@ void CL_Say_Preprocessor (void)
 	}
 
 	Cmd_ForwardToServer ();
-}
+}*/
 
 char *colortext(char *text){
 	static char ctext[2][80];
@@ -2861,7 +2899,7 @@ CL_InitLocal
 */
 void CL_InitLocal (void)
 {
-	char *glVersion;
+	const char	*glVersion;
 
 	cls.state = ca_disconnected;
 	cls.realtime = Sys_Milliseconds ();
@@ -3069,8 +3107,8 @@ void CL_InitLocal (void)
 	Cmd_AddCommand ("drop", NULL);
 
 	//r1: loc support
-	Cmd_AddCommand ("say", CL_Say_Preprocessor);
-	Cmd_AddCommand ("say_team", CL_Say_Preprocessor);
+	Cmd_AddCommand ("say", NULL);
+	Cmd_AddCommand ("say_team", NULL);
 
 	Cmd_AddCommand ("info", NULL);
 
@@ -3297,10 +3335,16 @@ void CL_Synchronous_Frame (int msec)
 
 	if (!cl_timedemo->value)
 	{
-		if (cls.state == ca_connected && extratime < 100)
-			return;			// don't flood packets out while connecting
-		if (extratime < 1000/cl_maxfps->value)
-			return;
+		if (cls.state == ca_connected)
+		{
+			if (extratime < 100 && !send_packet_now)
+				return;			// don't flood packets out while connecting
+		}
+		else
+		{
+			if (extratime < 1000/cl_maxfps->value)
+				return;
+		}
 	}
 
 	// let the mouse activate or deactivate
@@ -3316,21 +3360,21 @@ void CL_Synchronous_Frame (int msec)
 	if (cls.frametime > (1.0 / cl_minfps->value))
 		cls.frametime = (1.0 / cl_minfps->value);
 #else
-	if (cls.frametime > (1.0 / 5))
-		cls.frametime = (1.0 / 5);
+	if (cls.frametime > (1.0f / 5))
+		cls.frametime = (1.0f / 5);
 #endif
 
 	// if in the debugger last frame, don't timeout
 	if (msec > 5000)
 		cls.netchan.last_received = Sys_Milliseconds ();
 
+	send_packet_now = false;
+
 	// fetch results from server
 	CL_ReadPackets ();
 
 	// send a new command message to the server
 	CL_SendCommand_Synchronous ();
-
-	send_packet_now = false;
 
 	// predict all unacknowledged movements
 	CL_PredictMovement ();

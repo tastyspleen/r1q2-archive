@@ -31,7 +31,7 @@ extern	int		edit_line;
 extern	int		key_linepos;
 		
 
-void DrawString (int x, int y, char *s)
+void DrawString (int x, int y, const char *s)
 {
 	//r1: don't draw if obscured
 	if (viddef.height * scr_conlines > y)
@@ -45,7 +45,7 @@ void DrawString (int x, int y, char *s)
 	}
 }
 
-void DrawAltString (int x, int y, char *s)
+void DrawAltString (int x, int y, const char *s)
 {
 	//r1: don't draw if obscured
 	if (viddef.height * scr_conlines > y)

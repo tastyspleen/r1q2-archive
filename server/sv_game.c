@@ -57,6 +57,9 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 	{
 		Com_Printf ("GAME ERROR: Attempted to write %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, svc_strings[MSG_GetType()], p-1);
 		
+		if (sv_gamedebug->intvalue >= 2)
+			Q_DEBUGBREAKPOINT;
+
 		MSG_FreeData();
 		return;
 	}
@@ -122,7 +125,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 		client = svs.clients + (n-1);
 		if (client->state != cs_spawned)
 		{
-			Com_Printf ("GAME ERROR: PF_cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+			Com_Printf ("GAME ERROR: cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
 
 			if (sv_gamedebug->intvalue >= 2)
 				Q_DEBUGBREAKPOINT;
@@ -136,7 +139,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 
 	if (len < 0)
 	{
-		Com_Printf ("GAME ERROR: PF_cprintf: overflow.\n", LOG_SERVER|LOG_ERROR);
+		Com_Printf ("GAME ERROR: cprintf: message overflow.\n", LOG_SERVER|LOG_ERROR);
 
 		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;
@@ -294,6 +297,7 @@ PF_Configstring
 */
 void EXPORT PF_Configstring (int index, char *val)
 {
+	char	safestring[MAX_QPATH];
 	size_t	length;
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
@@ -381,10 +385,89 @@ fixed:
 
 	length = strlen(val);
 
-	if (length > (sizeof(sv.configstrings[index])*(MAX_CONFIGSTRINGS-index))-1)
+	if (index > CS_MODELS && index < CS_GENERAL)
+	{
+		//r1: more configstring validation - some mods don't check the name\model/skin lengths and
+		//this results in overwrite of CS_PLAYERSKINS subscripts.
+		if (length > sizeof(sv.configstrings[index])-1)
+		{
+			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val));
+			Q_strncpy (safestring, val, sizeof(safestring)-1);
+			val = safestring;
+		}
+	}
+	else if (length > (sizeof(sv.configstrings[index])*(MAX_CONFIGSTRINGS-index))-1)
+	{
+		//way too long, bail out
 		Com_Error (ERR_DROP, "configstring: index %d, '%s': too long", index, val);
-	else if (index != CS_STATUSBAR && length > sizeof(sv.configstrings[index])-1)
-		Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val));
+	}
+	else if (length > sizeof(sv.configstrings[index])-1)
+	{
+		//"harmless" overflow?
+		if (index == CS_STATUSBAR)
+		{
+			//max allowed for statusbar space
+			if (length > (sizeof(sv.configstrings[0]) * (CS_AIRACCEL-CS_STATUSBAR))-1)
+				Com_Error (ERR_DROP, "CS_STATUSBAR configstring %d length %d exceeds maximum allowed length", index, length);
+		}
+		else if (index > CS_STATUSBAR && index < CS_AIRACCEL)
+		{
+			//game dll is trying to set status bar one by one, WTF? just error out completely here.
+			Com_Error (ERR_DROP, "CS_STATUSBAR configstring %d length %d exceeds maximum allowed length", index, length);
+		}
+		else if (index == CS_NAME)
+		{
+			//some map names overflow this - ill allow for one index overflow since
+			//its only the cd audio that gets overwritten and seriously, how many maps set cd
+			//audio to something other than 0?
+			if (length > (sizeof(sv.configstrings[0]) * (CS_SKY-CS_NAME))-1)
+			{
+				Com_Error (ERR_DROP, "Map name exceeds maximum allowed length");
+			}
+			else if (length > sizeof(sv.configstrings[CS_NAME])-1)
+			{
+				Com_Printf ("WARNING: Map name exceeds maximum allowed length of 63 characters. R1Q2 will try to accomodate it anyway.\n", LOG_SERVER|LOG_WARNING);
+			}
+		}
+		else
+		{
+			Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val));
+		}
+	}
+
+	if (index == CS_CDTRACK)
+	{
+		int		track;
+
+		track = atoi(val);
+
+		//only accept this if its non-zero to allow for extended map name
+		if (sv.configstrings[CS_CDTRACK][0])
+		{
+			if (!track && atoi(sv.configstrings[CS_CDTRACK]) == 0)
+			{
+				Com_Printf ("WARNING: Ignoring CS_CDTRACK to allow for extended map name length\n", LOG_SERVER|LOG_WARNING);
+				index = -1;
+				val = "";
+			}
+			else
+			{
+				//the map name overflowed and we have a valid cd track so lets terminate it
+				sv.configstrings[CS_NAME][sizeof(sv.configstrings[CS_NAME])-1] = 0;
+			}
+		}
+		else if (!track)
+		{
+			//ignore actual value to save a precious byte of bandwidth
+			index = -1;
+			val = "";
+		}
+	}
+	else if (index == CS_MAPCHECKSUM)
+	{
+		//shouldn't touch this!
+		Com_Error (ERR_DROP, "Game DLL tried to set CS_MAPCHECKSUM");
+	}
 
 	if (!strcmp (sv.configstrings[index], val))
 	{
@@ -397,7 +480,8 @@ fixed:
 		return;
 	}
 
-	strcpy (sv.configstrings[index], val);
+	if (index != -1)
+		strcpy (sv.configstrings[index], val);
 
 	// send the update to everyone
 	if (sv.state != ss_loading)

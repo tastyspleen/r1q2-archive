@@ -263,7 +263,7 @@ This will be sent on the initial connection and upon each server load.
 */
 static void SV_New_f (void)
 {
-	char		*gamedir;
+	const char	*gamedir;
 	int			playernum;
 	edict_t		*ent;
 	varban_t	*bans;
@@ -457,30 +457,37 @@ static void SV_New_f (void)
 	//
 	// game server
 	// 
-	if (sv.state == ss_game)
+	switch (sv.state)
 	{
-		// set up the entity for the client
-		ent = EDICT_NUM(playernum+1);
-		ent->s.number = playernum+1;
-		sv_client->edict = ent;
+		case ss_game:
+			// set up the entity for the client
+			ent = EDICT_NUM(playernum+1);
+			ent->s.number = playernum+1;
+			sv_client->edict = ent;
 
-		memset (&sv_client->lastcmd, 0, sizeof(sv_client->lastcmd));
+			memset (&sv_client->lastcmd, 0, sizeof(sv_client->lastcmd));
 
-		//r1: per-client baselines
-		SV_CreateBaseline (sv_client);
+			//r1: per-client baselines
+			SV_CreateBaseline (sv_client);
 
-		// begin fetching configstrings
-		//MSG_BeginWriting (svc_stufftext);
-		//MSG_WriteString (va("cmd configstrings %i 0\n", svs.spawncount) );
-		//SV_AddMessage (sv_client, true);
+			// begin fetching configstrings
+			//MSG_BeginWriting (svc_stufftext);
+			//MSG_WriteString (va("cmd configstrings %i 0\n", svs.spawncount) );
+			//SV_AddMessage (sv_client, true);
 
-		SV_AddConfigstrings ();
+			SV_AddConfigstrings ();
+			break;
+
+		case ss_pic:
+		case ss_cinematic:
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString (va("cmd begin %i\n", svs.spawncount));
+			SV_AddMessage (sv_client, true);
+			break;
+
+		default:
+			break;
 	}
-
-	//r1: holy shit ugly, but it works!
-	//if (sv_client->state == cs_connected)
-	//	Netchan_Transmit (&sv_client->netchan, 0, NULL);
-
 }
 
 /*
@@ -834,7 +841,7 @@ plainLines:
 
 	// send next command
 	MSG_BeginWriting (svc_stufftext);
-	MSG_WriteString (va("precache %i\n", svs.spawncount) );
+	MSG_WriteString (va("precache %i\n", svs.spawncount));
 	SV_AddMessage (sv_client, true);
 }
 
@@ -1609,7 +1616,7 @@ static void SV_CvarResult_f (void)
 
 void SV_Nextserver (void)
 {
-	char	*v;
+	const char	*v;
 
 	//ZOID, ss_pic can be nextserver'd in coop mode
 	if (sv.state == ss_game || (sv.state == ss_pic && !Cvar_IntValue("coop")))
@@ -1721,7 +1728,7 @@ void SV_ExecuteUserCommand (char *s)
 		if (ptr < s)
 			ptr = s;
 		p = MakePrintable (ptr);
-		Blackhole (&net_from, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in command packet (%.32s)", p);
+		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in command packet (%.32s)", p);
 		Com_Printf ("EXPLOIT: Client %s[%s] tried to use a command containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), p);
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
 		return;
@@ -1742,11 +1749,18 @@ void SV_ExecuteUserCommand (char *s)
 				Com_Printf ("SV_ExecuteUserCommand: %s tried to use '%s'\n", LOG_SERVER, sv_client->name, x->name);
 
 			if (x->kickmethod == CMDBAN_MESSAGE)
+			{
 				SV_ClientPrintf (sv_client, PRINT_HIGH, "The '%s' command has been disabled by the server administrator.\n", x->name);
+			}
 			else if (x->kickmethod == CMDBAN_KICK)
 			{
 				Com_Printf ("Dropping %s, bancommand %s matched.\n", LOG_SERVER|LOG_DROP, sv_client->name, x->name);
 				SV_DropClient (sv_client, true);
+			}
+			else if (x->kickmethod == CMDBAN_BLACKHOLE)
+			{
+				Blackhole (&sv_client->netchan.remote_address, false, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "bancommand '%s'", x->name);
+				SV_DropClient (sv_client, false);
 			}
 
 			return;

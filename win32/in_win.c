@@ -28,6 +28,7 @@ extern	unsigned	sys_msg_time;
 qboolean	input_active;
 
 cvar_t	*in_mouse;
+cvar_t	*in_initjoy;
 cvar_t	*in_dinputkeyboard;
 
 cvar_t	*m_directinput;
@@ -1226,6 +1227,9 @@ void IN_Init (void)
 
 #ifdef JOYSTICK
 	// joystick variables
+	in_initjoy				= Cvar_Get ("in_initjoy",				"0",		CVAR_ARCHIVE);
+	in_initjoy->changed = IN_CvarModified;
+
 	in_joystick				= Cvar_Get ("in_joystick",				"0",		CVAR_ARCHIVE);
 	joy_name				= Cvar_Get ("joy_name",					"joystick",	0);
 	joy_advanced			= Cvar_Get ("joy_advanced",				"0",		0);
@@ -1384,16 +1388,13 @@ void IN_StartupJoystick (void)
 	int			numdevs;
 	JOYCAPS		jc;
 	MMRESULT	mmr;
-	cvar_t		*cv;
 
- 	// assume no joystick
+	// assume no joystick
 	joy_avail = false; 
 
 	// abort startup if user requests no joystick
-	cv = Cvar_Get ("in_initjoy", "0", CVAR_NOSET);
-
-	if ( !cv->intvalue ) 
-		return; 
+	if (!in_initjoy->intvalue)
+		return;
  
 	// verify joystick driver is present
 	if ((numdevs = joyGetNumDevs ()) == 0)
@@ -1494,7 +1495,7 @@ void Joy_AdvancedUpdate_f (void)
 		pdwRawValue[i] = RawValuePointer(i);
 	}
 
-	if( joy_advanced->value == 0.0)
+	if( joy_advanced->intvalue == 0)
 	{
 		// default joystick initialization
 		// 2 axes only with joystick control
@@ -1660,7 +1661,7 @@ void IN_JoyMove (usercmd_t *cmd)
 	}
 
 	// verify joystick is available and that the user wants to use it
-	if (!joy_avail || !in_joystick->value)
+	if (!joy_avail || !in_joystick->intvalue)
 	{
 		return; 
 	}
@@ -1671,7 +1672,7 @@ void IN_JoyMove (usercmd_t *cmd)
 		return;
 	}
 
-	if ( (in_speed.state & 1) ^ (int)cl_run->value)
+	if ( (in_speed.state & 1) ^ cl_run->intvalue)
 		speed = 2;
 	else
 		speed = 1;
@@ -1691,7 +1692,7 @@ void IN_JoyMove (usercmd_t *cmd)
 		switch (dwAxisMap[i])
 		{
 		case AxisForward:
-			if ((joy_advanced->value == 0.0) && mlooking)
+			if ((joy_advanced->intvalue == 0) && mlooking)
 			{
 				// user wants forward control to become look control
 				if (fabs(fAxisValue) > joy_pitchthreshold->value)

@@ -593,7 +593,7 @@ float	Cvar_VariableValue (const char *var_name);
 
 int Cvar_IntValue (const char *var_name);
 
-char	*Cvar_VariableString (const char *var_name);
+const char	*Cvar_VariableString (const char *var_name);
 // returns an empty string if not defined
 
 char 	*Cvar_CompleteVariable (const char *partial);
@@ -695,7 +695,7 @@ int NET_Connect (netadr_t *to, int port);
 
 char		*NET_inet_ntoa (unsigned long ip);
 char		*NET_AdrToString (netadr_t *a);
-qboolean	NET_StringToAdr (char *s, netadr_t *a);
+qboolean	NET_StringToAdr (const char *s, netadr_t *a);
 #ifndef NO_SERVER
 void		NET_Sleep(int msec);
 #endif
@@ -803,6 +803,8 @@ int			CM_PointLeafnum (const vec3_t p);
 int			CM_BoxLeafnums (vec3_t mins, vec3_t maxs, int *list,
 							int listsize, int *topnode);
 
+const char	*CM_MapName (void);
+qboolean	CM_MapWillLoad (const char *name);
 
 //int			CM_LeafContents (int leafnum);
 //extern int			CM_LeafCluster (int leafnum);
@@ -901,23 +903,21 @@ MISC
 */
 
 
-//r1: use variadic macros where possible to avoid overhead of varargs onto stack
-//except this doesn't seem to work even with gcc 2.x. oh well, viva la c99.
-/*#if __GNUC__ > 2
-#define		Com_DPrintf(args)	\
-{ \
+//r1: use variadic macros where possible to avoid overhead of evaluations and va
+#if __STDC_VERSION__ == 199901L
+#define		Com_DPrintf(...)	\
+do { \
 	if (developer->intvalue) \
-		Com_DPrintf_Real (##args); \
-}
+		_Com_DPrintf (__VA_ARGS__); \
+} while (0)
 #else
-#define Com_DPrintf Com_DPrintf_Real
-#endif*/
+#define Com_DPrintf _Com_DPrintf
+#endif
 
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
 void		Com_EndRedirect (void);
-void 		Com_Printf (const char *fmt, int level, ...);
+void 		_Com_DPrintf (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void 		Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
-void 		Com_DPrintf (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void 		Com_Error (int code, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 void 		Com_Quit (void);
 
@@ -992,7 +992,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CLIENT_IGNORE,
 	TAGMALLOC_BLACKHOLE,
 	TAGMALLOC_CVARBANS,
-	TAGMALLOC_MSG_QUEUE,
+	//TAGMALLOC_MSG_QUEUE,
 	TAGMALLOC_CMDBANS,
 	TAGMALLOC_REDBLACK,
 	TAGMALLOC_LRCON,

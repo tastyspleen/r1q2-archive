@@ -829,7 +829,8 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	numpackfiles = header.dirlen / sizeof(packfile_t);
 
 	if (numpackfiles > MAX_FILES_IN_PACK)
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
+		//Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
+		Com_Printf ("WARNING: packfile %s has %i files (max allowed %d) - may not be compatible with other clients\n", LOG_GENERAL, packfile, numpackfiles, MAX_FILES_IN_PACK);
 
 	if (!numpackfiles)
 	{
@@ -1032,8 +1033,8 @@ FS_ExecAutoexec
 */
 void FS_ExecAutoexec (void)
 {
-	char *dir;
-	char name [MAX_QPATH];
+	const char	*dir;
+	char		name [MAX_QPATH];
 
 	dir = Cvar_VariableString("gamedir");
 	if (dir[0])

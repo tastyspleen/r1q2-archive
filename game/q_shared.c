@@ -268,8 +268,18 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 
 //============================================================================
 
+//int sse2_enabled = 0;
+
 #if defined _M_IX86 && !defined C_ONLY && !defined linux && !defined SSE2
-#pragma warning (disable:4035)
+
+
+/*__declspec( naked ) void __cdecl Q_ftol2( float f, int *out )
+{
+	__asm fld dword ptr [esp+4]
+	__asm fistp dword ptr [esp+8]
+	__asm ret
+}*/
+
 __declspec( naked ) long __cdecl Q_ftol( float f )
 {
 	static int tmp;
@@ -278,7 +288,67 @@ __declspec( naked ) long __cdecl Q_ftol( float f )
 	__asm mov eax, tmp
 	__asm ret
 }
-#pragma warning (default:4035)
+
+/*__declspec( naked ) void __cdecl Q_ftolsse( float f, int *out )
+{
+	__asm movd xmm0, [esp+4]
+	__asm cvttss2si eax, xmm0
+	__asm mov [esp+8], eax
+	__asm ret
+}
+
+__declspec( naked ) void __cdecl Q_ftol( float f, int *out )
+{
+	__asm cmp sse2_enabled, 0
+	__asm jz nonsse
+	__asm call Q_ftolsse
+	__asm ret
+nonsse:
+	__asm call Q_ftol86
+	__asm ret
+}
+
+__declspec (naked) void __cdecl Q_sseinit (void)
+{
+	__asm mov eax, 1
+	__asm cpuid
+	__asm test edx, 4000000h
+	__asm jz nosse
+	__asm mov sse2_enabled, 1
+nosse:
+	__asm ret
+}*/
+
+__declspec (naked) void __cdecl Q_fastfloats (float *f, int *outptr)
+{
+	/*__asm cmp sse2_enabled, 0
+	__asm jz nonsse
+	__asm mov eax, [esp+4]
+	__asm movups xmm1, [eax]
+	__asm cvttps2dq xmm0, xmm1
+	__asm mov eax, [esp+8]
+	__asm movdqu [eax], xmm0
+	__asm ret
+nonsse:*/
+	__asm mov eax, [esp+8]
+	__asm mov ebx, [esp+4]
+
+	__asm fld dword ptr [ebx]
+	__asm fistp dword ptr [eax]
+	__asm fld dword ptr [ebx+4]
+	__asm fistp dword ptr [eax+4]
+	__asm fld dword ptr [ebx+8]
+	__asm fistp dword ptr [eax+8]
+	__asm ret
+}
+
+#else
+
+/*void Q_ftol2 (float f, int *out)
+{
+	*out = (int)f;
+}*/
+
 #endif
 
 /*
@@ -1082,7 +1152,7 @@ COM_Parse
 Parse a token out of a string
 ==============
 */
-char *COM_Parse (char **data_p)
+const char *COM_Parse (char **data_p)
 {
 	int		c;
 	int		len;

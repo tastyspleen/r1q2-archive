@@ -61,7 +61,7 @@ typedef	int			INTPTR;
 
 #pragma warning(disable : 4244)		// truncation
 #pragma warning(disable : 4018)     // signed/unsigned mismatch
-#pragma warning(disable : 4305)		// truncation from const double to float
+//#pragma warning(disable : 4305)		// truncation from const double to float
 
 #pragma warning(disable : 4096)		// __cdecl must be used with '...'*/
 
@@ -108,7 +108,7 @@ int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
 int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
 #ifdef LINUX
 #define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
-#define DEBUGBREAKPOINT asm ("int $3")
+#define DEBUGBREAKPOINT __asm ("int $3")
 #else
 #define	Q_DEBUGBREAKPOINT ((void)0)
 #define DEBUGBREAKPOINT ((void)0)
@@ -175,10 +175,10 @@ typedef enum {false, true}	qboolean;
 
 //terminating strncpy
 #define Q_strncpy(dst, src, len) \
-{ \
+do { \
 	strncpy ((dst), (src), (len)); \
 	(dst)[(len)] = 0; \
-} 
+} while (0)
 
 // angle indexes
 #define	PITCH				0		// up / down
@@ -275,10 +275,17 @@ extern vec3_t vec3_origin;
 // microsoft's fabs seems to be ungodly slow...
 //float Q_fabs (float f);
 //#define	fabs(f) Q_fabs(f)
+//extern int sse2_enabled;
 #if !defined C_ONLY && !defined __linux__ && !defined __sgi && !defined SSE2 && !defined __FreeBSD__
-extern long __cdecl Q_ftol( float f );
+//extern void __cdecl Q_sseinit (void);
+void __cdecl Q_ftol2( float f, int *out );
+long __cdecl Q_ftol( float f );
+extern void __cdecl Q_fastfloats (float *f, int *out);
+//extern void __cdecl Q_ftolsse( float f, int *out );
+//the overhead of using function pointer offsets any savings of using sse2 :/
 #else
 #define Q_ftol( f ) ( long ) (f)
+void Q_ftol2( float f, int *out );
 #endif
 
 //this is a function instead of a macro for the asm since some compilers are scared by inline asm
@@ -365,7 +372,7 @@ void COM_FileBase (char *in, char *out);
 void COM_FilePath (char *in, char *out);
 void COM_DefaultExtension (char *path, char *extension);
 
-char *COM_Parse (char **data_p);
+const char *COM_Parse (char **data_p);
 // data is an in/out parm, returns a parsed out token
 
 int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));

@@ -148,7 +148,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		return NULL;
 	}
 
-	if (!openal_active)
+	//if (!openal_active)
 	{
 
 		info = GetWavinfo (s->name, data, size);
@@ -165,10 +165,10 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		len = len * info.width * info.channels;
 		sc = s->cache = Z_TagMalloc (len + sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);
 	}
-	else
-	{
-		sc = s->cache = Z_TagMalloc (sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);
-	}
+	//else
+	//{
+	//	sc = s->cache = Z_TagMalloc (sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);
+	//}
 	
 	if (!sc)
 	{
@@ -176,8 +176,8 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		return NULL;
 	}
 
-	if (!openal_active)
-	{
+	//if (!openal_active)
+	//{
 		sc->length = info.samples;
 		sc->loopstart = info.loopstart;
 		sc->speed = info.rate;
@@ -185,27 +185,33 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		sc->stereo = info.channels;
 
 		ResampleSfx (s, sc->speed, sc->width, data + info.dataofs);
-	}
+	//}
 #ifdef USE_OPENAL
-	else
+	//else
+	if (openal_active)
 	{
 		ALint buffer;
 		int format;
-		ALvoid *wavData;
-		ALboolean loop;
+		//ALvoid *wavData;
+		//ALboolean loop;
 
 		buffer = OpenAL_GetFreeBuffer();
 		if (buffer == -1)
 			Com_Error (ERR_DROP, "Out of OpenAL buffers");
 
-		alutLoadWAVMemory (data, &format, &wavData, &sc->length, &sc->speed, &loop);
+		//alutLoadWAVMemory (data, &format, &wavData, &sc->length, &sc->speed, &loop);
+		//OpenAL_CheckForError();
+
+		if (sc->width == 1)
+			format = AL_FORMAT_MONO8;
+		else
+			format = AL_FORMAT_MONO16;
+
+		alBufferData (g_Buffers[buffer].buffer, format, sc->data, sc->length, sc->speed);
 		OpenAL_CheckForError();
 
-		alBufferData (g_Buffers[buffer].buffer, format, wavData, sc->length, sc->speed);
-		OpenAL_CheckForError();
-
-		alutUnloadWAV (format, wavData, sc->length, sc->speed);
-		OpenAL_CheckForError();
+		//alutUnloadWAV (format, wavData, sc->length, sc->speed);
+		//OpenAL_CheckForError();
 
 		Com_DPrintf ("OpenAL: Loaded %s into buffer %d\n", namebuffer, buffer);
 
@@ -260,15 +266,23 @@ void FindNextChunk(char *name)
 {
 	for (;;)
 	{
-		data_p=last_chunk;
+		data_p = last_chunk;
 
-		if (data_p >= iff_end)
+		/*if (data_p >= iff_end)
 		{	// didn't find the chunk
 			data_p = NULL;
 			return;
-		}
+		}*/
 		
 		data_p += 4;
+
+		//r1: fix
+		if (data_p >= iff_end)
+		{
+			data_p = NULL;
+			return;
+		}
+
 		iff_chunk_len = GetLittleLong();
 		if (iff_chunk_len < 0)
 		{

@@ -552,7 +552,23 @@ void CMod_LoadEntityString (lump_t *l)
 	memcpy (map_entitystring, cmod_base + l->fileofs, l->filelen);
 }
 
+qboolean CM_MapWillLoad (const char *name)
+{
+	char			csname[MAX_QPATH];
 
+	if (!name || !name[0])
+		return true;
+
+	Com_sprintf (csname, sizeof(csname), "%s.override", name);
+
+	if (FS_LoadFile (csname, NULL) != -1)
+		return true;
+
+	if (FS_LoadFile (name, NULL) != -1)
+		return true;
+
+	return false;
+}
 
 /*
 ==================
@@ -563,12 +579,15 @@ Loads in the map and all submodels
 */
 cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 {
-	byte		*buf;
+	char			newname[MAX_QPATH];
+	byte			*buf;
+#if YOU_HAVE_A_BROKEN_COMPUTER
 	int				i;
+#endif
 	dheader_t		header;
-	int				length;
+	unsigned long	length;
 	static unsigned	last_checksum;
-
+	unsigned long	override_bits;
 	map_noareas = Cvar_Get ("map_noareas", "0", 0);
 
 	if (!strcmp (map_name, name) && (clientload || !Cvar_IntValue ("flushmap")) )
@@ -591,8 +610,8 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 	numentitychars = 0;
 
 	//r1: fix for missing terminators on some badly compiled maps
-	memset (map_entitystring, 0, MAX_MAP_ENTSTRING);
-	memset (map_name, 0, MAX_QPATH);
+	memset (map_entitystring, 0, sizeof(map_entitystring));
+	memset (map_name, 0, sizeof(map_name));
 
 	if (!name || !name[0])
 	{
@@ -607,10 +626,48 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 	// load the file
 	//
 
+	override_bits = 0;
+
+	//r1: allow transparent server-side map entity replacement
+	if (!clientload)
+	{
+		FILE			*script;
+		char			csname[MAX_QPATH];
+
+		Com_sprintf (csname, sizeof(csname), "%s.override", name);
+		
+		FS_FOpenFile (csname, &script, true);
+
+		if (script)
+		{
+			FS_Read (&override_bits, sizeof(override_bits), script);
+
+			if (override_bits & 1)
+				FS_Read (newname, sizeof(newname), script);
+
+			if (override_bits & 2)
+				FS_Read (&last_checksum, sizeof(last_checksum), script);
+
+			if (override_bits & 4)
+			{
+				FS_Read (&length, sizeof(length), script);
+				if (!length || length >= MAX_MAP_ENTSTRING)
+				{
+					FS_FCloseFile (script);
+					Com_Error (ERR_DROP, "CM_LoadMap: bad entity string size %lu", length);
+				}
+				FS_Read (map_entitystring, length, script);
+			}
+
+			FS_FCloseFile (script);
+			name = newname;
+		}
+	}
+
 	length = FS_LoadFile (name, (void **)&buf);
 	if (!buf)
 	{
-		if (!developer->intvalue)
+		if (!developer->intvalue || !clientload)
 		{
 			Com_Error (ERR_DROP, "Couldn't load %s", name);
 			//r1: ugly, but flush fs cache in case they install it
@@ -627,18 +684,23 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 		}
 	}
 
-	last_checksum = LittleLong (Com_BlockChecksum (buf, length));
+	if (!(override_bits & 2))
+		last_checksum = LittleLong (Com_BlockChecksum (buf, length));
+
 	*checksum = last_checksum;
 
 	header = *(dheader_t *)buf;
+
+#if YOU_HAVE_A_BROKEN_COMPUTER
 	for (i=0 ; i<sizeof(dheader_t)/4 ; i++)
 		((int *)&header)[i] = LittleLong ( ((int *)&header)[i]);
+#endif
 
 	if (header.version != BSPVERSION)
 	{
 		//r1: free
 		FS_FreeFile (buf);
-		Com_Error (ERR_DROP, "CMod_LoadBrushModel: %s has wrong version number (%i should be %i)"
+		Com_Error (ERR_DROP, "CM_LoadMap: %s has wrong version number (%i should be %i)"
 		, name, header.version, BSPVERSION);
 	}
 
@@ -657,7 +719,9 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 	CMod_LoadAreas (&header.lumps[LUMP_AREAS]);
 	CMod_LoadAreaPortals (&header.lumps[LUMP_AREAPORTALS]);
 	CMod_LoadVisibility (&header.lumps[LUMP_VISIBILITY]);
-	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES]);
+
+	if (!(override_bits & 4))
+		CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES]);
 
 	FS_FreeFile (buf);
 
@@ -669,6 +733,11 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 	strcpy (map_name, name);
 
 	return &map_cmodels[0];
+}
+
+const char *CM_MapName (void)
+{
+	return map_name;
 }
 
 /*

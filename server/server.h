@@ -30,9 +30,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	MAX_MASTERS	8				// max recipients for heartbeat packets
 
-#define	CMDBAN_MESSAGE	0
-#define	CMDBAN_KICK		1
-#define	CMDBAN_SILENT	2
+#define	CMDBAN_MESSAGE		0
+#define	CMDBAN_KICK			1
+#define	CMDBAN_SILENT		2
+#define	CMDBAN_BLACKHOLE	3
 
 #define	CMDBAN_LOG_MESSAGE	0
 #define	CMDBAN_LOG_SILENT	1
@@ -489,7 +490,7 @@ void SV_ClientPrintf (client_t *cl, int level, const char *fmt, ...) __attribute
 void SV_BroadcastPrintf (int level, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 void SV_BroadcastCommand (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
-sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type);
+//sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type);
 //void SV_AddMessageQueue (client_t *client, int extrabytes);
 void SV_AddMessage (client_t *cl, qboolean reliable);
 void SV_AddMessageSingle (client_t *cl, qboolean reliable);

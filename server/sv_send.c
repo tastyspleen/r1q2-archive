@@ -351,7 +351,12 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 	if (to != MULTICAST_ALL_R && to != MULTICAST_ALL)
 	{
 		if (!origin)
-			Com_Error (ERR_DROP, "SV_Multicast: bad multicast_t used with NULL origin");
+		{
+			Com_Printf ("GAME ERROR: SV_Multicast called with NULL origin but not with MULTICAST_ALL, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+			if (sv_gamedebug->intvalue >= 2)
+				Q_DEBUGBREAKPOINT;
+			return;
+		}
 		leafnum = CM_PointLeafnum (origin);
 		area1 = CM_LeafArea (leafnum);
 	}
@@ -363,7 +368,12 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 
 	//r1: check we have data in the multicast buffer
 	if (!MSG_GetLength())
-		Com_Error (ERR_DROP, "SV_Multicast: no data");
+	{
+		Com_Printf ("GAME ERROR: SV_Multicast called with no data in multicast buffer, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+		if (sv_gamedebug->intvalue >= 2)
+			Q_DEBUGBREAKPOINT;
+		return;
+	}
 
 	// if doing a serverrecord, store everything
 	if (svs.demofile)
@@ -396,7 +406,10 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 
 	default:
 		mask = NULL;
-		Com_Error (ERR_FATAL, "SV_Multicast: bad to:%i", to);
+		Com_Printf ("GAME ERROR: SV_Multicast called with bad multicast_t to, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+		if (sv_gamedebug->intvalue >= 2)
+			Q_DEBUGBREAKPOINT;
+		return;
 	}
 
 	// send the data to all relevent clients

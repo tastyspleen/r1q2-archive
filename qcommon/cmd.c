@@ -604,7 +604,7 @@ void Cmd_Alias_f (void)
 
 static	int			cmd_argc;
 static	char		*cmd_argv[MAX_STRING_TOKENS];
-static	char		*cmd_null_string = "";
+static	char		cmd_null_string[] = "";
 static	char		cmd_args[MAX_STRING_CHARS];
 static	char		cmd_buffer[MAX_STRING_CHARS*2];
 
@@ -676,12 +676,13 @@ Cmd_MacroExpandString
 */
 char *Cmd_MacroExpandString (char *text)
 {
-	int		i, j, k, count, len;
+	int			i, j, k, count, len;
 	qboolean	inquote;
-	char	*scan;
-	static	char	expanded[MAX_STRING_CHARS];
-	char	temporary[MAX_STRING_CHARS];
-	char	*token, *start, *cvarname, *extra;
+	char		*scan;
+	static char	expanded[MAX_STRING_CHARS];
+	char		temporary[MAX_STRING_CHARS];
+	char		*start, *extra;
+	const char	*token, *cvarname;
 
 	inquote = false;
 	scan = text;
@@ -795,9 +796,9 @@ a waste...
 */
 void Cmd_TokenizeString (char *text, qboolean macroExpand)
 {
-	int		cmd_pointer;
-	int		i;
-	char	*com_token;
+	int			cmd_pointer;
+	int			i;
+	const char	*com_token;
 
 // clear the args from the last string
 	for (i=0 ; i<cmd_argc ; i++)
@@ -1076,7 +1077,10 @@ void	Cmd_ExecuteString (char *text)
 		cmd = *(cmd_function_t **)data;
 		if (!cmd->function)
 		{	// forward to server command
-			Cmd_ExecuteString (va("cmd %s", text));
+			//Cmd_ExecuteString (va("cmd %s", text));
+#ifndef DEDICATED_ONLY
+			Cmd_ForwardToServer ();
+#endif
 			//Com_DPrintf ("Cmd_ExecuteString: no function '%s' for '%s', using 'cmd'\n", cmd->name, text);
 		}
 		else

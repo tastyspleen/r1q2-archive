@@ -503,8 +503,9 @@ void Key_Console (int key)
 		Com_Printf ("%s\n", LOG_CLIENT,key_lines[edit_line]);
 		edit_line = (edit_line + 1) & 31;
 		history_line = edit_line;
+		memset (key_lines[edit_line], 0, sizeof(key_lines[edit_line]));
 		key_lines[edit_line][0] = ']';
-		key_lines[edit_line][1] = '\0';
+		//key_lines[edit_line][1] = '\0';
 		key_linepos = 1;
 		if (cls.state == ca_disconnected)
 			SCR_UpdateScreen ();	// force an update, because the command

@@ -558,8 +558,9 @@ static void SV_GameMap_f (void)
 			Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
 
 			//r1: check it exists
-            if (FS_LoadFile (expanded, NULL) == -1)
-			{			
+            //if (FS_LoadFile (expanded, NULL) == -1)
+			if (!CM_MapWillLoad (expanded))
+			{
 				Com_Printf ("Can't find map '%s'\n", LOG_GENERAL, map);
 				return;
 			}
@@ -643,7 +644,8 @@ static void SV_Map_f (void)
 		Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
 
 		//r1: check it exists
-        if (FS_LoadFile (expanded, NULL) == -1)
+        //if (FS_LoadFile (expanded, NULL) == -1)
+		if (!CM_MapWillLoad (expanded))
 		{			
 			Com_Printf ("Can't find map '%s'\n", LOG_GENERAL, map);
 			return;
@@ -1153,7 +1155,8 @@ static char *cmdbanmethodnames[] =
 {
 	"message",
 	"kick",
-	"silent"
+	"silent",
+	"blackhole"
 };
 
 static void SV_AddCommandBan_f (void)
@@ -1166,7 +1169,7 @@ static void SV_AddCommandBan_f (void)
 	{
 		Com_Printf ("Purpose: Prevents any client from executing a given command.\n"
 					"Syntax : addcommandban <commandname> [method] [logmethod]\n"
-					"           method=message|kick|silent (default message)\n"
+					"           method=message|kick|silent|blackhole (default message)\n"
 					"           logmethod=log|silent (default log)\n"
 					"Example: addcommandban god\n"
 					"Example: addcommandban frkq2cmd kick silent\n"
@@ -1192,6 +1195,8 @@ static void SV_AddCommandBan_f (void)
 		method = CMDBAN_KICK;
 	else if (!Q_stricmp (Cmd_Argv(2), "silent"))
 		method = CMDBAN_SILENT;
+	else if (!Q_stricmp (Cmd_Argv(2), "blackhole"))
+		method = CMDBAN_BLACKHOLE;
 	else
 		method = CMDBAN_MESSAGE;
 
@@ -1205,7 +1210,7 @@ static void SV_AddCommandBan_f (void)
 
 	x->name = CopyString (Cmd_Argv(1), TAGMALLOC_CMDBANS);
 	x->kickmethod = method;
-	x->logmethod = method;
+	x->logmethod = logmethod;
 	x->next = NULL;
 
 	if (sv.state)
@@ -1642,6 +1647,7 @@ static void SV_AddLrconCmd_f (void)
 
 static void SV_DelLrconCmd_f(void)
 {
+	int					mlen;
 	char				*match;
 	linkednamelist_t	*ncmd;
 	linkednamelist_t	*last;
@@ -1655,19 +1661,19 @@ static void SV_DelLrconCmd_f(void)
 	}
 
 	match = StripQuotes(Cmd_Args());
+	mlen = strlen(match);
 
-	ncmd = last = &nullcmds;
+	ncmd = last = &lrconcmds;
 
 	while (ncmd->next)
 	{
 		ncmd = ncmd->next;
-		if (!Q_stricmp (match, ncmd->name))
+		if (!Q_strncasecmp (match, ncmd->name, mlen))
 		{
 			last->next = ncmd->next;
+			Com_Printf ("lrcon command '%s' removed.\n", LOG_GENERAL, ncmd->name);
 			Z_Free (ncmd->name);
 			Z_Free (ncmd);
-
-			Com_Printf ("lrcon command '%s' removed.\n", LOG_GENERAL, match);
 			return;
 		}
 		last = ncmd;
@@ -1734,8 +1740,14 @@ static void SV_Status_f (void)
 	}
 	else
 	{
-		Com_Printf (" # score ping name            lastmsg ip address            rate/pps ver\n", LOG_GENERAL);
-		Com_Printf ("-- ----- ---- --------------- ------- --------------------- -------- ---\n", LOG_GENERAL);
+		Com_Printf ("num score ping name            lastmsg ip address            rate/pps ver\n", LOG_GENERAL);
+		Com_Printf ("--- ----- ---- --------------- ------- --------------------- -------- ---\n", LOG_GENERAL);
+		//ideally want to keep this < 80 chars to avoid wrapping.
+/*
+ # score ping name            lastmsg address               rate/pps ver
+-- ----- ---- --------------- ------- --------------------- -------- ---
+ 0     1   58 [PD]Monk              4 210.84.229.185:50132  3.2K/ 49  34
+ */
 	}
 
 	for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
@@ -1762,9 +1774,9 @@ static void SV_Status_f (void)
 			ps = (player_state_new *)&cl->edict->client->ps.old_ps;*/
 
 #ifdef ENHANCED_SERVER
-			Com_Printf ("%2i %5i ", LOG_GENERAL, i, ((struct gclient_new_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
+			Com_Printf ("%3i %5i ", LOG_GENERAL, i, ((struct gclient_new_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
 #else
-			Com_Printf ("%2i %5i ", LOG_GENERAL, i, ((struct gclient_old_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
+			Com_Printf ("%3i %5i ", LOG_GENERAL, i, ((struct gclient_old_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
 #endif
 
 		if (cl->state == cs_connected || cl->state == cs_spawning) {

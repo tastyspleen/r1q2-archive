@@ -429,7 +429,7 @@ char *NET_ErrorString (void)
 
 		//r1: this should NEVER happen. chances are some spyware or other bullshit is
 		//    assing up the connection.
-	case WSAEINTR: return "WSAEINTR: Interrupted function call (YOUR WINSOCK IS FUCKED)";
+	case WSAEINTR: return "WSAEINTR: Interrupted function call (your TCP stack is likely broken/corrupt)";
 
 	case WSAEBADF: return "WSAEBADF";
 	case WSAEACCES: return "WSAEACCES: Permission denied";

@@ -240,6 +240,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 
 	// save name for levels that don't set message
 	strncpy (sv.configstrings[CS_NAME], server, sizeof(sv.configstrings[CS_NAME])-1);
+
 	if (Cvar_IntValue ("deathmatch"))
 	{
 		Com_sprintf(sv.configstrings[CS_AIRACCEL], sizeof(sv.configstrings[CS_AIRACCEL]), "%g", sv_airaccelerate->value);
@@ -276,9 +277,18 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	}
 	else
 	{
+		char	*p;
 		Com_sprintf (sv.configstrings[CS_MODELS+1],sizeof(sv.configstrings[CS_MODELS+1]),
 			"maps/%s.bsp", server);
 		sv.models[1] = CM_LoadMap (sv.configstrings[CS_MODELS+1], false, &checksum);
+
+		//FUCKING HUGE AND UGLY hack to allow map overriding
+		strcpy (sv.configstrings[CS_MODELS+1], CM_MapName());
+		strcpy (sv.name, CM_MapName() + 5);
+		p = strrchr(sv.name, '.');
+		if (!p)
+			Com_Error (ERR_DROP, "Aiee, sv.name is missing it's period: %s", sv.name);
+		*p = 0;
 	}
 
 	Com_sprintf (sv.configstrings[CS_MAPCHECKSUM],sizeof(sv.configstrings[CS_MAPCHECKSUM]),
@@ -321,6 +331,10 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 		ge->RunFrame ();
 		ge->RunFrame ();
 	}
+
+	//verify game didn't clobber important stuff
+	if ((int)checksum != atoi(sv.configstrings[CS_MAPCHECKSUM]))
+		Com_Error (ERR_DROP, "Game DLL corrupted server configstrings");
 
 	// all precaches are complete
 	sv.state = serverstate;
@@ -490,7 +504,7 @@ another level:
 */
 void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 {
-	char	level[MAX_QPATH];
+	char	level[MAX_QPATH-9]; //save space for maps/*.bsp
 	char	*ch;
 	char	spawnpoint[MAX_QPATH];
 	size_t	l;

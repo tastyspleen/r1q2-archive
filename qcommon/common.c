@@ -91,8 +91,11 @@ int		time_after_game;
 int		time_before_ref;
 int		time_after_ref;
 
+// for profiling
 static int msg_local_hits;
 static int msg_malloc_hits;
+
+static int messageSizes[1500];
 
 char *svc_strings[256] =
 {
@@ -151,7 +154,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CLIENT_IGNORE, "CLIENT_IGNORE", 0},
 	{TAGMALLOC_BLACKHOLE, "BLACKHOLE", 0},
 	{TAGMALLOC_CVARBANS, "CVARBANS", 0},
-	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE", 0},
+	//{TAGMALLOC_MSG_QUEUE, "MSGQUEUE", 0},
 	{TAGMALLOC_CMDBANS, "CMDBANS", 0},
 	{TAGMALLOC_REDBLACK, "REDBLACK", 0},
 	{TAGMALLOC_LRCON, "LRCON", 0},
@@ -341,7 +344,7 @@ Com_DPrintf
 A Com_Printf that only shows up if the "developer" cvar is set
 ================
 */
-void Com_DPrintf (char const *fmt, ...)
+void _Com_DPrintf (char const *fmt, ...)
 {
 	if (!developer->intvalue)
 	{
@@ -410,7 +413,10 @@ void Com_Error (int code, const char *fmt, ...)
 		//r1: auto-restart server code on game crash
 		if (code == ERR_GAME)
 		{
-			char *resmap = Cvar_VariableString ("sv_restartmap");
+			const char *resmap;
+
+			resmap = Cvar_VariableString ("sv_restartmap");
+
 			if (resmap[0])
 				Cmd_ExecuteString (va ("map %s", resmap));
 		}
@@ -713,6 +719,7 @@ void MSG_EndWriting (sizebuf_t *out)
 	{
 		SZ_Write (out, message_buff, msgbuff.cursize);
 	}
+
 	SZ_Clear (&msgbuff);
 }
 
@@ -731,6 +738,9 @@ void MSG_EndWrite (messagelist_t *out)
 		msg_local_hits++;
 		out->data = out->localbuff;
 	}
+
+	if (msgbuff.cursize < sizeof(messageSizes) / sizeof(messageSizes[0]))
+		messageSizes[msgbuff.cursize]++;
 
 	memcpy (out->data, message_buff, msgbuff.cursize);
 	out->cursize = msgbuff.cursize;
@@ -1341,10 +1351,12 @@ void *SZ_GetSpace (sizebuf_t /*@out@*/*buf, int length)
 			Com_Error (ERR_FATAL, "SZ_GetSpace: attempted to write %d bytes to an uninitialized buffer!", length);
 
 		if (!buf->allowoverflow)
+		{
+			if (length > buf->maxsize)
+				Com_Error (ERR_FATAL, "SZ_GetSpace: %i is > full buffer size %d (%d)", length, buf->maxsize, buf->buffsize);
+
 			Com_Error (ERR_FATAL, "SZ_GetSpace: overflow without allowoverflow set (%d+%d > %d)", buf->cursize, length, buf->maxsize);
-		
-		if (length > buf->maxsize)
-			Com_Error (ERR_FATAL, "SZ_GetSpace: %i is > full buffer size %d (%d)", length, buf->maxsize, buf->buffsize);
+		}		
 		
 		//r1: clear the buffer BEFORE the error!! (for console buffer)
 		if (buf->cursize + length >= buf->buffsize)
@@ -2128,12 +2140,33 @@ void Q_NullFunc(void)
 void Msg_Stats_f (void)
 {
 	int		total;
+	int		i, j;
+	int		num;
+	int		sum;
 
 	total = msg_malloc_hits + msg_local_hits;
 
 	Com_Printf ("malloc: %d (%.2f%%), local: %d (%.2f%%)\n", LOG_GENERAL,
 		msg_malloc_hits, ((float)msg_malloc_hits / (float)total) * 100.0f,
 		msg_local_hits, ((float)msg_local_hits / (float)total) * 100.0f);
+	
+	Com_Printf ("byte breakdown:\n", LOG_GENERAL);
+
+	total = 0;
+	num = 0;
+
+	for (i = 0; i < sizeof(messageSizes) / sizeof(messageSizes[0]); i += 10)
+	{
+		sum = 0;
+		for (j = i; j < i+ 10; j++)
+		{
+			sum += messageSizes[j];
+			total += j * messageSizes[j];
+			num += messageSizes[j];
+		}
+		Com_Printf ("%i-%d: %d\n", LOG_GENERAL, i, i + 10, sum);
+	}
+	Com_Printf ("mean: %.2f\n", LOG_GENERAL, (float)total / (float)num);
 }
 
 void _z_debug_changed (cvar_t *cvar, char *o, char *n)

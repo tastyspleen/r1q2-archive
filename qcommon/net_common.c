@@ -30,10 +30,10 @@ int _true = 1;
 	*(int *)&a->ip = ((struct sockaddr_in *)s)->sin_addr.s_addr; \
 	a->port = ((struct sockaddr_in *)s)->sin_port; \
 
-qboolean	NET_StringToSockaddr (char *s, struct sockaddr *sadr)
+qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 {
 	int	isip = 0;
-	char *p;
+	const char *p;
 	struct hostent	*h;
 	char	*colon;
 //	int		val;
@@ -106,7 +106,7 @@ idnewt:28000
 192.246.40.70:28000
 =============
 */
-qboolean	NET_StringToAdr (char *s, netadr_t *a)
+qboolean	NET_StringToAdr (const char *s, netadr_t *a)
 {
 	struct sockaddr sadr;
 

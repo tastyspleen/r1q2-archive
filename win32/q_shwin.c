@@ -271,14 +271,16 @@ void _START_PERFORMANCE_TIMER (void)
 }
 void _STOP_PERFORMANCE_TIMER (void)
 {
+	double res;
 	LARGE_INTEGER stop;
 	__int64 diff;
 	LARGE_INTEGER freq;
 	QueryPerformanceCounter (&stop);
 	QueryPerformanceFrequency (&freq);
 	diff = stop.QuadPart - start.QuadPart;
-	Com_Printf ("Function executed in %.5f secs.\n", LOG_GENERAL, ((double)((double)diff / (double)freq.QuadPart)));
-	totalTime += (double)((double)diff / (double)freq.QuadPart);
+	res = ((double)((double)diff / (double)freq.QuadPart));
+	Com_Printf ("Function executed in %.5f secs.\n", LOG_GENERAL, res);
+	totalTime += res;
 }
 #endif
 #endif

@@ -554,7 +554,7 @@ void CL_ParseLaser (int colors, vec3_t start, vec3_t end)
 			l->ent.flags = RF_TRANSLUCENT | RF_BEAM;
 			VectorCopy (start, l->ent.origin);
 			VectorCopy (end, l->ent.oldorigin);
-			l->ent.alpha = 0.30;
+			l->ent.alpha = 0.30f;
 			l->ent.skinnum = (colors >> ((randomMT() % 4)*8)) & 0xff;
 			l->ent.model = NULL;
 			l->ent.frame = 4;
@@ -1052,7 +1052,7 @@ void CL_ParseTEnt (void)
 		ex->lightcolor[2] = 0.0;
 		ex->ent.model = cl_mod_bfg_explo;
 		ex->ent.flags |= RF_TRANSLUCENT;
-		ex->ent.alpha = 0.30;
+		ex->ent.alpha = 0.30f;
 		ex->frames = 4;
 		break;
 
@@ -1104,9 +1104,9 @@ void CL_ParseTEnt (void)
 		ex->ent.flags = RF_BEAM;
 		ex->start = cl.frame.servertime - 0.1;
 		ex->light = 100 + (float)(randomMT()%75);
-		ex->lightcolor[0] = 1.0;
-		ex->lightcolor[1] = 1.0;
-		ex->lightcolor[2] = 0.3;
+		ex->lightcolor[0] = 1.0f;
+		ex->lightcolor[1] = 1.0f;
+		ex->lightcolor[2] = 0.3f;
 		ex->ent.model = cl_mod_flash;
 		ex->frames = 2;
 		break;
@@ -1169,9 +1169,9 @@ void CL_ParseTEnt (void)
 			ex->lightcolor[1] = 1;
 		else // flechette
 		{
-			ex->lightcolor[0] = 0.19;
-			ex->lightcolor[1] = 0.41;
-			ex->lightcolor[2] = 0.75;
+			ex->lightcolor[0] = 0.19f;
+			ex->lightcolor[1] = 0.41f;
+			ex->lightcolor[2] = 0.75f;
 		}
 		ex->ent.model = cl_mod_explode;
 		ex->frames = 4;

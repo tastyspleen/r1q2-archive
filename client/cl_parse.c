@@ -180,7 +180,7 @@ Returns true if the file exists, otherwise it attempts
 to start a download from the server.
 ===============
 */
-qboolean	CL_CheckOrDownloadFile (char *filename)
+qboolean	CL_CheckOrDownloadFile (const char *filename)
 {
 	FILE	*fp;
 	int		length;
@@ -585,7 +585,7 @@ void CL_ParseServerData (void)
 			{
 				Cvar_Set("game", str);
 			}
-			Cvar_ForceSet ("$game", str);
+			Cvar_ForceSet ("$$game", str);
 		}
 	}
 
@@ -938,11 +938,18 @@ void CL_ParseConfigString (void)
 		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring %d exceeds available space", i);
 
 	//r1: don't allow basic things to overflow
-	if ((i < CS_STATUSBAR && i >= CS_AIRACCEL) && (i < CS_GENERAL))
+	if (i != CS_NAME && i < CS_GENERAL)
 	{
-		if (length >= MAX_QPATH)
-			Com_Printf ("WARNING: Configstring %d of length %d exceeds MAX_QPATH.\n", LOG_CLIENT|LOG_WARNING, i, length);
-		Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
+		if (i >= CS_STATUSBAR && i < CS_AIRACCEL)
+		{
+			strncpy (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (CS_AIRACCEL - i))-1);
+		}
+		else
+		{
+			if (length >= MAX_QPATH)
+				Com_Printf ("WARNING: Configstring %d of length %d exceeds MAX_QPATH.\n", LOG_CLIENT|LOG_WARNING, i, length);
+			Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
+		}
 	}
 	else
 	{

@@ -158,8 +158,11 @@ typedef struct
 	int		color;
 } graphsamp_t;
 
+#define	DEBUGGRAPH_SAMPLES	2048
+#define	DEBUGGRAPH_MASK		2047
+
 static	int			current;
-static	graphsamp_t	values[2048];
+static	graphsamp_t	values[DEBUGGRAPH_SAMPLES];
 
 /*
 ==============
@@ -168,8 +171,8 @@ SCR_DebugGraph
 */
 void EXPORT SCR_DebugGraph (float value, int color)
 {
-	values[current&2047].value = value;
-	values[current&2047].color = color;
+	values[current&DEBUGGRAPH_MASK].value = value;
+	values[current&DEBUGGRAPH_MASK].color = color;
 	current++;
 }
 
@@ -195,7 +198,7 @@ void SCR_DrawDebugGraph (void)
 
 	for (a=0 ; a<w ; a++)
 	{
-		i = (current-1-a+1024) & 1023;
+		i = (current-1-a+DEBUGGRAPH_SAMPLES) & DEBUGGRAPH_MASK;
 		v = values[i].value;
 		color = values[i].color;
 		v = v*scr_graphscale->value + scr_graphshift->value;
@@ -922,7 +925,7 @@ void SizeHUDString (char *string, int *w, int *h)
 	*h = lines * 8;
 }
 
-void DrawHUDString (char *string, int x, int y, int centerwidth, int xor)
+void DrawHUDString (const char *string, int x, int y, int centerwidth, int xor)
 {
 	int		margin;
 	char	line[1024];
@@ -1036,11 +1039,11 @@ SCR_ExecuteLayoutString
 */
 void SCR_ExecuteLayoutString (char *s)
 {
-	int		x, y;
-	int		value;
-	char	*token;
-	int		width;
-	int		index;
+	int				x, y;
+	int				value;
+	const char		*token;
+	int				width;
+	int				index;
 	clientinfo_t	*ci;
 
 	if (cls.state != ca_active || !cl.refresh_prepped)
@@ -1112,7 +1115,7 @@ void SCR_ExecuteLayoutString (char *s)
 						token = COM_Parse (&s);
 						SCR_AddDirtyPoint (x, y);
 						SCR_AddDirtyPoint (x+23, y+23);
-						re.DrawPic (x, y, token);
+						re.DrawPic (x, y, (char *)token);
 					}
 					else
 					{
@@ -1534,6 +1537,12 @@ void SCR_UpdateScreen (void)
 			V_RenderView ();
 #endif
 
+			if (scr_timegraph->intvalue)
+				SCR_DebugGraph (cls.frametime*300, cls.frametime*300);
+
+			if (scr_debuggraph->intvalue || scr_timegraph->intvalue || scr_netgraph->intvalue || scr_sizegraph->intvalue)
+				SCR_DrawDebugGraph ();
+
 			SCR_DrawStats ();
 			if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 1)
 				SCR_DrawLayout ();
@@ -1542,12 +1551,6 @@ void SCR_UpdateScreen (void)
 
 			SCR_DrawNet ();
 			SCR_CheckDrawCenterString ();
-
-			if (scr_timegraph->intvalue)
-				SCR_DebugGraph (cls.frametime*300, cls.frametime*300);
-
-			if (scr_debuggraph->intvalue || scr_timegraph->intvalue || scr_netgraph->intvalue || scr_sizegraph->intvalue)
-				SCR_DrawDebugGraph ();
 
 			SCR_DrawPause ();
 
