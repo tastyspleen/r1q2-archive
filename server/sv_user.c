@@ -1579,6 +1579,8 @@ static void SV_CvarResult_f (void)
 
 		while (bans->next)
 		{
+			bans = bans->next;
+
 			if (!strcmp (Cmd_Argv(1), bans->varname))
 				return;
 		}
