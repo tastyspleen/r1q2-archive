@@ -690,6 +690,7 @@ int NET_Connect (netadr_t *to, int port);
 #define NET_CompareBaseAdr(a,b) \
 	(*(int *)(a)->ip == *(int *)(b)->ip)
 
+unsigned short NET_PortToHost (netadr_t *a);
 char		*NET_AdrToString (netadr_t *a);
 qboolean	NET_StringToAdr (char *s, netadr_t *a);
 #ifndef NO_SERVER

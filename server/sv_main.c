@@ -1724,7 +1724,7 @@ void SV_ReadPackets (void)
 
 			if (cl->netchan.remote_address.port != net_from.port)
 			{
-				Com_Printf ("SV_ReadPackets: fixing up a translated port for %s [%d->%d]\n", LOG_SERVER|LOG_NOTICE, cl->name, ShortSwap(cl->netchan.remote_address.port), ShortSwap(net_from.port));
+				Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, NET_PortToHost(&cl->netchan.remote_address), NET_PortToHost(&net_from));
 				cl->netchan.remote_address.port = net_from.port;
 			}
 

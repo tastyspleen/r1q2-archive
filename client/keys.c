@@ -642,7 +642,7 @@ void Key_Console (int key)
 
 	if (key == K_HOME || key == K_KP_HOME )
 	{
-		if (keydown[K_CTRL])
+		if (keydown[K_CTRL] || !key_lines[edit_line][1] || key_linepos == 1)
 			con.display = con.current - con.totallines + 10;
 		else
 			key_linepos = 1;
@@ -651,10 +651,14 @@ void Key_Console (int key)
 
 	if (key == K_END || key == K_KP_END )
 	{
-		if (keydown[K_CTRL])
+		int		len;
+
+		len = strlen(key_lines[edit_line]);
+
+		if (keydown[K_CTRL] || !key_lines[edit_line][1] || key_linepos == len)
 			con.display = con.current;
 		else
-			key_linepos = strlen(key_lines[edit_line]);
+			key_linepos = len;
 		return;
 	}
 	
