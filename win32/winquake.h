@@ -41,7 +41,8 @@ extern DWORD gSndBufSize;
 extern HWND			cl_hwnd;
 extern qboolean		ActiveApp, Minimized;
 
-extern const byte        scantokey[256];
+extern const byte		scantokey[128];
+extern const byte		dinputkeymap[256];
 
 void IN_ReadImmediateData (usercmd_t *cmd);
 void IN_ReadBufferedData( usercmd_t *cmd );

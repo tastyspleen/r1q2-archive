@@ -170,7 +170,7 @@ void IN_InitDInput (void)
 		Com_Error (ERR_FATAL, "Trying to init DirectInput when already initialized!");
 
     // Create a DInput object
-	Com_Printf ("...creating DirectInput object: ", LOG_CLIENT);
+	Com_Printf ("...initializing DirectInput: ", LOG_CLIENT);
 	
 	//extern HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
 	//DirectInput8Create(hTheInstance, DIRECTINPUT_VERSION, , NULL);
@@ -388,7 +388,7 @@ void IN_ReadKeyboard (void)
         // plus a 'D' - meaning the key was pressed 
         //   or a 'U' - meaning the key was released
 		//Com_Printf ("scancode: %d\n", LOG_GENERAL, didod[i].dwOfs);
-		Key_Event ( scantokey[didod[i].dwOfs], (didod[i].dwData & 0x80) ? true : false, sys_msg_time);
+		Key_Event ( dinputkeymap[didod[i].dwOfs], (didod[i].dwData & 0x80) ? true : false, sys_msg_time);
     }
 }
 
@@ -867,7 +867,7 @@ void IN_ActivateMouse (void)
 
 	//Com_Printf ("******************* IN_ActivateMouse\n");
 
-	if (g_pDI)
+	if (g_pMouse)
 	{
 		IDirectInputDevice8_Acquire (g_pMouse);
 	}

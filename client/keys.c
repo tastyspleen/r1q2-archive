@@ -154,6 +154,11 @@ keyname_t keynames[] =
 	{"KP_MINUS",		K_KP_MINUS },
 	{"KP_PLUS",			K_KP_PLUS },
 
+	{"NUMLOCK",			K_NUMLOCK },
+	{"SCROLLLOCK",		K_SCROLLLOCK },
+	{"CAPSLOCK",		K_CAPSLOCK },
+	{"PRINTSCREEN",		K_PRTSCR },
+
 	{"MWHEELUP", K_MWHEELUP },
 	{"MWHEELDOWN", K_MWHEELDOWN },
 

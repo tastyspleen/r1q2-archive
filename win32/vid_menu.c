@@ -235,6 +235,8 @@ void EXPORT VID_MenuInit( void )
 		"[1280 960 ]",
 		"[1600 1200]",
 		"[2048 1536]",
+		"[1280 1024]",
+		"[1680 1050]",
 		0
 	};
 	static const char *refs[] =

@@ -72,6 +72,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define K_KP_MINUS		173
 #define K_KP_PLUS		174
 
+//DirectInput on Win32 provides these
+#define	K_NUMLOCK		175
+#define	K_SCROLLLOCK	176
+#define	K_CAPSLOCK		177
+
+#define	K_PRTSCR		178
+
 #define K_PAUSE			255
 
 //

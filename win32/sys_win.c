@@ -902,6 +902,7 @@ Sys_SendKeyEvents
 Send Key_Event calls
 ================
 */
+#ifndef DEDICATED_ONLY
 void Sys_SendKeyEvents (void)
 {
 	if (g_pKeyboard)
@@ -927,8 +928,7 @@ void Sys_SendKeyEvents (void)
 	// grab frame time 
 	sys_frame_time = timeGetTime();	// FIXME: should this be at start?
 }
-
-
+#endif
 
 /*
 ================

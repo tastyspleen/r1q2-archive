@@ -2939,6 +2939,17 @@ void CL_LoadDeferredModels (void)
 	}
 }
 
+void CL_Synchronous_Frame (int msec)
+{
+
+
+
+
+
+
+}
+
+
 //CL_SendCommand
 //jec - prepare and send out the current usercmd state.
 void CL_SendCommand (void)
@@ -2984,6 +2995,13 @@ void CL_Frame (int msec)
 		NET_Client_Sleep (100);
 #endif
 #endif
+
+	if (cl_async->intvalue == 0)
+	{
+		CL_Synchronous_Frame (msec);
+		return;
+	}
+
 	//jec - set internal counters
 	packet_delta += msec;
 	render_delta += msec;
