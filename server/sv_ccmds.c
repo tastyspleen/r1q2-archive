@@ -530,20 +530,14 @@ static void SV_GameMap_f (void)
 	{	// save the map just exited
 		if (!strchr (map, '.') && !strchr (map, '$'))
 		{
-			Com_sprintf (expanded, sizeof(expanded), "maps/%s.zbsp", map);
+			Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
 			//r1: always terminate!
 			expanded[sizeof(expanded)-1] = '\0';
-			if (FS_LoadFile (expanded, NULL) == -1)
-			{
-				Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
-				//r1: always terminate!
-				expanded[sizeof(expanded)-1] = '\0';
-				
-				//r1: check it exists
-                if (FS_LoadFile (expanded, NULL) == -1) {			
-					Com_Printf ("Can't find map '%s'\n", map);
-					return;
-				}
+			
+			//r1: check it exists
+            if (FS_LoadFile (expanded, NULL) == -1) {			
+				Com_Printf ("Can't find map '%s'\n", map);
+				return;
 			}
 		}		
 		
@@ -622,21 +616,14 @@ static void SV_Map_f (void)
 	map = Cmd_Argv(1);
 	if (!strchr (map, '.') && !strchr (map, '$') && *map != '*')
 	{
-		Com_sprintf (expanded, sizeof(expanded), "maps/%s.zbsp", map);
-
+		Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
 		//r1: always terminate!
-		//expanded[sizeof(expanded)-1] = '\0';
-		if (FS_LoadFile (expanded, NULL) == -1)
-		{
-			Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
-			//r1: always terminate!
-			//expanded[sizeof(expanded)-1] = '\0';
+		expanded[sizeof(expanded)-1] = '\0';
 
-			//r1: check it exists
-            if (FS_LoadFile (expanded, NULL) == -1) {			
-				Com_Printf ("Can't find map '%s'\n", map);
-				return;
-			}
+		//r1: check it exists
+        if (FS_LoadFile (expanded, NULL) == -1) {			
+			Com_Printf ("Can't find map '%s'\n", map);
+			return;
 		}
 	}
 

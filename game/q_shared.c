@@ -1211,21 +1211,22 @@ int Q_stricmp (char *s1, char *s2)
 
 int Com_sprintf (char /*@out@*/*dest, int size, char *fmt, ...)
 {
-	int		len;
+	int			len;
 	va_list		argptr;
-	char	bigbuffer[0x10000];
+	char		bigbuffer[0x10000];
 
 	va_start (argptr,fmt);
 	len = Q_vsnprintf (bigbuffer, sizeof(bigbuffer), fmt, argptr);
 	va_end (argptr);
 
-	if (len == -1)
+	if (len == -1 || len == size)
 	{
-		Com_Printf ("Com_sprintf: overflow of %i in %i\n", len, size);
-		bigbuffer[size-1] = '\0';
+		Com_Printf ("Com_sprintf: overflow\n");
+		len = size-1;
 	}
 
-	strncpy (dest, bigbuffer, size);
+	bigbuffer[size-1] = '\0';
+	strcpy (dest, bigbuffer);
 
 	return len;
 }

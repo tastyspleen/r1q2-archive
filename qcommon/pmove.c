@@ -973,113 +973,92 @@ void PM_CheckDuck (void)
 {
 	trace_t	trace;
 
-	/*pm->mins[0] = -16;
-	pm->mins[1] = -16;
+	if (!pm->enhanced)
+	{
 
-	pm->maxs[0] = 16;
-	pm->maxs[1] = 16;*/
+		pm->mins[0] = -16;
+		pm->mins[1] = -16;
 
-	//FIXME: this is a really shitty way of detecting old dlls
-	//0,0,0 0,0,0 might be intended by the new version, however if an old
-	//game dll tries to use an empty bbox (spectator mode?) then this will
-	//unfortunately break (update: PM_SPECTATOR ignores bbox anyway so this
-	//is ok)
-	if (VectorCompare (pm->mins, vec3_origin)
-		&& VectorCompare (pm->maxs, vec3_origin)) {
-			VectorSet (pm->mins, -16, -16, -24);
-			VectorSet (pm->maxs, 16, 16, 32);
+		pm->maxs[0] = 16;
+		pm->maxs[1] = 16;
 
-			/*pm->mins[0] = -16;
-			pm->mins[1] = -16;
 
-			pm->maxs[0] = 16;
-			pm->maxs[1] = 16;*/
+		if (pm->s.pm_type == PM_GIB)
+		{
+			pm->mins[2] = 0;
+			pm->maxs[2] = 16;
+			pm->viewheight = 8;
+			return;
+		}
 
-			if (pm->s.pm_type == PM_GIB)
-			{
-				pm->mins[2] = 0;
-				pm->maxs[2] = 16;
-				pm->viewheight = 8;
-				return;
-			}
+		pm->mins[2] = -24;
 
-			//pm->mins[2] = -24;
-
-			if (pm->s.pm_type == PM_DEAD)
-			{
-				pm->s.pm_flags |= PMF_DUCKED;
-			}
-			else if (pm->cmd.upmove < 0 && (pm->s.pm_flags & PMF_ON_GROUND) )
-			{	// duck
-				pm->s.pm_flags |= PMF_DUCKED;
-			}
-			else
-			{	// stand up if possible
-				if (pm->s.pm_flags & PMF_DUCKED)
-				{
-					// try to stand up
-					pm->maxs[2] = 32;
-					trace = pm->trace (pml.origin, pm->mins, pm->maxs, pml.origin);
-					if (!trace.allsolid)
-						pm->s.pm_flags &= ~PMF_DUCKED;
-				}
-			}
-
+		if (pm->s.pm_type == PM_DEAD)
+		{
+			pm->s.pm_flags |= PMF_DUCKED;
+		}
+		else if (pm->cmd.upmove < 0 && (pm->s.pm_flags & PMF_ON_GROUND) )
+		{	// duck
+			pm->s.pm_flags |= PMF_DUCKED;
+		}
+		else
+		{	// stand up if possible
 			if (pm->s.pm_flags & PMF_DUCKED)
 			{
-				pm->maxs[2] = 4;
-				pm->viewheight = -2;
-			}
-			else
-			{
+				// try to stand up
 				pm->maxs[2] = 32;
-				pm->viewheight = 22;
+				trace = pm->trace (pml.origin, pm->mins, pm->maxs, pml.origin);
+				if (!trace.allsolid)
+					pm->s.pm_flags &= ~PMF_DUCKED;
 			}
-
-		} else {
-			if (pm->s.pm_type == PM_GIB)
-			{
-				pm->mins[2] = 0;
-				pm->maxs[2] = 16;
-				pm->viewheight = 8;
-				return;
-			}
-
-			pm->mins[2] = -24;
-
-			if (pm->s.pm_type == PM_DEAD)
-			{
-				pm->s.pm_flags |= PMF_DUCKED;
-			}
-			else if (pm->cmd.upmove < 0 && (pm->s.pm_flags & PMF_ON_GROUND) )
-			{	// duck
-				pm->s.pm_flags |= PMF_DUCKED;
-			}
-			else
-			{	// stand up if possible
-				if (pm->s.pm_flags & PMF_DUCKED)
-				{
-					vec3_t up;
-					VectorCopy (pm->maxs, up);
-					// try to stand up
-					up[2] *= 2;
-					trace = pm->trace (pml.origin, pm->mins, up, pml.origin);
-					if (!trace.allsolid)
-						pm->s.pm_flags &= ~PMF_DUCKED;
-				}
-			}
-
 		}
-	//if (pm->s.pm_flags & PMF_DUCKED)
-	//{
-		//pm->maxs[2] = 4;
-		//pm->viewheight = -2;
-	//}
-	/*else
+
+		if (pm->s.pm_flags & PMF_DUCKED)
+		{
+			pm->maxs[2] = 4;
+			pm->viewheight = -2;
+		}
+		else
+		{
+			pm->maxs[2] = 32;
+			pm->viewheight = 22;
+		}
+	}
+	else
 	{
-		pm->maxs[2] = 32;
-		pm->viewheight = 22;
-	}*/
+		if (pm->s.pm_type == PM_GIB)
+		{
+			pm->mins[2] = 0;
+			pm->maxs[2] = 16;
+			pm->viewheight = 8;
+			return;
+		}
+
+		pm->mins[2] = -24;
+
+		if (pm->s.pm_type == PM_DEAD)
+		{
+			pm->s.pm_flags |= PMF_DUCKED;
+		}
+		else if (pm->cmd.upmove < 0 && (pm->s.pm_flags & PMF_ON_GROUND) )
+		{	// duck
+			pm->s.pm_flags |= PMF_DUCKED;
+		}
+		else
+		{	// stand up if possible
+			if (pm->s.pm_flags & PMF_DUCKED)
+			{
+				vec3_t up;
+				VectorCopy (pm->maxs, up);
+
+				// try to stand up
+				up[2] *= 2;
+				trace = pm->trace (pml.origin, pm->mins, up, pml.origin);
+				if (!trace.allsolid)
+					pm->s.pm_flags &= ~PMF_DUCKED;
+			}
+		}
+	}
 }
 
 

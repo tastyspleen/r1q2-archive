@@ -697,6 +697,7 @@ typedef struct
 
 	float		multiplier;
 	qboolean	strafehack;
+	qboolean	enhanced;
 } pmove_new_t;
 
 // entity_state_t->effects

@@ -202,14 +202,26 @@ void Com_Printf (char *fmt, ...)
 				logfile = fopen (name, "a");
 			else
 				logfile = fopen (name, "w");
+			if (!logfile)
+			{
+#ifndef DEDICATED_ONLY
+				Con_Print ("ALERT: Couldn't open logfile!!\n");
+#endif
+#ifndef NO_SERVER
+				Sys_ConsoleOutput ("ALERT: Couldn't open logfile!!\n");
+#endif
+			}
 		}
 
 		if (logfile)
 		{
 			if (logfile_timestamp->intvalue)
 			{
-				char	*line;
-				char	*msgptr;
+				char		*line;
+				char		*msgptr;
+
+				static qboolean	insert_timestamp = true;
+
 				time_t	tm;
 
 				time(&tm);
@@ -220,8 +232,14 @@ void Com_Printf (char *fmt, ...)
 				line = strstr (msgptr, "\n");
 				while (line)
 				{
+					if (insert_timestamp)
+					{
+						fprintf (logfile, "%s ", timestamp);
+						insert_timestamp = false;
+					}
 					*line = 0;
-					fprintf (logfile, "%s %s\n", timestamp, msgptr);
+					fprintf (logfile, "%s\n", msgptr);
+					insert_timestamp = true;
 					line++;
 					msgptr = line;
 
@@ -229,6 +247,12 @@ void Com_Printf (char *fmt, ...)
 						break;
 
 					line = strstr (msgptr, "\n");
+				}
+
+				if (insert_timestamp)
+				{
+					fprintf (logfile, "%s ", timestamp);
+					insert_timestamp = false;
 				}
 
 				fprintf (logfile, "%s", msgptr);
@@ -1097,8 +1121,6 @@ void *SZ_GetSpace (sizebuf_t /*@out@*/*buf, int length)
 		if (length > buf->maxsize)
 			Com_Error (ERR_FATAL, "SZ_GetSpace: %i is > full buffer size %d (%d)", length, buf->maxsize, buf->buffsize);
 		
-		buf->overflowed = true;
-
 		//r1: clear the buffer BEFORE the error!! (for console buffer)
 		if (buf->cursize + length >= buf->buffsize)
 		{
@@ -1109,6 +1131,8 @@ void *SZ_GetSpace (sizebuf_t /*@out@*/*buf, int length)
 		{
 			Com_DPrintf ("SZ_GetSpace: overflowed maxsize\n");
 		}
+
+		buf->overflowed = true;
 	}
 
 	data = buf->data + buf->cursize;

@@ -510,6 +510,7 @@ unsigned int frames_seconds = 0;
 char rateMsg[] = "RATEDROP";
 char frameMsg[] = "OLDFRAME";
 char parseMsg[] = "OLDPARSE";
+char overflowMsg[] = "OVERFLOW";
 
 extern int __cdecl entitycmpfnc( const entity_t *, const entity_t * );
 
@@ -677,9 +678,12 @@ void V_RenderView(void)
 	}
 
 	//FIXME: incorrect use of scr_ prefix
-	if (scr_showturtle->intvalue) {
+	if (scr_showturtle->intvalue)
+	{
 		frame_t *old;
-		if (cl.surpressCount) {
+
+		if (cl.surpressCount)
+		{
 			int x;
 			for (x=0 ; x<sizeof(rateMsg)-1; x++)
 				re.DrawChar (1+(x*8), 250, 128 + rateMsg[x] );
@@ -687,7 +691,8 @@ void V_RenderView(void)
 
 		old = &cl.frames[cl.frame.deltaframe & UPDATE_MASK];
 		if (old->serverframe != cl.frame.deltaframe)
-		{	// The frame that the server did the delta from
+		{	
+			// The frame that the server did the delta from
 			// is too old, so we can't reconstruct it properly.
 			int x;
 			for (x=0 ; x<sizeof(frameMsg)-1; x++)
@@ -701,6 +706,12 @@ void V_RenderView(void)
 				re.DrawChar (1+(x*8), 282, 128 + parseMsg[x] );
 		}
 
+		if (!gotFrameFromServerPacket)
+		{
+			int x;
+			for (x=0 ; x<sizeof(overflowMsg)-1; x++)
+				re.DrawChar (1+(x*8), 298, 128 + overflowMsg[x] );
+		}
 	}
 
 	SCR_AddDirtyPoint (scr_vrect.x, scr_vrect.y);

@@ -143,8 +143,14 @@ static void SV_New_f (void)
 	// send full levelname
 	MSG_WriteString (&sv_client->netchan.message, sv.configstrings[CS_NAME]);
 
-	if (sv_client->protocol == ENHANCED_PROTOCOL_VERSION) {
-		MSG_WriteShort (&sv_client->netchan.message, (unsigned short)sv_downloadport->intvalue);
+	if (sv_client->protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		//are we enhanced?
+#ifdef ENHANCED_SERVER
+		MSG_WriteByte (&sv_client->netchan.message, 1);
+#else
+		MSG_WriteByte (&sv_client->netchan.message, 0);
+#endif
 	}
 
 	//r1: fix for old clients that don't respond to stufftext due to pending cmd buffer

@@ -21,7 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-int serverPacketCount;
+int			serverPacketCount;
+qboolean	gotFrameFromServerPacket;
 
 char *svc_strings[256] =
 {
@@ -591,11 +592,11 @@ void CL_ParseServerData (void)
 
 	// read in download server port (if any)
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && !cl.attractloop)
-		cls.dlserverport = MSG_ReadShort (&net_message);
+		cl.enhancedServer = MSG_ReadByte (&net_message);
 	else
-		cls.dlserverport = 0;
+		cl.enhancedServer = 0;
 
-	Com_DPrintf ("Serverdata packet received. protocol=%d, servercount=%d, attractloop=%d, clnum=%d, game=%s, map=%s, dlserver=%d\n", cls.serverProtocol, cl.servercount, cl.attractloop, cl.playernum, cl.gamedir, str, cls.dlserverport);
+	Com_DPrintf ("Serverdata packet received. protocol=%d, servercount=%d, attractloop=%d, clnum=%d, game=%s, map=%s, enhanced=%d\n", cls.serverProtocol, cl.servercount, cl.attractloop, cl.playernum, cl.gamedir, str, cl.enhancedServer);
 
 	if (cl.playernum == -1)
 	{	// playing a cinematic or showing a pic, not a level
@@ -1069,6 +1070,7 @@ void CL_ParseServerMessage (void)
 		Com_Printf ("------------------\n");
 
 	serverPacketCount++;
+	gotFrameFromServerPacket = false;
 
 //
 // parse the message
@@ -1100,15 +1102,28 @@ void CL_ParseServerMessage (void)
 	// other commands
 		switch (cmd)
 		{
-		default:
-			if (developer->intvalue)
-				Com_Printf ("Unknown command char %d, ignoring!!\n", cmd);
-			else
-				Com_Error (ERR_DROP,"CL_ParseServerMessage: Illegible server message %d (0x%.2x)\n", cmd, cmd);
+		case svc_muzzleflash:
+			CL_ParseMuzzleFlash ();
 			break;
-			
+
+		case svc_muzzleflash2:
+			CL_ParseMuzzleFlash2 ();
+			break;
+
+		case svc_temp_entity:
+			CL_ParseTEnt ();
+			break;
+
+		case svc_layout:
+			s = MSG_ReadString (&net_message);
+			strncpy (cl.layout, s, sizeof(cl.layout)-1);
+			break;
+
+		case svc_inventory:
+			CL_ParseInventory ();
+			break;
+
 		case svc_nop:
-//			Com_Printf ("svc_nop\n");
 			break;
 			
 		case svc_disconnect:
@@ -1124,6 +1139,10 @@ void CL_ParseServerMessage (void)
 			}
 			cls.state = ca_connecting;
 			cls.connect_time = -99999;	// CL_CheckForResend() will fire immediately
+			break;
+
+		case svc_sound:
+			CL_ParseStartSoundPacket();
 			break;
 
 		case svc_print:
@@ -1148,20 +1167,11 @@ void CL_ParseServerMessage (void)
 			Com_Printf ("%s", s);
 			con.ormask = 0;
 			break;
-			
-		case svc_centerprint:
-			SCR_CenterPrint (MSG_ReadString (&net_message));
-			break;
-			
+
 		case svc_stufftext:
 			s = MSG_ReadString (&net_message);
 			Com_DPrintf ("stufftext: %s\n", s);
 			Cbuf_AddText (s);
-
-#ifdef _DEBUG
-			//strcpy (s, StripHighBits (s, 2));
-			//Com_Printf ("stuff: %s\n", s);
-#endif
 			break;
 			
 		case svc_serverdata:
@@ -1172,42 +1182,29 @@ void CL_ParseServerMessage (void)
 		case svc_configstring:
 			CL_ParseConfigString ();
 			break;
-			
-		case svc_sound:
-			CL_ParseStartSoundPacket();
-			break;
+		
 			
 		case svc_spawnbaseline:
 			CL_ParseBaseline ();
 			break;
 
-		case svc_temp_entity:
-			CL_ParseTEnt ();
-			break;
-
-		case svc_muzzleflash:
-			CL_ParseMuzzleFlash ();
-			break;
-
-		case svc_muzzleflash2:
-			CL_ParseMuzzleFlash2 ();
+		case svc_centerprint:
+			SCR_CenterPrint (MSG_ReadString (&net_message));
 			break;
 
 		case svc_download:
 			CL_ParseDownload (false);
 			break;
 
+		case svc_playerinfo:
+		case svc_packetentities:
+		case svc_deltapacketentities:
+			Com_Error (ERR_DROP, "Out of place frame data");
+			break;
+
 		case svc_frame:
 			CL_ParseFrame ();
-			break;
-
-		case svc_inventory:
-			CL_ParseInventory ();
-			break;
-
-		case svc_layout:
-			s = MSG_ReadString (&net_message);
-			strncpy (cl.layout, s, sizeof(cl.layout)-1);
+			gotFrameFromServerPacket = true;
 			break;
 
 		// ************** r1q2 specific BEGIN ****************
@@ -1220,11 +1217,13 @@ void CL_ParseServerMessage (void)
 			break;
 		// ************** r1q2 specific END ******************
 
-		case svc_playerinfo:
-		case svc_packetentities:
-		case svc_deltapacketentities:
-			Com_Error (ERR_DROP, "Out of place frame data");
+		default:
+			if (developer->intvalue)
+				Com_Printf ("Unknown command char %d, ignoring!!\n", cmd);
+			else
+				Com_Error (ERR_DROP,"CL_ParseServerMessage: Unknown command byte %d (0x%.2x)", cmd, cmd);
 			break;
+
 		}
 	}
 }

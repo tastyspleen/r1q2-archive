@@ -1419,26 +1419,35 @@ void CL_LoadLoc (char *filename)
 {
 	cl_location_t	*loc = &cl_locations;
 	char *x, *y, *z, *name, *line;
-	char readLine[0xFF];
+	char readLine[256];
+	int	linenum;
 	//int len;
 	FILE *fLoc;
 
 	CL_FreeLocs ();
 
 	FS_FOpenFile (filename, &fLoc);
-	if (!fLoc) {
+
+	if (!fLoc)
+	{
 		Com_DPrintf ("CL_LoadLoc: %s not found\n", filename);
 		return;
 	}
 
+	linenum = 0;
+
 	while ((line = (fgets (readLine, sizeof(readLine), fLoc))))
 	{
+		linenum++;
 		x = line;
 
-		name = NULL;
+		if (*x == '\r' || *x == '\n' || *x == '\0')
+			continue;
+
+		name = y = z = NULL;
 
 		while (*line) {
-			if (*line == ' ') {
+			if (*line == ' ' || *line == '\t') {
 				*line++ = '\0';
 				y = line;
 				break;
@@ -1447,7 +1456,7 @@ void CL_LoadLoc (char *filename)
 		}
 
 		while (*line) {
-			if (*line == ' ') {
+			if (*line == ' ' || *line == '\t') {
 				*line++ = '\0';
 				z = line;
 				break;
@@ -1456,7 +1465,7 @@ void CL_LoadLoc (char *filename)
 		}
 
 		while (*line) {
-			if (*line == ' ' && !name) {
+			if (*line == ' ' || *line == '\t') {
 				*line = '\0';
 				name = line + 1;
 			} else if (*line == '\n' || *line == '\r') {
@@ -1466,11 +1475,16 @@ void CL_LoadLoc (char *filename)
 			line++;
 		}
 
+		if (!*x || !y || !*y || !z || !*z || !name || !*name)
+		{
+			Com_Printf ("CL_LoadLoc: Parse error on line %d of '%s'.\n", linenum, filename);
+			break;
+		}
+
 		loc->next = Z_TagMalloc (sizeof(cl_location_t), TAGMALLOC_CLIENT_LOC);
 		loc = loc->next;
 
-		loc->name = Z_TagMalloc (strlen(name)+1, TAGMALLOC_CLIENT_LOC);
-		strcpy (loc->name, name);
+		loc->name = CopyString (name, TAGMALLOC_CLIENT_LOC);
 		VectorSet (loc->location, (float)atoi(x)/8.0, (float)atoi(y)/8.0, (float)atoi(z)/8.0);
 
 		Com_DPrintf ("CL_AddLoc: adding location '%s'\n", name);
@@ -1485,17 +1499,76 @@ char *CL_Loc_Get (void)
 	unsigned int	length, bestlength = 0xFFFFFFFF;
 	cl_location_t	*loc = &cl_locations, *best;
 
-	while (loc->next) {
+	while (loc->next)
+	{
 		loc = loc->next;
+
 		VectorSubtract (loc->location, cl.refdef.vieworg, distance);
 		length = VectorLength (distance);
-		if (length < bestlength) {
+
+		if (length < bestlength)
+		{
 			best = loc;
 			bestlength = length;
 		}
 	}
 
 	return best->name;
+}
+
+void CL_AddLoc_f (void)
+{
+	cl_location_t	*loc, *last, *newentry;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Purpose: Add a new location.\n"
+					"Syntax : addloc <name>\n"
+					"Example: addloc red base\n");
+		return;
+	}
+
+	loc = &cl_locations;
+
+	last = loc->next;
+
+	newentry = Z_TagMalloc (sizeof(*loc), TAGMALLOC_CLIENT_LOC);
+	newentry->name = CopyString (Cmd_Args(), TAGMALLOC_CLIENT_LOC);
+	VectorCopy (cl.refdef.vieworg, newentry->location);
+	newentry->next = last;
+	loc->next = newentry;
+
+	Com_Printf ("Location '%s' added at (%d, %d, %d).\n", newentry->name, (int)cl.refdef.vieworg[0]*8, (int)cl.refdef.vieworg[1]*8, (int)cl.refdef.vieworg[2]*8);
+}
+
+void CL_SaveLoc_f (void)
+{
+	cl_location_t	*loc = &cl_locations;
+	FILE			*out;
+
+	char			locbuff[MAX_QPATH+4];
+	char			locfile[MAX_OSPATH];
+
+	COM_StripExtension (cl.configstrings[CS_MODELS+1], locbuff);
+	strcat (locbuff, ".loc");
+
+	Com_sprintf (locfile, sizeof(locfile), "%s/%s", FS_Gamedir(), locbuff);
+
+	out = fopen (locfile, "wb");
+	if (!out)
+	{
+		Com_Printf ("CL_SaveLoc_f: Unable to open '%s' for writing.\n", locfile);
+		return;
+	}
+
+	while (loc->next)
+	{
+		loc = loc->next;
+		fprintf (out, "%i %i %i %s\n", (int)loc->location[0]*8, (int)loc->location[1]*8, (int)loc->location[2]*8, loc->name);
+	}
+
+	fclose (out);
+	Com_Printf ("Locations saved to '%s'.\n", locbuff);
 }
 
 void CL_Say_Preprocessor (void)
@@ -1950,8 +2023,9 @@ fixed:
 		precache_check = ENV_CNT;
 	}
 
-	if (precache_check == ENV_CNT) {
-		char locbuff[MAX_QPATH];
+	if (precache_check == ENV_CNT)
+	{
+		char locbuff[MAX_QPATH+4];
 		precache_check = ENV_CNT + 1;
 
 		COM_StripExtension (cl.configstrings[CS_MODELS+1], locbuff);
@@ -1962,7 +2036,7 @@ fixed:
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 
 		if (map_checksum && map_checksum != strtoul(cl.configstrings[CS_MAPCHECKSUM], NULL, 10)) {
-			Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x\n",
+			Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x",
 				map_checksum, atoi(cl.configstrings[CS_MAPCHECKSUM]));
 			return;
 		}
@@ -2294,6 +2368,10 @@ void CL_InitLocal (void)
 #ifdef WIN32
 	Cmd_AddCommand ("update", CL_Update_f);
 #endif
+
+	Cmd_AddCommand ("addloc", CL_AddLoc_f);
+	Cmd_AddCommand ("saveloc", CL_SaveLoc_f);
+
 	//
 	// forward to server commands
 	//

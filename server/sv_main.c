@@ -908,7 +908,8 @@ gotnewcl:
 		return;
 
 	// send the connect packet to the client
-	Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect");
+	// r1: also send dlport as per tcp download spec.
+	Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect %d", sv_downloadport->intvalue);
 
 	Netchan_Setup (NS_SERVER, &newcl->netchan, adr, version, 0);
 

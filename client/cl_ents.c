@@ -736,21 +736,26 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 	if (flags & PS_RDFLAGS)
 		state->rdflags = MSG_ReadByte (&net_message);
 
-	if (flags & PS_BBOX) {
-		int x, zd, zu;
-		int solid;
+	//r1q2 extensions
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		if (flags & PS_BBOX)
+		{
+			int x, zd, zu;
+			int solid;
 
-		solid = MSG_ReadShort (&net_message);
+			solid = MSG_ReadShort (&net_message);
 
-		x = 8*(solid & 31);
-		zd = 8*((solid>>5) & 31);
-		zu = 8*((solid>>10) & 63) - 32;
+			x = 8*(solid & 31);
+			zd = 8*((solid>>5) & 31);
+			zu = 8*((solid>>10) & 63) - 32;
 
-		state->mins[0] = state->mins[1] = -x;
-		state->maxs[0] = state->maxs[1] = x;
-		state->mins[2] = -zd;
-		state->maxs[2] = zu;
-		Com_Printf ("received bbox from server: (%f, %f, %f), (%f, %f, %f)\n", state->mins[0], state->mins[1], state->mins[2], state->maxs[0], state->maxs[1], state->maxs[2]);
+			state->mins[0] = state->mins[1] = -x;
+			state->maxs[0] = state->maxs[1] = x;
+			state->mins[2] = -zd;
+			state->maxs[2] = zu;
+			Com_Printf ("received bbox from server: (%f, %f, %f), (%f, %f, %f)\n", state->mins[0], state->mins[1], state->mins[2], state->maxs[0], state->maxs[1], state->maxs[2]);
+		}
 	}
 
 	// parse stats

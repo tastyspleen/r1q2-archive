@@ -758,10 +758,8 @@ void SV_BuildClientFrame (client_t *client)
 			&& !ent->s.event)
 			continue;
 
-		if (!ent->inuse)
-		{
-			Com_Printf ("WARNING: Mod didn't nullify unused entity %d!\n", e);
-		}
+		if (sv_gamedebug->intvalue && !ent->inuse)
+			Com_Printf ("WARNING: Entity %d is marked as unused but still contains state and thus may be sent to clients!\n", e);
 
 		// ignore if not touching a PV leaf
 		if (ent != clent)

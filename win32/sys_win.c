@@ -269,8 +269,8 @@ void Sys_InstallService(char *servername, char *cmdline)
 	strcat (lpszBinaryPathName, " -service ");
 	strcat (lpszBinaryPathName, cmdline);
 
-	Com_sprintf (srvDispName, sizeof(srvDispName)-1, "Quake II - %s", servername);
-	Com_sprintf (srvName, sizeof(srvName)-1, "R1Q2(%s)", servername);
+	Com_sprintf (srvDispName, sizeof(srvDispName), "Quake II - %s", servername);
+	Com_sprintf (srvName, sizeof(srvName), "R1Q2(%s)", servername);
 
 	schSCManager = OpenSCManager( 
 		NULL,                    // local machine 
@@ -789,7 +789,7 @@ void Sys_ConsoleOutput (char *string)
 	char *p, *s;
 	//int n = 0;
 
-	if (!dedicated || !dedicated->intvalue)
+	if (!dedicated->intvalue)
 		return;
 
 	if (oldStyleConsole)

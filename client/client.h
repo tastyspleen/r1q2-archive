@@ -219,6 +219,8 @@ typedef struct client_state_s
 
 	clientinfo_t	clientinfo[MAX_CLIENTS];
 	clientinfo_t	baseclientinfo;
+
+	qboolean		enhancedServer;
 } client_state_t;
 
 extern	client_state_t	cl;
@@ -605,6 +607,7 @@ void CL_Record_f (void);
 extern	char *svc_strings[];
 
 extern	int	serverPacketCount;
+extern	qboolean gotFrameFromServerPacket;
 
 void CL_ParseServerMessage (void);
 void CL_LoadClientinfo (clientinfo_t *ci, char *s);

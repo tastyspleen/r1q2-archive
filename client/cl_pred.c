@@ -253,10 +253,13 @@ void CL_PredictMovement (void)
 
 		pm.cmd = *cmd;
 
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+		if (cl.enhancedServer)
+		{
 			VectorCopy (cl.frame.playerstate.mins, pm.mins);
 			VectorCopy (cl.frame.playerstate.maxs, pm.maxs);
-		} else {
+		}
+		else
+		{
 			VectorSet (pm.mins, -16, -16, -24);
 			VectorSet (pm.maxs,  16,  16, 32);
 		}
@@ -266,7 +269,8 @@ void CL_PredictMovement (void)
 		else
 			pm.multiplier = 1;
 
-		pm.strafehack = (qboolean)cl_strafejump_hack->intvalue;
+		pm.enhanced = cl.enhancedServer;
+		pm.strafehack = cl_strafejump_hack->intvalue;
 
 		Pmove (&pm);
 

@@ -476,6 +476,10 @@ int FS_FOpenFile (char *filename, FILE **file)
 			*file = NULL;
 			return -1;
 		}
+#ifdef _DEBUG
+		Com_DPrintf ("File '%s' found in cache: %s\n", filename, cache->filepath);
+#endif
+
 		*file = fopen (cache->filepath, "rb");
 		if (!*file)
 			Com_Error (ERR_FATAL, "Couldn't open %s", cache->filepath);	
@@ -540,6 +544,10 @@ int FS_FOpenFile (char *filename, FILE **file)
 	}
 #endif
 
+#ifdef _DEBUG
+		Com_DPrintf ("File '%s' not found in cache, searching fs_searchpaths\n", filename);
+#endif
+
 	for (search = fs_searchpaths ; search ; search = search->next)
 	{
 		// is the element a pak file?
@@ -559,6 +567,11 @@ int FS_FOpenFile (char *filename, FILE **file)
 			if (entry)
 			{
 				entry = *(packfile_t **)entry;
+
+#ifdef _DEBUG
+				Com_DPrintf ("File '%s' found in %s, (%s)\n", filename, pak->filename, entry->name);
+#endif
+
 				*file = fopen (pak->filename, "rb");
 				if (!*file)
 					Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	

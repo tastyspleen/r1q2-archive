@@ -233,8 +233,8 @@ int Netchan_Transmit (netchan_t *chan, int length, byte *data)
 	if (chan->message.overflowed || chan->message.cursize >= MAX_MSGLEN)
 	{
 		chan->fatal_error = true;
-		Com_Printf ("%s:Outgoing message overflow\n"
-			, NET_AdrToString (&chan->remote_address));
+		Com_Printf ("%s:Outgoing message overflow (o:%d, %d bytes)\n"
+			, NET_AdrToString (&chan->remote_address), chan->message.overflowed, chan->message.cursize);
 		return -2;
 	}
 

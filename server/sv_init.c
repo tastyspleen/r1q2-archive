@@ -420,7 +420,7 @@ void SV_InitGame (void)
 #ifdef _DEBUG
 	sv_downloadport = Cvar_Get ("sv_downloadport", va("%d", server_port), 0);
 #else
-	sv_downloadport = Cvar_Get ("sv_downloadport", "0", 0);
+	sv_downloadport = Cvar_Get ("sv_downloadport", "0", CVAR_NOSET);
 #endif
 
 #ifdef _DEBUG

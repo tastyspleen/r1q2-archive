@@ -510,11 +510,13 @@ static qboolean SV_SendClientDatagram (client_t *client)
 	//temp = client->netchan.message.overflowed;
 
 	if (msg.overflowed)
-	{	// must have room left for the packet header
+	{	
+		// must have room left for the packet header
 		Com_DPrintf ("WARNING: msg overflowed for %s\n", client->name);
 		SZ_Clear (&msg);
-		//client->netchan.message.overflowed = true;
-	} else {
+	}
+	else
+	{
 
 		//r1ch: fill in any spare room in the netchan with msg queue
 		while (client->messageQueue.next)
@@ -567,21 +569,15 @@ static qboolean SV_SendClientDatagram (client_t *client)
 				}
 			}
 		}
-
-		// send the datagram
-		ret = Netchan_Transmit (&client->netchan, msg.cursize, msg.data);
-		if (ret == -1)
-		{
-			SV_KickClient (client, "connection reset by peer", NULL);
-			return false;
-		}
-		else if (ret == -2)
-		{
-			SV_KickClient (client, "outgoing message overflow", NULL);
-			return false;
-		}
 	}
-	//client->netchan.message.overflowed = temp;
+
+	// send the datagram
+	ret = Netchan_Transmit (&client->netchan, msg.cursize, msg.data);
+	if (ret == -1)
+	{
+		SV_KickClient (client, "connection reset by peer", NULL);
+		return false;
+	}
 
 	// record the size for rate estimation
 	client->message_size[sv.framenum % RATE_MESSAGES] = msg.cursize;

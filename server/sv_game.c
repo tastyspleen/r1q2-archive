@@ -505,6 +505,12 @@ void EXPORT SV_Pmove (pmove_t *pm)
 
 	epm.strafehack = (qboolean)sv_strafejump_hack->intvalue;
 
+#ifdef ENHANCED_SERVER
+	epm.enhanced = true;
+#else
+	epm.enhanced = false;
+#endif
+
 	//pmove
 	Pmove (&epm);
 	
