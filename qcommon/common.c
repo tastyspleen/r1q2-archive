@@ -420,7 +420,7 @@ void Com_Error (int code, const char *fmt, ...)
 	{
 		printf ("%s\n", msg);
 		if (dbg_crash_on_fatal_error->intvalue)
-			DEBUGBREAKPOINT;
+			Q_DEBUGBREAKPOINT;
 
 		//an err_die means the whole game is about to explode, avoid running any extra code if possible
 		if (code != ERR_DIE)
@@ -2528,6 +2528,13 @@ void StripHighBits (char *string, int highbits)
 	}
 
 	*p = '\0';
+}
+
+qboolean isvalidchar (int c)
+{
+	if (!isalnum(c) && c != '_' && c != '-')
+		return false;
+	return true;
 }
 
 void ExpandNewLines (char *string)

@@ -1566,7 +1566,7 @@ void CL_AddPlayerBeams (void)
 		}
 //PMM
 
-		if (dist[1] == 0 && dist[0] == 0)
+		if (FLOAT_EQ_ZERO(dist[1]) && FLOAT_EQ_ZERO(dist[0]))
 		{
 			yaw = 0;
 			if (FLOAT_GT_ZERO(dist[2]))
@@ -1577,7 +1577,7 @@ void CL_AddPlayerBeams (void)
 		else
 		{
 	// PMM - fixed to correct for pitch of 0
-			if (dist[0])
+			if (FLOAT_EQ_ZERO(dist[0]))
 				yaw = (atan2(dist[1], dist[0]) * 180 / M_PI);
 			else if (FLOAT_GT_ZERO(dist[1]))
 				yaw = 90;
@@ -1634,16 +1634,16 @@ void CL_AddPlayerBeams (void)
 		memset (&ent, 0, sizeof(ent));
 		if (b->model == cl_mod_heatbeam)
 		{
-			model_length = 32.0;
+			model_length = 32.0f;
 		}
 		else if (b->model == cl_mod_lightning)
 		{
-			model_length = 35.0;
-			d-= 20.0;  // correction so it doesn't end in middle of tesla
+			model_length = 35.0f;
+			d-= 20.0f;  // correction so it doesn't end in middle of tesla
 		}
 		else
 		{
-			model_length = 30.0;
+			model_length = 30.0f;
 		}
 		steps = ceil(d/model_length);
 		len = (d-model_length)/(steps-1);
@@ -1695,8 +1695,10 @@ void CL_AddPlayerBeams (void)
 			
 			V_AddEntity (&ent);
 
-			for (j=0 ; j<3 ; j++)
-				org[j] += dist[j]*len;
+			org[0] += dist[0]*len;
+			org[1] += dist[1]*len;
+			org[2] += dist[2]*len;
+
 			d -= model_length;
 		}
 	}
@@ -1728,12 +1730,16 @@ void CL_ProcessSustain ()
 	for (i=0, s=cl_sustains; i< MAX_SUSTAINS; i++, s++)
 	{
 		if (s->id)
+		{
 			if ((s->endtime >= cl.time) && (cl.time >= s->nextthink))
 			{
 				s->think (s);
 			}
 			else if (s->endtime < cl.time)
+			{
 				s->id = 0;
+			}
+		}
 	}
 }
 
@@ -1763,67 +1769,68 @@ void CL_AddExplosions (void)
 
 		switch (ex->type)
 		{
-		case ex_mflash:
-			if (f >= ex->frames-1)
-				ex->type = ex_free;
-			break;
-		case ex_misc:
-			if (f >= ex->frames-1)
-			{
-				ex->type = ex_free;
+			case ex_free:
+			case ex_explosion:
+			default:
 				break;
-			}
-			ent->alpha = 1.0 - frac/(ex->frames-1);
-			break;
-		case ex_flash:
-			if (f >= 1)
-			{
-				ex->type = ex_free;
+			case ex_misc:
+				if (f >= ex->frames-1)
+				{
+					ex->type = ex_free;
+					continue;
+				}
+				ent->alpha = 1.0 - frac/(ex->frames-1);
 				break;
-			}
-			ent->alpha = 1.0;
-			break;
-		case ex_poly:
-			if (f >= ex->frames-1)
-			{
-				ex->type = ex_free;
+			case ex_flash:
+				if (f >= 1)
+				{
+					ex->type = ex_free;
+					continue;
+				}
+				ent->alpha = 1.0;
 				break;
-			}
+			case ex_mflash:
+				if (f >= ex->frames-1)
+					ex->type = ex_free;
+				break;
+			case ex_poly:
+				if (f >= ex->frames-1)
+				{
+					ex->type = ex_free;
+					continue;
+				}
 
-			ent->alpha = (16.0 - (float)f)/16.0;
+				ent->alpha = (16.0 - (float)f)/16.0;
 
-			if (f < 10)
-			{
-				ent->skinnum = (f>>1);
-				if (ent->skinnum < 0)
-					ent->skinnum = 0;
-			}
-			else
-			{
-				ent->flags |= RF_TRANSLUCENT;
-				if (f < 13)
-					ent->skinnum = 5;
+				if (f < 10)
+				{
+					ent->skinnum = (f>>1);
+					if (ent->skinnum < 0)
+						ent->skinnum = 0;
+				}
 				else
-					ent->skinnum = 6;
-			}
-			break;
-		case ex_poly2:
-			if (f >= ex->frames-1)
-			{
-				ex->type = ex_free;
+				{
+					ent->flags |= RF_TRANSLUCENT;
+					if (f < 13)
+						ent->skinnum = 5;
+					else
+						ent->skinnum = 6;
+				}
 				break;
-			}
+			case ex_poly2:
+				if (f >= ex->frames-1)
+				{
+					ex->type = ex_free;
+					continue;
+				}
 
-			ent->alpha = (5.0 - (float)f)/5.0;
-			ent->skinnum = 0;
-			ent->flags |= RF_TRANSLUCENT;
-			break;
+				ent->alpha = (5.0 - (float)f)/5.0;
+				ent->skinnum = 0;
+				ent->flags |= RF_TRANSLUCENT;
+				break;
 		}
 
-		if (ex->type == ex_free)
-			continue;
-
-		if (ex->light)
+		if (FLOAT_NE_ZERO(ex->light))
 		{
 			V_AddLight (ent->origin, ex->light*ent->alpha,
 				ex->lightcolor[0], ex->lightcolor[1], ex->lightcolor[2]);
@@ -1833,6 +1840,7 @@ void CL_AddExplosions (void)
 
 		if (f < 0)
 			f = 0;
+
 		ent->frame = ex->baseframe + f + 1;
 		ent->oldframe = ex->baseframe + f;
 		ent->backlerp = 1.0 - cl.lerpfrac;

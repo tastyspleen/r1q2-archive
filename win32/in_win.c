@@ -1322,6 +1322,7 @@ void IN_Frame (void)
 		// temporarily deactivate if in fullscreen
 		if (vid_fullscreen && vid_fullscreen->intvalue == 0)
 		{
+			//Com_Printf ("vid fullscreen is zero!!!\n", LOG_GENERAL);
 			IN_DeactivateMouse ();
 			return;
 		}

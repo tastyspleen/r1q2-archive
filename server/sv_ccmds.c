@@ -81,7 +81,7 @@ static void SV_SetMaster_f (void)
 	svs.last_heartbeat = -9999999;
 }
 
-qboolean StringIsNumeric (const char *s)
+static qboolean StringIsNumeric (const char *s)
 {
 	const char	*p;
 
@@ -835,7 +835,7 @@ static void SV_CheckCvarBans_f (void)
 	Com_Printf ("cvar checks sent...\n", LOG_GENERAL);
 }
 
-void ShowVarBans (varban_t *bans)
+static void ShowVarBans (varban_t *bans)
 {
 	banmatch_t	*match;
 
@@ -863,7 +863,7 @@ static void SV_ListUserinfoBans_f (void)
 	ShowVarBans (&userinfobans);
 }
 
-qboolean DeleteVarBan (varban_t *bans, char *match)
+static qboolean DeleteVarBan (varban_t *bans, char *match)
 {
 	varban_t	*last;
 
@@ -935,7 +935,7 @@ static void SV_DelUserinfoBan_f (void)
     	Com_Printf ("userinfoban '%s' not found.\n", LOG_GENERAL, match);
 }
 
-qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *iffound)
+static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *iffound)
 {
 	banmatch_t	*match = NULL;
 	varban_t	*bans = list;
@@ -1065,7 +1065,7 @@ static void SV_AddUserinfoBan_f (void)
 		Com_Printf ("userinfoban for '%s %s' added.\n", LOG_GENERAL, cvar, blocktype);
 }
 
-int MaskBits (unsigned long mask)
+static int MaskBits (unsigned long mask)
 {
 	int		i;
 	int		bits;
@@ -1361,7 +1361,7 @@ static void SV_Kick_f (void)
 	sv_client->lastmessage = svs.realtime;	// min case there is a funny zombie
 }
 
-void SV_Stuff_f (void)
+static void SV_Stuff_f (void)
 {
 	char *s;
 
@@ -1396,7 +1396,28 @@ void SV_Stuff_f (void)
 	}
 }
 
-void SV_AddStuffCmd_f (void)
+static void SV_Stuffall_f (void)
+{
+	client_t	*cl;
+	int			i;
+	char		*s;
+
+	s = Cmd_Args();
+
+	for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
+	{
+		if (cl->state <= cs_zombie)
+			continue;
+
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString (s);
+		SV_AddMessage (cl, true);
+	}
+
+	Com_Printf ("Wrote '%s' to all clients.\n", LOG_GENERAL, s);
+}
+
+static void SV_AddStuffCmd_f (void)
 {
 	char	*s;
 	char	*dst;
@@ -1434,7 +1455,7 @@ void SV_AddStuffCmd_f (void)
 	}
 }
 
-void SV_ListStuffedCommands_f (void)
+static void SV_ListStuffedCommands_f (void)
 {
 	int		i;
 	char	*s, *p;
@@ -1475,7 +1496,7 @@ void SV_ListStuffedCommands_f (void)
 	}
 }
 
-void SV_DelStuffCmd_f (void)
+static void SV_DelStuffCmd_f (void)
 {
 	int		length;
 	int		i;
@@ -1527,7 +1548,7 @@ void SV_DelStuffCmd_f (void)
 	Com_Printf ("Index %d not found.\n", LOG_GENERAL, index);
 }
 
-void SV_AddNullCmd_f (void)
+static void SV_AddNullCmd_f (void)
 {
 	linkednamelist_t	*ncmd;
 
@@ -1555,7 +1576,7 @@ void SV_AddNullCmd_f (void)
 		Com_Printf ("'%s' nullified.\n", LOG_GENERAL, ncmd->name);
 }
 
-void SV_DelNullCmd_f(void)
+static void SV_DelNullCmd_f(void)
 {
 	char				*match;
 	linkednamelist_t	*ncmd;
@@ -1591,7 +1612,7 @@ void SV_DelNullCmd_f(void)
 	Com_Printf ("%s not found.\n", LOG_GENERAL, match);
 }
 
-void SV_AddLrconCmd_f (void)
+static void SV_AddLrconCmd_f (void)
 {
 	linkednamelist_t	*ncmd;
 
@@ -1619,7 +1640,7 @@ void SV_AddLrconCmd_f (void)
 		Com_Printf ("'%s' added to lrcon commands.\n", LOG_GENERAL, ncmd->name);
 }
 
-void SV_DelLrconCmd_f(void)
+static void SV_DelLrconCmd_f(void)
 {
 	char				*match;
 	linkednamelist_t	*ncmd;
@@ -1655,12 +1676,33 @@ void SV_DelLrconCmd_f(void)
 	Com_Printf ("lrcon command '%s' not found.\n", LOG_GENERAL, match);
 }
 
+static void SV_DumpLinkedList (linkednamelist_t *list)
+{
+	while (list->next)
+	{
+		list = list->next;
+		Com_Printf ("%s\n", LOG_GENERAL, list->name);
+	}
+}
+
+static void SV_ListLrconCmds_f (void)
+{
+	Com_Printf ("Allowed lrcon commands:\n", LOG_GENERAL);
+	SV_DumpLinkedList (&lrconcmds);
+}
+
+static void SV_ListNullCmds_f (void)
+{
+	Com_Printf ("Nullcmds:\n", LOG_GENERAL);
+	SV_DumpLinkedList (&nullcmds);
+}
+
 /*
 ================
 SV_Status_f
 ================
 */
-void SV_Status_f (void)
+static void SV_Status_f (void)
 {
 	int			i;//, j, l;
 	client_t	*cl;
@@ -2187,15 +2229,18 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("checkcvarbans", SV_CheckCvarBans_f);
 
 	Cmd_AddCommand ("stuff", SV_Stuff_f);
+	Cmd_AddCommand ("stuffall", SV_Stuffall_f);
 
 	Cmd_AddCommand ("addstuffcmd", SV_AddStuffCmd_f);
 	Cmd_AddCommand ("liststuffcmds", SV_ListStuffedCommands_f);
 	Cmd_AddCommand ("delstuffcmd", SV_DelStuffCmd_f);
 
 	Cmd_AddCommand ("addnullcmd", SV_AddNullCmd_f);
+	Cmd_AddCommand ("listnullcmds", SV_ListNullCmds_f);
 	Cmd_AddCommand ("delnullcmd", SV_DelNullCmd_f);
 
 	Cmd_AddCommand ("addlrconcmd", SV_AddLrconCmd_f);
+	Cmd_AddCommand ("listlrconcmds", SV_ListLrconCmds_f);
 	Cmd_AddCommand ("dellrconcmd", SV_DelLrconCmd_f);
 
 	//r1: service support

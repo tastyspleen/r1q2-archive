@@ -333,17 +333,23 @@ void CL_PrepRefresh (void)
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
-	cl.model_draw[0] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
+	//modelindex 1 is always world.
+	//is 0 ever used?
+
+	cl.model_clip[0] = NULL;
+	cl.model_draw[0] = NULL;
+
+	cl.model_draw[1] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
 
 	if (cl.configstrings[CS_MODELS+1][0] == '*')
-		cl.model_clip[0] = CM_InlineModel (cl.configstrings[CS_MODELS+1]);
+		cl.model_clip[1] = CM_InlineModel (cl.configstrings[CS_MODELS+1]);
 	else
-		cl.model_clip[0] = NULL;
+		cl.model_clip[1] = NULL;
 
 	if (cl_defermodels->intvalue)
 	{
 		deffered_model_index = 1;
-		for (i = 1; i < MAX_MODELS; i++)
+		for (i = 2; i < MAX_MODELS; i++)
 		{
 			cl.model_clip[i] = NULL;
 			cl.model_draw[i] = NULL;
@@ -352,7 +358,7 @@ void CL_PrepRefresh (void)
 	else
 	{
 		deffered_model_index = MAX_MODELS;
-		for (i = 1; i < MAX_MODELS; i++)
+		for (i = 2; i < MAX_MODELS; i++)
 		{
 			if (!cl.configstrings[CS_MODELS+i][0])
 				continue;

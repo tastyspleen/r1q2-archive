@@ -127,6 +127,8 @@ void EXPORT VID_Printf (int print_level, const char *fmt, ...)
 	vsnprintf (msg, sizeof(msg)-1, fmt, argptr);
 	va_end (argptr);
 
+	msg[sizeof(msg)-1] = 0;
+
 	if (print_level == PRINT_ALL)
 	{
 		Com_Printf ("%s", LOG_CLIENT, msg);
@@ -151,6 +153,8 @@ void EXPORT VID_Error (int err_level, const char *fmt, ...)
 	va_start (argptr,fmt);
 	vsnprintf (msg, sizeof(msg)-1, fmt,argptr);
 	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
 
 	Com_Error (err_level,"%s", msg);
 }
@@ -711,8 +715,11 @@ VID_LoadRefresh
 */
 qboolean VID_LoadRefresh( char *name, char *errstr )
 {
-	refimport_t	ri;
-	GetRefAPI_t	GetRefAPI;
+	refimport_t		ri;
+	refimportnew_t	rx;
+
+	GetRefAPI_t		GetRefAPI;
+	GetExtraAPI_t	GetExtraAPI;
 	
 	if ( reflib_active )
 	{
@@ -756,6 +763,12 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 	ri.Vid_MenuInit = VID_MenuInit;
 	ri.Vid_NewWindow = VID_NewWindow;
 
+	//EXTENDED FUNCTIONS
+	rx.FS_FOpenFile = FS_FOpenFile;
+	rx.FS_FCloseFile = FS_FCloseFile;
+	rx.FS_Read = FS_Read;
+	rx.structSize = sizeof(rx);
+
 	Com_DPrintf ("refimport_t set.\n");
 
 	if ( ( GetRefAPI = (GetRefAPI_t)GetProcAddress( reflib_library, "GetRefAPI" ) ) == 0 )
@@ -766,6 +779,17 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 	}
 
 	Com_DPrintf ("got RefAPI.\n");
+
+	if ( ( GetExtraAPI = (GetExtraAPI_t)GetProcAddress( reflib_library, "GetExtraAPI" ) ) == 0 )
+	{
+		Com_DPrintf ("No ExtraAPI found.\n");
+	}
+	else
+	{
+		Com_DPrintf ("Initializing ExtraAPI...");
+		GetExtraAPI (rx);
+		Com_DPrintf ("done.\n");
+	}
 
 	re = GetRefAPI( ri );
 

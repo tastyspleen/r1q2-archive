@@ -562,27 +562,48 @@ void Cvar_Set_f (void)
 	int		flags;
 
 	c = Cmd_Argc();
-	if (c != 3 && c != 4)
+	//if (c != 3 && c != 4)
+	if (c < 3)
 	{
-		Com_Printf ("usage: set <variable> <value> [u / s]\n", LOG_GENERAL);
+		Com_Printf ("usage: set <variable> <value> [u / s] (line: set %s)\n", LOG_GENERAL, Cmd_Args());
 		return;
 	}
 
-	if (c == 4)
+	//r1: fixed so that 'set variable some thing' results in variable -> "some thing"
+	//so that set command can be used in aliases to set things with spaces without
+	//requring quotes.
+
+	if (!strcmp(Cmd_Argv(c-1), "u"))
+		flags = CVAR_USERINFO;
+	else if (!strcmp(Cmd_Argv(3), "s"))
+		flags = CVAR_SERVERINFO;
+	else
+		flags = 0;
+
+
+	if (flags)
 	{
-		if (!strcmp(Cmd_Argv(3), "u"))
-			flags = CVAR_USERINFO;
-		else if (!strcmp(Cmd_Argv(3), "s"))
-			flags = CVAR_SERVERINFO;
-		else
+		/*char	string[2048];
+		int		i;
+
+		string[0] = 0;
+
+		for (i=2 ; i<c-1 ; i++)
 		{
-			Com_Printf ("flags can only be 'u' or 's' ('%s' given)\n", LOG_GENERAL, Cmd_Argv(3));
-			return;
-		}
+			strcat (string, Cmd_Argv(i));
+			if (i+1 != c-1)
+				strcat (string, " ");
+		}*/
+
+		//note, we don't do the above to get the full string since userinfo vars
+		//have to use same format as 3.20 (eg set undef $undef u should set undef "u")
+		//for q2admin and other userinfo checking mods.
 		Cvar_FullSet (Cmd_Argv(1), Cmd_Argv(2), flags);
 	}
 	else
-		Cvar_Set (Cmd_Argv(1), Cmd_Argv(2));
+	{
+		Cvar_Set (Cmd_Argv(1), Cmd_Args2(2));
+	}
 }
 
 
@@ -643,7 +664,8 @@ void Cvar_List_f (void)
 	num = i;
 
 	len = num * sizeof(cvar_t);
-	sortedList = Z_TagMalloc (len, TAGMALLOC_CVAR);
+	//sortedList = Z_TagMalloc (len, TAGMALLOC_CVAR);
+	sortedList = alloca(len);
 	
 	for (var = cvar_vars, i = 0; var ; var = var->next, i++)
 	{
@@ -688,7 +710,7 @@ void Cvar_List_f (void)
 	if (!argLen)
 		Com_Printf ("%i cvars\n", LOG_GENERAL, i);
 
-	Z_Free (sortedList);
+	//Z_Free (sortedList);
 }
 
 

@@ -47,7 +47,7 @@ int SV_FindIndex (const char *name, int start, int maxIndex, qboolean create)
 			Com_Printf ("GAME WARNING: SV_FindIndex: NULL or empty name, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 3)
-			DEBUGBREAKPOINT;
+			Q_DEBUGBREAKPOINT;
 		return 0;
 	}
 

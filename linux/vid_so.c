@@ -63,31 +63,33 @@ DLL GLUE
 */
 
 #define	MAXPRINTMSG	4096
-void VID_Printf (int print_level, char *fmt, ...)
+void VID_Printf (int print_level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
-	static qboolean	inupdate;
 	
 	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
+	vsnprintf (msg, sizeof(msg)-1, fmt,argptr);
 	va_end (argptr);
 
+	msg[sizeof(msg)-1] = 0;
+
 	if (print_level == PRINT_ALL)
-		Com_Printf ("%s", msg);
+		Com_Printf ("%s", LOG_CLIENT, msg);
 	else
 		Com_DPrintf ("%s", msg);
 }
 
-void VID_Error (int err_level, char *fmt, ...)
+void VID_Error (int err_level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
-	static qboolean	inupdate;
 	
 	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
+	vsnprintf (msg, sizeof(msg)-1, fmt,argptr);
 	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
 
 	Com_Error (err_level,"%s", msg);
 }
@@ -189,7 +191,6 @@ qboolean VID_LoadRefresh( char *name )
 	GetRefAPI_t	GetRefAPI;
 	char	fn[MAX_OSPATH];
 	struct stat st;
-	extern uid_t saved_euid;
 	FILE *fp;
 	
 	if ( reflib_active )
@@ -204,10 +205,8 @@ qboolean VID_LoadRefresh( char *name )
 		VID_FreeReflib ();
 	}
 
-	Com_Printf( "------- Loading %s -------\n", name );
+	Com_Printf( "------- Loading %s -------\n", LOG_CLIENT, name);
 
-	//regain root
-	seteuid(saved_euid);
 
 	/*if ((fp = fopen(SO_FILE, "r")) == NULL) {
 		Com_Printf( "LoadLibrary(\"%s\") failed: can't open " SO_FILE " (required for location of ref libraries)\n", name);
@@ -248,7 +247,7 @@ qboolean VID_LoadRefresh( char *name )
 
 	if ( ( reflib_library = dlopen( fn, RTLD_NOW ) ) == 0 )
 	{
-		Com_Printf( "LoadLibrary(\"%s\") failed: %s\n", name , dlerror());
+		Com_Printf( "LoadLibrary(\"%s\") failed: %s\n", LOG_CLIENT, name , dlerror());
 		return false;
 	}
 
@@ -326,7 +325,7 @@ qboolean VID_LoadRefresh( char *name )
 	setreuid(getuid(), getuid());
 	setegid(getgid());
 
-	Com_Printf( "------------------------------------\n");
+	Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	reflib_active = true;
 	return true;
 }
@@ -366,10 +365,10 @@ void VID_ReloadRefresh (void)
 		{
 			if ( strcmp (vid_ref->string, "soft") == 0 ||
 				strcmp (vid_ref->string, "softx") == 0 ) {
-Com_Printf("Refresh failed\n");
+				Com_Printf("Refresh failed\n", LOG_CLIENT);
 				sw_mode = Cvar_Get( "sw_mode", "0", 0 );
 				if (sw_mode->value != 0) {
-Com_Printf("Trying mode 0\n");
+					Com_Printf("Trying mode 0\n", LOG_CLIENT);
 					Cvar_SetValue("sw_mode", 0);
 					if ( !VID_LoadRefresh( name ) )
 						Com_Error (ERR_FATAL, "Couldn't fall back to software refresh!");

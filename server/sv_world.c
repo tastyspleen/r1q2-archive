@@ -158,7 +158,7 @@ void EXPORT SV_UnlinkEdict (edict_t *ent)
 				Com_Printf ("GAME WARNING: SV_UnlinkEdict: unlinking entity %d that isn't linked\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, NUM_FOR_EDICT(ent));
 
 				if (sv_gamedebug->intvalue >= 4)
-					DEBUGBREAKPOINT;
+					Q_DEBUGBREAKPOINT;
 			}
 		}
 		return;		// not linked in anywhere
@@ -199,7 +199,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 			Com_Printf ("GAME WARNING: SV_LinkEdict: linking entity %d that isn't in use\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, NUM_FOR_EDICT(ent));
 
 			if (sv_gamedebug->intvalue >= 4)
-				DEBUGBREAKPOINT;
+				Q_DEBUGBREAKPOINT;
 		}
 		return;
 	}
@@ -675,11 +675,14 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	//r1: server-side hax for bad looping traces
 	if (++sv_tracecount >= sv_max_traces_per_frame->intvalue)
 	{
-		clip.trace.fraction = 1.0;
-		//clip.trace.ent = ge->edicts;
-		clip.trace.ent = NULL;// = 0;
-		VectorCopy (end, clip.trace.endpos);
 		Com_Printf ("GAME ERROR: Bad SV_Trace: %d calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
+
+		clip.trace.fraction = 1.0;
+		clip.trace.ent = ge->edicts;
+		VectorCopy (end, clip.trace.endpos);
+		//this is really nasty, attempts to overwite source in Game DLL. may result in flying players and ents if it uses an origin
+		//directly!! we may even crash here if we are given a write protected start.
+		VectorCopy (end, start);
 		sv_tracecount = 0;
 		return clip.trace;
 	}

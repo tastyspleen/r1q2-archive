@@ -233,6 +233,7 @@ char *CopyString (const char *in, int tag);
 void StripHighBits (char *string, int highbits);
 void ExpandNewLines (char *string);
 char *MakePrintable (const byte *s);
+qboolean isvalidchar (int c);
 
 //============================================================================
 
@@ -873,8 +874,8 @@ char	*EXPORT FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
 void	FS_ExecAutoexec (void);
 
-int		FS_FOpenFile (const char *filename, FILE /*@out@*/**file, qboolean openHandle);
-void	FS_FCloseFile (FILE *f);
+int		EXPORT FS_FOpenFile (const char *filename, FILE /*@out@*/**file, qboolean openHandle);
+void	EXPORT FS_FCloseFile (FILE *f);
 // note: this can't be called from another DLL, due to MS libc issues
 
 void FS_FlushCache (void);
@@ -889,7 +890,7 @@ void	EXPORT FS_FreeFile (void *buffer);
 
 void	FS_CreatePath (char *path);
 
-int Sys_FileLength (const char *path);
+int		Sys_FileLength (const char *path);
 
 /*
 ==============================================================
@@ -1020,11 +1021,10 @@ size_t __cdecl fast_strlen(const char *s);
 void __cdecl fast_strlwr(char *s);
 int __cdecl fast_tolower(int c);
 #else
-#define fast_strlwr(x) strlwr(x)
+#define fast_strlwr(x) Q_strlwr(x)
 #define fast_strlen(x) strlen(x)
 #define fast_tolower(x) tolower(x)
 #endif
-
 char *StripQuotes (char *string);
 
 #ifdef WIN32
@@ -1078,6 +1078,7 @@ void	Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
 void	Sys_Quit (void);
 char	*Sys_GetClipboardData( void );
 void	Sys_CopyProtect (void);
+void	Sys_SetWindowText(char *buff);
 
 /*
 ==============================================================

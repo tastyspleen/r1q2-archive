@@ -28,12 +28,10 @@ int		snd_scaletable[32][256];
 int 	*snd_p, snd_linear_count, snd_vol;
 short	*snd_out;
 
-void __cdecl S_WriteLinearBlastStereo16 (void);
+void EXPORT S_WriteLinearBlastStereo16 (void);
 
-#if !(defined __linux__ && defined __i386__)
-#if	!id386
-
-void __cdecl S_WriteLinearBlastStereo16 (void)
+#ifndef WIN32
+void EXPORT S_WriteLinearBlastStereo16 (void)
 {
 	int		i;
 	int		val;
@@ -102,7 +100,6 @@ LClampDone2:
 	}
 }
 
-#endif
 #endif
 
 void S_TransferStereo16 (unsigned long *pbuf, int endtime)
@@ -367,10 +364,8 @@ void S_InitScaletable (void)
 }
 
 
-#if !(defined __linux__ && defined __i386__)
-#if	!id386
-
-void __cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
+#ifndef WIN32
+void EXPORT S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	int 	data;
 	int		*lscale, *rscale;
@@ -474,7 +469,6 @@ LDone:
 	}
 }
 
-#endif
 #endif
 
 void __cdecl S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)

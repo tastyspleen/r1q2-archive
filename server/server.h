@@ -448,7 +448,6 @@ extern cvar_t *hostname;
 extern int server_port;
 
 #ifdef WIN32
-void Sys_SetWindowText(char *buff);
 void Sys_UpdateConsoleBuffer (void);
 void Sys_InstallService(char *servername, char *cmdline);
 void Sys_DeleteService (char *servername);
@@ -457,7 +456,7 @@ void Sys_DisableTray (void);
 void Sys_Minimize (void);
 #endif
 
-void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...) __attribute__ ((format (printf, 4, 5)));;
+void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...) __attribute__ ((format (printf, 5, 6)));;
 
 //
 // sv_phys.c
@@ -509,7 +508,6 @@ void SV_ExecuteClientMessage (client_t *cl);
 // sv_ccmds.c
 //
 void SV_ReadLevelFile (void);
-void SV_Status_f (void);
 
 //
 // sv_ents.c

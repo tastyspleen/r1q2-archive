@@ -1847,7 +1847,8 @@ qboolean CL_LoadLoc (const char *filename)
 		return false;
 	}
 
-	locBuffer = Z_TagMalloc (len+2, TAGMALLOC_CLIENT_LOC);
+	//locBuffer = Z_TagMalloc (len+2, TAGMALLOC_CLIENT_LOC);
+	locBuffer = alloca (len+2);
 	FS_Read (locBuffer, len, handle);
 	FS_FCloseFile (handle);
 
@@ -1957,7 +1958,7 @@ qboolean CL_LoadLoc (const char *filename)
 
 	Com_DPrintf ("CL_AddLoc: read %d locations from '%s'\n", linenum, filename);
 
-	Z_Free (locBuffer);
+	//Z_Free (locBuffer);
 	return true;
 }
 
@@ -1966,6 +1967,8 @@ char *CL_Loc_Get (vec3_t org)
 	vec3_t			distance;
 	unsigned int	length, bestlength = 0xFFFFFFFF;
 	cl_location_t	*loc = &cl_locations, *best;
+
+	Q_assert (cl_locations.next);
 
 	while (loc->next)
 	{
@@ -2391,7 +2394,7 @@ void CL_RequestNextDownload (void)
 				length = (int)strlen (model);
 				for (j = 0; j < length; j++)
 				{
-					if (!isalnum(model[j]) && model[j] != '_')
+					if (!isvalidchar(model[j]))
 					{
 						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
 						strcpy (model, "male");
@@ -2403,7 +2406,7 @@ void CL_RequestNextDownload (void)
 				length = (int)strlen (skin);
 				for (j = 0; j < length; j++)
 				{
-					if (!isalnum(skin[j]) && skin[j] != '_')
+					if (!isvalidchar(skin[j]))
 					{
 						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
 						strcpy (model, "male");
@@ -3297,11 +3300,7 @@ void CL_Synchronous_Frame (int msec)
 		if (cls.state == ca_connected && extratime < 100)
 			return;			// don't flood packets out while connecting
 		if (extratime < 1000/cl_maxfps->value)
-		{
-			//avoid 100% cpu usage
-			if (!NET_Client_Sleep (1))	// framerate is too high
-				return;
-		}
+			return;
 	}
 
 	// let the mouse activate or deactivate
@@ -3472,9 +3471,6 @@ void CL_Frame (int msec)
 			render_frame = false;
 	}
 
-	if (!cl_async->intvalue && render_frame)
-		packet_frame = true;
-
 	// don't flood packets out while connecting
 	if (cls.state == ca_connected && packet_delta < 100)
 		packet_frame = false;
@@ -3564,11 +3560,6 @@ void CL_Frame (int msec)
 
 		if (cls.state <= ca_active)
 			NET_Client_Sleep (1);
-	}
-	else
-	{
-		//avoid 100% cpu usage
-		NET_Client_Sleep (1);
 	}
 		//cls.framecount++;
 	//}

@@ -152,7 +152,7 @@ void Sys_Error (const char *error, ...)
 
 	if (ret == IDRETRY)
 	{
-		DEBUGBREAKPOINT;
+		Q_DEBUGBREAKPOINT;
 	}
 	else if (ret == IDIGNORE)
 	{

@@ -482,3 +482,22 @@ int NET_Connect (netadr_t *to, int port)
 	return s;
 }
 
+int NET_Client_Sleep (int msec)
+{
+    struct timeval timeout;
+	fd_set	fdset;
+	int i;
+
+	FD_ZERO(&fdset);
+	i = 0;
+
+	if (ip_sockets[NS_CLIENT])
+	{
+		FD_SET(ip_sockets[NS_CLIENT], &fdset); // network socket
+		i = ip_sockets[NS_CLIENT];
+	}
+
+	timeout.tv_sec = msec/1000;
+	timeout.tv_usec = (msec%1000)*1000;
+	return select(i+1, &fdset, NULL, NULL, &timeout);
+}

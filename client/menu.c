@@ -33,24 +33,24 @@ static char *menu_move_sound	= "misc/menu2.wav";
 static char *menu_out_sound		= "misc/menu3.wav";
 
 void M_Menu_Main_f (void);
-	void M_Menu_Game_f (void);
-		void M_Menu_LoadGame_f (void);
-		void M_Menu_SaveGame_f (void);
-		void M_Menu_PlayerConfig_f (void);
-			void M_Menu_DownloadOptions_f (void);
-		void M_Menu_Credits_f( void );
-	void M_Menu_Multiplayer_f( void );
-		void M_Menu_JoinServer_f (void);
-			void M_Menu_AddressBook_f( void );
-		void M_Menu_StartServer_f (void);
-			void M_Menu_DMOptions_f (void);
-	void M_Menu_Video_f (void);
-	void M_Menu_Options_f (void);
-		void M_Menu_R1Q2_f (void);
-		void M_Menu_Keys_f (void);
-	void M_Menu_Quit_f (void);
+static 	void M_Menu_Game_f (void);
+static 		void M_Menu_LoadGame_f (void);
+static 		void M_Menu_SaveGame_f (void);
+static 		void M_Menu_PlayerConfig_f (void);
+static 			void M_Menu_DownloadOptions_f (void);
+static 		void M_Menu_Credits_f( void );
+static 	void M_Menu_Multiplayer_f( void );
+static 		void M_Menu_JoinServer_f (void);
+static 			void M_Menu_AddressBook_f( void );
+static 		void M_Menu_StartServer_f (void);
+static 			void M_Menu_DMOptions_f (void);
+static 	void M_Menu_Video_f (void);
+static 	void M_Menu_Options_f (void);
+static 		void M_Menu_R1Q2_f (void);
+static 		void M_Menu_Keys_f (void);
+static 	void M_Menu_Quit_f (void);
 
-	void M_Menu_Credits( void );
+static 	void M_Menu_Credits( void );
 
 qboolean	m_entersound;		// play after drawing a frame, so caching
 								// won't disrupt the sound
@@ -1028,8 +1028,11 @@ extern cvar_t *in_joystick;
 static menuframework_s	s_r1q2_options_menu;
 static menuseparator_s	s_r1q2_warning;
 static menuseparator_s	s_r1q2_warning2;
+
+#ifdef WIN32
 static menulist_s		s_r1q2_dinput;
 static menulist_s		s_r1q2_winxp;
+#endif
 
 static menulist_s		s_r1q2_defer;
 static menulist_s		s_r1q2_async;
@@ -1074,6 +1077,7 @@ static void CustomizeControlsFunc( void *unused )
 	M_Menu_Keys_f();
 }
 
+#ifdef WIN32
 static void DirectInputFunc (void *unused)
 {
 	Cvar_SetValue ("m_directinput", s_r1q2_dinput.curvalue);
@@ -1085,6 +1089,7 @@ static void AccelFixFunc (void *unused)
 	Cvar_SetValue ("m_fixaccel", s_r1q2_winxp.curvalue);
 	IN_Restart_f();
 }
+#endif
 
 static void DeferFunc (void *unused)
 {
@@ -1127,6 +1132,7 @@ static void R1Q2_MenuInit (void)
 		0
 	};
 
+#ifdef WIN32
 	static const char *dinputnames[] = 
 	{
 		"disabled",
@@ -1134,6 +1140,7 @@ static void R1Q2_MenuInit (void)
 		"immediate",
 		0
 	};
+#endif
 
 	/*
 	** configure controls menu and menu items
@@ -1153,7 +1160,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_warning2.generic.x    = 160;
 	s_r1q2_warning2.generic.y	 = 10;
 
-
+#ifdef WIN32
 	s_r1q2_dinput.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_dinput.generic.x	= 0;
 	s_r1q2_dinput.generic.y	= 30;
@@ -1169,6 +1176,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_winxp.generic.callback = AccelFixFunc;
 	s_r1q2_winxp.itemnames = yesno_names;
 	s_r1q2_winxp.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("m_fixaccel"));
+#endif
 
 	s_r1q2_defer.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_defer.generic.x	= 0;
@@ -1241,8 +1249,12 @@ static void R1Q2_MenuInit (void)
 
 	Menu_AddItem (&s_r1q2_options_menu, (void *)&s_r1q2_warning);
 	Menu_AddItem (&s_r1q2_options_menu, (void *)&s_r1q2_warning2);
+
+#ifdef WIN32
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_dinput );
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_winxp );
+#endif
+
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_defer );
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_async );
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_autorecord );
@@ -3858,17 +3870,18 @@ static int EXPORT pmicmpfnc( const void *_a, const void *_b )
 
 static qboolean PlayerConfig_MenuInit( void )
 {
-	extern cvar_t *name;
-	extern cvar_t *team;
-	extern cvar_t *skin;
+	//extern cvar_t *name;
+	//extern cvar_t *skin;
+
 	char currentdirectory[1024];
 	char currentskin[1024];
 	int i = 0;
+	int	hand;
 
 	int currentdirectoryindex = 0;
 	int currentskinindex = 0;
 
-	cvar_t *hand = Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
+	//cvar_t *hand = Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
 
 	static const char *handedness[] = { "right", "left", "center", 0 };
 
@@ -3877,11 +3890,13 @@ static qboolean PlayerConfig_MenuInit( void )
 	if (s_numplayermodels == 0)
 		return false;
 
-	if ( hand->value < 0 || hand->value > 2 )
+	hand = Cvar_IntValue ("hand");
+
+	if ( hand < 0 || hand > 2)
 		Cvar_Set( "hand", "0" );
 
 	//r1: BUFFER OVERFLOW WAS HERE
-	Q_strncpy( currentdirectory, skin->string, sizeof(currentdirectory)-1);
+	Q_strncpy( currentdirectory, Cvar_VariableString ("skin"), sizeof(currentdirectory)-1);
 
 	if ( strchr( currentdirectory, '/' ) )
 	{
@@ -3933,8 +3948,8 @@ static qboolean PlayerConfig_MenuInit( void )
 	s_player_name_field.generic.y		= 0;
 	s_player_name_field.length	= 20;
 	s_player_name_field.visible_length = 20;
-	strncpy( s_player_name_field.buffer, name->string, sizeof(s_player_name_field.buffer)-1);
-	s_player_name_field.cursor = (int)strlen( name->string );
+	strncpy( s_player_name_field.buffer, Cvar_VariableString ("name"), sizeof(s_player_name_field.buffer)-1);
+	s_player_name_field.cursor = (int)strlen( s_player_name_field.buffer );
 
 	s_player_model_title.generic.type = MTYPE_SEPARATOR;
 	s_player_model_title.generic.name = "model";

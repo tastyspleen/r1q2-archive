@@ -93,10 +93,15 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	dst[2] = rot[2][0] * point[0] + rot[2][1] * point[1] + rot[2][2] * point[2];
 }
 
+void _Q_DEBUGBREAKPOINT (void)
+{
+	DEBUGBREAKPOINT;
+}
+
 void _Q_assert (char *expression, char *function, unsigned line)
 {
 	Com_Printf ("Q_assert: Assertion '%s' failed on %s:%u\n", LOG_GENERAL, expression, function, line);
-	DEBUGBREAKPOINT;
+	Q_DEBUGBREAKPOINT;
 }
 
 void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@out@*//*@null@*/right, vec3_t /*@out@*//*@null@*/up)
@@ -262,20 +267,6 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 
 
 //============================================================================
-
-
-float Q_fabs (float f)
-{
-#if 0
-	if (f >= 0)
-		return f;
-	return -f;
-#else
-	int tmp = * ( int * ) &f;
-	tmp &= 0x7FFFFFFF;
-	return * ( float * ) &tmp;
-#endif
-}
 
 #if defined _M_IX86 && !defined C_ONLY && !defined linux && !defined SSE2
 #pragma warning (disable:4035)
@@ -1134,7 +1125,7 @@ skipwhite:
 		for (;;)
 		{
 			c = *data++;
-			if (c=='\"' || !c)
+			if (c== '\"' || !c)
 			{
 				//bugfix from skuller
 				goto finish;
@@ -1245,7 +1236,7 @@ int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...)
 
 	if (len == -1 || len == size)
 	{
-		Com_Printf ("Com_sprintf: overflow\n", LOG_GENERAL);
+		Com_Printf ("Com_sprintf: overflow of size %d\n", LOG_GENERAL, size);
 		len = size-1;
 	}
 
@@ -1511,5 +1502,14 @@ int Q_snprintf (char *buff, size_t len, const char *fmt, ...)
 	va_end (argptr);
 
 	return ret;
+}
+
+void Q_strlwr (char *str)
+{
+	while (*str)
+	{
+		*str = tolower(*str);
+		str++;
+	}
 }
 #endif

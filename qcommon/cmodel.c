@@ -988,7 +988,7 @@ int	CM_TransformedPointContents (vec3_t p, int headnode, vec3_t origin, vec3_t a
 
 	// rotate start and end into the models frame of reference
 	if (headnode != box_headnode && 
-	(angles[0] || angles[1] || angles[2]) )
+	(FLOAT_NE_ZERO(angles[0]) || FLOAT_NE_ZERO(angles[1]) || FLOAT_NE_ZERO(angles[2])) )
 	{
 		AngleVectors (angles, forward, right, up);
 

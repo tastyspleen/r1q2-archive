@@ -741,7 +741,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	while (*t)
 	{
 		//if (!isprint (*t))
-		if (!(*t > 32 && *t < 128))
+		if (*t <= 32 || *t >= 128)
 		{
 			i = -1;
 			break;
@@ -1215,8 +1215,7 @@ void CL_ParseServerMessage (void)
 				con.ormask = 128;
 
 				//r1: change !p_version to !version since p is for proxies
-				if (strstr (s, ": !r1q2_version") ||
-					strstr (s, ": !version") &&
+				if ((strstr (s, "!r1q2_version") || strstr (s, "!version")) &&
 					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
 					cls.spamTime = cls.realtime + random() * 1500; 
 			}

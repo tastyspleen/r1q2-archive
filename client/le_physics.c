@@ -69,7 +69,7 @@ void LE_Physics_Toss (localent_t *ent)
 		//check for stop
 		ClipVelocity (ent->velocity, tr.plane.normal, ent->velocity, ent->movetype == MOVETYPE_BOUNCE ? 1.7 : 1);
 
-		if (tr.plane.normal[2] > 0.7 && ent->movetype == MOVETYPE_TOSS || ((ent->velocity[2] < 0.01 && ent->velocity[2] > -0.01) && ent->movetype == MOVETYPE_BOUNCE))
+		if ((tr.plane.normal[2] > 0.7 && ent->movetype == MOVETYPE_TOSS) || ((ent->velocity[2] < 0.01 && ent->velocity[2] > -0.01) && ent->movetype == MOVETYPE_BOUNCE))
 			ent->movetype = MOVETYPE_NONE;
 	}
 

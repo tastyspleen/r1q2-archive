@@ -185,46 +185,21 @@ typedef struct
 	void	(EXPORT *AppActivate)( qboolean activate );
 } refexport_t;
 
-//for msvc autocomplete
-#ifdef UNDEFINED
-typedef struct
-{
-	void	(*Sys_Error) (int err_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
-
-	void	(*Cmd_AddCommand) (const char *name, void(*cmd)(void));
-	void	(*Cmd_RemoveCommand) (const char *name);
-	int		(*Cmd_Argc) (void);
-	char	*(*Cmd_Argv) (int i);
-	void	(*Cmd_ExecuteText) (int exec_when, char *text);
-
-	void	(*Con_Printf) (int print_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
-
-	// files will be memory mapped read only
-	// the returned buffer may be part of a larger pak file,
-	// or a discrete file from anywhere in the quake search path
-	// a -1 return means the file does not exist
-	// NULL can be passed for buf to just determine existance
-	int		(*FS_LoadFile) (const char *name, void **buf);
-	void	(*FS_FreeFile) (void *buf);
-
-	// gamedir will be the current directory that generated
-	// files should be stored to, ie: "f:\quake\id1"
-	char	*(*FS_Gamedir) (void);
-
-	cvar_t	*(*Cvar_Get) (const char *name, const char *value, int flags);
-	cvar_t	*(*Cvar_Set)( const char *name, const char *value );
-	void	 (*Cvar_SetValue)( const char *name, float value );
-
-	qboolean	(*Vid_GetModeInfo)( int *width, int *height, int mode );
-	void		(*Vid_MenuInit)( void );
-	void		(*Vid_NewWindow)( int width, int height );
-} refimport_t;
-#endif
-
-
 //
 // these are the functions imported by the refresh module
 //
+typedef struct
+{
+	//for backwards compatibility
+	int			structSize;
+	//**********************************************************************
+	// extended renderer API functions, check for NULL in ref before using!!
+	//**********************************************************************
+	int			(IMPORT *FS_FOpenFile) (const char *filename, FILE **file, qboolean openHandle);
+	void		(IMPORT *FS_FCloseFile) (FILE *file);
+	void		(IMPORT *FS_Read) (void *buffer, int len, FILE *f);
+} refimportnew_t;
+
 typedef struct
 {
 	void	(IMPORT *Sys_Error) (int err_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
@@ -258,8 +233,8 @@ typedef struct
 	void		(IMPORT *Vid_NewWindow)( int width, int height );
 } refimport_t;
 
-
 // this is the only function actually exported at the linker level
 typedef	refexport_t	(EXPORT *GetRefAPI_t) (refimport_t);
+typedef	void (EXPORT *GetExtraAPI_t) (refimportnew_t);
 
 #endif // __REF_H

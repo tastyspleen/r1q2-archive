@@ -867,6 +867,14 @@ static void SV_Begin_f (void)
 {
 	Com_DPrintf ("Begin() from %s\n", sv_client->name);
 
+	//r1: could be abused to respawn or cause spam/other mod-specific problems
+	if (sv_client->state != cs_spawning)
+	{
+		Com_Printf ("EXPLOIT: Illegal 'begin' from %s (already spawned), client dropped.\n", LOG_SERVER|LOG_EXPLOIT, sv_client->name);
+		SV_DropClient (sv_client, false);
+		return;
+	}
+
 	// handle the case of a level changing while a client was connecting
 	if ( atoi(Cmd_Argv(1)) != svs.spawncount )
 	{
@@ -980,7 +988,7 @@ static void SV_NextDownload_f (void)
 		//	r = MAX_USABLEMSG - sv_client->datagram.cursize - 400;
 
 		//if (sv_client->downloadcount >= 871224)
-		//	DEBUGBREAKPOINT;
+		//	Q_DEBUGBREAKPOINT;
 
 		while ( z.total_out < r )
 		{
@@ -1110,6 +1118,9 @@ static void SV_BeginDownload_f(void)
 	if (Cmd_Argc() > 2)
 		offset = atoi(Cmd_Argv(2)); // downloaded offset
 
+	//name is always filtered for security reasons
+	StripHighBits (name, 1);
+
 	// hacked by zoid to allow more conrol over download
 	// first off, no .. or global allow check
 
@@ -1145,7 +1156,7 @@ static void SV_BeginDownload_f(void)
 	length = strlen(name);
 
 	//fix some ./ references in maps, eg ./textures/map/file
-	if (length && name[0] == '.' && name[1] == '/')
+	if (length >= 2 && name[0] == '.' && name[1] == '/')
 	{
 		memmove (name, name+2, length-1);
 		length -= 2;
@@ -1177,10 +1188,11 @@ static void SV_BeginDownload_f(void)
 		SV_DropClient (sv_client, false);
 		return;
 	}
-	else if (name[0] == 0 //empty name, maybe as result of ./ normalize
-		|| name[0] == '.' 
+	else if (!length || name[0] == 0 //empty name, maybe as result of ./ normalize
+		//|| name[0] == '.' 
 		// leading slash bad as well, must be in subdir
-		|| name[0] == '/'
+		//|| name[0] == '/'
+		|| !isvalidchar (name[0])
 		// r1: \ is bad in general, client won't even write properly if we do sent it
 		|| strchr (name, '\\')
 		// MUST be in a subdirectory	
@@ -1188,7 +1200,11 @@ static void SV_BeginDownload_f(void)
 		//fix for / at eof causing dir open -> crash (note, we don't blackhole this one because original q2 client
 		//with allow_download_players 1 will scan entire CS_PLAYERSKINS. since some mods overload it, this may result
 		//in example "download players/\nsomething/\n".
-		|| name[length-1] == '/')
+		//|| name[length-1] == '/'
+		// r1: another bug, maps/. will fopen(".") -> crash
+		//|| name[length-1] == '.'
+		|| !isvalidchar (name[length-1])
+		)
 	{
 		Com_Printf ("Refusing bad download path %s to %s\n", LOG_SERVER|LOG_DOWNLOAD|LOG_WARNING, name, sv_client->name);
 		MSG_BeginWriting (svc_download);
@@ -1243,7 +1259,7 @@ static void SV_BeginDownload_f(void)
 	//r1: should this ever happen?
 	if (sv_client->download)
 	{
-		Com_Printf ("Warning, client %s started a download '%s' with an already existing download.\n", LOG_SERVER|LOG_WARNING, sv_client->name, name);
+		Com_Printf ("WARNING: Client %s started a download '%s' with an already existing download of '%s'.\n", LOG_SERVER|LOG_WARNING, sv_client->name, name, sv_client->downloadFileName);
 
 		FS_FreeFile (sv_client->download);
 		sv_client->download = NULL;
@@ -1256,9 +1272,9 @@ static void SV_BeginDownload_f(void)
 
 	//adjust case and re-try
 #ifdef LINUX
-	if (!sv_client->download)
+	if (sv_client->downloadsize == -1)
 	{
-		strlwr (name);
+		Q_strlwr (name);
 		sv_client->downloadsize = FS_LoadFile (name, NULL);
 	}
 #endif
@@ -1585,6 +1601,7 @@ static void SV_CvarResult_f (void)
 				return;
 		}
 
+		//note that certain versions of frkq2 can trigger this since the frkq2_cvar hiding code is bugged
 		Com_Printf ("Dropping %s for bad cvar check result ('%s' unrequested).\n", LOG_SERVER|LOG_DROP, sv_client->name, Cmd_Argv(1));
 		SV_DropClient (sv_client, false);
 	}

@@ -1288,8 +1288,8 @@ void Key_Event (int key, qboolean down, unsigned time)
 //
 	if (!down)
 	{
-		//r1ch: don't run buttons in console
-		if (cls.key_dest != key_console)
+		//r1ch: don't run buttons in console/chat/menu
+		if (cls.key_dest == key_game)
 		{
 			kb = keybindings[key];
 			if (kb && kb[0] == '+')
@@ -1322,7 +1322,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 		{
 			if (kb[0] == '+')
 			{	// button commands add keynum and time as a parm
-				if (cls.key_dest == key_console) //r1: don't run buttons in console
+				if (cls.key_dest != key_game) //r1: don't run buttons in console
 					return;
 				Com_sprintf (cmd, sizeof(cmd), "%s %i %u\n", kb, key, time);
 				Cbuf_AddText (cmd);

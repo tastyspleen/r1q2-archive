@@ -1121,12 +1121,12 @@ void SCR_ExecuteLayoutString (char *s)
 						index = atoi(token);
 
 						if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-							Com_Error (ERR_DROP, "Bad stats index %d in block 'pic' whilst parsing following layout:\n%s", index, s);
+							Com_Error (ERR_DROP, "Bad stats index %d in block 'pic' whilst parsing layout string", index);
 
 						value = cl.frame.playerstate.stats[index];
 
 						if (value >= MAX_IMAGES)
-							Com_Error (ERR_DROP, "Bad picture index %d in block 'pic' whilst parsing following layout:\n%s", value, s);
+							Com_Error (ERR_DROP, "Bad picture index %d in block 'pic' whilst parsing layout string", value);
 
 						if (cl.configstrings[CS_IMAGES+value][0])
 						{
@@ -1148,7 +1148,7 @@ void SCR_ExecuteLayoutString (char *s)
 					index = atoi(token);
 
 					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-						Com_Error (ERR_DROP, "Bad stats index %d in block 'num' whilst parsing following layout:\n%s", index, s);
+						Com_Error (ERR_DROP, "Bad stats index %d in block 'num' whilst parsing layout string", index);
 
 					value = cl.frame.playerstate.stats[index];
 					SCR_DrawField (x, y, 0, width, value);
@@ -1214,12 +1214,12 @@ void SCR_ExecuteLayoutString (char *s)
 					index = atoi(token);
 
 					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-						Com_Error (ERR_DROP, "Bad stats index %d in block 'stat_string' whilst parsing following layout:\n%s", index, s);
+						Com_Error (ERR_DROP, "Bad stats index %d in block 'stat_string' whilst parsing layout string", index);
 
 					index = cl.frame.playerstate.stats[index];
 
 					if (index < 0 || index >= MAX_CONFIGSTRINGS)
-						Com_Error (ERR_DROP, "Bad stat_string index %d whilst parsing following layout:\n%s", index, s);
+						Com_Error (ERR_DROP, "Bad stat_string index %d whilst parsing layout string", index);
 
 					DrawString (x, y, cl.configstrings[index]);
 					continue;
@@ -1261,7 +1261,7 @@ void SCR_ExecuteLayoutString (char *s)
 					index = atoi(token);
 
 					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-						Com_Error (ERR_DROP, "Bad stats index %d in block 'if' whilst parsing following layout:\n%s", index, s);
+						Com_Error (ERR_DROP, "Bad stats index %d in block 'if' whilst parsing layout string", index);
 
 					value = cl.frame.playerstate.stats[index];
 					if (!value)
@@ -1293,7 +1293,7 @@ void SCR_ExecuteLayoutString (char *s)
 					value = atoi(token);
 
 					if (value >= MAX_CLIENTS || value < 0)
-						Com_Error (ERR_DROP, "Bad client index %d in block 'client' whilst parsing following layout:\n%s", value, s);
+						Com_Error (ERR_DROP, "Bad client index %d in block 'client' whilst parsing layout string", value);
 
 					ci = &cl.clientinfo[value];
 
@@ -1336,7 +1336,7 @@ void SCR_ExecuteLayoutString (char *s)
 					value = atoi(token);
 					
 					if (value >= MAX_CLIENTS || value < 0)
-						Com_Error (ERR_DROP, "Bad client index %d in block 'ctf' whilst parsing following layout:\n%s", value, s);
+						Com_Error (ERR_DROP, "Bad client index %d in block 'ctf' whilst parsing layout string", value);
 
 					ci = &cl.clientinfo[value];
 

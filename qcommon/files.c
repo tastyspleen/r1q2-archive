@@ -141,11 +141,11 @@ void	FS_CreatePath (char *path)
 ==============
 FS_FCloseFile
 
-For some reason, other dll's can't just cal fclose()
+For some reason, other dll's can't just call fclose()
 on files returned by FS_FOpenFile...
 ==============
 */
-void FS_FCloseFile (FILE *f)
+void EXPORT FS_FCloseFile (FILE *f)
 {
 	fclose (f);
 }
@@ -442,7 +442,7 @@ a seperate file.
 ===========
 */
 
-int FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
+int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 {
 	fscache_t		*cache;
 	searchpath_t	*search;
@@ -677,7 +677,7 @@ Properly handles partial reads
 
 #define	MAX_READ	0x40000		// read in blocks of 64k
 								// r1: bumped to 256k.
-void FS_Read (void *buffer, int len, FILE *f)
+void EXPORT FS_Read (void *buffer, int len, FILE *f)
 {
 	int		block, remaining;
 	int		read;
@@ -685,6 +685,8 @@ void FS_Read (void *buffer, int len, FILE *f)
 #ifdef CD_AUDIO
 	int		tries = 0;
 #endif
+
+	Q_assert (len != 0);
 
 	buf = (byte *)buffer;
 
@@ -960,7 +962,10 @@ static void FS_AddGameDirectory (const char *dir)
 				}
 				else
 				{
-					filenames[total++] = strdup(s);
+					//filenames[total++] = strdup(s);
+					filenames[total] = alloca(strlen(s)+1);
+					strcpy (filenames[total], s);
+					total++;
 				}
 			}
 
@@ -1001,7 +1006,7 @@ static void FS_AddGameDirectory (const char *dir)
 			search->next = fs_searchpaths;
 			fs_searchpaths = search;
 		}
-		free (filenames[i]);
+		//free (filenames[i]);
 	}
 }
 
@@ -1201,7 +1206,7 @@ char /*@null@*/ **FS_ListFiles( char *findname, int *numfiles, unsigned musthave
 		{
 			list[nfiles] = strdup( s );
 #ifdef _WIN32
-			strlwr( list[nfiles] );
+			Q_strlwr( list[nfiles] );
 #endif
 			nfiles++;
 		}

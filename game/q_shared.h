@@ -28,7 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
-
 #ifndef NO_ZLIB
 #include <zlib.h>
 #endif
@@ -78,11 +77,12 @@ typedef	int			INTPTR;
 #if _MSC_VER >= 1400
 #pragma warning(disable: 4996)		// deprecated functions
 #endif
-
+#define alloca _alloca
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
-#define Q_snprintf snprintf
-#define Q_vsnprintf vsnprintf
+#define	Q_strlwr _strlwr
+#define Q_snprintf _snprintf
+#define Q_vsnprintf _vsnprintf
 #define Q_strncasecmp strnicmp
 #define Q_stricmp _strcmpi
 #define strdup _strdup
@@ -94,7 +94,7 @@ typedef	int			INTPTR;
 #define EXPORT __cdecl
 #define IMPORT __cdecl
 #define DEBUGBREAKPOINT _asm int 3
-
+#define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
 #define __attribute__(x) 
 
 #else /* NON-WIN32 */
@@ -103,12 +103,15 @@ typedef	int			INTPTR;
 #define Q_strncasecmp strncasecmp
 #define EXPORT
 #define IMPORT
+void Q_strlwr (char *str);
 int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
 int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
 #ifdef LINUX
+#define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
 #define DEBUGBREAKPOINT asm ("int $3")
 #else
-#define DEBUGBREAKPOINT if (0){}
+#define	Q_DEBUGBREAKPOINT ((void)0)
+#define DEBUGBREAKPOINT ((void)0)
 #endif
 
 #endif
@@ -277,6 +280,10 @@ extern long __cdecl Q_ftol( float f );
 #else
 #define Q_ftol( f ) ( long ) (f)
 #endif
+
+//this is a function instead of a macro for the asm since some compilers are scared by inline asm
+//and disable some optimizations.
+void _Q_DEBUGBREAKPOINT (void);
 
 #define DotProduct(x,y)			(x[0]*y[0]+x[1]*y[1]+x[2]*y[2])
 #define VectorSubtract(a,b,c)	(c[0]=a[0]-b[0],c[1]=a[1]-b[1],c[2]=a[2]-b[2])

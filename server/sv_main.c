@@ -206,7 +206,7 @@ int StringIsWhitespace (const char *name)
 
 	while (*p)
 	{
-		if (!iswspace (*p))
+		if (!isspace (*p))
 			return 0;
 		p++;
 	}
@@ -1155,7 +1155,7 @@ gotnewcl:
 		{
 			Com_Printf ("GAME ERROR: Userinfo string corrupted after ClientConnect\n", LOG_SERVER|LOG_WARNING); 
 			if (sv_gamedebug->intvalue > 1)
-				DEBUGBREAKPOINT;
+				Q_DEBUGBREAKPOINT;
 		}
 	}
 
@@ -1558,8 +1558,6 @@ void SV_CalcPings (void)
 	client_t	*cl;
 	int			total, count;
 	int			best;
-
-	sv_calcpings_method->intvalue;
 
 	for (i=0 ; i<maxclients->intvalue ; i++)
 	{
@@ -2057,11 +2055,6 @@ void SV_Frame (int msec)
 
 	// clear teleport flags, etc for next frame
 	SV_PrepWorldFrame ();
-
-/*	//r1: update server console
-#ifdef WIN32
-	Sys_UpdateConsoleBuffer();
-#endif*/
 }
 
 //============================================================================

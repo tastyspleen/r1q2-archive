@@ -685,7 +685,10 @@ static qboolean SV_SendClientDatagram (client_t *client)
 	sizebuf_t		msg;
 	int				ret;
 	messagelist_t	*message, *last;
+
+#ifndef NDEBUG
 	byte			*wanted;
+#endif
 
 	//init unreliable portion
 	SZ_Init (&msg, msg_buf, sizeof(msg_buf));
@@ -711,7 +714,10 @@ static qboolean SV_SendClientDatagram (client_t *client)
 
 			if (message->reliable)
 			{
+#ifndef NDEBUG
+				//for debugging, keep track of this message so we can ensure it was delivered. if not, error out.
 				wanted = message->data;
+#endif
 				msg.maxsize = sizeof(msg_buf) - message->cursize;
 				//Com_Printf ("SV_SendClientDatagram: Reserving %d bytes of buffer space for %s. Have %d for unreliable.\n", LOG_GENERAL, message->cursize, client->name, msg.maxsize);
 				break;
@@ -754,7 +760,7 @@ retryframe:
 
 				if (compressed_frame_len != -1 && compressed_frame_len <= msg.maxsize - 5)
 				{
-					Com_Printf ("SV_SendClientDatagram: svc_frame for %s: %d -> %d\n", LOG_GENERAL, client->name, frame.cursize, compressed_frame_len);
+					Com_DPrintf ("SV_SendClientDatagram: svc_frame for %s: %d -> %d\n", client->name, frame.cursize, compressed_frame_len);
 					SZ_WriteByte (&msg, svc_zpacket);
 					SZ_WriteShort (&msg, compressed_frame_len);
 					SZ_WriteShort (&msg, frame.cursize);
@@ -764,7 +770,7 @@ retryframe:
 				{
 					if (sv_packetentities_hack->intvalue == 2)
 					{
-						Com_Printf ("SV_SendClientDatagram: zlib svc_frame %d -> %d for %s still didn't fit, using msg.maxsize of %d\n", LOG_GENERAL, frame.cursize, compressed_frame_len, client->name, msg.maxsize);
+						Com_DPrintf ("SV_SendClientDatagram: zlib svc_frame %d -> %d for %s still didn't fit, using msg.maxsize of %d\n", frame.cursize, compressed_frame_len, client->name, msg.maxsize);
 						SZ_Clear (&frame);
 						frame.maxsize = msg.maxsize;
 						goto retryframe;
@@ -809,7 +815,7 @@ retryframe:
 					if (message->data[1] == TE_BLOOD || message->data[1] == TE_SPLASH)
 						continue;
 
-					//drop some semi-useless effects
+					//drop some semi-useless repeated effects
 					if (message->data[1] == TE_GUNSHOT || message->data[1] == TE_BULLET_SPARKS || message->data[1] == TE_SHOTGUN)
 					{
 						//randomly drop some of these
@@ -933,13 +939,11 @@ retryframe:
 	//fit an svc_frame so we measure using hacks and frameSize. however we must commit to delivering
 	//one reliable message at least to avoid getting stuck on never sending large messages.
 
-	if (client->netchan.reliable_length)
+	SV_WriteReliableMessages (client, sizeof(msg_buf) - msg.cursize);
+
+#ifndef NDEBUG
+	if (!client->netchan.reliable_length)
 	{
-		SV_WriteReliableMessages (client, sizeof(msg_buf) - msg.cursize);
-	}
-	else
-	{
-		SV_WriteReliableMessages (client, sizeof(msg_buf) - msg.cursize);
 		message = client->msgListStart;
 		for (;;)
 		{
@@ -956,6 +960,7 @@ retryframe:
 			}
 		}
 	}
+#endif
 
 	// send the datagram
 	ret = Netchan_Transmit (&client->netchan, msg.cursize, msg.data);

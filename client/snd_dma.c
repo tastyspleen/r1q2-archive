@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_loc.h"
 
 void S_Play(void);
-void S_SoundList(void);
+void S_SoundList_f (void);
 void S_Update_(void);
 void S_StopAllSounds(void);
 
@@ -165,7 +165,7 @@ void S_Init (qboolean fullInit)
 
 			Cmd_AddCommand("play", S_Play);
 			Cmd_AddCommand("stopsound", S_StopAllSounds);
-			Cmd_AddCommand("soundlist", S_SoundList);
+			Cmd_AddCommand("soundlist", S_SoundList_f);
 			Cmd_AddCommand("soundinfo", S_SoundInfo_f);
 
 			if (!SNDDMA_Init(fullInit))
@@ -1564,37 +1564,38 @@ void S_Play(void)
 	}
 }
 
-void S_SoundList(void)
+void S_SoundList_f (void)
 {
 	int		i;
 	sfx_t	*sfx;
 	sfxcache_t	*sc;
 	int		size, total;
+	int		numsounds;
 
 	total = 0;
+	numsounds = 0;
+
 	for (sfx=known_sfx, i=0 ; i<num_sfx ; i++, sfx++)
 	{
-		if (!sfx->registration_sequence)
+		if (!sfx->name[0])
 			continue;
+
 		sc = sfx->cache;
 		if (sc)
 		{
 			size = sc->length*sc->width*(sc->stereo+1);
 			total += size;
-			if (sc->loopstart >= 0)
-				Com_Printf ("L", LOG_CLIENT);
-			else
-				Com_Printf (" ", LOG_CLIENT);
-			Com_Printf("(%2db) %6i : %s\n", LOG_CLIENT,sc->width*8,  size, sfx->name);
+			Com_Printf("%s(%2db) %8i : %s\n", LOG_CLIENT, sc->loopstart != -1 ? "L" : " ", sc->width*8,  size, sfx->name);
 		}
 		else
 		{
 			if (sfx->name[0] == '*')
-				Com_Printf("  placeholder : %s\n", LOG_CLIENT, sfx->name);
+				Com_Printf("    placeholder : %s\n", LOG_CLIENT, sfx->name);
 			else
-				Com_Printf("  not loaded  : %s\n", LOG_CLIENT, sfx->name);
+				Com_Printf("    not loaded  : %s\n", LOG_CLIENT, sfx->name);
 		}
+		numsounds++;
 	}
-	Com_Printf ("Total resident: %i\n", LOG_CLIENT, total);
+	Com_Printf ("Total resident: %i bytes (%.2f MB) in %d sounds\n", LOG_CLIENT, total, (float)total / 1024 / 1024, numsounds);
 }
 

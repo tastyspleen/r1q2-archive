@@ -253,7 +253,7 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 {
 	int							i;
 	int							pflags;
-	static player_state_new		null_playerstate = {0};
+	static player_state_new		null_playerstate;
 	int							statbits;
 
 	player_state_new			*ps, *ops;
