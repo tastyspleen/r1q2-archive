@@ -47,7 +47,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 
 	stepscale = (float)inrate / dma.speed;	// this is usually 0.5, 1, or 2
 
-	outcount = sc->length / stepscale;
+	outcount = (int)(sc->length / stepscale);
 	sc->length = outcount;
 
 	if (sc->length == 0)
@@ -59,7 +59,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 	}
 
 	if (sc->loopstart != -1)
-		sc->loopstart = sc->loopstart / stepscale;
+		sc->loopstart = (int)(sc->loopstart / stepscale);
 
 	sc->speed = dma.speed;
 	if (s_loadas8bit->intvalue)
@@ -83,7 +83,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 // general case
 		//Com_Printf ("WARNING: ResampleSfx: general case used, step %f in %d sc %d\n", stepscale, inwidth, sc->width);
 		samplefrac = 0;
-		fracstep = stepscale*256;
+		fracstep = (int)(stepscale*256);
 		for (i=0 ; i<outcount ; i++)
 		{
 			srcsample = samplefrac >> 8;
@@ -160,7 +160,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		}
 
 		stepscale = (float)info.rate / dma.speed;	
-		len = info.samples / stepscale;
+		len = (int)(info.samples / stepscale);
 
 		len = len * info.width * info.channels;
 		sc = s->cache = Z_TagMalloc (len + sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);

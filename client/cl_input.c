@@ -274,8 +274,8 @@ void CL_BaseMove (usercmd_t *cmd)
 	
 	if (in_strafe.state & 1)
 	{	// keyboard strafe
-		cmd->sidemove += mspeed * cl_sidespeed->value * CL_KeyState (&in_right);
-		cmd->sidemove -= mspeed * cl_sidespeed->value * CL_KeyState (&in_left);
+		cmd->sidemove += (int)(mspeed * cl_sidespeed->value * CL_KeyState (&in_right));
+		cmd->sidemove -= (int)(mspeed * cl_sidespeed->value * CL_KeyState (&in_left));
 	}
 	else
 	{	// keyboard turn
@@ -291,8 +291,8 @@ void CL_BaseMove (usercmd_t *cmd)
 	}	
 	else
 	{	// keyboard move front/back
-		cmd->forwardmove += mspeed * cl_forwardspeed->value * CL_KeyState (&in_forward);
-		cmd->forwardmove -= mspeed * cl_forwardspeed->value * CL_KeyState (&in_back);
+		cmd->forwardmove += (int)(mspeed * cl_forwardspeed->value * CL_KeyState (&in_forward));
+		cmd->forwardmove -= (int)(mspeed * cl_forwardspeed->value * CL_KeyState (&in_back));
 	}
 	
 	// keyboard look up/down
@@ -300,28 +300,28 @@ void CL_BaseMove (usercmd_t *cmd)
 	cl.viewangles[PITCH] += tspeed*cl_pitchspeed->value * CL_KeyState(&in_lookdown);
 	
 	// keyboard strafe left/right
-	cmd->sidemove += mspeed * cl_sidespeed->value * CL_KeyState (&in_moveright);
-	cmd->sidemove -= mspeed * cl_sidespeed->value * CL_KeyState (&in_moveleft);
+	cmd->sidemove += (int)(mspeed * cl_sidespeed->value * CL_KeyState (&in_moveright));
+	cmd->sidemove -= (int)(mspeed * cl_sidespeed->value * CL_KeyState (&in_moveleft));
 
 	// keyboard jump/crouch
-	cmd->upmove += mspeed * cl_upspeed->value * CL_KeyState (&in_up);
-	cmd->upmove -= mspeed * cl_upspeed->value * CL_KeyState (&in_down);
+	cmd->upmove += (int)(mspeed * cl_upspeed->value * CL_KeyState (&in_up));
+	cmd->upmove -= (int)(mspeed * cl_upspeed->value * CL_KeyState (&in_down));
 
 	//r1ch: cap to max allowed ranges
 	if (cmd->forwardmove > cl_forwardspeed->value * mspeed)
-		cmd->forwardmove = cl_forwardspeed->value * mspeed;
+		cmd->forwardmove = (int)(cl_forwardspeed->value * mspeed);
 	else if (cmd->forwardmove < -cl_forwardspeed->value * mspeed)
-		cmd->forwardmove = -cl_forwardspeed->value * mspeed;
+		cmd->forwardmove = -(int)(cl_forwardspeed->value * mspeed);
 
 	if (cmd->sidemove > cl_sidespeed->value * mspeed)
-		cmd->sidemove = cl_sidespeed->value * mspeed;
+		cmd->sidemove = (int)(cl_sidespeed->value * mspeed);
 	else if (cmd->sidemove < -cl_sidespeed->value * mspeed)
-		cmd->sidemove = -cl_sidespeed->value * mspeed;
+		cmd->sidemove = -(int)(cl_sidespeed->value * mspeed);
 
 	if (cmd->upmove > cl_upspeed->value * mspeed)
-		cmd->upmove = cl_upspeed->value * mspeed;
+		cmd->upmove = (int)(cl_upspeed->value * mspeed);
 	else if (cmd->upmove < -cl_upspeed->value * mspeed)
-		cmd->upmove = -cl_upspeed->value * mspeed;
+		cmd->upmove = -(int)(cl_upspeed->value * mspeed);
 }
 
 void CL_ClampPitch (void)
@@ -401,7 +401,7 @@ void CL_RefreshCmd (void)
 	cmd->angles[2] = ANGLE2SHORT(cl.viewangles[2]);
 
 	// update cmd->msec for CL_PredictMove
-	ms = cls.frametime * 1000;
+	ms = (int)(cls.frametime * 1000);
 	if (ms > 250)
 		ms = 100;
 
@@ -542,23 +542,26 @@ void CL_BaseMove_Synchronous (usercmd_t *cmd)
 	
 	memset (cmd, 0, sizeof(*cmd));
 	
-	VectorCopy (cl.viewangles, cmd->angles);
+	cmd->angles[0] = (short)cl.viewangles[0];
+	cmd->angles[1] = (short)cl.viewangles[1];
+	cmd->angles[2] = (short)cl.viewangles[2];
+
 	if (in_strafe.state & 1)
 	{
-		cmd->sidemove += cl_sidespeed->value * CL_KeyState (&in_right);
-		cmd->sidemove -= cl_sidespeed->value * CL_KeyState (&in_left);
+		cmd->sidemove += (int)(cl_sidespeed->value * CL_KeyState (&in_right));
+		cmd->sidemove -= (int)(cl_sidespeed->value * CL_KeyState (&in_left));
 	}
 
-	cmd->sidemove += cl_sidespeed->value * CL_KeyState (&in_moveright);
-	cmd->sidemove -= cl_sidespeed->value * CL_KeyState (&in_moveleft);
+	cmd->sidemove += (int)(cl_sidespeed->value * CL_KeyState (&in_moveright));
+	cmd->sidemove -= (int)(cl_sidespeed->value * CL_KeyState (&in_moveleft));
 
-	cmd->upmove += cl_upspeed->value * CL_KeyState (&in_up);
-	cmd->upmove -= cl_upspeed->value * CL_KeyState (&in_down);
+	cmd->upmove += (int)(cl_upspeed->value * CL_KeyState (&in_up));
+	cmd->upmove -= (int)(cl_upspeed->value * CL_KeyState (&in_down));
 
 	if (! (in_klook.state & 1) )
 	{	
-		cmd->forwardmove += cl_forwardspeed->value * CL_KeyState (&in_forward);
-		cmd->forwardmove -= cl_forwardspeed->value * CL_KeyState (&in_back);
+		cmd->forwardmove += (int)(cl_forwardspeed->value * CL_KeyState (&in_forward));
+		cmd->forwardmove -= (int)(cl_forwardspeed->value * CL_KeyState (&in_back));
 	}	
 
 //
@@ -592,7 +595,7 @@ void CL_FinishMove (usercmd_t *cmd)
 		cmd->buttons |= BUTTON_ANY;
 
 	// send milliseconds of time to apply the move
-	ms = cls.frametime * 1000;
+	ms = (int)(cls.frametime * 1000);
 	if (ms > 250)
 		ms = 100;		// time was unreasonable
 	cmd->msec = ms;

@@ -105,7 +105,7 @@ static void BrightnessCallback( void *s )
 
 	if ( Q_stricmp( vid_ref->string, "soft" ) == 0 )
 	{
-		float gamma = ( 0.8 - ( slider->curvalue/10.0 - 0.5 ) ) + 0.5;
+		float gamma = ( 0.8f - ( slider->curvalue/10.0f - 0.5f ) ) + 0.5f;
 
 		Cvar_SetValue( "vid_gamma", gamma );
 	}
@@ -130,16 +130,16 @@ static void ApplyChanges( void *unused )
 	/*
 	** invert sense so greater = brighter, and scale to a range of 0.5 to 1.3
 	*/
-	gamma = ( 0.8 - ( s_brightness_slider[s_current_menu_index].curvalue/10.0 - 0.5 ) ) + 0.5;
+	gamma = ( 0.8f - ( s_brightness_slider[s_current_menu_index].curvalue/10.0f - 0.5f ) ) + 0.5f;
 
 	Cvar_SetValue( "vid_gamma", gamma );
-	Cvar_SetValue( "sw_stipplealpha", s_stipple_box.curvalue );
-	Cvar_SetValue( "gl_picmip", 3 - s_tq_slider.curvalue );
-	Cvar_SetValue( "vid_fullscreen", s_fs_box[s_current_menu_index].curvalue );
-	Cvar_SetValue( "gl_ext_palettedtexture", s_paletted_texture_box.curvalue );
-	Cvar_SetValue( "gl_finish", s_finish_box.curvalue );
-	Cvar_SetValue( "sw_mode", s_mode_list[SOFTWARE_MENU].curvalue );
-	Cvar_SetValue( "gl_mode", s_mode_list[OPENGL_MENU].curvalue );
+	Cvar_SetValue( "sw_stipplealpha", (float)s_stipple_box.curvalue );
+	Cvar_SetValue( "gl_picmip", 3 - (float)s_tq_slider.curvalue );
+	Cvar_SetValue( "vid_fullscreen", (float)s_fs_box[s_current_menu_index].curvalue );
+	Cvar_SetValue( "gl_ext_palettedtexture", (float)s_paletted_texture_box.curvalue );
+	Cvar_SetValue( "gl_finish", (float)s_finish_box.curvalue );
+	Cvar_SetValue( "sw_mode", (float)s_mode_list[SOFTWARE_MENU].curvalue );
+	Cvar_SetValue( "gl_mode", (float)s_mode_list[OPENGL_MENU].curvalue );
 
 	switch ( s_ref_list[s_current_menu_index].curvalue )
 	{
@@ -188,7 +188,7 @@ static void ApplyChanges( void *unused )
 
 				vid_ref->modified = true;
 
-				g = 2.00 * ( 0.8 - ( vid_gamma->value - 0.5 ) ) + 1.0F;
+				g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
 #if _MSC_VER >= 1400
 				Com_sprintf (envbuffer, sizeof(envbuffer), "%f", g);
 				_putenv_s ("SSTV2_GAMMA", envbuffer);
@@ -282,10 +282,10 @@ void EXPORT VID_MenuInit( void )
 	if ( !scr_viewsize )
 		scr_viewsize = Cvar_Get ("viewsize", "100", CVAR_ARCHIVE);
 
-	s_screensize_slider[SOFTWARE_MENU].curvalue = scr_viewsize->intvalue/10;
-	s_screensize_slider[OPENGL_MENU].curvalue = scr_viewsize->intvalue/10;
+	s_screensize_slider[SOFTWARE_MENU].curvalue = scr_viewsize->value/10;
+	s_screensize_slider[OPENGL_MENU].curvalue = scr_viewsize->value/10;
 
-	if ( strcmp( vid_ref->string, "soft" ) == 0 )
+	if ( strstr( vid_ref->string, "soft" ) == 0 )
 	{
 		s_current_menu_index = SOFTWARE_MENU;
 		s_ref_list[0].curvalue = s_ref_list[1].curvalue = REF_SOFT;
@@ -312,9 +312,9 @@ void EXPORT VID_MenuInit( void )
 		}
 	}
 
-	s_software_menu.x = viddef.width * 0.50;
+	s_software_menu.x = (int)(viddef.width * 0.50f);
 	s_software_menu.nitems = 0;
-	s_opengl_menu.x = viddef.width * 0.50;
+	s_opengl_menu.x = (int)(viddef.width * 0.50f);
 	s_opengl_menu.nitems = 0;
 
 	for ( i = 0; i < 2; i++ )
@@ -347,14 +347,14 @@ void EXPORT VID_MenuInit( void )
 		s_brightness_slider[i].generic.callback = BrightnessCallback;
 		s_brightness_slider[i].minvalue = 5;
 		s_brightness_slider[i].maxvalue = 13;
-		s_brightness_slider[i].curvalue = ( 1.3 - vid_gamma->value + 0.5 ) * 10;
+		s_brightness_slider[i].curvalue = ( 1.3f - vid_gamma->value + 0.5f ) * 10;
 
 		s_fs_box[i].generic.type = MTYPE_SPINCONTROL;
 		s_fs_box[i].generic.x	= 0;
 		s_fs_box[i].generic.y	= 40;
 		s_fs_box[i].generic.name	= "fullscreen";
 		s_fs_box[i].itemnames = yesno_names;
-		s_fs_box[i].curvalue = vid_fullscreen->value;
+		s_fs_box[i].curvalue = vid_fullscreen->intvalue;
 
 		s_defaults_action[i].generic.type = MTYPE_ACTION;
 		s_defaults_action[i].generic.name = "reset to defaults";
@@ -373,7 +373,7 @@ void EXPORT VID_MenuInit( void )
 	s_stipple_box.generic.x	= 0;
 	s_stipple_box.generic.y	= 60;
 	s_stipple_box.generic.name	= "stipple alpha";
-	s_stipple_box.curvalue = sw_stipplealpha->value;
+	s_stipple_box.curvalue = sw_stipplealpha->intvalue;
 	s_stipple_box.itemnames = yesno_names;
 
 	s_tq_slider.generic.type	= MTYPE_SLIDER;
@@ -389,13 +389,13 @@ void EXPORT VID_MenuInit( void )
 	s_paletted_texture_box.generic.y	= 70;
 	s_paletted_texture_box.generic.name	= "8-bit textures";
 	s_paletted_texture_box.itemnames = yesno_names;
-	s_paletted_texture_box.curvalue = gl_ext_palettedtexture->value;
+	s_paletted_texture_box.curvalue = gl_ext_palettedtexture->intvalue;
 
 	s_finish_box.generic.type = MTYPE_SPINCONTROL;
 	s_finish_box.generic.x	= 0;
 	s_finish_box.generic.y	= 80;
 	s_finish_box.generic.name	= "sync every frame";
-	s_finish_box.curvalue = gl_finish->value;
+	s_finish_box.curvalue = gl_finish->intvalue;
 	s_finish_box.itemnames = yesno_names;
 
 	Menu_AddItem( &s_software_menu, ( void * ) &s_ref_list[SOFTWARE_MENU] );

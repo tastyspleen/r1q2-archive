@@ -534,7 +534,7 @@ static void StartNetworkServerFunc( void *unused )
 
 static void Multiplayer_MenuInit( void )
 {
-	s_multiplayer_menu.x = viddef.width * 0.50 - 64;
+	s_multiplayer_menu.x = (int)(viddef.width * 0.50f) - 64;
 	s_multiplayer_menu.nitems = 0;
 
 	s_join_network_server_action.generic.type	= MTYPE_ACTION;
@@ -746,7 +746,7 @@ static void Keys_MenuInit( void )
 	int y = 0;
 	int i = 0;
 
-	s_keys_menu.x = viddef.width * 0.50;
+	s_keys_menu.x = (int)(viddef.width * 0.50f);
 	s_keys_menu.nitems = 0;
 	s_keys_menu.cursordraw = KeyCursorDrawFunc;
 
@@ -1062,13 +1062,13 @@ static menulist_s		s_options_console_action;
 
 static void CrosshairFunc( void *unused )
 {
-	Cvar_SetValue( "crosshair", s_options_crosshair_box.curvalue );
+	Cvar_SetValue( "crosshair", (float)s_options_crosshair_box.curvalue );
 }
 
 #ifdef JOYSTICK
 static void JoystickFunc( void *unused )
 {
-	Cvar_SetValue( "in_joystick", s_options_joystick_box.curvalue );
+	Cvar_SetValue( "in_joystick", (float)s_options_joystick_box.curvalue );
 }
 #endif
 
@@ -1080,35 +1080,35 @@ static void CustomizeControlsFunc( void *unused )
 #ifdef WIN32
 static void DirectInputFunc (void *unused)
 {
-	Cvar_SetValue ("m_directinput", s_r1q2_dinput.curvalue);
+	Cvar_SetValue ("m_directinput", (float)s_r1q2_dinput.curvalue);
 	IN_Restart_f();
 }
 
 static void AccelFixFunc (void *unused)
 {
-	Cvar_SetValue ("m_fixaccel", s_r1q2_winxp.curvalue);
+	Cvar_SetValue ("m_fixaccel", (float)s_r1q2_winxp.curvalue);
 	IN_Restart_f();
 }
 #endif
 
 static void DeferFunc (void *unused)
 {
-	Cvar_SetValue ("cl_defermodels", s_r1q2_defer.curvalue);
+	Cvar_SetValue ("cl_defermodels", (float)s_r1q2_defer.curvalue);
 }
 
 static void AsyncFunc (void *unused)
 {
-	Cvar_SetValue ("cl_async", s_r1q2_async.curvalue);
+	Cvar_SetValue ("cl_async", (float)s_r1q2_async.curvalue);
 }
 
 static void AutoFunc (void *unused)
 {
-	Cvar_SetValue ("cl_autorecord", s_r1q2_autorecord.curvalue);
+	Cvar_SetValue ("cl_autorecord", (float)s_r1q2_autorecord.curvalue);
 }
 
 static void RailTrailFunc (void *unused)
 {
-	Cvar_SetValue ("cl_railtrail", s_r1q2_xaniarail.curvalue);
+	Cvar_SetValue ("cl_railtrail", (float)s_r1q2_xaniarail.curvalue);
 }
 
 
@@ -1167,7 +1167,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_dinput.generic.name	= "directinput mouse";
 	s_r1q2_dinput.generic.callback = DirectInputFunc;
 	s_r1q2_dinput.itemnames = dinputnames;
-	s_r1q2_dinput.curvalue = ClampCvar (0, 2, Cvar_VariableValue ("m_directinput"));
+	s_r1q2_dinput.curvalue = (int)ClampCvar (0, 2, Cvar_VariableValue ("m_directinput"));
 
 	s_r1q2_winxp.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_winxp.generic.x	= 0;
@@ -1175,7 +1175,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_winxp.generic.name	= "xp mouse acceleration fix";
 	s_r1q2_winxp.generic.callback = AccelFixFunc;
 	s_r1q2_winxp.itemnames = yesno_names;
-	s_r1q2_winxp.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("m_fixaccel"));
+	s_r1q2_winxp.curvalue = (int)ClampCvar (0, 1, Cvar_VariableValue ("m_fixaccel"));
 #endif
 
 	s_r1q2_defer.generic.type = MTYPE_SPINCONTROL;
@@ -1184,7 +1184,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_defer.generic.name	= "defer model loading";
 	s_r1q2_defer.generic.callback = DeferFunc;
 	s_r1q2_defer.itemnames = yesno_names;
-	s_r1q2_defer.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("cl_defermodels"));
+	s_r1q2_defer.curvalue = (int)ClampCvar (0, 1, Cvar_VariableValue ("cl_defermodels"));
 
 	s_r1q2_async.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_async.generic.x	= 0;
@@ -1192,7 +1192,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_async.generic.name	= "asynchronous net/fps";
 	s_r1q2_async.generic.callback = AsyncFunc;
 	s_r1q2_async.itemnames = yesno_names;
-	s_r1q2_async.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("cl_async"));
+	s_r1q2_async.curvalue = (int)ClampCvar (0, 1, Cvar_VariableValue ("cl_async"));
 
 	s_r1q2_autorecord.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_autorecord.generic.x	= 0;
@@ -1200,7 +1200,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_autorecord.generic.name	= "automatic demo record";
 	s_r1q2_autorecord.generic.callback = AutoFunc;
 	s_r1q2_autorecord.itemnames = yesno_names;
-	s_r1q2_autorecord.curvalue = ClampCvar (0, 1, Cvar_VariableValue ("cl_autorecord"));
+	s_r1q2_autorecord.curvalue = (int)ClampCvar (0, 1, Cvar_VariableValue ("cl_autorecord"));
 
 	s_r1q2_xaniarail.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_xaniarail.generic.x	= 0;
@@ -1208,7 +1208,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_xaniarail.generic.name	= "\"xania\" railgun trail";
 	s_r1q2_xaniarail.generic.callback = RailTrailFunc;
 	s_r1q2_xaniarail.itemnames = xanianames;
-	s_r1q2_xaniarail.curvalue = ClampCvar (0, 5, Cvar_VariableValue ("cl_railtrail"));
+	s_r1q2_xaniarail.curvalue = (int)ClampCvar (0, 5, Cvar_VariableValue ("cl_railtrail"));
 
 /*
 	s_options_invertmouse_box.generic.type = MTYPE_SPINCONTROL;
@@ -1286,12 +1286,12 @@ static void R1Q2OptionsMenu ( void *unused )
 
 static void AlwaysRunFunc( void *unused )
 {
-	Cvar_SetValue( "cl_run", s_options_alwaysrun_box.curvalue );
+	Cvar_SetValue( "cl_run", (float)s_options_alwaysrun_box.curvalue );
 }
 
 static void FreeLookFunc( void *unused )
 {
-	Cvar_SetValue( "freelook", s_options_freelook_box.curvalue );
+	Cvar_SetValue( "freelook", (float)s_options_freelook_box.curvalue );
 }
 
 static void MouseSpeedFunc( void *unused )
@@ -1313,25 +1313,25 @@ static void ControlsSetMenuItemValues( void )
 	s_options_sensitivity_slider.curvalue	= ( sensitivity->value ) * 2;
 
 	Cvar_SetValue( "cl_run", ClampCvar( 0, 1, cl_run->value ) );
-	s_options_alwaysrun_box.curvalue		= cl_run->value;
+	s_options_alwaysrun_box.curvalue		= cl_run->intvalue;
 
 	s_options_invertmouse_box.curvalue		= m_pitch->value < 0;
 
 	Cvar_SetValue( "lookspring", ClampCvar( 0, 1, lookspring->value ) );
-	s_options_lookspring_box.curvalue		= lookspring->value;
+	s_options_lookspring_box.curvalue		= lookspring->intvalue;
 
 	Cvar_SetValue( "lookstrafe", ClampCvar( 0, 1, lookstrafe->value ) );
-	s_options_lookstrafe_box.curvalue		= lookstrafe->value;
+	s_options_lookstrafe_box.curvalue		= lookstrafe->intvalue;
 
 	Cvar_SetValue( "freelook", ClampCvar( 0, 1, freelook->value ) );
-	s_options_freelook_box.curvalue			= freelook->value;
+	s_options_freelook_box.curvalue			= freelook->intvalue;
 
 	Cvar_SetValue( "crosshair", ClampCvar( 0, 3, crosshair->value ) );
-	s_options_crosshair_box.curvalue		= crosshair->value;
+	s_options_crosshair_box.curvalue		= crosshair->intvalue;
 
 #ifdef JOYSTICK
 	Cvar_SetValue( "in_joystick", ClampCvar( 0, 1, in_joystick->value ) );
-	s_options_joystick_box.curvalue		= in_joystick->value;
+	s_options_joystick_box.curvalue		= in_joystick->intvalue;
 #endif
 
 	//s_options_noalttab_box.curvalue			= win_noalttab->value;
@@ -1352,22 +1352,22 @@ static void InvertMouseFunc( void *unused )
 
 static void LookspringFunc( void *unused )
 {
-	Cvar_SetValue( "lookspring", !lookspring->value );
+	Cvar_SetValue( "lookspring", (float)!lookspring->value );
 }
 
 static void LookstrafeFunc( void *unused )
 {
-	Cvar_SetValue( "lookstrafe", !lookstrafe->value );
+	Cvar_SetValue( "lookstrafe", (float)!lookstrafe->value );
 }
 
 static void UpdateVolumeFunc( void *unused )
 {
-	Cvar_SetValue( "s_volume", s_options_sfxvolume_slider.curvalue / 10 );
+	Cvar_SetValue( "s_volume", s_options_sfxvolume_slider.curvalue / 10.0f );
 }
 
 static void UpdateCDVolumeFunc( void *unused )
 {
-	Cvar_SetValue( "cd_nocd", !s_options_cdvolume_box.curvalue );
+	Cvar_SetValue( "cd_nocd", (float)!s_options_cdvolume_box.curvalue );
 }
 
 extern void Key_ClearTyping( void );
@@ -1408,7 +1408,7 @@ static void UpdateSoundQualityFunc( void *unused )
 		Cvar_Set ( "s_loadas8bit", "1" );
 	}
 	
-	Cvar_SetValue( "s_primary", s_options_compatibility_list.curvalue );
+	Cvar_SetValue( "s_primary", (float)s_options_compatibility_list.curvalue );
 
 	M_DrawTextBox( 8, 120 - 48, 36, 3 );
 	M_Print( 16 + 16, 120 - 48 + 8,  "Restarting the sound system. This" );
@@ -1514,7 +1514,7 @@ static void Options_MenuInit( void )
 	s_options_compatibility_list.generic.name	= "sound compatibility";
 	s_options_compatibility_list.generic.callback = UpdateSoundQualityFunc;
 	s_options_compatibility_list.itemnames		= compatibility_items;
-	s_options_compatibility_list.curvalue		= Cvar_VariableValue( "s_primary" );
+	s_options_compatibility_list.curvalue		= Cvar_IntValue( "s_primary" );
 
 	s_options_sensitivity_slider.generic.type	= MTYPE_SLIDER;
 	s_options_sensitivity_slider.generic.x		= 0;
@@ -2025,7 +2025,7 @@ static void M_Credits_MenuDraw( void )
 	/*
 	** draw the credits
 	*/
-	for ( i = 0, y = viddef.height - ( ( cls.realtime - credits_start_time ) / 40.0F ); credits[i] && y < viddef.height; y += 10, i++ )
+	for ( i = 0, y = (int)(viddef.height - ( ( cls.realtime - credits_start_time ) / 40.0F )); credits[i] && y < viddef.height; y += 10, i++ )
 	{
 		int j, stringoffset = 0;
 		int bold = false;
@@ -2158,7 +2158,7 @@ static void StartGame( void )
 	Cvar_SetValue( "deathmatch", 0 );
 	Cvar_SetValue( "coop", 0 );
 
-	Cvar_SetValue( "gamerules", 0 );		//PGM
+	//Cvar_SetValue( "gamerules", 0 );		//PGM
 
 	Cbuf_AddText ("loading ; killserver ; wait ; newgame\n");
 	cls.key_dest = key_game;
@@ -2207,7 +2207,7 @@ static void Game_MenuInit( void )
 		0
 	};*/
 
-	s_game_menu.x = viddef.width * 0.50;
+	s_game_menu.x = (int)(viddef.width * 0.50f);
 	s_game_menu.nitems = 0;
 
 	s_easy_game_action.generic.type	= MTYPE_ACTION;
@@ -2564,7 +2564,7 @@ static void JoinServer_MenuInit( void )
 {
 	int i;
 
-	s_joinserver_menu.x = viddef.width * 0.50 - 120;
+	s_joinserver_menu.x = (int)(viddef.width * 0.50f) - 120;
 	s_joinserver_menu.nitems = 0;
 
 	s_joinserver_address_book_action.generic.type	= MTYPE_ACTION;
@@ -2698,16 +2698,16 @@ static void RulesChangeFunc ( void *self )
 static void StartServerActionFunc( void *self )
 {
 	char	startmap[1024];
-	int		timelimit;
-	int		fraglimit;
-	int		maxclients;
+	float	timelimit;
+	float	fraglimit;
+	float	maxclients;
 	char	*spot;
 
 	strcpy( startmap, strchr( mapnames[s_startmap_list.curvalue], '\n' ) + 1 );
 
-	maxclients  = atoi( s_maxclients_field.buffer );
-	timelimit	= atoi( s_timelimit_field.buffer );
-	fraglimit	= atoi( s_fraglimit_field.buffer );
+	maxclients  = (float)atof( s_maxclients_field.buffer );
+	timelimit	= (float)atof( s_timelimit_field.buffer );
+	fraglimit	= (float)atof( s_fraglimit_field.buffer );
 
 	Cvar_SetValue( "maxclients", ClampCvar( 0, maxclients, maxclients ) );
 	Cvar_SetValue ("timelimit", ClampCvar( 0, timelimit, timelimit ) );
@@ -2719,15 +2719,15 @@ static void StartServerActionFunc( void *self )
 //PGM
 	if((s_rules_box.curvalue < 2) || (Developer_searchpath() != 2))
 	{
-		Cvar_SetValue ("deathmatch", !s_rules_box.curvalue );
-		Cvar_SetValue ("coop", s_rules_box.curvalue );
-		Cvar_Set ("gamerules", "0" );
+		Cvar_SetValue ("deathmatch", (float)!s_rules_box.curvalue );
+		Cvar_SetValue ("coop", (float)s_rules_box.curvalue );
+		//Cvar_Set ("gamerules", "0" );
 	}
 	else
 	{
 		Cvar_Set ("deathmatch", "1" );	// deathmatch is always true for rogue games, right?
 		Cvar_Set ("coop", "0" );			// FIXME - this might need to depend on which game we're running
-		Cvar_SetValue ("gamerules", s_rules_box.curvalue );
+		//Cvar_SetValue ("gamerules", (float)s_rules_box.curvalue );
 	}
 //PGM
 
@@ -2865,7 +2865,7 @@ static void StartServer_MenuInit( void )
 	/*
 	** initialize the menu stuff
 	*/
-	s_startserver_menu.x = viddef.width * 0.50;
+	s_startserver_menu.x = (int)(viddef.width * 0.50f);
 	s_startserver_menu.nitems = 0;
 
 	s_startmap_list.generic.type = MTYPE_SPINCONTROL;
@@ -3172,7 +3172,7 @@ static void DMFlagCallback( void *self )
 	}
 
 setvalue:
-	Cvar_SetValue ("dmflags", flags);
+	Cvar_SetValue ("dmflags", (float)flags);
 
 	Com_sprintf( dmoptions_statusbar, sizeof( dmoptions_statusbar ), "dmflags = %d", flags );
 
@@ -3191,7 +3191,7 @@ static void DMOptions_MenuInit( void )
 	int dmflags = Cvar_IntValue( "dmflags" );
 	int y = 0;
 
-	s_dmoptions_menu.x = viddef.width * 0.50;
+	s_dmoptions_menu.x = (int)(viddef.width * 0.50f);
 	s_dmoptions_menu.nitems = 0;
 
 	s_falls_box.generic.type = MTYPE_SPINCONTROL;
@@ -3426,27 +3426,27 @@ static void DownloadCallback( void *self )
 
 	if (f == &s_allow_download_box)
 	{
-		Cvar_SetValue("allow_download", f->curvalue);
+		Cvar_SetValue("allow_download", (float)f->curvalue);
 	}
 
 	else if (f == &s_allow_download_maps_box)
 	{
-		Cvar_SetValue("allow_download_maps", f->curvalue);
+		Cvar_SetValue("allow_download_maps", (float)f->curvalue);
 	}
 
 	else if (f == &s_allow_download_models_box)
 	{
-		Cvar_SetValue("allow_download_models", f->curvalue);
+		Cvar_SetValue("allow_download_models", (float)f->curvalue);
 	}
 
 	else if (f == &s_allow_download_players_box)
 	{
-		Cvar_SetValue("allow_download_players", f->curvalue);
+		Cvar_SetValue("allow_download_players", (float)f->curvalue);
 	}
 
 	else if (f == &s_allow_download_sounds_box)
 	{
-		Cvar_SetValue("allow_download_sounds", f->curvalue);
+		Cvar_SetValue("allow_download_sounds", (float)f->curvalue);
 	}
 }
 
@@ -3458,7 +3458,7 @@ static void DownloadOptions_MenuInit( void )
 	};
 	int y = 0;
 
-	s_downloadoptions_menu.x = viddef.width * 0.50;
+	s_downloadoptions_menu.x = (int)(viddef.width * 0.50f);
 	s_downloadoptions_menu.nitems = 0;
 
 	s_download_title.generic.type = MTYPE_SEPARATOR;
@@ -3653,13 +3653,13 @@ static void DownloadOptionsFunc( void *self )
 
 static void HandednessCallback( void *unused )
 {
-	Cvar_SetValue( "hand", s_player_handedness_box.curvalue );
+	Cvar_SetValue( "hand", (float)s_player_handedness_box.curvalue );
 }
 
 static void RateCallback( void *unused )
 {
 	if (s_player_rate_box.curvalue != sizeof(rate_tbl) / sizeof(*rate_tbl) - 1)
-		Cvar_SetValue( "rate", rate_tbl[s_player_rate_box.curvalue] );
+		Cvar_SetValue( "rate", (float)rate_tbl[s_player_rate_box.curvalue] );
 }
 
 static void ModelCallback( void *unused )
@@ -3989,7 +3989,7 @@ static qboolean PlayerConfig_MenuInit( void )
 	s_player_handedness_box.generic.name	= 0;
 	s_player_handedness_box.generic.cursor_offset = -48;
 	s_player_handedness_box.generic.callback = HandednessCallback;
-	s_player_handedness_box.curvalue = Cvar_VariableValue( "hand" );
+	s_player_handedness_box.curvalue = Cvar_IntValue( "hand" );
 	s_player_handedness_box.itemnames = handedness;
 
 	for (i = 0; i < sizeof(rate_tbl) / sizeof(*rate_tbl) - 1; i++)
@@ -4048,8 +4048,8 @@ static void PlayerConfig_MenuDraw( void )
 	refdef.width = 144;
 	refdef.height = 168;
 	refdef.fov_x = 40;
-	refdef.fov_y = CalcFov( refdef.fov_x, refdef.width, refdef.height );
-	refdef.time = cls.realtime*0.001;
+	refdef.fov_y = CalcFov( refdef.fov_x, (float)refdef.width, (float)refdef.height );
+	refdef.time = cls.realtime*0.001f;
 
 	if ( s_pmi[s_player_model_box.curvalue].skindisplaynames )
 	{
@@ -4071,7 +4071,8 @@ static void PlayerConfig_MenuDraw( void )
 		entity.frame = 0;
 		entity.oldframe = 0;
 		entity.backlerp = 0.0;
-		entity.angles[1] = yaw++;
+		entity.angles[1] = (float)yaw;
+		yaw++;
 		if ( ++yaw > 360 )
 			yaw -= 360;
 
@@ -4083,7 +4084,7 @@ static void PlayerConfig_MenuDraw( void )
 
 		Menu_Draw( &s_player_config_menu );
 
-		M_DrawTextBox( ( refdef.x ) * ( 320.0F / viddef.width ) - 8, ( viddef.height / 2 ) * ( 240.0F / viddef.height) - 77, refdef.width / 8, refdef.height / 8 );
+		M_DrawTextBox( (int)(( refdef.x ) * ( 320.0F / viddef.width ) - 8), (int)(( viddef.height / 2 ) * ( 240.0F / viddef.height) - 77), refdef.width / 8, refdef.height / 8 );
 		refdef.height += 4;
 
 		re.RenderFrame( &refdef );

@@ -1267,6 +1267,95 @@ static void SV_DelCommandBan_f (void)
 	Com_Printf ("Command '%s' is not blocked from use.\n", LOG_GENERAL, Cmd_Argv(1));
 }
 
+static void SV_AddServerAlias_f (void)
+{
+	linkedvaluelist_t	*alias;
+	char				*text;
+
+	if (Cmd_Argc() < 3)
+	{
+		Com_Printf ("Purpose: Add a server-side aliased command that stuffs clients.\n"
+					"Syntax : addserveralias <name> <commandstring>\n"
+					"Example: addserveralias cow \"set gender_auto 0;set skin cow/black\"\n", LOG_GENERAL);
+		return;
+	}
+
+	alias = &serveraliases;
+
+	text = StripQuotes (Cmd_Args2(2));
+
+	while (alias->next)
+	{
+		alias = alias->next;
+		if (!Q_stricmp (alias->name, Cmd_Argv(1)))
+		{
+			Z_Free (alias->value);
+			goto replace;
+		}
+	}
+
+	//FIXME: make better tag
+	alias->next = Z_TagMalloc (sizeof(linkedvaluelist_t), TAGMALLOC_ALIAS);
+	alias = alias->next;
+	alias->next = NULL;
+	alias->name = CopyString (Cmd_Argv(1), TAGMALLOC_ALIAS);
+
+replace:
+
+	alias->value = Z_TagMalloc (strlen(text)+2, TAGMALLOC_ALIAS);
+	strcpy (alias->value, text);
+	strcat (alias->value, "\n");
+
+	if (sv.state)
+		Com_Printf ("'%s' added to server aliases.\n", LOG_GENERAL, alias->name);
+}
+
+static void SV_DelServerAlias_f (void)
+{
+	linkedvaluelist_t	*alias, *last;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Purpose: Remove a server alias.\n"
+					"Syntax : delserveralias <name>\n"
+					"Example: delserveralias cow\n", LOG_GENERAL);
+		return;
+	}
+
+	last = alias = &serveraliases;
+
+	while (alias->next)
+	{
+		alias = alias->next;
+		if (!Q_stricmp (alias->name, Cmd_Argv(1)))
+		{
+			last->next = alias->next;
+			Com_Printf ("Server alias '%s' removed.\n", LOG_GENERAL, alias->name);
+			Z_Free (alias->value);
+			Z_Free (alias->name);
+			Z_Free (alias);
+			return;
+		}
+		last = alias;
+	}
+
+	Com_Printf ("Server alias '%s' not found.\n", LOG_GENERAL, Cmd_Argv(1));
+}
+
+static void SV_ListServerAliases_f (void)
+{
+	linkedvaluelist_t	*alias;
+
+	alias = &serveraliases;
+
+	Com_Printf ("Server aliases:\n", LOG_GENERAL);
+	while (alias->next)
+	{
+		alias = alias->next;
+		Com_Printf ("%s: %s", LOG_GENERAL, alias->name, alias->value);
+	}
+}
+
 static void SV_Addhole_f (void)
 {
 	netadr_t	adr;
@@ -1440,6 +1529,8 @@ static void SV_AddStuffCmd_f (void)
 	if (s)
 	{
 		s++;
+
+		s = StripQuotes (s);
 
 		if (!Q_stricmp (Cmd_Argv(1), "connect"))
 			dst = svConnectStuffString;
@@ -1797,7 +1888,7 @@ static void SV_Status_f (void)
 		
 		//r1: qport not so useful
 		{
-			float rateval = (float)cl->rate/1000.0;
+			float rateval = (float)cl->rate/1000.0f;
 			if (rateval < 10)
 				Com_Printf ("%.1fK/", LOG_GENERAL, rateval);
 			else
@@ -2229,6 +2320,10 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("addcommandban", SV_AddCommandBan_f);
 	Cmd_AddCommand ("delcommandban", SV_DelCommandBan_f);
 	Cmd_AddCommand ("listbannedcommands", SV_ListBannedCommands_f);
+
+	Cmd_AddCommand ("addserveralias", SV_AddServerAlias_f);
+	Cmd_AddCommand ("delserveralias", SV_DelServerAlias_f);
+	Cmd_AddCommand ("listserveraliases", SV_ListServerAliases_f);
 
 	Cmd_AddCommand ("addcvarban", SV_AddCvarBan_f);
 	Cmd_AddCommand ("delcvarban", SV_DelCvarBan_f);

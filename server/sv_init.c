@@ -192,7 +192,7 @@ clients along with it.
 
 ================
 */
-void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
+void SV_SpawnServer (const char *server, const char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
 {
 	int			i;
 	unsigned	checksum;
@@ -232,7 +232,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 
 	//r1: randomize serverframe to thwart some map timers
 	if (sv_randomframe->intvalue)
-		sv.randomframe = random() * 0xFFFF;
+		sv.randomframe = (int)(random() * 0xFFFF);
 
 	svs.realtime = 0;
 	sv.loadgame = loadgame;
@@ -243,13 +243,13 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 
 	if (Cvar_IntValue ("deathmatch"))
 	{
-		Com_sprintf(sv.configstrings[CS_AIRACCEL], sizeof(sv.configstrings[CS_AIRACCEL]), "%g", sv_airaccelerate->value);
-		pm_airaccelerate = sv_airaccelerate->value;
+		Com_sprintf(sv.configstrings[CS_AIRACCEL], sizeof(sv.configstrings[CS_AIRACCEL]), "%d", sv_airaccelerate->intvalue);
+		pm_airaccelerate = (qboolean)sv_airaccelerate->intvalue;
 	}
 	else
 	{
 		strcpy(sv.configstrings[CS_AIRACCEL], "0");
-		pm_airaccelerate = 0;
+		pm_airaccelerate = false;
 	}
 
 	//SZ_Init (&sv.multicast, sv.multicast_buf, sizeof(sv.multicast_buf));
@@ -502,7 +502,7 @@ another level:
 	map tram.cin+jail_e3
 ======================
 */
-void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
+void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 {
 	char	level[MAX_QPATH-9]; //save space for maps/*.bsp
 	char	*ch;

@@ -59,8 +59,8 @@ Cvar_FindVar
 */
 cvar_t *Cvar_FindVar (const char *var_name)
 {
-	cvar_t	*var;
-	void	**data;
+	cvar_t		*var;
+	const void	**data;
 
 	//not inited yet
 	if (!cvartree)
@@ -227,8 +227,8 @@ char *Cvar_CompleteVariable (const char *partial)
 
 cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
 {
-	cvar_t	*var;
-	void	**data;
+	cvar_t		*var;
+	const void	**data;
 
 	var = Z_TagMalloc (sizeof(cvar_t), TAGMALLOC_CVAR);
 
@@ -239,12 +239,12 @@ cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
 	var->changed = NULL;
 	var->latched_string = NULL;
 
-	var->value = atof (var->string);
-	var->intvalue = var->value;
+	var->value = (float)atof (var->string);
+	var->intvalue = (int)var->value;
 	var->flags = flags;
 
 	//r1: fix 0 case
-	if (!var->intvalue && var->value)
+	if (!var->intvalue && FLOAT_NE_ZERO(var->value))
 		var->intvalue = 1;
 
 	// link the variable in
@@ -383,11 +383,11 @@ cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
 			else
 			{
 				var->string = CopyString(value, TAGMALLOC_CVAR);
-				var->value = atof (var->string);
-				var->intvalue = var->value;
+				var->value = (float)atof (var->string);
+				var->intvalue = (int)var->value;
 
 				//r1: fix 0 case
-				if (!var->intvalue && var->value)
+				if (!var->intvalue && FLOAT_NE_ZERO(var->value))
 					var->intvalue = 1;
 
 				if (!strcmp(var->name, "game"))
@@ -414,11 +414,11 @@ cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
 	old_string = var->string;
 	var->string = CopyString(value, TAGMALLOC_CVAR);
 
-	var->value = atof (var->string);
-	var->intvalue = var->value;
+	var->value = (float)atof (var->string);
+	var->intvalue = (int)var->value;
 
 	//r1: fix 0 case
-	if (!var->intvalue && var->value)
+	if (!var->intvalue && FLOAT_NE_ZERO(var->value))
 		var->intvalue = 1;
 
 	var->modified = true;
@@ -477,11 +477,11 @@ cvar_t *Cvar_FullSet (const char *var_name, const char *value, int flags)
 	Z_Free (var->string);	// free the old value string
 	
 	var->string = CopyString(value, TAGMALLOC_CVAR);
-	var->value = atof (var->string);
-	var->intvalue = var->value;
+	var->value = (float)atof (var->string);
+	var->intvalue = (int)var->value;
 
 	//r1: fix 0 case
-	if (!var->intvalue && var->value)
+	if (!var->intvalue && FLOAT_NE_ZERO(var->value))
 		var->intvalue = 1;
 
 	var->flags = flags;
@@ -499,9 +499,9 @@ void EXPORT Cvar_SetValue (const char *var_name, float value)
 	char	val[32];
 
 	if (value == (int)value)
-		Com_sprintf (val, sizeof(val), "%i",(int)value);
+		Com_sprintf (val, sizeof(val), "%i", (int)value);
 	else
-		Com_sprintf (val, sizeof(val), "%f",value);
+		Com_sprintf (val, sizeof(val), "%g", value);
 	Cvar_Set (var_name, val);
 }
 
@@ -526,11 +526,11 @@ void Cvar_GetLatchedVars (void)
 
 		var->string = var->latched_string;
 		var->latched_string = NULL;
-		var->value = atof(var->string);
-		var->intvalue = var->value;
+		var->value = (float)atof(var->string);
+		var->intvalue = (int)var->value;
 
 		//r1: fix 0 case
-		if (!var->intvalue && var->value)
+		if (!var->intvalue && FLOAT_NE_ZERO(var->value))
 			var->intvalue = 1;
 
 		if (!strcmp(var->name, "game"))
@@ -699,8 +699,8 @@ void Cvar_List_f (void)
 	num = i;
 
 	len = num * sizeof(cvar_t);
-	//sortedList = Z_TagMalloc (len, TAGMALLOC_CVAR);
-	sortedList = alloca(len);
+	sortedList = Z_TagMalloc (len, TAGMALLOC_CVAR);
+	//sortedList = alloca(len);
 	
 	for (var = cvar_vars, i = 0; var ; var = var->next, i++)
 	{
@@ -745,7 +745,7 @@ void Cvar_List_f (void)
 	if (!argLen)
 		Com_Printf ("%i cvars\n", LOG_GENERAL, i);
 
-	//Z_Free (sortedList);
+	Z_Free (sortedList);
 }
 
 

@@ -157,7 +157,7 @@ void S_TransferPaintBuffer(int endtime)
 		// write a fixed sine wave
 		count = (endtime - paintedtime);
 		for (i=0 ; i<count ; i++)
-			paintbuffer[i].left = paintbuffer[i].right = sin((paintedtime+i)*0.1)*20000*256;
+			paintbuffer[i].left = paintbuffer[i].right = (int)((float)sin((paintedtime+i)*0.1f)*20000*256);
 	}
 
 
@@ -227,7 +227,7 @@ void S_PaintChannels(int endtime)
 	int		ltime, count;
 	playsound_t	*ps;
 
-	snd_vol = s_volume->value*256;
+	snd_vol = (int)(s_volume->value*256);
 
 //Com_Printf ("%i to %i\n", paintedtime, endtime);
 	while (paintedtime < endtime)
@@ -357,7 +357,7 @@ void S_InitScaletable (void)
 	s_volume->modified = false;
 	for (i=0 ; i<32 ; i++)
 	{
-		scale = i * 8 * 256 * s_volume->value;
+		scale = (int)(i * 8 * 256 * s_volume->value);
 		for (j=0 ; j<256 ; j++)
 			snd_scaletable[i][j] = ((signed char)j) * scale;
 	}

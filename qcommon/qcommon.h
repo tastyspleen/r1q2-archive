@@ -107,8 +107,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	MAX_MESSAGES_PER_LIST		2048
 
-//don't forget to pad for struct alignment
-#define	MSG_MAX_SIZE_BEFORE_MALLOC	45
+//don't forget to pad for struct alignment (rest of struct = 1
+#define	MSG_MAX_SIZE_BEFORE_MALLOC	69
 
 typedef struct sizebuf_s
 {
@@ -858,7 +858,7 @@ Common between server and client so prediction matches
 ==============================================================
 */
 
-extern float pm_airaccelerate;
+extern qboolean pm_airaccelerate;
 
 void Pmove (pmove_new_t *pmove);
 
@@ -1000,7 +1000,7 @@ enum tagmalloc_tags_e
 };
 
 
-extern void (*Z_Free)(void *buf);
+extern void (*Z_Free)(const void *buf);
 extern void *(*Z_TagMalloc)(int size, int tag);
 
 //void EXPORT Z_Free (void *ptr);

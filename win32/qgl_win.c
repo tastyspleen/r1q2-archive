@@ -1152,15 +1152,26 @@ void QGL_Shutdown( void )
 qboolean QGL_Init( const char *dllname )
 {
 	// update 3Dfx gamma irrespective of underlying DLL
-	{
-		char envbuffer[1024];
-		float g;
+	char envbuffer[1024];
+	float g;
+	char pathbuff[MAX_PATH];
+	WIN32_FILE_ATTRIBUTE_DATA	fileData;
 
-		g = 2.00 * ( 0.8 - ( vid_gamma->value - 0.5 ) ) + 1.0F;
-		Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
-		putenv( envbuffer );
-		Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
-		putenv( envbuffer );
+	g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
+
+	Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
+	putenv( envbuffer );
+
+	Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
+	putenv( envbuffer );
+
+	GetCurrentDirectory (sizeof(pathbuff)-16, pathbuff);
+	strcat (pathbuff, "\\opengl32.dll");
+
+	if (GetFileAttributesEx (pathbuff, GetFileExInfoStandard, &fileData))
+	{
+		ri.Con_Printf ( PRINT_ALL, "WARNING: An OpenGL DLL was loaded from the current directory. This may be a wrapper DLL and cause problems. It is recommended you delete '%s'.\n", pathbuff);
+		ri.Cvar_Get ("vid_localgl", "1", CVAR_NOSET);
 	}
 
 	if ( ( glw_state.hinstOpenGL = LoadLibrary( dllname ) ) == 0 )

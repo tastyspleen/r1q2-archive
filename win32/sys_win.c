@@ -145,6 +145,8 @@ void Sys_Error (const char *error, ...)
 	vsnprintf (text, sizeof(text)-1, error, argptr);
 	va_end (argptr);
 
+	text[sizeof(text)-1] = 0;
+
 	if (strlen(text) < 900)
 		strcat (text, "\n\nPress Retry to cause a debug breakpoint.\n");
 
@@ -1240,6 +1242,7 @@ HINSTANCE	global_hInstance;
 
 //#define FLOAT2INTCAST(f)(*((int *)(&f)))
 //#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
+
 
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {

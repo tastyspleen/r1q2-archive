@@ -141,7 +141,7 @@ void IN_MLookUp (void)
 //int			mouse_buttons;
 int			mouse_oldbuttonstate;
 POINT		current_pos;
-int			mouse_x, mouse_y, old_mouse_x, old_mouse_y;//, mx_accum, my_accum;
+float		mouse_x, mouse_y, old_mouse_x, old_mouse_y;//, mx_accum, my_accum;
 
 int			old_x, old_y;
 
@@ -224,7 +224,7 @@ void IN_SetRepeatRate (void)
 			key_repeatrate = 31;
 
 		//windows -> msecs between repeat
-		key_repeatrate = 1000.0f / (2.51f + ((float)key_repeatrate * 0.88709677419354838709677419354839f));
+		key_repeatrate = (int)(1000.0f / (2.51f + ((float)key_repeatrate * 0.88709677419354838709677419354839f)));
 	}
 	else
 	{
@@ -682,25 +682,25 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 				break;
 
             case DIMOFS_X:
-				val = (int)didod[ i ].dwData;
+				val = (float)(int)didod[ i ].dwData;
 				val *= sensitivity->value;
 				
 				// add mouse X/Y movement to cmd
 				if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
-					cmd->sidemove += m_side->value * val;
+					cmd->sidemove += (int)(m_side->value * val);
 				else
 					cl.viewangles[YAW] -= m_yaw->value * val;
 
 				break;
 
             case DIMOFS_Y:
-				val = (int)didod[ i ].dwData;
+				val = (float)(int)didod[ i ].dwData;
 				val *= sensitivity->value;
 
 				if ( (mlooking || freelook->intvalue) && !(in_strafe.state & 1))
 					cl.viewangles[PITCH] += m_pitch->value * val;
 				else
-					cmd->forwardmove -= m_forward->value * val;
+					cmd->forwardmove -= (int)(m_forward->value * val);
 
 				break;
 
@@ -855,22 +855,22 @@ void IN_ReadImmediateData (usercmd_t *cmd)
 
 	memcpy (&old_state, &dims2, sizeof(old_state));
 
-	mx = dims2.lX;
-	my = dims2.lY;
+	mx = (float)dims2.lX;
+	my = (float)dims2.lY;
 
 	mx *= sensitivity->value;
 	my *= sensitivity->value;
 
 	// add mouse X/Y movement to cmd
 	if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
-		cmd->sidemove += m_side->value * mx;
+		cmd->sidemove += (int)(m_side->value * mx);
 	else
 		cl.viewangles[YAW] -= m_yaw->value * mx;
 
 	if ( (mlooking || freelook->intvalue) && !(in_strafe.state & 1))
 		cl.viewangles[PITCH] += m_pitch->value * my;
 	else
-		cmd->forwardmove -= m_forward->value * my;
+		cmd->forwardmove -= (int)(m_forward->value * my);
 
 	return;
 }
@@ -1097,7 +1097,7 @@ IN_MouseMove
 */
 void IN_MouseMove (usercmd_t *cmd)
 {
-	int		mx, my;
+	float		mx, my;
 
 	if (!mouseactive)
 		return;
@@ -1122,8 +1122,8 @@ void IN_MouseMove (usercmd_t *cmd)
 	if (!GetCursorPos (&current_pos))
 		return;
 
-	mx = current_pos.x - window_center_x;
-	my = current_pos.y - window_center_y;
+	mx = (float)(current_pos.x - window_center_x);
+	my = (float)(current_pos.y - window_center_y);
 
 #if 0
 	if (!mx && !my)
@@ -1132,8 +1132,8 @@ void IN_MouseMove (usercmd_t *cmd)
 
 	if (m_filter->intvalue)
 	{
-		mouse_x = (mx + old_mouse_x) * 0.5;
-		mouse_y = (my + old_mouse_y) * 0.5;
+		mouse_x = (mx + old_mouse_x) * 0.5f;
+		mouse_y = (my + old_mouse_y) * 0.5f;
 	}
 	else
 	{
@@ -1149,7 +1149,7 @@ void IN_MouseMove (usercmd_t *cmd)
 
 // add mouse X/Y movement to cmd
 	if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
-		cmd->sidemove += m_side->value * mouse_x;
+		cmd->sidemove += (int)(m_side->value * mouse_x);
 	else
 		cl.viewangles[YAW] -= m_yaw->value * mouse_x;
 
@@ -1159,11 +1159,11 @@ void IN_MouseMove (usercmd_t *cmd)
 	}
 	else
 	{
-		cmd->forwardmove -= m_forward->value * mouse_y;
+		cmd->forwardmove -= (int)(m_forward->value * mouse_y);
 	}
 
 	// force the mouse to the center, so there's room to move
-	if (mx || my)
+	if (FLOAT_NE_ZERO(mx) || FLOAT_NE_ZERO(my))
 	{
 		//Com_Printf ("******** SETCURSORPOS\n");
 		SetCursorPos (window_center_x, window_center_y);
@@ -1714,7 +1714,7 @@ void IN_JoyMove (usercmd_t *cmd)
 				// user wants forward control to be forward control
 				if (fabs(fAxisValue) > joy_forwardthreshold->value)
 				{
-					cmd->forwardmove += (fAxisValue * joy_forwardsensitivity->value) * speed * cl_forwardspeed->value;
+					cmd->forwardmove += (int)((fAxisValue * joy_forwardsensitivity->value) * speed * cl_forwardspeed->value);
 				}
 			}
 			break;
@@ -1722,14 +1722,14 @@ void IN_JoyMove (usercmd_t *cmd)
 		case AxisSide:
 			if (fabs(fAxisValue) > joy_sidethreshold->value)
 			{
-				cmd->sidemove += (fAxisValue * joy_sidesensitivity->value) * speed * cl_sidespeed->value;
+				cmd->sidemove += (int)((fAxisValue * joy_sidesensitivity->value) * speed * cl_sidespeed->value);
 			}
 			break;
 
 		case AxisUp:
 			if (fabs(fAxisValue) > joy_upthreshold->value)
 			{
-				cmd->upmove += (fAxisValue * joy_upsensitivity->value) * speed * cl_upspeed->value;
+				cmd->upmove += (int)((fAxisValue * joy_upsensitivity->value) * speed * cl_upspeed->value);
 			}
 			break;
 
@@ -1739,7 +1739,7 @@ void IN_JoyMove (usercmd_t *cmd)
 				// user wants turn control to become side control
 				if (fabs(fAxisValue) > joy_sidethreshold->value)
 				{
-					cmd->sidemove -= (fAxisValue * joy_sidesensitivity->value) * speed * cl_sidespeed->value;
+					cmd->sidemove -= (int)((fAxisValue * joy_sidesensitivity->value) * speed * cl_sidespeed->value);
 				}
 			}
 			else
@@ -1753,7 +1753,7 @@ void IN_JoyMove (usercmd_t *cmd)
 					}
 					else
 					{
-						cl.viewangles[YAW] += (fAxisValue * joy_yawsensitivity->value) * speed * 180.0;
+						cl.viewangles[YAW] += (fAxisValue * joy_yawsensitivity->value) * speed * 180.0f;
 					}
 
 				}
@@ -1772,7 +1772,7 @@ void IN_JoyMove (usercmd_t *cmd)
 					}
 					else
 					{
-						cl.viewangles[PITCH] += (fAxisValue * joy_pitchsensitivity->value) * speed * 180.0;
+						cl.viewangles[PITCH] += (fAxisValue * joy_pitchsensitivity->value) * speed * 180.0f;
 					}
 				}
 			}

@@ -511,8 +511,8 @@ LONG WINAPI MainWndProc (
 				style = GetWindowLong( hWnd, GWL_STYLE );
 				AdjustWindowRect( &r, style, FALSE );
 
-				Cvar_SetValue( "vid_xpos", xPos + r.left);
-				Cvar_SetValue( "vid_ypos", yPos + r.top);
+				Cvar_SetValue( "vid_xpos", (float)(xPos + r.left));
+				Cvar_SetValue( "vid_ypos", (float)(yPos + r.top));
 				vid_xpos->modified = false;
 				vid_ypos->modified = false;
 				if (ActiveApp)
@@ -570,7 +570,7 @@ LONG WINAPI MainWndProc (
 			if ( vid_fullscreen )
 			{
 				Com_Printf ("ALT+Enter, setting fullscreen %d.\n", LOG_CLIENT, !vid_fullscreen->intvalue);
-				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
+				Cvar_SetValue( "vid_fullscreen", (float)!vid_fullscreen->intvalue );
 			}
 			return 0;
 		}

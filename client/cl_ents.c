@@ -352,11 +352,11 @@ void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
 		|| state->modelindex2 != ent->current.modelindex2
 		|| state->modelindex3 != ent->current.modelindex3
 		|| state->modelindex4 != ent->current.modelindex4
-		|| abs(state->origin[0] - ent->current.origin[0]) > 512
-		|| abs(state->origin[1] - ent->current.origin[1]) > 512
-		|| abs(state->origin[2] - ent->current.origin[2]) > 512
 		|| state->event == EV_PLAYER_TELEPORT
 		|| state->event == EV_OTHER_TELEPORT
+		|| abs((int)(state->origin[0] - ent->current.origin[0])) > 512
+		|| abs((int)(state->origin[1] - ent->current.origin[1])) > 512
+		|| abs((int)(state->origin[2] - ent->current.origin[2])) > 512
 		)
 	{
 		ent->serverframe = -99;
@@ -697,9 +697,9 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 	//
 	if (flags & PS_VIEWOFFSET)
 	{
-		state->viewoffset[0] = MSG_ReadChar (&net_message) * 0.25;
-		state->viewoffset[1] = MSG_ReadChar (&net_message) * 0.25;
-		state->viewoffset[2] = MSG_ReadChar (&net_message) * 0.25;
+		state->viewoffset[0] = MSG_ReadChar (&net_message) * 0.25f;
+		state->viewoffset[1] = MSG_ReadChar (&net_message) * 0.25f;
+		state->viewoffset[2] = MSG_ReadChar (&net_message) * 0.25f;
 	}
 
 	if (flags & PS_VIEWANGLES)
@@ -711,9 +711,9 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 
 	if (flags & PS_KICKANGLES)
 	{
-		state->kick_angles[0] = MSG_ReadChar (&net_message) * 0.25;
-		state->kick_angles[1] = MSG_ReadChar (&net_message) * 0.25;
-		state->kick_angles[2] = MSG_ReadChar (&net_message) * 0.25;
+		state->kick_angles[0] = MSG_ReadChar (&net_message) * 0.25f;
+		state->kick_angles[1] = MSG_ReadChar (&net_message) * 0.25f;
+		state->kick_angles[2] = MSG_ReadChar (&net_message) * 0.25f;
 	}
 
 	if (flags & PS_WEAPONINDEX)
@@ -724,24 +724,24 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 	if (flags & PS_WEAPONFRAME)
 	{
 		state->gunframe = MSG_ReadByte (&net_message);
-		state->gunoffset[0] = MSG_ReadChar (&net_message)*0.25;
-		state->gunoffset[1] = MSG_ReadChar (&net_message)*0.25;
-		state->gunoffset[2] = MSG_ReadChar (&net_message)*0.25;
-		state->gunangles[0] = MSG_ReadChar (&net_message)*0.25;
-		state->gunangles[1] = MSG_ReadChar (&net_message)*0.25;
-		state->gunangles[2] = MSG_ReadChar (&net_message)*0.25;
+		state->gunoffset[0] = MSG_ReadChar (&net_message)*0.25f;
+		state->gunoffset[1] = MSG_ReadChar (&net_message)*0.25f;
+		state->gunoffset[2] = MSG_ReadChar (&net_message)*0.25f;
+		state->gunangles[0] = MSG_ReadChar (&net_message)*0.25f;
+		state->gunangles[1] = MSG_ReadChar (&net_message)*0.25f;
+		state->gunangles[2] = MSG_ReadChar (&net_message)*0.25f;
 	}
 
 	if (flags & PS_BLEND)
 	{
-		state->blend[0] = MSG_ReadByte (&net_message)/255.0;
-		state->blend[1] = MSG_ReadByte (&net_message)/255.0;
-		state->blend[2] = MSG_ReadByte (&net_message)/255.0;
-		state->blend[3] = MSG_ReadByte (&net_message)/255.0;
+		state->blend[0] = MSG_ReadByte (&net_message)/255.0f;
+		state->blend[1] = MSG_ReadByte (&net_message)/255.0f;
+		state->blend[2] = MSG_ReadByte (&net_message)/255.0f;
+		state->blend[3] = MSG_ReadByte (&net_message)/255.0f;
 	}
 
 	if (flags & PS_FOV)
-		state->fov = MSG_ReadByte (&net_message);
+		state->fov = (float)MSG_ReadByte (&net_message);
 
 	if (flags & PS_RDFLAGS)
 		state->rdflags = MSG_ReadByte (&net_message);
@@ -760,10 +760,10 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 			zd = 8*((solid>>5) & 31);
 			zu = 8*((solid>>10) & 63) - 32;
 
-			state->mins[0] = state->mins[1] = -x;
-			state->maxs[0] = state->maxs[1] = x;
-			state->mins[2] = -zd;
-			state->maxs[2] = zu;
+			state->mins[0] = state->mins[1] = -(float)x;
+			state->maxs[0] = state->maxs[1] = (float)x;
+			state->mins[2] = -(float)zd;
+			state->maxs[2] = (float)zu;
 			Com_Printf ("received bbox from server: (%f, %f, %f), (%f, %f, %f)\n", LOG_CLIENT, state->mins[0], state->mins[1], state->mins[2], state->maxs[0], state->maxs[1], state->maxs[2]);
 		}
 	}
@@ -908,9 +908,9 @@ void CL_ParseFrame (void)
 			cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) * 100;
 
 			cl.force_refdef = true;
-			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125;
-			cl.predicted_origin[1] = cl.frame.playerstate.pmove.origin[1]*0.125;
-			cl.predicted_origin[2] = cl.frame.playerstate.pmove.origin[2]*0.125;
+			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125f;
+			cl.predicted_origin[1] = cl.frame.playerstate.pmove.origin[1]*0.125f;
+			cl.predicted_origin[2] = cl.frame.playerstate.pmove.origin[2]*0.125f;
 			VectorCopy (cl.frame.playerstate.viewangles, cl.predicted_angles);
 			if (cls.disable_servercount != cl.servercount
 				&& cl.refresh_prepped)
@@ -1002,9 +1002,12 @@ void CL_AddPacketEntities (frame_t *frame)
 	int					autoanim;
 	clientinfo_t		*ci;
 	unsigned int		effects, renderfx;
+	float				time;
+
+	time = (float)cl.time;
 
 	// bonus items rotate at a fixed rate
-	autorotate = anglemod(cl.time*0.1f);
+	autorotate = anglemod(time*0.1f);
 
 	// brush models can auto animate their frames
 	autoanim = 2*cl.time/1000;
@@ -1062,7 +1065,7 @@ void CL_AddPacketEntities (frame_t *frame)
 // pmm
 //======
 		ent.oldframe = cent->prev.frame;
-		ent.backlerp = 1.0 - cl.lerpfrac;
+		ent.backlerp = 1.0f - cl.lerpfrac;
 
 		if (effects & EF_ANIM_ALL) {
 			//ent.oldframe = ent.frame;
@@ -1199,7 +1202,7 @@ void CL_AddPacketEntities (frame_t *frame)
 		else if (effects & EF_SPINNINGLIGHTS)
 		{
 			ent.angles[0] = 0;
-			ent.angles[1] = anglemod(cl.time/2) + s1->angles[1];
+			ent.angles[1] = anglemod(time/2) + s1->angles[1];
 			ent.angles[2] = 180;
 			{
 				vec3_t forward;
@@ -1418,7 +1421,7 @@ void CL_AddPacketEntities (frame_t *frame)
 				float j;
 				ent.origin[2] += 32;
 				CL_TrapParticles (&ent);
-				j = (randomMT()%100) + 100;
+				j = (float)((randomMT()%100) + 100);
 				V_AddLight (ent.origin, j, 1, 0.8f, 0.1f);
 			}
 			else if (effects & EF_FLAG1)
@@ -1444,12 +1447,12 @@ void CL_AddPacketEntities (frame_t *frame)
 				{
 					float intensity;
 
-					intensity = 50 + (500 * (sin(cl.time/500.0f) + 1.0f));
+					intensity = 50 + (500 * ((float)sin(time/500.0f) + 1.0f));
 					// FIXME - check out this effect in rendition
 					if(vidref_val == VIDREF_GL)
 						V_AddLight (ent.origin, intensity, -1.0, -1.0, -1.0);
 					else
-						V_AddLight (ent.origin, -1.0 * intensity, 1.0, 1.0, 1.0);
+						V_AddLight (ent.origin, -1.0f * intensity, 1.0, 1.0, 1.0);
 					}
 				else
 				{
@@ -1552,7 +1555,7 @@ void CL_AddViewWeapon (player_state_new *ps, player_state_new *ops)
 	}
 
 	gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
-	gun.backlerp = 1.0 - cl.lerpfrac;
+	gun.backlerp = 1.0f - cl.lerpfrac;
 	VectorCopy (gun.origin, gun.oldorigin);	// don't lerp at all
 	V_AddEntity (&gun);
 }
@@ -1600,7 +1603,7 @@ void CL_CalcViewValues (void)
 		unsigned	delta;
 
 		if (cl_backlerp->intvalue)
-			backlerp = 1.0 - lerp;
+			backlerp = 1.0f - lerp;
 		else
 			backlerp = 1.0;
 
@@ -1618,15 +1621,15 @@ void CL_CalcViewValues (void)
 #ifdef _DEBUG
 			//Com_Printf ("delta = %d\n", delta);
 #endif
-			cl.refdef.vieworg[2] -= cl.predicted_step * (100 - delta) * 0.01;
+			cl.refdef.vieworg[2] -= cl.predicted_step * (100 - delta) * 0.01f;
 		}
 	}
 	else
 	{	// just use interpolated values
 		for (i=0 ; i<3 ; i++)
-			cl.refdef.vieworg[i] = ops->pmove.origin[i]*0.125 + ops->viewoffset[i] 
-				+ lerp * (ps->pmove.origin[i]*0.125 + ps->viewoffset[i] 
-				- (ops->pmove.origin[i]*0.125 + ops->viewoffset[i]) );
+			cl.refdef.vieworg[i] = ops->pmove.origin[i]*0.125f + ops->viewoffset[i] 
+				+ lerp * (ps->pmove.origin[i]*0.125f + ps->viewoffset[i] 
+				- (ops->pmove.origin[i]*0.125f + ops->viewoffset[i]) );
 	}
 
 	// if not running a demo or on a locked frame, add the local angle movement
@@ -1707,7 +1710,7 @@ void CL_AddEntities (void)
 		cl.lerpfrac = 0;
 	}
 	else
-		cl.lerpfrac = 1.0 - (cl.frame.servertime - cl.time) * 0.01;
+		cl.lerpfrac = 1.0f - (cl.frame.servertime - cl.time) * 0.01f;
 
 	if (cl_timedemo->intvalue)
 		cl.lerpfrac = 1.0;

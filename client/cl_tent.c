@@ -122,7 +122,7 @@ static struct sfx_s	*cl_sfx_lightning;
 static struct sfx_s	*cl_sfx_disrexp;
 static struct model_s	*cl_mod_lightning;
 static struct model_s	*cl_mod_heatbeam;
-static struct model_s	*cl_mod_monster_heatbeam;
+//static struct model_s	*cl_mod_monster_heatbeam;
 static struct model_s	*cl_mod_explo4_big;
 
 //ROGUE
@@ -215,14 +215,6 @@ re.RegisterPic ("w_machinegun");
 re.RegisterPic ("a_bullets");
 re.RegisterPic ("i_health");
 re.RegisterPic ("a_grenades");*/
-
-//ROGUE
-#ifdef ROGUE
-	cl_mod_explo4_big = re.RegisterModel ("models/objects/r_explode2/tris.md2");
-	cl_mod_lightning = re.RegisterModel ("models/proj/lightning/tris.md2");
-	cl_mod_heatbeam = re.RegisterModel ("models/proj/beam/tris.md2");
-	cl_mod_monster_heatbeam = re.RegisterModel ("models/proj/widowbeam/tris.md2");
-#endif
 //ROGUE
 }	
 
@@ -251,8 +243,8 @@ CL_AllocExplosion
 explosion_t *CL_AllocExplosion (void)
 {
 	int		i;
-	int		time;
 	int		index;
+	float	time;
 	
 	for (i=0 ; i<MAX_EXPLOSIONS ; i++)
 	{
@@ -263,7 +255,7 @@ explosion_t *CL_AllocExplosion (void)
 		}
 	}
 // find the oldest explosion
-	time = cl.time;
+	time = (float)cl.time;
 	index = 0;
 
 	for (i=0 ; i<MAX_EXPLOSIONS ; i++)
@@ -292,7 +284,7 @@ void CL_SmokeAndFlash(vec3_t origin)
 	ex->type = ex_misc;
 	ex->frames = 4;
 	ex->ent.flags = RF_TRANSLUCENT;
-	ex->start = cl.frame.servertime - 100;
+	ex->start = cl.frame.servertime - 100.0f;
 	ex->ent.model = cl_mod_smoke;
 
 	ex = CL_AllocExplosion ();
@@ -300,7 +292,7 @@ void CL_SmokeAndFlash(vec3_t origin)
 	ex->type = ex_flash;
 	ex->ent.flags = RF_FULLBRIGHT;
 	ex->frames = 2;
-	ex->start = cl.frame.servertime - 100;
+	ex->start = cl.frame.servertime - 100.0f;
 	ex->ent.model = cl_mod_flash;
 }
 
@@ -329,7 +321,7 @@ void CL_ParseParticles (void)
 CL_ParseBeam
 =================
 */
-int CL_ParseBeam (struct model_s *model)
+void CL_ParseBeam (struct model_s *model)
 {
 	int		ent;
 	vec3_t	start, end;
@@ -351,7 +343,7 @@ int CL_ParseBeam (struct model_s *model)
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
 			VectorClear (b->offset);
-			return ent;
+			return;
 		}
 
 // find a free beam
@@ -365,11 +357,11 @@ int CL_ParseBeam (struct model_s *model)
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
 			VectorClear (b->offset);
-			return ent;
+			return;
 		}
 	}
 	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
-	return ent;
+	return;
 }
 
 /*
@@ -377,7 +369,7 @@ int CL_ParseBeam (struct model_s *model)
 CL_ParseBeam2
 =================
 */
-int CL_ParseBeam2 (struct model_s *model)
+void CL_ParseBeam2 (struct model_s *model)
 {
 	int		ent;
 	vec3_t	start, end, offset;
@@ -401,7 +393,7 @@ int CL_ParseBeam2 (struct model_s *model)
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
 			VectorCopy (offset, b->offset);
-			return ent;
+			return;
 		}
 
 // find a free beam
@@ -415,11 +407,11 @@ int CL_ParseBeam2 (struct model_s *model)
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
 			VectorCopy (offset, b->offset);
-			return ent;
+			return;
 		}
 	}
 	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
-	return ent;
+	return;
 }
 
 // ROGUE
@@ -429,8 +421,9 @@ CL_ParsePlayerBeam
   - adds to the cl_playerbeam array instead of the cl_beams array
 =================
 */
-int CL_ParsePlayerBeam (struct model_s *model)
+void CL_ParsePlayerBeam (int tempent)
 {
+	struct model_s	*model;
 	int		ent;
 	vec3_t	start, end, offset;
 	beam_t	*b;
@@ -440,16 +433,29 @@ int CL_ParsePlayerBeam (struct model_s *model)
 	
 	MSG_ReadPos (&net_message, start);
 	MSG_ReadPos (&net_message, end);
+
 	// PMM - network optimization
-	if (model == cl_mod_heatbeam)
-		VectorSet(offset, 2, 7, -3);
-	else if (model == cl_mod_monster_heatbeam)
+	if (!cl_mod_heatbeam)
+		cl_mod_heatbeam = re.RegisterModel ("models/proj/beam/tris.md2");
+
+	model = cl_mod_heatbeam;
+
+	if (tempent == TE_HEATBEAM)
 	{
-		model = cl_mod_heatbeam;
+		VectorSet(offset, 2, 7, -3);
+	}
+	else if (tempent == TE_MONSTER_HEATBEAM)
+	{
 		VectorSet(offset, 0, 0, 0);
 	}
 	else
+	{
 		MSG_ReadPos (&net_message, offset);
+	}
+
+	//if we don't have the model, don't do anything
+	if (!model)
+		return;
 
 // override any beam with the same entity
 // PMM - For player beams, we only want one per player (entity) so..
@@ -463,7 +469,7 @@ int CL_ParsePlayerBeam (struct model_s *model)
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
 			VectorCopy (offset, b->offset);
-			return ent;
+			return;
 		}
 	}
 
@@ -478,11 +484,11 @@ int CL_ParsePlayerBeam (struct model_s *model)
 			VectorCopy (start, b->start);
 			VectorCopy (end, b->end);
 			VectorCopy (offset, b->offset);
-			return ent;
+			return;
 		}
 	}
 	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
-	return ent;
+	return;
 }
 //rogue
 
@@ -900,10 +906,10 @@ void CL_ParseTEnt (void)
 
 		ex = CL_AllocExplosion ();
 		VectorCopy (pos, ex->ent.origin);
-		ex->ent.angles[0] = acos(dir[2])/M_PI*180;
+		ex->ent.angles[0] = (float)acos(dir[2])/M_PI*180;
 	// PMM - fixed to correct for pitch of 0
 		if (dir[0])
-			ex->ent.angles[1] = atan2(dir[1], dir[0])/M_PI*180;
+			ex->ent.angles[1] = (float)atan2(dir[1], dir[0])/M_PI*180;
 		else if (FLOAT_GT_ZERO(dir[1]))
 			ex->ent.angles[1] = 90;
 		else if (FLOAT_LT_ZERO(dir[1]))
@@ -913,7 +919,7 @@ void CL_ParseTEnt (void)
 
 		ex->type = ex_misc;
 		ex->ent.flags = RF_FULLBRIGHT|RF_TRANSLUCENT;
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 150;
 		ex->lightcolor[0] = 1;
 		ex->lightcolor[1] = 1;
@@ -968,7 +974,7 @@ void CL_ParseTEnt (void)
 		VectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 350;
 		ex->lightcolor[0] = 1.0;
 		ex->lightcolor[1] = 0.5;
@@ -991,7 +997,7 @@ void CL_ParseTEnt (void)
 		VectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 350;
 		ex->lightcolor[0] = 1.0; 
 		ex->lightcolor[1] = 0.5;
@@ -1016,16 +1022,22 @@ void CL_ParseTEnt (void)
 		VectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 350;
 		ex->lightcolor[0] = 1.0;
 		ex->lightcolor[1] = 0.5;
 		ex->lightcolor[2] = 0.5;
 		ex->ent.angles[1] = (float)(randomMT() % 360);
-		if (type != TE_EXPLOSION1_BIG)				// PMM
+		if (type != TE_EXPLOSION1_BIG)
+		{			// PMM
 			ex->ent.model = cl_mod_explo4;			// PMM
+		}
 		else
+		{
+			if (!cl_mod_explo4_big)
+				cl_mod_explo4_big = re.RegisterModel ("models/objects/r_explode2/tris.md2");
 			ex->ent.model = cl_mod_explo4_big;
+		}
 		if (frand() < 0.5)
 			ex->baseframe = 15;
 		ex->frames = 15;
@@ -1045,7 +1057,7 @@ void CL_ParseTEnt (void)
 		VectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 350;
 		ex->lightcolor[0] = 0.0;
 		ex->lightcolor[1] = 1.0;
@@ -1075,7 +1087,7 @@ void CL_ParseTEnt (void)
 
 	case TE_PARASITE_ATTACK:
 	case TE_MEDIC_CABLE_ATTACK:
-		ent = CL_ParseBeam (cl_mod_parasite_segment);
+		CL_ParseBeam (cl_mod_parasite_segment);
 		break;
 
 	case TE_BOSSTPORT:			// boss teleporting to station
@@ -1085,7 +1097,7 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_GRAPPLE_CABLE:
-		ent = CL_ParseBeam2 (cl_mod_grapple_cable);
+		CL_ParseBeam2 (cl_mod_grapple_cable);
 		break;
 
 	// RAFAEL
@@ -1102,7 +1114,7 @@ void CL_ParseTEnt (void)
 		// note to self
 		// we need a better no draw flag
 		ex->ent.flags = RF_BEAM;
-		ex->start = cl.frame.servertime - 0.1;
+		ex->start = cl.frame.servertime - 0.1f;
 		ex->light = 100 + (float)(randomMT()%75);
 		ex->lightcolor[0] = 1.0f;
 		ex->lightcolor[1] = 1.0f;
@@ -1142,10 +1154,10 @@ void CL_ParseTEnt (void)
 
 		ex = CL_AllocExplosion ();
 		VectorCopy (pos, ex->ent.origin);
-		ex->ent.angles[0] = acos(dir[2])/M_PI*180;
+		ex->ent.angles[0] = (float)acos(dir[2])/M_PI*180;
 	// PMM - fixed to correct for pitch of 0
 		if (dir[0])
-			ex->ent.angles[1] = atan2(dir[1], dir[0])/M_PI*180;
+			ex->ent.angles[1] = (float)atan2(dir[1], dir[0])/M_PI*180;
 		else if (FLOAT_GT_ZERO(dir[1]))
 			ex->ent.angles[1] = 90;
 		else if (FLOAT_LT_ZERO(dir[1]))
@@ -1162,7 +1174,7 @@ void CL_ParseTEnt (void)
 		else // flechette
 			ex->ent.skinnum = 2;
 
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 150;
 		// PMM
 		if (type == TE_BLASTER2)
@@ -1180,6 +1192,9 @@ void CL_ParseTEnt (void)
 
 
 	case TE_LIGHTNING:
+		if (!cl_mod_lightning)
+			cl_mod_lightning = re.RegisterModel ("models/proj/lightning/tris.md2");
+
 		ent = CL_ParseLightning (cl_mod_lightning);
 		S_StartSound (NULL, ent, CHAN_WEAPON, cl_sfx_lightning, 1, ATTN_NORM, 0);
 		break;
@@ -1197,7 +1212,7 @@ void CL_ParseTEnt (void)
 		VectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
-		ex->start = cl.frame.servertime - 100;
+		ex->start = cl.frame.servertime - 100.0f;
 		ex->light = 350;
 		ex->lightcolor[0] = 1.0;
 		ex->lightcolor[1] = 0.5;
@@ -1227,11 +1242,11 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_HEATBEAM:
-		ent = CL_ParsePlayerBeam (cl_mod_heatbeam);
+		CL_ParsePlayerBeam (TE_HEATBEAM);
 		break;
 
 	case TE_MONSTER_HEATBEAM:
-		ent = CL_ParsePlayerBeam (cl_mod_monster_heatbeam);
+		CL_ParsePlayerBeam (TE_MONSTER_HEATBEAM);
 		break;
 
 	case TE_HEATBEAM_SPARKS:
@@ -1267,11 +1282,9 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_BUBBLETRAIL2:
-//		cnt = MSG_ReadByte (&net_message);
-		cnt = 8;
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
-		CL_BubbleTrail2 (pos, pos2, cnt);
+		CL_BubbleTrail2 (pos, pos2, 8);
 		S_StartSound (pos,  0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
 		break;
 
@@ -1379,7 +1392,7 @@ void CL_AddBeams (void)
 		{
 	// PMM - fixed to correct for pitch of 0
 			if (FLOAT_NE_ZERO(dist[0]))
-				yaw = (atan2(dist[1], dist[0]) * 180 / M_PI);
+				yaw = ((float)atan2(dist[1], dist[0]) * 180 / M_PI);
 			else if (FLOAT_GT_ZERO(dist[1]))
 				yaw = 90;
 			else
@@ -1387,8 +1400,8 @@ void CL_AddBeams (void)
 			if (FLOAT_LT_ZERO(yaw))
 				yaw += 360;
 	
-			forward = sqrt (dist[0]*dist[0] + dist[1]*dist[1]);
-			pitch = (atan2(dist[2], forward) * -180.0 / M_PI);
+			forward = (float)sqrt (dist[0]*dist[0] + dist[1]*dist[1]);
+			pitch = ((float)atan2(dist[2], forward) * -180.0f / M_PI);
 			if (FLOAT_LT_ZERO(pitch))
 				pitch += 360.0;
 		}
@@ -1406,7 +1419,7 @@ void CL_AddBeams (void)
 		{
 			model_length = 30.0;
 		}
-		steps = ceil(d/model_length);
+		steps = (float)ceil(d/model_length);
 		len = (d-model_length)/(steps-1);
 
 		// PMM - special case for lightning model .. if the real length is shorter than the model,
@@ -1435,7 +1448,7 @@ void CL_AddBeams (void)
 			{
 				ent.flags = RF_FULLBRIGHT;
 				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
+				ent.angles[1] = yaw + 180.0f;
 				ent.angles[2] = (float)(randomMT()%360);
 			}
 			else
@@ -1578,7 +1591,7 @@ void CL_AddPlayerBeams (void)
 		{
 	// PMM - fixed to correct for pitch of 0
 			if (FLOAT_EQ_ZERO(dist[0]))
-				yaw = (atan2(dist[1], dist[0]) * 180 / M_PI);
+				yaw = ((float)atan2(dist[1], dist[0]) * 180 / M_PI);
 			else if (FLOAT_GT_ZERO(dist[1]))
 				yaw = 90;
 			else
@@ -1586,8 +1599,8 @@ void CL_AddPlayerBeams (void)
 			if (FLOAT_LT_ZERO(yaw))
 				yaw += 360;
 	
-			forward = sqrt (dist[0]*dist[0] + dist[1]*dist[1]);
-			pitch = (atan2(dist[2], forward) * -180.0 / M_PI);
+			forward = (float)sqrt (dist[0]*dist[0] + dist[1]*dist[1]);
+			pitch = ((float)atan2(dist[2], forward) * -180.0f / M_PI);
 			if (FLOAT_LT_ZERO(pitch))
 				pitch += 360.0;
 		}
@@ -1598,7 +1611,7 @@ void CL_AddPlayerBeams (void)
 			{
 				framenum = 2;
 				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
+				ent.angles[1] = yaw + 180.0f;
 				ent.angles[2] = 0;
 
 				AngleVectors(ent.angles, f, r, u);
@@ -1645,7 +1658,7 @@ void CL_AddPlayerBeams (void)
 		{
 			model_length = 30.0f;
 		}
-		steps = ceil(d/model_length);
+		steps = (float)ceil(d/model_length);
 		len = (d-model_length)/(steps-1);
 
 		// PMM - special case for lightning model .. if the real length is shorter than the model,
@@ -1675,15 +1688,15 @@ void CL_AddPlayerBeams (void)
 			{
 				ent.flags = RF_FULLBRIGHT;
 				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
-				ent.angles[2] = (cl.time) % 360;
+				ent.angles[1] = yaw + 180.0f;
+				ent.angles[2] = (float)((cl.time) % 360);
 				ent.frame = framenum;
 			}
 			else if (b->model == cl_mod_lightning)
 			{
 				ent.flags = RF_FULLBRIGHT;
 				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
+				ent.angles[1] = yaw + 180.0f;
 				ent.angles[2] = (float)(randomMT() % 360);
 			}
 			else
@@ -1763,7 +1776,7 @@ void CL_AddExplosions (void)
 			continue;
 
 		frac = (cl.time - ex->start)/100.0f;
-		f = floor(frac);
+		f = (int)floor(frac);
 
 		ent = &ex->ent;
 
@@ -1779,7 +1792,7 @@ void CL_AddExplosions (void)
 					ex->type = ex_free;
 					continue;
 				}
-				ent->alpha = 1.0 - frac/(ex->frames-1);
+				ent->alpha = 1.0f - frac/(ex->frames-1);
 				break;
 			case ex_flash:
 				if (f >= 1)
@@ -1800,7 +1813,7 @@ void CL_AddExplosions (void)
 					continue;
 				}
 
-				ent->alpha = (16.0 - (float)f)/16.0;
+				ent->alpha = (16.0f - (float)f)/16.0f;
 
 				if (f < 10)
 				{
@@ -1824,7 +1837,7 @@ void CL_AddExplosions (void)
 					continue;
 				}
 
-				ent->alpha = (5.0 - (float)f)/5.0;
+				ent->alpha = (5.0f - (float)f)/5.0f;
 				ent->skinnum = 0;
 				ent->flags |= RF_TRANSLUCENT;
 				break;
@@ -1843,7 +1856,7 @@ void CL_AddExplosions (void)
 
 		ent->frame = ex->baseframe + f + 1;
 		ent->oldframe = ex->baseframe + f;
-		ent->backlerp = 1.0 - cl.lerpfrac;
+		ent->backlerp = 1.0f - cl.lerpfrac;
 
 		V_AddEntity (ent);
 	}

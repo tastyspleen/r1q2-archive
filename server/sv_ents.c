@@ -405,9 +405,9 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	//
 	if (pflags & PS_VIEWOFFSET)
 	{
-		MSG_WriteChar (ps->viewoffset[0]*4);
-		MSG_WriteChar (ps->viewoffset[1]*4);
-		MSG_WriteChar (ps->viewoffset[2]*4);
+		MSG_WriteChar ((int)(ps->viewoffset[0]*4));
+		MSG_WriteChar ((int)(ps->viewoffset[1]*4));
+		MSG_WriteChar ((int)(ps->viewoffset[2]*4));
 	}
 
 	if (pflags & PS_VIEWANGLES)
@@ -420,9 +420,9 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	if (pflags & PS_KICKANGLES)
 	{
 		//r1: fixed, these are read as chars on client!
-		MSG_WriteChar (ps->kick_angles[0]*4);
-		MSG_WriteChar (ps->kick_angles[1]*4);
-		MSG_WriteChar (ps->kick_angles[2]*4);
+		MSG_WriteChar ((int)(ps->kick_angles[0]*4));
+		MSG_WriteChar ((int)(ps->kick_angles[1]*4));
+		MSG_WriteChar ((int)(ps->kick_angles[2]*4));
 	}
 
 	if (pflags & PS_WEAPONINDEX)
@@ -434,26 +434,26 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	{
 		MSG_WriteByte (ps->gunframe);
 
-		MSG_WriteChar (ps->gunoffset[0]*4);
-		MSG_WriteChar (ps->gunoffset[1]*4);
-		MSG_WriteChar (ps->gunoffset[2]*4);
+		MSG_WriteChar ((int)(ps->gunoffset[0]*4));
+		MSG_WriteChar ((int)(ps->gunoffset[1]*4));
+		MSG_WriteChar ((int)(ps->gunoffset[2]*4));
 
-		MSG_WriteChar (ps->gunangles[0]*4);
-		MSG_WriteChar (ps->gunangles[1]*4);
-		MSG_WriteChar (ps->gunangles[2]*4);
+		MSG_WriteChar ((int)(ps->gunangles[0]*4));
+		MSG_WriteChar ((int)(ps->gunangles[1]*4));
+		MSG_WriteChar ((int)(ps->gunangles[2]*4));
 	}
 
 	if (pflags & PS_BLEND)
 	{
 		//r1: fix byte overflow making this lower than it was supposed to be
-		MSG_WriteByte (ps->blend[0]*255);
-		MSG_WriteByte (ps->blend[1]*255);
-		MSG_WriteByte (ps->blend[2]*255);
-		MSG_WriteByte (ps->blend[3]*255);
+		MSG_WriteByte ((int)(ps->blend[0]*255));
+		MSG_WriteByte ((int)(ps->blend[1]*255));
+		MSG_WriteByte ((int)(ps->blend[2]*255));
+		MSG_WriteByte ((int)(ps->blend[3]*255));
 	}
 
 	if (pflags & PS_FOV)
-		MSG_WriteByte (ps->fov);
+		MSG_WriteByte ((int)(ps->fov));
 
 	if (pflags & PS_RDFLAGS)
 		MSG_WriteByte (ps->rdflags);
@@ -462,21 +462,21 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 		int j, k;
 		int solid;
 
-		i = ps->maxs[0]/8;
+		i = (int)(ps->maxs[0]/8);
 		if (i<1)
 			i = 1;
 		if (i>31)
 			i = 31;
 
 		// z is not symetric
-		j = (-ps->mins[2])/8;
+		j = (int)((-ps->mins[2])/8);
 		if (j<1)
 			j = 1;
 		if (j>31)
 			j = 31;
 
 		// and z maxs can be negative...
-		k = (ps->maxs[2]+32)/8;
+		k = (int)((ps->maxs[2]+32)/8);
 		if (k<1)
 			k = 1;
 		if (k>63)
@@ -740,7 +740,7 @@ void SV_BuildClientFrame (client_t *client)
 #ifdef ENHANCED_SERVER
 			org[i] = ((struct gclient_new_s *)(clent->client))->ps.pmove.origin[i]*0.125 + ((struct gclient_new_s *)(clent->client))->ps.viewoffset[i];
 #else
-			org[i] = ((struct gclient_old_s *)(clent->client))->ps.pmove.origin[i]*0.125 + ((struct gclient_old_s *)(clent->client))->ps.viewoffset[i];
+			org[i] = ((struct gclient_old_s *)(clent->client))->ps.pmove.origin[i]*0.125f + ((struct gclient_old_s *)(clent->client))->ps.viewoffset[i];
 #endif
 	}
 

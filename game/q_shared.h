@@ -59,12 +59,11 @@ typedef	int			INTPTR;
 //#pragma warning(disable : 4136)     // X86
 //#pragma warning(disable : 4051)     // ALPHA
 
-#pragma warning(disable : 4244)		// truncation
+//#pragma warning(disable : 4244)		// truncation
 #pragma warning(disable : 4018)     // signed/unsigned mismatch
 //#pragma warning(disable : 4305)		// truncation from const double to float
 
 #pragma warning(disable : 4096)		// __cdecl must be used with '...'*/
-
 #pragma warning(disable : 4142)		//benign redefinition
 
 #pragma warning(2 : 4189 4210 4389)	// useful warnings
@@ -81,7 +80,7 @@ typedef	int			INTPTR;
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
 #define	Q_strlwr _strlwr
-#define Q_snprintf _snprintf
+//#define Q_snprintf _snprintf
 #define Q_vsnprintf _vsnprintf
 #define Q_strncasecmp strnicmp
 #define Q_stricmp _strcmpi
@@ -105,7 +104,7 @@ typedef	int			INTPTR;
 #define IMPORT
 void Q_strlwr (char *str);
 int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
-int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
+//int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
 #ifdef LINUX
 #define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
 #define DEBUGBREAKPOINT __asm ("int $3")
@@ -517,17 +516,17 @@ typedef struct cvar_s
 
 typedef struct cmdalias_s
 {
+	char				name[MAX_ALIAS_NAME];
 	struct cmdalias_s	*next;
-	char	name[MAX_ALIAS_NAME];
-	char	*value;
+	char				*value;
 } cmdalias_t;
 
 typedef void (*xcommand_t) (void);
 
 typedef struct cmd_function_s
 {
-	struct cmd_function_s	*next;
 	const char				*name;
+	struct cmd_function_s	*next;
 	xcommand_t				function;
 } cmd_function_t;
 
@@ -1318,8 +1317,8 @@ ROGUE - VERSIONS
 ==========================================================
 */
 
-#define	ANGLE2SHORT(x)	((int)((x)*65536/360) & 65535)
-#define	SHORT2ANGLE(x)	((x)*(360.0/65536))
+#define	ANGLE2SHORT(x)	((int)((x)*182.04444444444444444444444444444f) & 65535)
+#define	SHORT2ANGLE(x)	((x)*(0.0054931640625f))
 
 
 //

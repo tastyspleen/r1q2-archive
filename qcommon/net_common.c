@@ -260,7 +260,7 @@ void NET_OpenIP (int flags)
 
 	if (!ip_sockets[NS_CLIENT])
 	{
-		int newport = random() * 64000 + 1024;
+		int newport = (int)(random() * 64000 + 1024);
 		port = Cvar_Get("ip_clientport", va("%i", newport), CVAR_NOSET)->intvalue;
 		if (!port)
 		{

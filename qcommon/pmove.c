@@ -39,7 +39,7 @@ typedef struct
 	cplane_t	groundplane;
 	int			groundcontents;
 
-	vec3_t		previous_origin;
+	short		previous_origin[3];
 	qboolean	ladder;
 } pml_t;
 
@@ -48,15 +48,15 @@ static pml_t			pml;
 
 
 // movement parameters
-#define	pm_stopspeed 100.0f
-#define	pm_maxspeed 300.0f
-#define	pm_duckspeed 100.0f
-#define	pm_accelerate 10.0f
-float	pm_airaccelerate = 0.0f;
-#define	pm_wateraccelerate 10.0f
-#define	pm_friction 6.0f
-#define	pm_waterfriction  1.0f
-#define	pm_waterspeed 400.0f
+#define		pm_stopspeed 100.0f
+#define		pm_maxspeed 300.0f
+#define		pm_duckspeed 100.0f
+#define		pm_accelerate 10.0f
+qboolean	pm_airaccelerate = false;
+#define		pm_wateraccelerate 10.0f
+#define		pm_friction 6.0f
+#define		pm_waterfriction  1.0f
+#define		pm_waterspeed 400.0f
 
 /*
 
@@ -350,7 +350,7 @@ void PM_Friction (void)
 	
 	vel = pml.velocity;
 	
-	speed = sqrt(vel[0]*vel[0] +vel[1]*vel[1] + vel[2]*vel[2]);
+	speed = (float)sqrt(vel[0]*vel[0] +vel[1]*vel[1] + vel[2]*vel[2]);
 	if (speed < 1)
 	{
 		vel[0] = 0;
@@ -677,8 +677,8 @@ void PM_CatagorizePosition (void)
 	vec3_t		point;
 	int			cont;
 	trace_t		trace;
-	int			sample1;
-	int			sample2;
+	float		sample1;
+	float		sample2;
 
 // if the player hull point one unit down is solid, the player
 // is on ground
@@ -686,7 +686,7 @@ void PM_CatagorizePosition (void)
 // see if standing on something solid	
 	point[0] = pml.origin[0];
 	point[1] = pml.origin[1];
-	point[2] = pml.origin[2] - 0.25;
+	point[2] = pml.origin[2] - 0.25f;
 	if (pml.velocity[2] > 180) //!!ZOID changed from 100 to 180 (ramp accel)
 	{
 		pm->s.pm_flags &= ~PMF_ON_GROUND;
@@ -1100,9 +1100,9 @@ qboolean	PM_GoodPosition (void)
 	if (pm->s.pm_type == PM_SPECTATOR)
 		return true;
 
-	origin[0] = end[0] = pm->s.origin[0]*0.125;
-	origin[1] = end[1] = pm->s.origin[1]*0.125;
-	origin[2] = end[2] = pm->s.origin[2]*0.125;
+	origin[0] = end[0] = pm->s.origin[0]*0.125f;
+	origin[1] = end[1] = pm->s.origin[1]*0.125f;
+	origin[2] = end[2] = pm->s.origin[2]*0.125f;
 	trace = pm->trace (origin, pm->mins, pm->maxs, end);
 
 	return !trace.allsolid;
@@ -1155,6 +1155,7 @@ void PM_SnapPosition (void)
 	}
 
 	// go back to the last position
+	//XXXXXXXXXXXXXXXXXXXXX this is short -> float !!!!!
 	VectorCopy (pml.previous_origin, pm->s.origin);
 //	Com_DPrintf ("using previous_origin\n");
 }
@@ -1219,9 +1220,9 @@ void PM_InitialSnapPosition(void)
 			for ( x = 0; x < 3; x++ ) {
 				pm->s.origin[0] = base[0] + offset[ x ];
 				if (PM_GoodPosition ()) {
-					pml.origin[0] = pm->s.origin[0]*0.125;
-					pml.origin[1] = pm->s.origin[1]*0.125;
-					pml.origin[2] = pm->s.origin[2]*0.125;
+					pml.origin[0] = pm->s.origin[0]*0.125f;
+					pml.origin[1] = pm->s.origin[1]*0.125f;
+					pml.origin[2] = pm->s.origin[2]*0.125f;
 					VectorCopy (pm->s.origin, pml.previous_origin);
 					return;
 				}
@@ -1294,18 +1295,18 @@ void Pmove (pmove_new_t *pmove)
 	memset (&pml, 0, sizeof(pml));
 
 	// convert origin and velocity to float values
-	pml.origin[0] = pm->s.origin[0]*0.125;
-	pml.origin[1] = pm->s.origin[1]*0.125;
-	pml.origin[2] = pm->s.origin[2]*0.125;
+	pml.origin[0] = pm->s.origin[0]*0.125f;
+	pml.origin[1] = pm->s.origin[1]*0.125f;
+	pml.origin[2] = pm->s.origin[2]*0.125f;
 
-	pml.velocity[0] = pm->s.velocity[0]*0.125;
-	pml.velocity[1] = pm->s.velocity[1]*0.125;
-	pml.velocity[2] = pm->s.velocity[2]*0.125;
+	pml.velocity[0] = pm->s.velocity[0]*0.125f;
+	pml.velocity[1] = pm->s.velocity[1]*0.125f;
+	pml.velocity[2] = pm->s.velocity[2]*0.125f;
 
 	// save old org in case we get stuck
 	VectorCopy (pm->s.origin, pml.previous_origin);
 
-	pml.frametime = pm->cmd.msec * 0.001;
+	pml.frametime = pm->cmd.msec * 0.001f;
 
 	PM_ClampAngles ();
 

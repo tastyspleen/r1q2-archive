@@ -665,9 +665,12 @@ void Con_DrawConsole (float frac)
 	int				lines;
 	char			version[24];
 	char			dlbar[1024];
-	time_t	t;
+
+	time_t			t;
 	struct tm		*today;
-	lines = viddef.height * frac;
+
+	lines = (int)(viddef.height * frac);
+
 	if (lines <= 0)
 		return;
 

@@ -124,8 +124,8 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	{
 		vid_xpos = ri.Cvar_Get ("vid_xpos", "0", 0);
 		vid_ypos = ri.Cvar_Get ("vid_ypos", "0", 0);
-		x = vid_xpos->value;
-		y = vid_ypos->value;
+		x = Q_ftol(vid_xpos->value);
+		y = Q_ftol(vid_ypos->value);
 	}
 
 	glw_state.hWnd = CreateWindowEx (
@@ -215,12 +215,12 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 		if (FLOAT_NE_ZERO(vid_forcedrefresh->value))
 		{
 			dm.dmFields |= DM_DISPLAYFREQUENCY;
-			dm.dmDisplayFrequency = vid_forcedrefresh->value;
+			dm.dmDisplayFrequency = Q_ftol(vid_forcedrefresh->value);
 		}
 
 		if ( FLOAT_NE_ZERO(gl_bitdepth->value) )
 		{
-			dm.dmBitsPerPel = gl_bitdepth->value;
+			dm.dmBitsPerPel = Q_ftol(gl_bitdepth->value);
 			dm.dmFields |= DM_BITSPERPEL;
 			ri.Con_Printf( PRINT_ALL, "...using gl_bitdepth of %d\n", ( int ) gl_bitdepth->value );
 		}
@@ -260,7 +260,7 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 
 			if ( FLOAT_NE_ZERO(gl_bitdepth->value) )
 			{
-				dm.dmBitsPerPel = gl_bitdepth->value;
+				dm.dmBitsPerPel = Q_ftol(gl_bitdepth->value);
 				dm.dmFields |= DM_BITSPERPEL;
 			}
 
@@ -941,6 +941,7 @@ qboolean GLimp_InitGL (void)
 	}
 
 	{
+		WORD ramps[3][256];
 		DEVMODE dm;
 		HDC hdDesk;
 		memset( &dm, 0, sizeof( dm ) );
@@ -949,6 +950,12 @@ qboolean GLimp_InitGL (void)
 		dm.dmSize = sizeof( dm );
 		dm.dmBitsPerPel = GetDeviceCaps( hdDesk, BITSPIXEL );
 		dm.dmFields     = DM_BITSPERPEL;
+
+		if (GetDeviceGammaRamp (hdDesk, ramps))
+		{
+			if (ramps[0][0] > 0 || ramps[1][0] > 0 || ramps[2][0] > 0)
+				ri.Cvar_Get ("vid_hwgamma", va ("GDGR: %d-%d-%d", ramps[0][0], ramps[1][0], ramps[2][0]), CVAR_NOSET);
+		}
 
 		ReleaseDC( GetDesktopWindow(), hdDesk );
 
@@ -996,14 +1003,14 @@ qboolean GLimp_InitGL (void)
 			PFD_SUPPORT_OPENGL |   // support OpenGL 
 			PFD_DOUBLEBUFFER,      // double buffered 
 			PFD_TYPE_RGBA,         // RGBA type 
-			gl_colorbits->value,// desktop color depth 
+			(byte)Q_ftol(gl_colorbits->value),// desktop color depth 
 			0, 0, 0, 0, 0, 0,      // color bits ignored 
-			gl_alphabits->value, // alpha buffer 
+			(byte)Q_ftol(gl_alphabits->value), // alpha buffer 
 			0,                     // shift bit ignored 
 			0,                     // no accumulation buffer 
 			0, 0, 0, 0,            // accum bits ignored 
-			gl_depthbits->value, // z-buffer 
-			gl_stencilbits->value, // no stencil buffer 
+			(byte)Q_ftol(gl_depthbits->value), // z-buffer 
+			(byte)Q_ftol(gl_stencilbits->value), // no stencil buffer 
 			0,                     // no auxiliary buffer 
 			PFD_MAIN_PLANE,        // main layer 
 			0,                     // reserved 
@@ -1063,13 +1070,15 @@ qboolean GLimp_InitGL (void)
 				ri.Con_Printf (PRINT_ALL, "«ÃÈÌﬂ…ÓÈÙ«Ã®©†≈ÚÚÔÚ∫ no hardware accelerated pixelformats matching your current settings (try editing gl_colorbits/gl_alphabits/gl_depthbits/gl_stencilbits)\n");
 				return init_regular();
 			}
+			ri.Cvar_Get ("vid_renderer", s, CVAR_NOSET);
 			ri.Con_Printf (PRINT_ALL, "Getting capabilities of '%s'\n", s);
 		}
 
 		wglGetExtensionsStringARB = (PFNWGLGETEXTENSIONSSTRINGARBPROC)qwglGetProcAddress("wglGetExtensionsStringARB");
 		wglGetExtensionsStringEXT = (PFNWGLGETEXTENSIONSSTRINGEXTPROC)qwglGetProcAddress("wglGetExtensionsStringEXT");
 
-		if (!wglGetExtensionsStringARB || !wglGetExtensionsStringARB) {
+		if (!wglGetExtensionsStringARB || !wglGetExtensionsStringARB)
+		{
 			ReleaseDC (temphwnd, hDC);
 			DestroyWindow (temphwnd);
 			temphwnd = NULL;

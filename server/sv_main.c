@@ -163,6 +163,7 @@ varban_t			userinfobans;
 bannedcommands_t	bannedcommands;
 linkednamelist_t	nullcmds;
 linkednamelist_t	lrconcmds;
+linkedvaluelist_t	serveraliases;
 
 int		pyroadminid;
 
@@ -250,8 +251,14 @@ void SV_DropClient (client_t *drop, qboolean notify)
 		ge->ClientDisconnect (drop->edict);
 	}
 
-	drop->state = cs_zombie;
+	//r1: fix for mods that don't clean score
+#ifdef ENHANCED_SERVER
+	((struct gclient_new_s *)(drop->edict->client))->ps.stats[STAT_FRAGS] = 0;
+#else
+	((struct gclient_old_s *)(drop->edict->client))->ps.stats[STAT_FRAGS] = 0;
+#endif
 
+	drop->state = cs_zombie;
 	drop->name[0] = 0;
 }
 
@@ -398,10 +405,10 @@ char	*SV_StatusString (void)
 		uptimeString[0] = 0;
 		secs = (unsigned int)(time(NULL) - server_start_time);
 
-		while (secs/60/60/24/365.25 >= 1)
+		while (secs/60/60/24/365 >= 1)
 		{
 			years++;
-			secs -= 60*60*24*365.25;
+			secs -= 60*60*24*365;
 		}
 
 		while (secs/60/60/24 >= 1)
@@ -431,7 +438,7 @@ char	*SV_StatusString (void)
 			}
 			else
 			{
-				days += 365.25;
+				days += 365;
 			}
 		}
 
@@ -818,7 +825,7 @@ void SVC_DirectConnect (void)
 	char		userinfo[MAX_INFO_STRING];
 	char		key[MAX_INFO_KEY];
 
-	float		reserved;
+	int			reserved;
 
 	unsigned short	qport;
 
@@ -1310,6 +1317,26 @@ qboolean UnBlackhole (int index)
 	return true;
 }
 
+const char *FindPlayer (netadr_t *from)
+{
+	int			i;
+	client_t	*cl;
+
+	for (i=0, cl=svs.clients ; i<maxclients->intvalue ; i++,cl++)
+	{
+		//FIXME: do we want packets from zombies still?
+		if (cl->state == cs_free)
+			continue;
+
+		if (!NET_CompareBaseAdr (&net_from, &cl->netchan.remote_address))
+			continue;
+
+		return cl->name;
+	}
+
+	return "";
+}
+
 /*
 ===============
 SVC_RemoteCommand
@@ -1343,7 +1370,7 @@ void SVC_RemoteCommand (void)
 	{
 		Com_Printf ("Bad rcon_password.\n", LOG_GENERAL);
 		Com_EndRedirect ();
-		Com_Printf ("Bad rcon from %s (%s).\n", LOG_SERVER|LOG_ERROR, NET_AdrToString (&net_from), Cmd_Args());
+		Com_Printf ("Bad rcon from %s[%s] (%s).\n", LOG_SERVER|LOG_ERROR, NET_AdrToString (&net_from), FindPlayer(&net_from), Cmd_Args());
 	}
 	else
 	{
@@ -1422,12 +1449,12 @@ void SVC_RemoteCommand (void)
 		{
 			Cmd_ExecuteString (remaining);
 			Com_EndRedirect ();
-			Com_Printf ("Rcon from %s:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), remaining);
+			Com_Printf ("Rcon from %s[%s]:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
 		}
 		else
 		{
 			Com_EndRedirect();
-			Com_Printf ("Bad limited rcon from %s:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), remaining);
+			Com_Printf ("Bad limited rcon from %s[%s]:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
 		}
 	}
 

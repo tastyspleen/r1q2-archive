@@ -554,7 +554,10 @@ void Key_Console (int key)
 					best = least;
 			}
 
-			sprintf(key_lines[edit_line], "]%s ", best);
+			//r1: maybe completing cvar/cmd from net?
+			snprintf(key_lines[edit_line], sizeof(key_lines[edit_line])-1, "]%s ", best);
+			key_lines[edit_line][sizeof(key_lines[edit_line])-1] = 0;
+
 			key_linepos = (int)strlen(key_lines[edit_line]);
 		}
 		else if (cl_cmdcomplete->value == 2)
@@ -1205,7 +1208,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 		if (key == K_ENTER)
 		{
 			Com_Printf ("ALT+Enter, setting fullscreen %d.\n", LOG_CLIENT, !vid_fullscreen->intvalue);
-			Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
+			Cvar_SetValue( "vid_fullscreen", (float)!vid_fullscreen->intvalue );
 			return;
 		}
 		else if (key == K_TAB)

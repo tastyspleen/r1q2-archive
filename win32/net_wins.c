@@ -251,13 +251,13 @@ int NET_IPSocket (char *net_interface, int port)
 		return 0;
 	}
 
-	i = net_rcvbuf->intvalue * 1024.0f;
+	i = net_rcvbuf->intvalue * 1024;
 	setsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&i, sizeof(i));
 	getsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&j, &x);
 	if (i != j)
 		Com_Printf ("WARNING: Setting SO_RCVBUF: wanted %d, got %d\n", LOG_NET, i, j);
 
-	i = net_sndbuf->intvalue * 1024.0f;
+	i = net_sndbuf->intvalue * 1024;
 	setsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&i, sizeof(i));
 	getsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&j, &x);
 	if (i != j)

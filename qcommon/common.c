@@ -161,7 +161,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
 };
 
-void (*Z_Free)(void *buf);
+void (*Z_Free)(const void *buf);
 void *(*Z_TagMalloc)(int size, int tag);
 
 /*
@@ -219,6 +219,8 @@ void Com_Printf (const char *fmt, int level, ...)
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 		Com_Printf ("WARNING: Com_Printf: message overflow.\n", LOG_GENERAL);
 	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
 
 	if (rd_target)
 	{
@@ -359,6 +361,8 @@ void _Com_DPrintf (char const *fmt, ...)
 		if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 			Com_Printf ("WARNING: Com_DPrintf: message overflow.\n", LOG_WARNING);
 		va_end (argptr);
+
+		msg[sizeof(msg)-1] = 0;
 	
 		Com_Printf ("%s", LOG_DEBUG, msg);
 	}
@@ -1249,19 +1253,19 @@ char *MSG_ReadStringLine (sizebuf_t *msg_read)
 
 float MSG_ReadCoord (sizebuf_t *msg_read)
 {
-	return MSG_ReadShort(msg_read) * (1.0/8);
+	return MSG_ReadShort(msg_read) * 0.125f;
 }
 
 void MSG_ReadPos (sizebuf_t *msg_read, vec3_t pos)
 {
-	pos[0] = MSG_ReadShort(msg_read) * (1.0/8);
-	pos[1] = MSG_ReadShort(msg_read) * (1.0/8);
-	pos[2] = MSG_ReadShort(msg_read) * (1.0/8);
+	pos[0] = MSG_ReadShort(msg_read) * 0.125f;
+	pos[1] = MSG_ReadShort(msg_read) * 0.125f;
+	pos[2] = MSG_ReadShort(msg_read) * 0.125f;
 }
 
 float MSG_ReadAngle (sizebuf_t *msg_read)
 {
-	return MSG_ReadChar(msg_read) * (360.0/256);
+	return MSG_ReadChar(msg_read) * 1.40625f;
 }
 
 float MSG_ReadAngle16 (sizebuf_t *msg_read)
@@ -1596,7 +1600,7 @@ qboolean	free_from_game = false;
 Z_Free
 ========================
 */
-void EXPORT Z_FreeRelease (void *ptr)
+void EXPORT Z_FreeRelease (const void *ptr)
 {
 	zhead_t	*z;
 
@@ -1613,7 +1617,7 @@ void EXPORT Z_FreeRelease (void *ptr)
 	free (z);
 }
 
-void EXPORT Z_FreeDebug (void *ptr)
+void EXPORT Z_FreeDebug (const void *ptr)
 {
 	zhead_t	*z;
 
@@ -1746,6 +1750,8 @@ void Z_Verify (const char *format, ...)
 	vsnprintf (string, sizeof(string)-1, format, argptr);
 	va_end (argptr);
 
+	string[sizeof(string)-1] = 0;
+
 	i = 0;
 
 	for (z=z_chain.next ; z != &z_chain ; z=next)
@@ -1861,7 +1867,10 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 
 	//aieeeee.
 	if (z_buggygame->intvalue)
-		size *= 2;
+		size *= z_buggygame->intvalue + 1;
+
+	if (!size)
+		Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes!");
 
 	b = Z_TagMalloc (size+4, tag);
 
@@ -2048,11 +2057,12 @@ For proxy protecting
 */
 byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 {
-	int		n;
-	byte	*p;
-	int		x;
-	byte chkb[60 + 4];
-	unsigned short crc;
+	int				n;
+	int				x;
+	byte			*p;
+	byte			chkb[60 + 4];
+	unsigned short	crc;
+	byte			r;
 
 
 	if (sequence < 0)
@@ -2076,9 +2086,9 @@ byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 	for (x=0, n=0; n<length; n++)
 		x += chkb[n];
 
-	crc = (crc ^ x) & 0xff;
+	r = (crc ^ x) & 0xff;
 
-	return crc;
+	return r;
 }
 
 #ifdef USE_OPENSSL
@@ -2391,7 +2401,7 @@ void Qcommon_Frame (int msec)
 	}
 	else if (timescale->intvalue)
 	{
-		msec *= timescale->value;
+		msec = (int)(msec * timescale->value);
 
 		if (msec < 1)
 			msec = 1;

@@ -105,7 +105,8 @@ void DisplayALError (char *msg, int code)
 
 void OpenAL_DestroyBuffers (void)
 {
-	int i;
+	unsigned	i;
+
 	for (i = 0; i < openAlMaxSources; i++) {
 		alSourceStop (g_Sources[i]);
 	}	
@@ -142,7 +143,7 @@ qboolean AL_Attenuated (int i)
 
 	VectorSubtract (soundOrigin, listener_origin, source_vec);
 
-	dist_mult = alindex[i].attenuation * ((alindex[i].attenuation == ATTN_STATIC)?0.001:0.0005);
+	dist_mult = alindex[i].attenuation * ((alindex[i].attenuation == ATTN_STATIC)?0.001f:0.0005f);
 
 	dist = VectorNormalize (source_vec) - SOUND_FULLVOLUME;
 
@@ -156,18 +157,18 @@ qboolean AL_Attenuated (int i)
 
 	if (!dist_mult)
 	{	// no attenuation = no spatialization
-		rscale = 1.0;
-		lscale = 1.0;
+		rscale = 1.0f;
+		lscale = 1.0f;
 	}
 	else
 	{
-		rscale = 0.5 * (1.0 + dot);
-		lscale = 0.5 * (1.0 - dot);
+		rscale = 0.5f * (1.0f + dot);
+		lscale = 0.5f * (1.0f - dot);
 	}
 
 	// add in distance effect
-	right_vol = (255.0 * ((1.0 - dist) * rscale));
-	left_vol = (255.0 * ((1.0 - dist) * lscale));
+	right_vol = (255.0f * ((1.0f - dist) * rscale));
+	left_vol = (255.0f * ((1.0f - dist) * lscale));
 
 	if ((right_vol <= 0) && (left_vol <= 0))
 		return true;
@@ -202,7 +203,7 @@ void OpenAL_FreeAlIndexes (int index)
 ALint OpenAL_GetFreeSource (void)
 {
 	ALenum state;
-	int i;
+	unsigned i;
 
 	for (i = 0; i < openAlMaxSources; i++)
 	{
@@ -227,7 +228,7 @@ Shut down the OpenAL interface, if it is running.
 */
 void OpenAL_Shutdown (void)
 {
-	int i;
+	unsigned i;
 	int error;
 	ALCcontext *Context;
 	ALCdevice *Device;
@@ -286,7 +287,7 @@ void OpenAL_Shutdown (void)
 
 ALint OpenAL_GetFreeBuffer (void)
 {
-	int i;
+	unsigned i;
 	for (i = 0; i < openAlMaxBuffers; i++)
 	{
 		if (!g_Buffers[i].inuse)

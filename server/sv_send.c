@@ -319,6 +319,8 @@ void SV_BroadcastCommand (const char *fmt, ...)
 	vsnprintf (string, sizeof(string)-1, fmt, argptr);
 	va_end (argptr);
 
+	string[sizeof(string)-1] = 0;
+
 	MSG_BeginWriting (svc_stufftext);
 	MSG_WriteString (string);
 	SV_Multicast (NULL, MULTICAST_ALL_R);
@@ -547,9 +549,9 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 			origin = origin_v;
 			if (entity->solid == SOLID_BSP)
 			{
-				origin_v[0] = entity->s.origin[0]+0.5*(entity->mins[0]+entity->maxs[0]);
-				origin_v[1] = entity->s.origin[1]+0.5*(entity->mins[1]+entity->maxs[1]);
-				origin_v[2] = entity->s.origin[2]+0.5*(entity->mins[2]+entity->maxs[2]);
+				origin_v[0] = entity->s.origin[0]+0.5f*(entity->mins[0]+entity->maxs[0]);
+				origin_v[1] = entity->s.origin[1]+0.5f*(entity->mins[1]+entity->maxs[1]);
+				origin_v[2] = entity->s.origin[2]+0.5f*(entity->mins[2]+entity->maxs[2]);
 			}
 			else
 			{
@@ -588,13 +590,20 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 		MSG_WriteByte (soundindex);
 
 		if (flags & SND_VOLUME)
-			MSG_WriteByte (volume*255);
+			MSG_WriteByte ((int)(volume*255));
 
 		if (flags & SND_ATTENUATION)
-			MSG_WriteByte (attenuation*64);
+		{
+			if (attenuation >= 4.0)
+			{
+				Com_Printf ("GAME ERROR: Sound %s with bad attenuation %f, fixed.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, sv.configstrings[CS_SOUNDS+soundindex], attenuation);
+				attenuation = 3.984375;
+			}
+			MSG_WriteByte ((int)(attenuation*64));
+		}
 
 		if (flags & SND_OFFSET)
-			MSG_WriteByte (timeofs*1000);
+			MSG_WriteByte ((int)(timeofs*1000));
 
 		if (flags & SND_ENT)
 			MSG_WriteShort (sendchan);

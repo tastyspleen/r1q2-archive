@@ -73,12 +73,12 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	//memset( zrot, 0, sizeof( zrot ) );
 	//zrot[0][0] = zrot[1][1] = zrot[2][2] = 1.0F;
 
-	zrot[0][0] = cos( DEG2RAD( degrees ) );
-	zrot[0][1] = sin( DEG2RAD( degrees ) );
+	zrot[0][0] = (float)cos( DEG2RAD( degrees ) );
+	zrot[0][1] = (float)sin( DEG2RAD( degrees ) );
 	zrot[0][2] = 0;
 
-	zrot[1][0] = -sin( DEG2RAD( degrees ) );
-	zrot[1][1] = cos( DEG2RAD( degrees ) );
+	zrot[1][0] = (float)-sin( DEG2RAD( degrees ) );
+	zrot[1][1] = (float)cos( DEG2RAD( degrees ) );
 	zrot[1][2] = 0;
 
 	zrot[2][0] = 0.0f;
@@ -111,18 +111,18 @@ void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@
 	// static to help MS compiler fp bugs
 
 	angle = angles[YAW] * M_PI2_DIV_360;
-	sy = sin(angle);
-	cy = cos(angle);
+	sy = (float)sin(angle);
+	cy = (float)cos(angle);
 
 	angle = angles[PITCH] * M_PI2_DIV_360;
-	sp = sin(angle);
-	cp = cos(angle);
+	sp = (float)sin(angle);
+	cp = (float)cos(angle);
 
 	if (right || up)
 	{
 		angle = angles[ROLL] * M_PI2_DIV_360;
-		sr = sin(angle);
-		cr = cos(angle);
+		sr = (float)sin(angle);
+		cr = (float)cos(angle);
 	}
 
 	if (forward)
@@ -185,7 +185,7 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 		if ( fabs( src[i] ) < minelem )
 		{
 			pos = i;
-			minelem = fabs( src[i] );
+			minelem = (float)fabs( src[i] );
 		}
 	}
 	tempvec[0] = tempvec[1] = tempvec[2] = 0.0F;
@@ -766,7 +766,7 @@ vec_t VectorNormalize (vec3_t v)
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = sqrt (length);		// FIXME
+	length = (float)sqrt (length);		// FIXME
 
 	if (FLOAT_NE_ZERO(length))
 	{
@@ -785,7 +785,7 @@ vec_t VectorNormalize2 (vec3_t v, vec3_t out)
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = sqrt (length);		// FIXME
+	length = (float)sqrt (length);		// FIXME
 
 	if (FLOAT_NE_ZERO(length))
 	{
@@ -851,7 +851,7 @@ vec_t VectorLength(vec3_t v)
 	length += v[1]*v[1];
 	length += v[2]*v[2];
 
-	length = sqrt (length);		// FIXME
+	length = (float)sqrt (length);		// FIXME
 
 	return length;
 }
@@ -1561,7 +1561,7 @@ int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va)
 	return -1;
 }
 
-int Q_snprintf (char *buff, size_t len, const char *fmt, ...)
+/*int Q_snprintf (char *buff, size_t len, const char *fmt, ...)
 {
 	int ret;
 
@@ -1572,7 +1572,7 @@ int Q_snprintf (char *buff, size_t len, const char *fmt, ...)
 	va_end (argptr);
 
 	return ret;
-}
+}*/
 
 void Q_strlwr (char *str)
 {

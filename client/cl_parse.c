@@ -159,7 +159,7 @@ void CL_FinishDownload (void)
 
 #ifdef _DEBUG
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && (strstr(newn, "players"))) {
-		for (r = 0; r < MAX_CLIENTS; r++) {
+		for (r = 0; r < cl.maxclients; r++) {
 			ci = &cl.clientinfo[r];
 			if (ci->deferred)
 				CL_ParseClientinfo (r);
@@ -167,6 +167,7 @@ void CL_FinishDownload (void)
 	}
 #endif
 
+	cls.failed_download = false;
 	cls.downloadpending = false;
 	cls.download = NULL;
 	cls.downloadpercent = 0;
@@ -227,16 +228,18 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 	strcpy (cls.downloadname, filename);
 
 	//r1: fix \ to /
-	while ((p = strchr(cls.downloadname, '\\')))
+	p = cls.downloadname;
+	while ((p = strchr(p, '\\')))
 		*p = '/';
 
 	length = (int)strlen(cls.downloadname);
 
 	//normalize path
-	if (cls.downloadname[0] == '.' && cls.downloadname[1] == '/')
+	p = cls.downloadname;
+	while ((p = strstr (p, "./")))
 	{
-		memmove (cls.downloadname, cls.downloadname +2, length-1);
-		length -=2;
+		memmove (p, p+2, length - (p - cls.downloadname) - 1);
+		length -= 2;
 	}
 
 	//r1: verify we are giving the server a legal path
@@ -341,7 +344,8 @@ void CL_Download_f (void)
 	strncpy (cls.downloadname, filename, sizeof(cls.downloadname)-1);
 
 	//r1: fix \ to /
-	while ((p = strchr(cls.downloadname, '\\')))
+	p = cls.downloadname;
+	while ((p = strchr(p, '\\')))
 		*p = '/';
 
 	// download to a temp name, and only rename
@@ -450,6 +454,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 
 		//r1: nuke the temp filename
 		*cls.downloadtempname = 0;
+		cls.failed_download = true;
 
 		if (cls.download)
 		{
@@ -652,9 +657,6 @@ void CL_ParseZPacket (void)
 	if (compressed_len <= 0)
 		Com_Error (ERR_DROP, "CL_ParseZPacket: compressed_len <= 0");
 
-	//buff_in = Z_Malloc (compressed_len);
-	//buff_out = Z_Malloc (uncompressed_len);
-
 	MSG_ReadData (&net_message, buff_in, compressed_len);
 
 	SZ_Init (&sb, buff_out, uncompressed_len);
@@ -662,33 +664,8 @@ void CL_ParseZPacket (void)
 
 	old = net_message;
 	net_message = sb;
-
-	/*for (;;)
-	{
-		cmd = MSG_ReadByte (&net_message);
-
-		if (cmd == -1)
-			break;
-
-		switch (cmd) {
-			case svc_configstring:
-				CL_ParseConfigString ();
-				break;
-			case svc_spawnbaseline:
-				CL_ParseBaseline ();
-				break;
-			default:
-				Com_Error (ERR_DROP, "CL_ParseZPacket: unhandled command 0x%x!", cmd);
-				break;
-		}
-	}*/
-
 	CL_ParseServerMessage ();
-
 	net_message = old;
-
-	//Z_Free (buff_in);
-	//Z_Free (buff_out);
 
 	Com_DPrintf ("Got a ZPacket, %d->%d\n", uncompressed_len + 4, compressed_len);
 }
@@ -741,7 +718,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	while (*t)
 	{
 		//if (!isprint (*t))
-		if (*t <= 32 || *t >= 128)
+		if (*t <= 32)
 		{
 			i = -1;
 			break;
@@ -959,7 +936,7 @@ void CL_ParseConfigString (void)
 	// do something apropriate
 	if (i == CS_AIRACCEL)
 	{
-		pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
+		pm_airaccelerate = (qboolean)atoi(cl.configstrings[CS_AIRACCEL]);
 	}
 	else if (i >= CS_LIGHTS && i < CS_LIGHTS+MAX_LIGHTSTYLES)
 	{
@@ -1002,12 +979,17 @@ void CL_ParseConfigString (void)
 		if (cl.refresh_prepped)
 			re.RegisterPic (cl.configstrings[i]);
 	}
+	else if (i == CS_MAXCLIENTS)
+	{
+		if (!cl.attractloop)
+			cl.maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
+	}
 	else if (i >= CS_PLAYERSKINS && i < CS_PLAYERSKINS+MAX_CLIENTS)
 	{
 		//r1: hack to avoid parsing non-skins from mods that overload CS_PLAYERSKINS
 		//FIXME: how reliable is CS_MAXCLIENTS?
 		i -= CS_PLAYERSKINS;
-		if ((cl.configstrings[CS_MAXCLIENTS][0] && i < atoi(cl.configstrings[CS_MAXCLIENTS])) || Com_ServerState() == ss_demo)
+		if (i < cl.maxclients)
 		{
 			if (cl.refresh_prepped && strcmp(olds, s))
 				CL_ParseClientinfo (i);
@@ -1047,17 +1029,17 @@ void CL_ParseStartSoundPacket(void)
 	sound_num = MSG_ReadByte (&net_message);
 
     if (flags & SND_VOLUME)
-		volume = MSG_ReadByte (&net_message) / 255.0;
+		volume = MSG_ReadByte (&net_message) / 255.0f;
 	else
 		volume = DEFAULT_SOUND_PACKET_VOLUME;
 	
     if (flags & SND_ATTENUATION)
-		attenuation = MSG_ReadByte (&net_message) / 64.0;
+		attenuation = MSG_ReadByte (&net_message) / 64.0f;
 	else
 		attenuation = DEFAULT_SOUND_PACKET_ATTENUATION;	
 
     if (flags & SND_OFFSET)
-		ofs = MSG_ReadByte (&net_message) / 1000.0;
+		ofs = MSG_ReadByte (&net_message) / 1000.0f;
 	else
 		ofs = 0;
 
@@ -1224,7 +1206,7 @@ void CL_ParseServerMessage (void)
 				//r1: change !p_version to !version since p is for proxies
 				if ((strstr (s, "!r1q2_version") || strstr (s, "!version")) &&
 					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
-					cls.spamTime = cls.realtime + random() * 1500; 
+					cls.spamTime = cls.realtime + (int)(random() * 1500);
 			}
 
 			// for getting debug info overnight :)

@@ -61,8 +61,16 @@ typedef struct linkednamelist_s
 	char					*name;
 } linkednamelist_t;
 
-extern linkednamelist_t nullcmds;
-extern linkednamelist_t lrconcmds;
+typedef struct linkedvaluelist_s
+{
+	struct linkedvaluelist_s	*next;
+	char						*name;
+	char						*value;
+} linkedvaluelist_t;
+
+extern linkednamelist_t		nullcmds;
+extern linkednamelist_t		lrconcmds;
+extern linkedvaluelist_t	serveraliases;
 
 extern	char svConnectStuffString[1100];
 extern	char svBeginStuffString[1100];
@@ -441,7 +449,7 @@ void Master_Packet (void);
 // sv_init.c
 //
 void SV_InitGame (void);
-void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame);
+void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame);
 
 qboolean CheckUserInfoFields (char *userinfo);
 

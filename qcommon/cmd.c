@@ -117,7 +117,7 @@ FIXME: actually change the command buffer to do less copying
 */
 void Cbuf_InsertText (const char *text)
 {
-	char	*temp;
+	char	temp[COMMAND_BUFFER_SIZE];
 	int		templen;
 
 // copy off any commands still remaining in the exec buffer
@@ -125,7 +125,7 @@ void Cbuf_InsertText (const char *text)
 	if (templen)
 	{
 		//temp = Z_TagMalloc (templen, TAGMALLOC_CMDBUFF);
-		temp = alloca (templen);
+		//temp = alloca (templen);
 		memcpy (temp, cmd_text_buf, templen);
 		SZ_Clear (&cmd_text);
 	}
@@ -347,8 +347,8 @@ qboolean Cbuf_AddLateCommands (void)
 	if (!s)
 		return false;
 		
-	//text = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
-	text = alloca (s+1);
+	text = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
+	//text = alloca (s+1);
 	text[0] = 0;
 	for (i=1 ; i<argc ; i++)
 	{
@@ -358,8 +358,8 @@ qboolean Cbuf_AddLateCommands (void)
 	}
 	
 	// pull out the commands
-	//build = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
-	build = alloca (s+1);
+	build = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
+	//build = alloca (s+1);
 	build[0] = 0;
 	
 	for (i=0 ; i<s-1 ; i++)
@@ -385,8 +385,8 @@ qboolean Cbuf_AddLateCommands (void)
 	if (ret)
 		Cbuf_AddText (build);
 	
-	//Z_Free (text);
-	//Z_Free (build);
+	Z_Free (text);
+	Z_Free (build);
 
 	return ret;
 }
@@ -408,8 +408,9 @@ Cmd_Exec_f
 */
 void Cmd_Exec_f (void)
 {
-	char	*f, *f2, *p;
-	int		len;
+	char	*f, *p;
+	int	len;
+	char	f2[COMMAND_BUFFER_SIZE+2];
 
 	if (Cmd_Argc () != 2)
 	{
@@ -419,10 +420,10 @@ void Cmd_Exec_f (void)
 
 	//r1: sanity check length first so people don't exec pak0.pak and eat 300MB ram
 	len = FS_LoadFile (Cmd_Argv(1), NULL);
-	if (len >= COMMAND_BUFFER_SIZE - 2)
+	if (len > COMMAND_BUFFER_SIZE - 2)
 	{
-		Com_Printf ("couldn't exec %s, exceeds maximum config file length\n", LOG_GENERAL, Cmd_Argv(1));
-		return;
+		Com_Printf ("warning, %s exceeds maximum config file length\n", LOG_GENERAL, Cmd_Argv(1));
+		len = COMMAND_BUFFER_SIZE - 2;
 	}
 
 	FS_LoadFile (Cmd_Argv(1), (void **)&f);
@@ -432,14 +433,18 @@ void Cmd_Exec_f (void)
 		return;
 	}
 
+#ifndef DEDICATED_ONLY
 	if (Com_ServerState())
+#endif
 		Com_Printf ("execing %s\n", LOG_GENERAL, Cmd_Argv(1));
+#ifndef DEDICATED_ONLY
 	else
 		Com_DPrintf ("execing %s\n",Cmd_Argv(1));
-	
+#endif
+
 	// the file doesn't have a trailing 0, so we need to copy it off
 	//f2 = Z_TagMalloc(len+2, TAGMALLOC_CMDBUFF);
-	f2 = alloca (len+2);
+	//f2 = alloca (len+2);
 	memcpy (f2, f, len);
 
 	//r1: fix for "no trailing newline = 'u or s'" bug.
@@ -490,8 +495,8 @@ void Cmd_Aliaslist_f (void)
 	num = i;
 
 	len = num * sizeof(cmdalias_t);
-	//sortedList = Z_TagMalloc (len, TAGMALLOC_CMD);
-	sortedList = alloca(len);
+	sortedList = Z_TagMalloc (len, TAGMALLOC_CMD);
+	//sortedList = alloca(len);
 	
 	for (a = cmd_alias, i = 0; a ; a = a->next, i++)
 	{
@@ -514,7 +519,7 @@ void Cmd_Aliaslist_f (void)
 			Com_Printf ("%s : %s\n", LOG_GENERAL, a->name, a->value);
 	}
 
-	//Z_Free (sortedList);
+	Z_Free (sortedList);
 }
 
 /*
@@ -1148,8 +1153,8 @@ void Cmd_List_f (void)
 	num = i;
 
 	len = num * sizeof(cmd_function_t);
-	//sortedList = Z_TagMalloc (len, TAGMALLOC_CMD);
-	sortedList = alloca(len);
+	sortedList = Z_TagMalloc (len, TAGMALLOC_CMD);
+	//sortedList = alloca(len);
 	
 	for (cmd = cmd_functions, i = 0; cmd ; cmd = cmd->next, i++)
 	{
@@ -1171,7 +1176,7 @@ void Cmd_List_f (void)
 	if (!argLen)
 		Com_Printf ("%i commands\n", LOG_GENERAL, i);
 
-	//Z_Free (sortedList);
+	Z_Free (sortedList);
 }
 
 /*

@@ -516,22 +516,22 @@ void S_SpatializeOrigin (vec3_t origin, float master_vol, float dist_mult, int *
 
 	if (dma.channels == 1 || !dist_mult)
 	{ // no attenuation = no spatialization
-		rscale = 1.0;
-		lscale = 1.0;
+		rscale = 1.0f;
+		lscale = 1.0f;
 	}
 	else
 	{
-		rscale = 0.5 * (1.0 + dot);
-		lscale = 0.5*(1.0 - dot);
+		rscale = 0.5f * (1.0f + dot);
+		lscale = 0.5f * (1.0f - dot);
 	}
 
 	// add in distance effect
-	scale = (1.0 - dist) * rscale;
+	scale = (1.0f - dist) * rscale;
 	*right_vol = (int) (master_vol * scale);
 	if (*right_vol < 0)
 		*right_vol = 0;
 
-	scale = (1.0 - dist) * lscale;
+	scale = (1.0f - dist) * lscale;
 	*left_vol = (int) (master_vol * scale);
 	if (*left_vol < 0)
 		*left_vol = 0;
@@ -561,7 +561,7 @@ void S_Spatialize(channel_t *ch)
 	else
 		CL_GetEntitySoundOrigin (ch->entnum, origin);
 
-	S_SpatializeOrigin (origin, ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol);
+	S_SpatializeOrigin (origin, (float)ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol);
 }           
 
 
@@ -632,10 +632,10 @@ void S_IssuePlaysound (playsound_t *ps)
 
 	// spatialize
 	if (ps->attenuation == ATTN_STATIC)
-		ch->dist_mult = ps->attenuation * 0.001;
+		ch->dist_mult = ps->attenuation * 0.001f;
 	else
-		ch->dist_mult = ps->attenuation * 0.0005;
-	ch->master_vol = ps->volume;
+		ch->dist_mult = ps->attenuation * 0.0005f;
+	ch->master_vol = (int)ps->volume;
 	ch->entnum = ps->entnum;
 	ch->entchannel = ps->entchannel;
 	ch->sfx = ps->sfx;
@@ -843,7 +843,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 				/*alSourcef (g_Sources[sourceNum], AL_REFERENCE_DISTANCE, 256.0f * fvol);
 				OpenAL_CheckForError();*/
 
-				gain = fvol / 1.0;
+				gain = fvol / 1.0f;
 				//gain *= 0.2;
 
 				alSourcef (g_Sources[sourceNum], AL_GAIN, gain);
@@ -876,7 +876,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 	}
 #endif
 
-	vol = fvol*255;
+	vol = (int)(fvol*255);
 
 	// make the playsound_t
 	ps = S_AllocPlaysound ();
@@ -894,20 +894,20 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 	ps->entnum = entnum;
 	ps->entchannel = entchannel;
 	ps->attenuation = attenuation;
-	ps->volume = vol;
+	ps->volume = fvol*255;
 	ps->sfx = sfx;
 
 	// drift s_beginofs
-	start = cl.frame.servertime * 0.001 * dma.speed + s_beginofs;
+	start = (int)(cl.frame.servertime * 0.001f * dma.speed + s_beginofs);
 	if (start < paintedtime)
 	{
 		start = paintedtime;
-		s_beginofs = start - (cl.frame.servertime * 0.001 * dma.speed);
+		s_beginofs = (int)(start - (cl.frame.servertime * 0.001f * dma.speed));
 	}
-	else if (start > paintedtime + 0.3 * dma.speed)
+	else if (start > paintedtime + 0.3f * dma.speed)
 	{
-		start = paintedtime + 0.1 * dma.speed;
-		s_beginofs = start - (cl.frame.servertime * 0.001 * dma.speed);
+		start = (int)(paintedtime + 0.1f * dma.speed);
+		s_beginofs = (int)(start - (cl.frame.servertime * 0.001f * dma.speed));
 	}
 	else
 	{
@@ -917,7 +917,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 	if (!timeofs)
 		ps->begin = paintedtime;
 	else
-		ps->begin = start + timeofs * dma.speed;
+		ps->begin = (int)(start + timeofs * dma.speed);
 
 	// sort into the pending sound list
 	for (sort = s_pendingplays.next ; 
@@ -1084,9 +1084,9 @@ void S_AddLoopSounds (void)
 			if (!model)
 				continue;
 
-			origin[0] = ent->origin[0]+0.5*(model->mins[0]+model->maxs[0]);
-			origin[1] = ent->origin[1]+0.5*(model->mins[1]+model->maxs[1]);
-			origin[2] = ent->origin[2]+0.5*(model->mins[2]+model->maxs[2]);
+			origin[0] = ent->origin[0]+0.5f*(model->mins[0]+model->maxs[0]);
+			origin[1] = ent->origin[1]+0.5f*(model->mins[1]+model->maxs[1]);
+			origin[2] = ent->origin[2]+0.5f*(model->mins[2]+model->maxs[2]);
 		}
 		else
 		{
@@ -1255,7 +1255,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 		{
 			for (i=0 ; ; i++)
 			{
-				src = i*scale;
+				src = (int)(i*scale);
 				if (src >= samples)
 					break;
 				dst = s_rawend&(MAX_RAW_SAMPLES-1);
@@ -1271,7 +1271,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 	{
 		for (i=0 ; ; i++)
 		{
-			src = i*scale;
+			src = (int)(i*scale);
 			if (src >= samples)
 				break;
 			dst = s_rawend&(MAX_RAW_SAMPLES-1);
@@ -1286,7 +1286,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 	{
 		for (i=0 ; ; i++)
 		{
-			src = i*scale;
+			src = (int)(i*scale);
 			if (src >= samples)
 				break;
 			dst = s_rawend&(MAX_RAW_SAMPLES-1);
@@ -1301,7 +1301,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 	{
 		for (i=0 ; ; i++)
 		{
-			src = i*scale;
+			src = (int)(i*scale);
 			if (src >= samples)
 				break;
 			dst = s_rawend&(MAX_RAW_SAMPLES-1);
@@ -1522,7 +1522,7 @@ void S_Update_(void)
 	}
 
 // mix ahead of current position
-	endtime = soundtime + s_mixahead->value * dma.speed;
+	endtime = (int)(soundtime + s_mixahead->value * dma.speed);
 //endtime = (soundtime + 4096) & ~4095;
 
 	// mix to an even submission block size

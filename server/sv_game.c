@@ -91,6 +91,8 @@ void EXPORT PF_dprintf (const char *fmt, ...)
 	}
 	va_end (argptr);
 
+	msg[sizeof(msg)-1] = 0;
+
 	Com_Printf ("%s", LOG_GAME|LOG_DEBUG, msg);
 }
 
@@ -136,6 +138,8 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 	va_start (argptr,fmt);
 	len = Q_vsnprintf (msg, sizeof (msg)-1, fmt, argptr);
 	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
 
 	if (len < 0)
 	{
@@ -186,22 +190,23 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 
 	n = NUM_FOR_EDICT(ent);
 
-	client = svs.clients + (n-1);
-	if (client->state != cs_spawned)
-	{
-		Com_Printf ("GAME ERROR: PF_centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
-
-		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
-		return;
-	}
-		
+	
 	if (n < 1 || n > maxclients->intvalue)
 	{
 		if (sv_gamedebug->intvalue)
 			Com_Printf ("GAME WARNING: PF_centerprintf to non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
 
 		if (sv_gamedebug->intvalue >= 3)
+			Q_DEBUGBREAKPOINT;
+		return;
+	}
+
+	client = svs.clients + (n-1);
+	if (client->state != cs_spawned)
+	{
+		Com_Printf ("GAME ERROR: PF_centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+
+		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;
 		return;
 	}
@@ -216,6 +221,8 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 			Q_DEBUGBREAKPOINT;
 	}
 	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
 
 	MSG_BeginWriting (svc_centerprint);
 	MSG_WriteString (msg);
@@ -238,6 +245,8 @@ void EXPORT PF_error (const char *fmt, ...)
 	va_start (argptr,fmt);
 	vsnprintf (msg, sizeof(msg)-1, fmt, argptr);
 	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
 
 	Com_Error (ERR_GAME, "Game Error: %s", msg);
 }
@@ -456,17 +465,29 @@ fixed:
 				sv.configstrings[CS_NAME][sizeof(sv.configstrings[CS_NAME])-1] = 0;
 			}
 		}
-		else if (!track)
-		{
-			//ignore actual value to save a precious byte of bandwidth
-			index = -1;
-			val = "";
-		}
 	}
 	else if (index == CS_MAPCHECKSUM)
 	{
 		//shouldn't touch this!
 		Com_Error (ERR_DROP, "Game DLL tried to set CS_MAPCHECKSUM");
+	}
+	else if (index == CS_SKYROTATE)
+	{
+		//optimize to save space
+		val = safestring;
+		sprintf (safestring, "%g", atof(val));
+	}
+	else if (index == CS_SKYAXIS)
+	{
+		//optimize to save space
+		vec3_t	axis;
+		if (sscanf (val, "%f %f %f", &axis[0], &axis[1], &axis[2]) != 3)
+		{
+			Com_Printf ("GAME ERROR: Invalid CS_SKYAXIS configstring '%s'!\n", LOG_SERVER|LOG_WARNING, val);
+			VectorClear (axis);
+		}
+		val = safestring;
+		sprintf (safestring, "%g %g %g", axis[0], axis[1], axis[2]);
 	}
 
 	if (!strcmp (sv.configstrings[index], val))
@@ -791,7 +812,7 @@ void SV_InitGameProgs (void)
 
 	ge->Init ();
 	if (!ge->edicts)
-		Com_Error (ERR_DROP, "Game failed to initialize correctly");
+		Com_Error (ERR_DROP, "Game failed to initialize globals.edicts");
 
 	//r1: moved from SV_InitGame to here.
 	for (i=0 ; i<maxclients->intvalue ; i++)

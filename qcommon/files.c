@@ -202,14 +202,14 @@ typedef struct fscache_s fscache_t;
 
 struct fscache_s
 {
+	char			filename[MAX_QPATH];
+	char			filepath[MAX_OSPATH];
+	unsigned int	filelen;
+	unsigned int	fileseek;
 #ifdef HASH_CACHE
 	fscache_t		*next;
 	unsigned int	hash;
 #endif
-	char			filepath[MAX_OSPATH];
-	char			filename[MAX_QPATH];
-	unsigned int	filelen;
-	unsigned int	fileseek;
 };
 
 static struct rbtree *rb;
@@ -494,8 +494,9 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 		{
 			*file = fopen (cache->filepath, "rb");
 			if (!*file)
-				Com_Error (ERR_FATAL, "Couldn't open %s", cache->filepath);	
-			fseek (*file, cache->fileseek, SEEK_SET);
+				Com_Error (ERR_FATAL, "Couldn't open %s (cached)", cache->filepath);	
+			if (fseek (*file, cache->fileseek, SEEK_SET))
+				Com_Error (ERR_FATAL, "Couldn't seek to offset %d in %s (cached)", cache->fileseek, cache->filepath);
 		}
 		return cache->filelen;
 	}
@@ -589,10 +590,11 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 					*file = fopen (pak->filename, "rb");
 					if (!*file)
 						Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
-					fseek (*file, entry->filepos, SEEK_SET);
+					if (fseek (*file, entry->filepos, SEEK_SET))
+						Com_Error (ERR_FATAL, "Couldn't seek to offset %ld for %s in %s", entry->filepos, entry->name, pak->filename);
 				}
 
-				if (fs_cache->intvalue)
+				if (fs_cache->intvalue & 1)
 				{
 #if BTREE_SEARCH
 					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename);
@@ -619,7 +621,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 				if (filelen == -1)
 					continue;
 				
-				if (fs_cache->intvalue)
+				if (fs_cache->intvalue & 4)
 					FS_AddToCache (netpath, filelen, 0, filename);
 
 				return filelen;
@@ -632,7 +634,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 			Com_DPrintf ("FindFile: %s\n",netpath);
 
 			filelen = FS_filelength (*file);
-			if (fs_cache->intvalue)
+			if (fs_cache->intvalue & 4)
 			{
 #if BTREE_SEARCH
 				FS_AddToCache (netpath, filelen, 0, filename);
@@ -649,7 +651,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 	
 	Com_DPrintf ("FindFile: can't find %s\n", filename);
 
-	if (fs_cache->intvalue >= 2)
+	if (fs_cache->intvalue & 2)
 	{
 #if BTREE_SEARCH
 		FS_AddToCache (NULL, 0, 0, filename);
@@ -711,7 +713,7 @@ void EXPORT FS_Read (void *buffer, int len, FILE *f)
 			}
 			else
 #endif
-				Com_Error (ERR_FATAL, "FS_Read: 0 bytes read");
+				Com_Error (ERR_FATAL, "FS_Read: 0 bytes read. Did you forget to empty the filesystem cache after modifying a file?");
 		}
 
 		if (read == -1)
@@ -963,10 +965,10 @@ static void FS_AddGameDirectory (const char *dir)
 				}
 				else
 				{
-					//filenames[total++] = strdup(s);
-					filenames[total] = alloca(strlen(s)+1);
-					strcpy (filenames[total], s);
-					total++;
+					filenames[total++] = strdup(s);
+					//filenames[total] = alloca(strlen(s)+1);
+					//strcpy (filenames[total], s);
+					//total++;
 				}
 			}
 
@@ -1007,7 +1009,7 @@ static void FS_AddGameDirectory (const char *dir)
 			search->next = fs_searchpaths;
 			fs_searchpaths = search;
 		}
-		//free (filenames[i]);
+		free (filenames[i]);
 	}
 }
 
@@ -1366,6 +1368,6 @@ void FS_InitFilesystem (void)
 	if (fs_gamedirvar->string[0])
 		FS_SetGamedir (fs_gamedirvar->string);
 
-	fs_cache = Cvar_Get ("fs_cache", "2", 0);
+	fs_cache = Cvar_Get ("fs_cache", "7", 0);
 	fs_noextern = Cvar_Get ("fs_noextern", "0", 0);
 }

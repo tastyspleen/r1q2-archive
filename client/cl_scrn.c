@@ -50,7 +50,7 @@ cvar_t		*scr_conheight;
 cvar_t		*scr_centertime;
 cvar_t		*scr_showturtle;
 cvar_t		*scr_showpause;
-cvar_t		*scr_printspeed;
+//cvar_t		*scr_printspeed;
 
 cvar_t		*scr_netgraph;
 cvar_t		*scr_timegraph;
@@ -113,7 +113,7 @@ void CL_AddNetgraph (void)
 	ping /= 30;
 	if (ping > 30)
 		ping = 30;
-	SCR_DebugGraph (ping, 0xd0);
+	SCR_DebugGraph ((float)ping, 0xd0);
 }
 
 void CL_AddSizegraph (void)
@@ -149,7 +149,7 @@ void CL_AddSizegraph (void)
 	if (ping > 30)
 		ping = 30;
 
-	SCR_DebugGraph (ping, color);
+	SCR_DebugGraph ((float)ping, color);
 }
 
 typedef struct
@@ -243,7 +243,7 @@ void SCR_CenterPrint (char *str)
 		itsTheSameAsBefore = false;
 
 	strncpy (scr_centerstring, str, sizeof(scr_centerstring)-1);
-	scr_centertime_off = cls.realtime + scr_centertime->value * 1000;
+	scr_centertime_off = (int)(cls.realtime + scr_centertime->value * 1000);
 	//scr_centertime_start = cl.time;
 
 	// count the number of lines for centering
@@ -320,7 +320,7 @@ void SCR_DrawCenterString (void)
 	start = scr_centerstring;
 
 	if (scr_center_lines <= 4)
-		y = viddef.height*0.35;
+		y = (int)(viddef.height*0.35f);
 	else
 		y = 48;
 
@@ -394,7 +394,7 @@ Keybinding command
 */
 void SCR_SizeUp_f (void)
 {
-	Cvar_SetValue ("viewsize",scr_viewsize->intvalue+10);
+	Cvar_SetValue ("viewsize", (float)scr_viewsize->intvalue+10);
 }
 
 
@@ -407,7 +407,7 @@ Keybinding command
 */
 void SCR_SizeDown_f (void)
 {
-	Cvar_SetValue ("viewsize",scr_viewsize->intvalue-10);
+	Cvar_SetValue ("viewsize", (float)scr_viewsize->intvalue-10);
 }
 
 /*
@@ -429,15 +429,15 @@ void SCR_Sky_f (void)
 	}
 
 	if (Cmd_Argc() > 2)
-		rotate = atof(Cmd_Argv(2));
+		rotate = (float)atof(Cmd_Argv(2));
 	else
 		rotate = 0;
 
 	if (Cmd_Argc() == 6)
 	{
-		axis[0] = atof(Cmd_Argv(3));
-		axis[1] = atof(Cmd_Argv(4));
-		axis[2] = atof(Cmd_Argv(5));
+		axis[0] = (float)atof(Cmd_Argv(3));
+		axis[1] = (float)atof(Cmd_Argv(4));
+		axis[2] = (float)atof(Cmd_Argv(5));
 	}
 	else
 	{
@@ -487,7 +487,7 @@ void SCR_Init (void)
 	scr_showturtle = Cvar_Get ("scr_showturtle", "1", 0);
 	scr_showpause = Cvar_Get ("scr_showpause", "1", 0);
 	scr_centertime = Cvar_Get ("scr_centertime", "2.5", 0);
-	scr_printspeed = Cvar_Get ("scr_printspeed", "8", 0);
+	//scr_printspeed = Cvar_Get ("scr_printspeed", "8", 0);
 	scr_netgraph = Cvar_Get ("netgraph", "0", 0);
 	scr_timegraph = Cvar_Get ("timegraph", "0", 0);
 	scr_sizegraph = Cvar_Get ("sizegraph", "0", 0);
@@ -720,7 +720,7 @@ void SCR_TimeRefresh_f (void)
 		re.BeginFrame( 0 );
 		for (i=0 ; i<128 ; i++)
 		{
-			cl.refdef.viewangles[1] = i/128.0*360.0;
+			cl.refdef.viewangles[1] = i/128.0f*360.0f;
 			re.RenderFrame (&cl.refdef);
 		}
 		re.EndFrame();
@@ -729,7 +729,7 @@ void SCR_TimeRefresh_f (void)
 	{
 		for (i=0 ; i<128 ; i++)
 		{
-			cl.refdef.viewangles[1] = i/128.0*360.0;
+			cl.refdef.viewangles[1] = i/128.0f*360.0f;
 
 			re.BeginFrame( 0 );
 			re.RenderFrame (&cl.refdef);
@@ -738,7 +738,7 @@ void SCR_TimeRefresh_f (void)
 	}
 
 	stop = Sys_Milliseconds ();
-	time = (stop-start)/1000.0;
+	time = (stop-start)/1000.0f;
 
 	if (Cmd_Argc() == 2)
 		Com_Printf ("%f seconds (%f fps)\n", LOG_CLIENT, time, 128000/time);
@@ -819,8 +819,8 @@ void SCR_TileClear (void)
 	scr_dirty.y1 = 9999;
 	scr_dirty.y2 = -9999;
 
-	// don't bother with anything convered by the console)
-	top = scr_con_current*viddef.height;
+	// don't bother with anything convered by the console
+	top = (int)(scr_con_current*viddef.height);
 	if (top >= clear.y1)
 		clear.y1 = top;
 
@@ -1295,7 +1295,7 @@ void SCR_ExecuteLayoutString (char *s)
 					token = COM_Parse (&s);
 					value = atoi(token);
 
-					if (value >= MAX_CLIENTS || value < 0)
+					if (value >= cl.maxclients || value < 0)
 						Com_Error (ERR_DROP, "Bad client index %d in block 'client' whilst parsing layout string", value);
 
 					ci = &cl.clientinfo[value];
@@ -1338,7 +1338,7 @@ void SCR_ExecuteLayoutString (char *s)
 
 					value = atoi(token);
 					
-					if (value >= MAX_CLIENTS || value < 0)
+					if (value >= cl.maxclients || value < 0)
 						Com_Error (ERR_DROP, "Bad client index %d in block 'ctf' whilst parsing layout string", value);
 
 					ci = &cl.clientinfo[value];
@@ -1538,7 +1538,7 @@ void SCR_UpdateScreen (void)
 #endif
 
 			if (scr_timegraph->intvalue)
-				SCR_DebugGraph (cls.frametime*300, cls.frametime*300);
+				SCR_DebugGraph (cls.frametime*300, (int)(cls.frametime*300));
 
 			if (scr_debuggraph->intvalue || scr_timegraph->intvalue || scr_netgraph->intvalue || scr_sizegraph->intvalue)
 				SCR_DrawDebugGraph ();

@@ -113,7 +113,7 @@ areanode_t *SV_CreateAreaNode (int depth, vec3_t mins, vec3_t maxs)
 	else
 		anode->axis = 1;
 	
-	anode->dist = 0.5 * (maxs[anode->axis] + mins[anode->axis]);
+	anode->dist = 0.5f * (maxs[anode->axis] + mins[anode->axis]);
 	VectorCopy (mins, mins1);	
 	VectorCopy (mins, mins2);	
 	VectorCopy (maxs, maxs1);	
@@ -210,21 +210,21 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	// encode the size into the entity_state for client prediction
 	if (ent->solid == SOLID_BBOX && !(ent->svflags & SVF_DEADMONSTER) && !(sv_new_entflags->intvalue && ent->svflags & SVF_NOPREDICTION))
 	{	// assume that x/y are equal and symetric
-		i = ent->maxs[0]/8;
+		i = (int)(ent->maxs[0]/8);
 		if (i<1)
 			i = 1;
 		if (i>31)
 			i = 31;
 
 		// z is not symetric
-		j = (-ent->mins[2])/8;
+		j = (int)((-ent->mins[2])/8);
 		if (j<1)
 			j = 1;
 		if (j>31)
 			j = 31;
 
 		// and z maxs can be negative...
-		k = (ent->maxs[2]+32)/8;
+		k = (int)((ent->maxs[2]+32)/8);
 		if (k<1)
 			k = 1;
 		if (k>63)
@@ -249,10 +249,10 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 		max = 0;
 		for (i=0 ; i<3 ; i++)
 		{
-			v =fabs( ent->mins[i]);
+			v = (float)fabs( ent->mins[i]);
 			if (v > max)
 				max = v;
-			v =fabs( ent->maxs[i]);
+			v = (float)fabs( ent->maxs[i]);
 			if (v > max)
 				max = v;
 		}

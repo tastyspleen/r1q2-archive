@@ -147,7 +147,7 @@ plainStrings:
 	else
 	{
 		int			index;
-		int			realBytes;
+		unsigned	realBytes;
 		int			result;
 		z_stream	z;
 		sizebuf_t	zBuff;
@@ -232,13 +232,13 @@ plainStrings:
 
 			if (z.total_out > realBytes)
 			{
-				Com_DPrintf ("SV_Configstrings_f: %d bytes would be a %lud byte zPacket\n", realBytes, z.total_out);
+				Com_DPrintf ("SV_Configstrings_f: %d bytes would be a %lu byte zPacket\n", realBytes, z.total_out);
 				goto plainStrings;
 			}
 
 			start = index;
 
-			Com_DPrintf ("SV_Configstrings_f: wrote %d bytes in a %lud byte zPacket\n", realBytes, z.total_out);
+			Com_DPrintf ("SV_Configstrings_f: wrote %d bytes in a %lu byte zPacket\n", realBytes, z.total_out);
 
 			MSG_BeginWriting (svc_zpacket);
 			MSG_WriteShort (z.total_out);
@@ -332,12 +332,12 @@ static void SV_New_f (void)
 				Com_sprintf (randomIP[i], sizeof(randomIP[0]), "%d.%d.%d.%d:%d", (int)(random() * 255),  (int)(random() * 255), (int)(random() * 255), (int)(random() * 255), server_port);
 			}
 
-			serverIndex = random() * 15;
+			serverIndex = (int)(random() * 15);
 
 			Q_strncpy (randomIP[serverIndex], sv_force_reconnect->string, sizeof(randomIP[0])-1);
 
-			conindex = random() * 15;
-			varindex = random() * 15;
+			conindex = (int)(random() * 15);
+			varindex = (int)(random() * 15);
 
 			for (i = 0; i < 16; i++)
 			{
@@ -744,7 +744,7 @@ plainLines:
 	}
 	else
 	{
-		int			realBytes;
+		unsigned	realBytes;
 		int			result;
 		z_stream	z;
 		sizebuf_t	zBuff;
@@ -823,13 +823,13 @@ plainLines:
 
 			if (z.total_out > realBytes)
 			{
-				Com_DPrintf ("SV_Baselines_f: %d bytes would be a %lud byte zPacket\n", realBytes, z.total_out);
+				Com_DPrintf ("SV_Baselines_f: %d bytes would be a %lu byte zPacket\n", realBytes, z.total_out);
 				goto plainLines;
 			}
 
 			startPos = start;
 
-			Com_DPrintf ("SV_Baselines_f: wrote %d bytes in a %lud byte zPacket\n", realBytes, z.total_out);
+			Com_DPrintf ("SV_Baselines_f: wrote %d bytes in a %lu byte zPacket\n", realBytes, z.total_out);
 
 			MSG_BeginWriting (svc_zpacket);
 			MSG_WriteShort (z.total_out);
@@ -894,13 +894,13 @@ static void SV_Begin_f (void)
 	//r1: they didn't respond to version probe
 	if (!sv_client->versionString)
 	{
-		Com_Printf ("WARNING: Didn't receive 'version' string from %s[%s], hacked/broken client?\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
+		Com_Printf ("WARNING: Didn't receive 'version' string from %s[%s], hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
 		SV_DropClient (sv_client, false);
 		return;
 	}
 	else if (sv_client->reconnect_var[0])
 	{
-		Com_Printf ("WARNING: Client %s[%s] didn't respond to reconnect check, hacked/broken client?\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
+		Com_Printf ("WARNING: Client %s[%s] didn't respond to reconnect check, hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
 		SV_DropClient (sv_client, false);
 		return;
 	}
@@ -928,8 +928,10 @@ static void SV_Begin_f (void)
 	ge->ClientBegin (sv_player);
 
 	//give them some movement
+	//FIXME: make this msec value correct based on server framenum
 	sv_client->commandMsec = sv_msecs->intvalue;
 	sv_client->commandMsecOverflowCount = 0;
+
 
 	//r1: this is in bad place
 	//Cbuf_InsertFromDefer ();
@@ -949,7 +951,7 @@ SV_NextDownload_f
 */
 static void SV_NextDownload_f (void)
 {
-	int			r;
+	unsigned	r;
 	int			percent;
 	int			size;
 	int			remaining;
@@ -967,7 +969,7 @@ static void SV_NextDownload_f (void)
 		byte		*buff;
 		z_stream	z = {0};
 		int			i, j;
-		int			realBytes;
+		unsigned	realBytes;
 		int			result;
 
 		z.next_out = zOut;
@@ -1116,7 +1118,7 @@ SV_BeginDownload_f
 */
 static void SV_BeginDownload_f(void)
 {
-	char	*name;
+	char	*name, *p;
 	int		offset = 0;
 	size_t	length;
 
@@ -1163,9 +1165,10 @@ static void SV_BeginDownload_f(void)
 	length = strlen(name);
 
 	//fix some ./ references in maps, eg ./textures/map/file
-	if (length >= 2 && name[0] == '.' && name[1] == '/')
+	p = name;
+	while ((p = strstr (p, "./")))
 	{
-		memmove (name, name+2, length-1);
+		memmove (p, p+2, length - (p - name) - 1);
 		length -= 2;
 	}
 
@@ -1221,7 +1224,7 @@ static void SV_BeginDownload_f(void)
 		return;
 	}
 	//r1: non-enhanced clients don't auto download a sprite's skins. this results in crash when trying to render it.
-	else if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION && !Q_stricmp (name + length - 4, ".sp2"))
+	else if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION && length >= 4 && !Q_stricmp (name + length - 4, ".sp2"))
 	{
 		Com_Printf ("Refusing download of sprite %s to %s\n", LOG_SERVER|LOG_DOWNLOAD|LOG_WARNING, name, sv_client->name);
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "\nRefusing download of '%s' as your client may not fetch any linked skins.\n"
@@ -1515,9 +1518,9 @@ banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result)
 				if (matchvalue[1])
 				{
 					float intresult, matchint;
-					intresult = atof(result);
+					intresult = (float)atof(result);
 
-					matchint = atof(matchvalue+1);
+					matchint = (float)atof(matchvalue+1);
 
 					switch (matchvalue[0])
 					{
@@ -1700,6 +1703,7 @@ void SV_ExecuteUserCommand (char *s)
 	ucmd_t				*u;
 	bannedcommands_t	*x;
 	linkednamelist_t	*y;
+	linkedvaluelist_t	*z;
 	
 	//r1: catch attempted command expansions
 	if (strchr(s, '$'))
@@ -1740,6 +1744,17 @@ void SV_ExecuteUserCommand (char *s)
 
 	Cmd_TokenizeString (s, false);
 	sv_player = sv_client->edict;
+
+	for (z = serveraliases.next; z; z = z->next)
+	{
+		if (!strcmp (Cmd_Argv(0), z->name))
+		{
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString (z->value);
+			SV_AddMessage (sv_client, true);
+			break;
+		}
+	}
 
 	for (x = bannedcommands.next; x; x = x->next)
 	{

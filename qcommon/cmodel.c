@@ -423,7 +423,7 @@ void CMod_LoadBrushSides (lump_t *l)
 
 	// need to save space for box planes
 	if (count > MAX_MAP_BRUSHSIDES)
-		Com_Error (ERR_DROP, "Map has too many planes");
+		Com_Error (ERR_DROP, "Map has too many planes (%d > 65536)", count);
 
 	out = map_brushsides;	
 	numbrushsides = count;
@@ -434,7 +434,7 @@ void CMod_LoadBrushSides (lump_t *l)
 		out->plane = &map_planes[num];
 		j = LittleShort (in->texinfo);
 		if (j >= numtexinfo)
-			Com_Error (ERR_DROP, "Bad brushside texinfo");
+			Com_Error (ERR_DROP, "Bad brushside texinfo (%d > %d)", j, numtexinfo);
 		else if (j < 0)
 			j = 0;
 		out->surface = &map_surfaces[j];
@@ -1082,7 +1082,7 @@ BOX TRACING
 */
 
 // 1/32 epsilon to keep floating point happy
-#define	DIST_EPSILON	(0.03125)
+#define	DIST_EPSILON	(0.03125f)
 
 vec3_t	trace_start, trace_end;
 vec3_t	trace_mins, trace_maxs;
@@ -1382,9 +1382,9 @@ void CM_RecursiveHullCheck (int num, float p1f, float p2f, vec3_t p1, vec3_t p2)
 		if (trace_ispoint)
 			offset = 0;
 		else
-			offset = fabs(trace_extents[0]*plane->normal[0]) +
-				fabs(trace_extents[1]*plane->normal[1]) +
-				fabs(trace_extents[2]*plane->normal[2]);
+			offset = (float)fabs(trace_extents[0]*plane->normal[0]) +
+				(float)fabs(trace_extents[1]*plane->normal[1]) +
+				(float)fabs(trace_extents[2]*plane->normal[2]);
 	}
 
 
@@ -1409,14 +1409,14 @@ return;
 	// put the crosspoint DIST_EPSILON pixels on the near side
 	if (t1 < t2)
 	{
-		idist = 1.0/(t1-t2);
+		idist = 1.0f/(t1-t2);
 		side = 1;
 		frac2 = (t1 + offset + DIST_EPSILON)*idist;
 		frac = (t1 - offset + DIST_EPSILON)*idist;
 	}
 	else if (t1 > t2)
 	{
-		idist = 1.0/(t1-t2);
+		idist = 1.0f/(t1-t2);
 		side = 0;
 		frac2 = (t1 - offset - DIST_EPSILON)*idist;
 		frac = (t1 + offset + DIST_EPSILON)*idist;
