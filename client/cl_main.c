@@ -2939,14 +2939,124 @@ void CL_LoadDeferredModels (void)
 	}
 }
 
+void CL_SendCommand_Synchronous (void)
+{
+	// get new key events
+	Sys_SendKeyEvents ();
+
+	// allow mice or other external controllers to add commands
+#ifdef JOYSTICK
+	IN_Commands ();
+#endif
+
+	// process console commands
+	Cbuf_Execute ();
+
+	// fix any cheating cvars
+	CL_FixCvarCheats ();
+
+	// send intentions now
+	CL_SendCmd_Synchronous ();
+
+	// resend a connection request if necessary
+	CL_CheckForResend ();
+}
+
 void CL_Synchronous_Frame (int msec)
 {
+	static int	extratime;
+	static int  lasttimecalled;
 
+	if (dedicated->value)
+		return;
 
+	extratime += msec;
 
+	if (!cl_timedemo->value && !send_packet_now)
+	{
+		if (cls.state == ca_connected && extratime < 100)
+			return;			// don't flood packets out while connecting
+		if (extratime < 1000/cl_maxfps->value)
+			return;			// framerate is too high
+	}
 
+	// let the mouse activate or deactivate
+	IN_Frame ();
 
+	// decide the simulation time
+	cls.frametime = extratime/1000.0;
+	cl.time += extratime;
+	cls.realtime = curtime;
 
+	extratime = 0;
+#if 0
+	if (cls.frametime > (1.0 / cl_minfps->value))
+		cls.frametime = (1.0 / cl_minfps->value);
+#else
+	if (cls.frametime > (1.0 / 5))
+		cls.frametime = (1.0 / 5);
+#endif
+
+	// if in the debugger last frame, don't timeout
+	if (msec > 5000)
+		cls.netchan.last_received = Sys_Milliseconds ();
+
+	// fetch results from server
+	CL_ReadPackets ();
+
+	// send a new command message to the server
+	CL_SendCommand_Synchronous ();
+
+	send_packet_now = false;
+
+	// predict all unacknowledged movements
+	CL_PredictMovement ();
+
+	// allow rendering DLL change
+	if (reload_video)
+	{
+		VID_ReloadRefresh ();
+		reload_video = false;
+	}
+
+	if (!cl.refresh_prepped && cls.state == ca_active)
+		CL_PrepRefresh ();
+
+	CL_LoadDeferredModels();
+
+	// update the screen
+	SCR_UpdateScreen ();
+
+	// update audio
+	S_Update (cl.refdef.vieworg, cl.v_forward, cl.v_right, cl.v_up);
+	
+#ifdef CD_AUDIO
+	CDAudio_Update();
+#endif
+
+	if (cls.spamTime && cls.spamTime < cls.realtime)
+	{
+		char buff[256];
+		Com_sprintf (buff, sizeof(buff), "say \"R1Q2 %s %s %s %s [http://r1ch.net/r1q2]\"\n", VERSION,
+			__TIMESTAMP__, CPUSTRING, BUILDSTRING
+		);
+		Cbuf_AddText (buff);
+		cls.lastSpamTime = cls.realtime;
+		cls.spamTime = 0;
+	}
+
+	if (cl_lents->intvalue)
+		LE_RunLocalEnts ();
+
+	// advance local effects for next frame
+	CL_RunDLights ();
+	CL_RunLightStyles ();
+
+#ifdef CINEMATICS
+	SCR_RunCinematic ();
+#endif
+
+	SCR_RunConsole ();
 }
 
 

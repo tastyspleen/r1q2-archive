@@ -32,6 +32,9 @@ cvar_t	*in_dinputkeyboard;
 
 cvar_t	*m_directinput;
 
+cvar_t	*k_repeatrate;
+cvar_t	*k_repeatdelay;
+
 extern int			key_repeatrate;
 extern int			key_repeatdelay;
 
@@ -212,6 +215,35 @@ void IN_FreeDirectInput (void)
 	g_pDI = NULL;
 }
 
+void IN_SetRepeatRate (void)
+{
+	if (!k_repeatrate->intvalue)
+	{
+		if (!SystemParametersInfo (SPI_GETKEYBOARDSPEED, 0, &key_repeatrate, 0))
+			key_repeatrate = 31;
+
+		//windows -> msecs between repeat
+		key_repeatrate = 1000.0f / (2.51f + ((float)key_repeatrate * 0.88709677419354838709677419354839f));
+	}
+	else
+	{
+		key_repeatrate = k_repeatrate->intvalue;
+	}
+	
+	if (!k_repeatdelay->intvalue)
+	{
+		if (!SystemParametersInfo (SPI_GETKEYBOARDDELAY, 0, &key_repeatdelay, 0))
+			key_repeatdelay = 0;
+
+		//windows -> msecs
+		key_repeatdelay = key_repeatdelay * 250 + 250;
+	}
+	else
+	{
+		key_repeatdelay = k_repeatdelay->intvalue;
+	}
+}
+
 int IN_InitDInputKeyboard (void)
 {
     HRESULT hr;
@@ -298,17 +330,7 @@ int IN_InitDInputKeyboard (void)
 
 	//dinput has no concept of repeated key messages so we need to do it ourselves.
 
-	if (!SystemParametersInfo (SPI_GETKEYBOARDSPEED, 0, &key_repeatrate, 0))
-		key_repeatrate = 31;
-	
-	if (!SystemParametersInfo (SPI_GETKEYBOARDDELAY, 0, &key_repeatdelay, 0))
-		key_repeatdelay = 0;
-
-	//windows -> msecs
-	key_repeatdelay = key_repeatdelay * 250 + 250;
-
-	//windows -> msecs between repeat
-	key_repeatrate = 1000.0f / (2.51f + ((float)key_repeatrate * 0.88709677419354838709677419354839f));
+	IN_SetRepeatRate ();
 
     // Acquire the newly created device
 	IDirectInputDevice8_Acquire (g_pKeyboard);
@@ -1150,6 +1172,11 @@ void IN_CvarModified (cvar_t *self, char *oldValue, char *newValue)
 
 qboolean os_winxp = false;
 
+void IN_UpdateRate (cvar_t *self, char *oldValue, char *newValue)
+{
+	IN_SetRepeatRate ();
+}
+
 /*
 ===========
 IN_Init
@@ -1168,7 +1195,13 @@ void IN_Init (void)
 
 	in_dinputkeyboard		= Cvar_Get ("in_dinputkeyboard",		"1",		0);
 
+	k_repeatrate			= Cvar_Get ("k_repeatrate",				"0",		0);
+	k_repeatdelay			= Cvar_Get ("k_repeatdelay",			"0",		0);
+
 	cl_hidewindowtitle		= Cvar_Get ("cl_hidewindowtitle",		"0",		0);
+
+	k_repeatdelay->changed = IN_UpdateRate;
+	k_repeatrate->changed = IN_UpdateRate;
 
 	in_dinputkeyboard->changed = IN_CvarModified;
 	m_winxp_fix->changed = IN_CvarModified;

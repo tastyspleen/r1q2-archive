@@ -1254,6 +1254,8 @@ void Key_Event (int key, qboolean down, unsigned time)
 	}
 	else
 	{
+		key_lastrepeat[key] = 0;
+
 		anykeydown--;
 		if (anykeydown < 0)
 			anykeydown = 0;
