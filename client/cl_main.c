@@ -421,7 +421,7 @@ void CL_Record_f (void)
 		return;
 	}
 
-	if (strstr (Cmd_Argv(1), "..") || strstr (Cmd_Argv(1), "/") || strstr (Cmd_Argv(1), "\\") )
+	if (strstr (Cmd_Argv(1), "..") || strchr (Cmd_Argv(1), '/') || strchr (Cmd_Argv(1), '\\') )
 	{
 		Com_Printf ("Illegal filename.\n", LOG_CLIENT);
 		return;
@@ -441,7 +441,7 @@ void CL_Record_f (void)
 	else
 	{
 		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-			Com_Printf ("WARNING: Demos recorded at cl_protocol %d may not be compatible with non-R1Q2 clients!\n", LOG_CLIENT, ENHANCED_PROTOCOL_VERSION);
+			Com_Printf ("WARNING: Demos recorded at cl_protocol 35 are not compatible with non-R1Q2 clients!\n", LOG_CLIENT);
 		Com_Printf ("recording to %s.\n", LOG_CLIENT, name);
 	}
 }
