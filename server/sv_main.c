@@ -197,6 +197,10 @@ void SV_DropClient (client_t *drop)
 	if (drop->lastlines)
 		Z_Free (drop->lastlines);
 
+	//r1: free version string
+	if (drop->versionString)
+		Z_Free (drop->versionString);
+
 	//r1: free message queue
 	while (drop->messageQueue.next)
 	{

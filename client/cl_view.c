@@ -306,6 +306,20 @@ void CL_PrepRefresh (void)
 	num_cl_weaponmodels = 1;
 	strcpy(cl_weaponmodels[0], "weapon.md2");
 
+	for (i=1 ; i<MAX_MODELS && cl.configstrings[CS_MODELS+i][0] ; i++)
+	{
+		if (cl.configstrings[CS_MODELS+i][0] == '#')
+		{
+			// special player weapon model
+			if (num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS)
+			{
+				strncpy(cl_weaponmodels[num_cl_weaponmodels], cl.configstrings[CS_MODELS+i]+1,
+					sizeof(cl_weaponmodels[num_cl_weaponmodels]) - 1);
+				num_cl_weaponmodels++;
+			}
+		}
+	}
+
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
 	deffered_model_index = 1;

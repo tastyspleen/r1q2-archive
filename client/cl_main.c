@@ -1553,7 +1553,7 @@ char *colortext(char *text){
 
 void CL_RequestNextDownload (void)
 {
-	//unsigned	map_checksum;		// for detecting cheater maps
+	unsigned	map_checksum;		// for detecting cheater maps
 	char fn[MAX_OSPATH];
 	dmdl_t *pheader;
 
@@ -1914,13 +1914,13 @@ void CL_RequestNextDownload (void)
 
 		CL_LoadLoc (locbuff);
 
-		/*CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
+		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 
-		if (map_checksum && map_checksum != atoi(cl.configstrings[CS_MAPCHECKSUM])) {
+		if (map_checksum && map_checksum != strtoul(cl.configstrings[CS_MAPCHECKSUM], NULL, 10)) {
 			Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x\n",
 				map_checksum, atoi(cl.configstrings[CS_MAPCHECKSUM]));
 			return;
-		}*/
+		}
 	}
 
 	if (precache_check > ENV_CNT && precache_check < TEXTURE_CNT) {
@@ -2440,24 +2440,13 @@ void CL_LoadDeferredModels (void)
 		if (!cl.configstrings[CS_MODELS+deffered_model_index][0])
 			continue;
 
-		if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '#')
-		{
-			// special player weapon model
-			if (num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS)
-			{
-				strncpy(cl_weaponmodels[num_cl_weaponmodels], cl.configstrings[CS_MODELS+deffered_model_index]+1,
-					sizeof(cl_weaponmodels[num_cl_weaponmodels]) - 1);
-				num_cl_weaponmodels++;
-			}
-		} 
-		else
+		if (cl.configstrings[CS_MODELS+deffered_model_index][0] != '#')
 		{
 			cl.model_draw[deffered_model_index] = re.RegisterModel (cl.configstrings[CS_MODELS+deffered_model_index]);
 			if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '*')
 				cl.model_clip[deffered_model_index] = CM_InlineModel (cl.configstrings[CS_MODELS+deffered_model_index]);
 			else
 				cl.model_clip[deffered_model_index] = NULL;
-
 		}
 
 		break;

@@ -772,12 +772,24 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		s = t+1;
 	}
 
+	//r1ch: check sanity of paths: only allow printable data
+	t = s;
+	while (*t)
+	{
+		if (!isprint (*t))
+		{
+			*s = 0;
+			break;
+		}
+		t++;
+	}
+
 	if (*s == 0)
 	{
-		Com_sprintf (model_filename, sizeof(model_filename), "players/male/tris.md2");
-		Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/male/weapon.md2");
-		Com_sprintf (skin_filename, sizeof(skin_filename), "players/male/grunt.pcx");
-		Com_sprintf (ci->iconname, sizeof(ci->iconname), "/players/male/grunt_i.pcx");
+		strcpy (model_filename, "players/male/tris.md2");
+		strcpy (weapon_filename, "players/male/weapon.md2");
+		strcpy (skin_filename, "players/male/grunt.pcx");
+		strcpy (ci->iconname, "/players/male/grunt_i.pcx");
 		ci->model = re.RegisterModel (model_filename);
 		memset(ci->weaponmodel, 0, sizeof(ci->weaponmodel));
 		ci->weaponmodel[0] = re.RegisterModel (weapon_filename);
@@ -925,13 +937,17 @@ void CL_ParseConfigString (void)
 
 	i = MSG_ReadShort (&net_message);
 	if (i < 0 || i >= MAX_CONFIGSTRINGS)
-		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring > MAX_CONFIGSTRINGS");
+		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring >= MAX_CONFIGSTRINGS");
 	s = MSG_ReadString(&net_message);
 
 	strncpy (olds, cl.configstrings[i], sizeof(olds));
 	olds[sizeof(olds) - 1] = 0;
 
-	strcpy (cl.configstrings[i], s);
+	//r1ch: only allow statusbar to overflow
+	if (i >= CS_STATUSBAR && i < CS_AIRACCEL)
+		strncpy (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (CS_AIRACCEL - i))-1);
+	else
+		strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
 
 	//Com_Printf ("configstring %i: %s\n", i, s);
 
@@ -958,13 +974,13 @@ void CL_ParseConfigString (void)
 		}
 
 		//r1: load map whilst connecting to save a bit of time
-		if (i == CS_MODELS + 1)
+		/*if (i == CS_MODELS + 1)
 		{
 			CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &i);
 			if (i && i != atoi(cl.configstrings[CS_MAPCHECKSUM]))
 				Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x\n",
 					i, atoi(cl.configstrings[CS_MAPCHECKSUM]));
-		}
+		}*/
 	}
 	else if (i >= CS_SOUNDS && i < CS_SOUNDS+MAX_MODELS)
 	{
