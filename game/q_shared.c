@@ -1399,6 +1399,7 @@ qboolean Info_CheckBytes (char *s)
 	{
 		if (*s < 32 || *s >= 127)
 			return false;
+		s++;
 	}
 
 	return true;

@@ -145,7 +145,7 @@ Sys_Milliseconds
 ================
 */
 int	curtime;
-int oldcurtime;
+//int oldcurtime;
 #ifndef BUILDING_REF_GL
 int Sys_Milliseconds (void)
 {
@@ -156,14 +156,15 @@ int Sys_Milliseconds (void)
 	{	// let base retain 16 bits of effectively random data
 		base = timeGetTime() & 0xffff0000;
 		initialized = true;
-		oldcurtime = 0;
+//		oldcurtime = 0;
 	}
+	
 	curtime = timeGetTime() - base;
 
-	if (curtime < oldcurtime)
+	/*if (curtime < oldcurtime)
 		Com_Printf ("Sys_Milliseconds: Uh oh! Timer wrapped!\n");
 
-	oldcurtime = curtime;
+	oldcurtime = curtime;*/
 
 	return curtime;
 }
