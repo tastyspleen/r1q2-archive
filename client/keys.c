@@ -1357,6 +1357,7 @@ void Key_ClearStates (void)
 			Key_Event( i, false, 0 );
 		keydown[i] = 0;
 		key_repeats[i] = 0;
+		key_lastrepeat[i] = 0;
 	}
 }
 

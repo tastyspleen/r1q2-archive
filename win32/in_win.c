@@ -1010,6 +1010,8 @@ void IN_Restart_f (void)
 	mouseactive = false;
 	mouseinitialized = false;
 
+	Key_ClearStates ();
+
 #ifdef JOYSTICK
 	IN_StartupJoystick ();
 #endif
@@ -1066,7 +1068,7 @@ void IN_MouseMove (usercmd_t *cmd)
 	if (!mouseactive)
 		return;
 
-	if (g_pDI)
+	if (g_pMouse)
 	{
 		if (m_directinput->intvalue == 1)
 			IN_ReadBufferedData (cmd);
