@@ -94,46 +94,6 @@ LOOPBACK BUFFERS FOR LOCAL PLAYER
 =============================================================================
 */
 
-qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
-{
-	int		i;
-	loopback_t	*loop;
-
-	loop = &loopbacks[sock];
-
-	if (loop->send - loop->get > MAX_LOOPBACK)
-		loop->get = loop->send - MAX_LOOPBACK;
-
-	if (loop->get >= loop->send)
-		return false;
-
-	i = loop->get & (MAX_LOOPBACK-1);
-	loop->get++;
-
-	memcpy (net_message->data, loop->msgs[i].data, loop->msgs[i].datalen);
-	net_message->cursize = loop->msgs[i].datalen;
-	memset (net_from, 0, sizeof(*net_from));
-	net_from->type = NA_LOOPBACK;
-	net_from->ip[0] = 127;
-	net_from->ip[3] = 1;
-	return true;
-
-}
-
-
-void NET_SendLoopPacket (netsrc_t sock, int length, void *data)
-{
-	int		i;
-	loopback_t	*loop;
-
-	loop = &loopbacks[sock^1];
-
-	i = loop->send & (MAX_LOOPBACK-1);
-	loop->send++;
-
-	memcpy (loop->msgs[i].data, data, length);
-	loop->msgs[i].datalen = length;
-}
 
 //=============================================================================
 
@@ -144,8 +104,10 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 	int		fromlen;
 	int		err;
 
+#ifndef DEDICATED_ONLY
 	if (NET_GetLoopPacket (sock, net_from, net_message))
 		return 1;
+#endif
 
 	if (!ip_sockets[sock])
 		return 0;
@@ -323,11 +285,13 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 		if (!net_socket)
 			return 0;
 	}
+#ifndef DEDICATED_ONLY
 	else if ( to->type == NA_LOOPBACK )
 	{
 		NET_SendLoopPacket (sock, length, data);
 		return 0;
 	}
+#endif
 	else if (to->type == NA_BROADCAST)
 	{
 		net_socket = ip_sockets[sock];
@@ -414,7 +378,7 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 	{
 		err = WSAGetLastError();
 		if (err != WSAEAFNOSUPPORT)
-			Com_Printf ("WARNING: UDP_OpenSocket: socket: %s", NET_ErrorString());
+			Com_Printf ("WARNING: UDP_OpenSocket: socket: %s\n", NET_ErrorString());
 		return 0;
 	}
 
@@ -435,7 +399,7 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 	// make it non-blocking
 	if (ioctlsocket (newsocket, FIONBIO, (u_long *)&_true) == -1)
 	{
-		Com_Printf ("WARNING: UDP_OpenSocket: ioctl FIONBIO: %s\n", NET_ErrorString());
+		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't make non-blocking: %s", NET_ErrorString());
 		return 0;
 	}
 
@@ -444,16 +408,14 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 	// make it broadcast capable
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
-		Com_Printf ("WARNING: UDP_OpenSocket: setsockopt SO_BROADCAST: %s\n", NET_ErrorString());
+		Com_Error (ERR_DROP, "UDP_OpenSocket: setsockopt SO_BROADCAST: %s", NET_ErrorString());
 		return 0;
 	}
 
 	//r1: set 'interactive' ToS
 	i = 0x10;
 	if (setsockopt(newsocket, IPPROTO_IP, IP_TOS, (char *)&i, sizeof(i)) == -1)
-	{
 		Com_Printf ("WARNING: UDP_OpenSocket: setsockopt IP_TOS: %s\n", NET_ErrorString());
-	}
 
 	if (!net_interface || !net_interface[0] || !stricmp(net_interface, "localhost"))
 		address.sin_addr.s_addr = INADDR_ANY;
@@ -469,7 +431,7 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
-		Com_Printf ("WARNING: UDP_OpenSocket: bind: %s\n", NET_ErrorString());
+		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't bind to port %d: %s", port, NET_ErrorString());
 		closesocket (newsocket);
 		return 0;
 	}

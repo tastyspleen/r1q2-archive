@@ -117,8 +117,10 @@ void SZ_Print (sizebuf_t *buf, char *data);	// strcats onto the sizebuf
 
 //============================================================================
 
-struct usercmd_s;
-struct entity_state_s;
+//struct usercmd_s;
+//struct entity_state_s;
+
+extern entity_state_t null_entity_state;
 
 void MSG_WriteChar (sizebuf_t *sb, int c);
 void MSG_BeginWriteByte (sizebuf_t *sb, int c);
@@ -177,9 +179,10 @@ void COM_AddParm (char *parm);
 void COM_Init (void);
 void COM_InitArgv (int argc, char **argv);
 
-char *CopyString (char *in);
+char *CopyString (char *in, short tag);
 
 char *StripHighBits (char *string, int highbits);
+char *MakePrintable (unsigned char *s);
 
 //============================================================================
 
@@ -848,8 +851,9 @@ extern	int		time_after_ref;
 
 typedef struct tagmalloc_tag_s
 {
-	short	value;
-	char	*name;
+	short		value;
+	char		*name;
+	unsigned int allocs;
 } tagmalloc_tag_t;
 
 //r1: tagmalloc defines
@@ -860,7 +864,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CMDTOKEN,
 	TAGMALLOC_CMD,
 	TAGMALLOC_LOADMAP,
-	TAGMALLOC_COPYSTRING,
+	TAGMALLOC_ALIAS,
 	TAGMALLOC_CVAR,
 	TAGMALLOC_FSCACHE,
 	TAGMALLOC_FSLOADFILE,
@@ -877,7 +881,6 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CLIENT_SOUNDCACHE,
 	TAGMALLOC_CLIENT_DLL,
 	TAGMALLOC_CLIENT_LOC,
-	TAGMALLOC_X86_SHIT,
 	TAGMALLOC_BLACKHOLE,
 	TAGMALLOC_CVARBANS,
 	TAGMALLOC_MSG_QUEUE,

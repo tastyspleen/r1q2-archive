@@ -928,7 +928,6 @@ void SV_RecordDemoMessage (void)
 {
 	int			e;
 	edict_t		*ent;
-	entity_state_t	nostate;
 	sizebuf_t	buf;
 	byte		buf_data[32768];
 	int			len;
@@ -936,7 +935,6 @@ void SV_RecordDemoMessage (void)
 	if (!svs.demofile)
 		return;
 
-	memset (&nostate, 0, sizeof(nostate));
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
 
 	// write a frame message that doesn't contain a player_state_t
@@ -954,7 +952,7 @@ void SV_RecordDemoMessage (void)
 			ent->s.number && 
 			(ent->s.modelindex || ent->s.effects || ent->s.sound || ent->s.event) && 
 			!(ent->svflags & SVF_NOCLIENT))
-			MSG_WriteDeltaEntity (NULL, &nostate, &ent->s, &buf, false, true, false, ENHANCED_PROTOCOL_VERSION);
+			MSG_WriteDeltaEntity (NULL, &null_entity_state, &ent->s, &buf, false, true, false, ENHANCED_PROTOCOL_VERSION);
 
 		e++;
 		ent = EDICT_NUM(e);

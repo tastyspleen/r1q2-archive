@@ -757,7 +757,7 @@ static void SV_Savegame_f (void)
 	Com_Printf ("Done.\n");
 }
 
-static qboolean RemoveCvarBan (int index)
+/*static qboolean RemoveCvarBan (int index)
 {
 	cvarban_t *temp, *last;
 	int i;
@@ -789,7 +789,7 @@ static qboolean RemoveCvarBan (int index)
 	Z_Free (temp);
 
 	return true;
-}
+}*/
 
 static void SV_CheckCvarBans_f (void)
 {
@@ -801,12 +801,16 @@ static void SV_CheckCvarBans_f (void)
 		return;
 	}
 
-	//SZ_Clear (&sv.multicast);
-
-	while (bans->next) {
+	while (bans->next)
+	{
 		bans = bans->next;
-		MSG_BeginWriteByte (&sv.multicast, svc_stufftext);
-		MSG_WriteString (&sv.multicast, va("cmd .c %s \"$%s\"\n", bans->cvarname, bans->cvarname));
+
+		//version is implicit
+		if (Q_stricmp (bans->cvarname, "version"))
+		{
+			MSG_BeginWriteByte (&sv.multicast, svc_stufftext);
+			MSG_WriteString (&sv.multicast, va("cmd .c %s $%s\n", bans->cvarname, bans->cvarname));
+		}
 	}
 
 	SV_Multicast (vec3_origin, MULTICAST_ALL_R);
@@ -816,14 +820,7 @@ static void SV_CheckCvarBans_f (void)
 static void SV_DelCvarBan_f (void)
 {
 	char *match;
-	cvarban_t *bans = &cvarbans;
-	int index = 1;
-
-	if (!svs.initialized)
-	{
-		Com_Printf ("No server running.\n");
-		return;
-	}
+	cvarban_t *bans = &cvarbans, *last = &cvarbans;
 
 	if (Cmd_Argc() < 2)
 	{
@@ -835,13 +832,29 @@ static void SV_DelCvarBan_f (void)
 
 	match = Cmd_Argv(1);
 
-	while (bans->next) {
+	while (bans->next)
+	{
 		bans = bans->next;
-		if (!Q_stricmp (match, bans->cvarname)) {
-			Com_Printf ("cvarban '%s' removed.\n", bans->cvarname);
-			RemoveCvarBan (index);
+		if (!Q_stricmp (match, bans->cvarname))
+		{
+			while (bans->match.next)
+			{
+				banmatch_t *old;
+				old = bans->match.next;
+				bans->match.next = old->next;
+				Z_Free (old->matchvalue);
+				Z_Free (old->message);
+				Z_Free (old);
+			}
+		
+			last->next = bans->next;
+			Z_Free (bans->cvarname);
+			Z_Free (bans);
+
+			Com_Printf ("cvarban '%s' removed.\n", match);
 			return;
 		}
+		last = bans;
 	}
 
 	Com_Printf ("%s not found.\n", match);
@@ -849,9 +862,10 @@ static void SV_DelCvarBan_f (void)
 
 static void SV_AddCvarBan_f (void)
 {
+	banmatch_t *match = NULL;
 	cvarban_t *bans = &cvarbans;
-	int blockmethod, i;
-	char *cvar, *blocktype, *iffound, message[1024], *x;
+	int blockmethod;
+	char *cvar, *blocktype, *iffound,*x;
 	
 	if (Cmd_Argc() < 5)
 	{
@@ -860,7 +874,9 @@ static void SV_AddCvarBan_f (void)
 					"Syntax : addcvarban <cvarname> <(=|<|>|!)numvalue|string|*> <KICK|BLACKHOLE> <message>\n"
 					"Example: addcvarban gl_modulate >2 KICK Use a lower gl_modulate\n"
 					"Example: addcvarban frkq2_bot * BLACKHOLE That client is not allowed\n"
-					"Example: addcvarban vid_ref sw KICK Software mode is not allowed\n");
+					"Example: addcvarban vid_ref sw KICK Software mode is not allowed\n"
+					"Example: addcvarban version \"Q2 3.20 PPC\" KICK That version is not allowed\n"
+					"WARNING: If the match string requires quotes it can not be added via rcon.\n");
 		return;
 	}
 
@@ -868,21 +884,13 @@ static void SV_AddCvarBan_f (void)
 	blocktype = Cmd_Argv(2);
 	iffound = Cmd_Argv(3);
 
-	message[0] = 0;
-
 	x = blocktype;
 	if (*x == '>' || *x == '<' || *x == '=') {
 		x++;
 		if (!isdigit (*x)) {
-			Com_Printf ("Error: digit must follow modifier %s\n", blocktype);
+			Com_Printf ("Error: digit must follow modifier '%c'\n", *blocktype);
 			return;
 		}
-	}
-
-	for (i = 4; i < Cmd_Argc(); i++) {
-		strcat (message, Cmd_Argv(i));
-		if (i != Cmd_Argc()-1)
-			strcat (message, " ");
 	}
 
 	if (!Q_stricmp (iffound, "kick")) {
@@ -895,14 +903,34 @@ static void SV_AddCvarBan_f (void)
 	}
 
 	while (bans->next)
+	{
 		bans = bans->next;
+		if (!Q_stricmp (bans->cvarname, cvar))
+		{
+			match = &bans->match;
+			while (match->next)
+			{
+				match = match->next;
+			}
+			break;
+		}
+	}
 
-	bans->next = Z_TagMalloc (sizeof(cvarban_t), TAGMALLOC_CVARBANS);
-	bans = bans->next;
-	bans->cvarname = CopyString (cvar);
-	bans->matchvalue = CopyString (blocktype);
-	bans->message = CopyString (message);
-	bans->blockmethod = blockmethod;
+	if (!match)
+	{
+		bans->next = Z_TagMalloc (sizeof(cvarban_t), TAGMALLOC_CVARBANS);
+		bans = bans->next;
+		bans->cvarname = CopyString (cvar, TAGMALLOC_CVARBANS);
+
+		match = &bans->match;
+	}
+
+	match->next = Z_TagMalloc (sizeof(banmatch_t), TAGMALLOC_CVARBANS);
+	match = match->next;
+
+	match->matchvalue = CopyString (blocktype, TAGMALLOC_CVARBANS);
+	match->message = CopyString (Cmd_Args2 (4), TAGMALLOC_CVARBANS);
+	match->blockmethod = blockmethod;
 
 	Com_Printf ("cvarban added.\n");
 }
@@ -949,7 +977,7 @@ static void SV_BanCommand_f (void)
 
 	if (Cmd_Argc() < 2)
 	{
-		Com_Printf ("Purpose: Prevents a client from executing a given command.\n"
+		Com_Printf ("Purpose: Prevents any client from executing a given command.\n"
 					"Syntax : bancommand <commandname>\n"
 					"Example: bancommand god\n");
 		return;
@@ -971,7 +999,7 @@ static void SV_BanCommand_f (void)
 	x->next = Z_TagMalloc (sizeof(*x), TAGMALLOC_CMDBANS);
 	x = x->next;
 
-	x->name = CopyString (Cmd_Argv(1));
+	x->name = CopyString (Cmd_Argv(1), TAGMALLOC_CMDBANS);
 
 	Com_Printf ("Command '%s' is blocked from use.\n", x->name);
 }
@@ -982,7 +1010,7 @@ static void SV_UnBanCommand_f (void)
 
 	if (Cmd_Argc() < 2)
 	{
-		Com_Printf ("Purpose: Allows a client to execute a previously banned command.\n"
+		Com_Printf ("Purpose: Allows any client to execute a previously banned command.\n"
 					"Syntax : unbancommand <commandname>\n"
 					"Example: unbancommand god\n");
 		return;

@@ -542,7 +542,7 @@ void Cmd_Alias_f (void)
 
 	if (!a)
 	{
-		a = Z_TagMalloc (sizeof(cmdalias_t), TAGMALLOC_CMDBUFF);
+		a = Z_TagMalloc (sizeof(cmdalias_t), TAGMALLOC_ALIAS);
 		a->next = cmd_alias;
 		cmd_alias = a;
 	}
@@ -559,7 +559,7 @@ void Cmd_Alias_f (void)
 	}
 	strcat (cmd, "\n");
 	
-	a->value = CopyString (cmd);
+	a->value = CopyString (cmd, TAGMALLOC_ALIAS);
 }
 
 /*
@@ -574,6 +574,7 @@ static	int			cmd_argc;
 static	char		*cmd_argv[MAX_STRING_TOKENS];
 static	char		*cmd_null_string = "";
 static	char		cmd_args[MAX_STRING_CHARS];
+static	char		cmd_buffer[MAX_STRING_CHARS*2];
 
 cmd_function_t	*cmd_functions;		// possible commands to execute
 
@@ -649,9 +650,6 @@ char *Cmd_MacroExpandString (char *text)
 	char	temporary[MAX_STRING_CHARS];
 	char	*token, *start;
 
-	if (!strstr(text, "$"))
-		return text;
-
 	inquote = false;
 	scan = text;
 
@@ -719,22 +717,29 @@ Cmd_TokenizeString
 
 Parses the given string into command line tokens.
 $Cvars will be expanded unless they are in a quoted token
+
+R1CH: Modified this to avoid use of Z_Alloc/Z_Free. Using
+dynamic memory functions for maybe 4-5 bytes at a time is
+a waste...
 ============
 */
 void Cmd_TokenizeString (char *text, qboolean macroExpand)
 {
+	int		cmd_pointer;
 	int		i;
 	char	*com_token;
 
 // clear the args from the last string
 	for (i=0 ; i<cmd_argc ; i++)
-		Z_Free (cmd_argv[i]);
+		cmd_argv[i] = NULL;
+		//Z_Free (cmd_argv[i]);
 		
 	cmd_argc = 0;
 	cmd_args[0] = 0;
-	
+	cmd_pointer = 0;
+
 	// macro expand the text
-	if (macroExpand)
+	if (macroExpand && strstr(text, "$"))
 		text = Cmd_MacroExpandString (text);
 
 	if (!text)
@@ -742,7 +747,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 
 	for (;;)
 	{
-// skip whitespace up to a /n
+		// skip whitespace up to a /n
 		while (*text && *text <= ' ' && *text != '\n')
 		{
 			text++;
@@ -784,9 +789,19 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 
 		if (cmd_argc < MAX_STRING_TOKENS)
 		{
-			cmd_argv[cmd_argc] = Z_TagMalloc (strlen(com_token)+1, TAGMALLOC_CMDTOKEN);
-			strcpy (cmd_argv[cmd_argc], com_token);
+			int len;
+			//cmd_argv[cmd_argc] = Z_TagMalloc (strlen(com_token)+1, TAGMALLOC_CMDTOKEN);
+			//strcpy (cmd_argv[cmd_argc], com_token);
+			len = strlen(com_token);
+			if (len+1 + cmd_pointer >= MAX_STRING_CHARS*2)
+			{
+				Com_Printf ("Cmd_TokenizeString: overflow\n");
+				return;
+			}
+			strcpy (cmd_buffer + cmd_pointer, com_token);
+			cmd_argv[cmd_argc] = cmd_buffer + cmd_pointer;
 			cmd_argc++;
+			cmd_pointer += len+1;
 		}
 	}
 	

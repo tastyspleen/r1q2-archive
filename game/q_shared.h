@@ -27,11 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <ctype.h>
 
 #ifndef NO_ZLIB
-/*#ifdef _WIN32
-#define ZEXPORT __fastcall
-#endif*/
-
-#include "../lib/zlib.h"
+#include <zlib.h>
 #endif
 
 //#define ENHANCED_SERVER 1
@@ -40,17 +36,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef _WIN32
 // unknown pragmas are SUPPOSED to be ignored, but....
-#pragma warning(disable : 4244)     // MIPS
+//#pragma warning(disable : 4244)     // MIPS
 //#pragma warning(disable : 4136)     // X86
 //#pragma warning(disable : 4051)     // ALPHA
 
+#pragma warning(disable : 4244)		// truncation
 #pragma warning(disable : 4018)     // signed/unsigned mismatch
 #pragma warning(disable : 4305)		// truncation from const double to float
 
 #pragma warning(disable : 4096)		// __cdecl must be used with '...'*/
-#pragma warning(1 : 4189)
 
-#pragma intrinsic(abs, fabs, memset, memcmp, memcpy, strcmp, strlen, strcat)
+#pragma warning(2 : 4189 4210 4389)	// useful warnings
+
+#if _MSC_VER >= 1400
+#pragma warning(disable: 4996)		// deprecated functions
+#endif
 
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -312,6 +312,7 @@ char *Info_ValueForKey (char *s, char *key);
 void Info_RemoveKey (char *s, char *key);
 void Info_SetValueForKey (char *s, char *key, char *value);
 qboolean Info_Validate (char *s);
+qboolean Info_CheckBytes (char *s);
 
 void seedMT(unsigned long seed);
 unsigned long randomMT (void);

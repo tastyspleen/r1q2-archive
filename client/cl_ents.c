@@ -491,9 +491,6 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 	entity_state_t	*oldstate;
 	int			oldindex, oldnum;
 
-	//entity_state_t	nullstate;
-	//memset (&nullstate, 0, sizeof(nullstate));
-
 	newframe->parse_entities = cl.parse_entities;
 	newframe->num_entities = 0;
 
@@ -1376,26 +1373,35 @@ void CL_AddPacketEntities (frame_t *frame)
 			}
 			else if (effects & EF_BFG)
 			{
-				static int bfg_lightramp[6] = {300, 400, 600, 300, 150, 75};
+				float j;
+				static float bfg_lightramp[6] = {300.0, 400.0, 600.0, 300.0, 150.0, 75.0};
 
 				if (effects & EF_ANIM_ALLFAST)
 				{
 					CL_BfgParticles (&ent);
-					i = 200;
+					j = 200.0;
 				}
 				else
 				{
-					i = bfg_lightramp[s1->frame];
+					//r1: protect against access violation
+					unsigned int frameindex;
+
+					frameindex = s1->frame;
+					if (frameindex > 6)
+						frameindex = 6;
+
+					j = bfg_lightramp[frameindex];
 				}
-				V_AddLight (ent.origin, i, 0, 1, 0);
+				V_AddLight (ent.origin, j, 0, 1, 0);
 			}
 			// RAFAEL
 			else if (effects & EF_TRAP)
 			{
+				float j;
 				ent.origin[2] += 32;
 				CL_TrapParticles (&ent);
-				i = (randomMT()%100) + 100;
-				V_AddLight (ent.origin, i, 1, 0.8, 0.1);
+				j = (randomMT()%100) + 100;
+				V_AddLight (ent.origin, j, 1, 0.8, 0.1);
 			}
 			else if (effects & EF_FLAG1)
 			{

@@ -114,6 +114,10 @@ cvar_t	*sv_reserved_password;
 cvar_t	*sv_allow_map;
 cvar_t	*sv_allow_unconnected_cmds;
 
+cvar_t	*sv_strict_userinfo_check;
+
+cvar_t	*sv_calcpings_method;
+
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
 
@@ -640,22 +644,36 @@ void SVC_DirectConnect (void)
 	}
 
 	//qport = atoi(Cmd_Argv(2));
-
 	strncpy (userinfo, Cmd_Argv(4), sizeof(userinfo)-1);
 
-	//r1: check it is not overflowed
-	if (strlen(userinfo) >= sizeof(userinfo)-1)
+	//r1: check it is not overflowed, save enough bytes for /ip/111.222.333.444
+	if (strlen(userinfo) + 19 >= sizeof(userinfo)-1)
 	{
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nUserinfo string length exceeded.\n");
 		return;
 	}
 
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
-	if (strstr(userinfo, "\x7f"))
+	if (strstr(userinfo, "\xFF"))
 	{
-		Blackhole (&net_from, "MSG_ReadString exploit");
+		char *ptr;
+		ptr = strstr (userinfo, "\xFF");
+		ptr -= 8;
+		if (ptr < userinfo)
+			ptr = userinfo;
+		Blackhole (&net_from, "0xFF in userinfo (%.32s)", MakePrintable(ptr));
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
 		return;
+	}
+
+	if (sv_strict_userinfo_check->value)
+	{
+		if (!Info_CheckBytes (userinfo))
+		{
+			Com_Printf ("Warning, Info_CheckBytes failed for %s!\n", NET_AdrToString (adr));
+			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nUserinfo contains illegal bytes.\n");
+			return;
+		}
 	}
 
 	//r1ch: allow filtering of stupid "fun" names etc.
@@ -1123,6 +1141,10 @@ void SV_CalcPings (void)
 	int			i, j;
 	client_t	*cl;
 	int			total, count;
+	int			best;
+	int			method;
+
+	method = sv_calcpings_method->value;
 
 	for (i=0 ; i<maxclients->value ; i++)
 	{
@@ -1130,38 +1152,46 @@ void SV_CalcPings (void)
 		if (cl->state != cs_spawned )
 			continue;
 
-#if 0
-		if (cl->lastframe > 0)
-			cl->frame_latency[sv.framenum&(LATENCY_COUNTS-1)] = sv.framenum - cl->lastframe + 1;
-		else
-			cl->frame_latency[sv.framenum&(LATENCY_COUNTS-1)] = 0;
-#endif
-
-		total = 0;
-		count = 0;
-		for (j=0 ; j<LATENCY_COUNTS ; j++)
+		if (method == 1)
 		{
-			if (cl->frame_latency[j] > 0)
+			total = 0;
+			count = 0;
+			for (j=0 ; j<LATENCY_COUNTS ; j++)
 			{
-				count++;
-				total += cl->frame_latency[j];
+				if (cl->frame_latency[j] > 0)
+				{
+					count++;
+					total += cl->frame_latency[j];
+				}
 			}
+			if (!count)
+				cl->ping = 0;
+			else
+				cl->ping = total / count;
 		}
-		if (!count)
-			cl->ping = 0;
+		else if (method == 2)
+		{
+			best = 9999;
+			for (j=0 ; j<LATENCY_COUNTS ; j++)
+			{
+				if (cl->frame_latency[j] > 0 && cl->frame_latency[j] < best)
+				{
+					best = cl->frame_latency[j];
+				}
+			}
+
+			cl->ping = best;
+		}
 		else
-#if 0
-			cl->ping = total*100/count - 100;
-#else
-			cl->ping = total / count;
-#endif
+		{
+			cl->ping = 0;
+		}
 
 		// let the game dll know about the ping
-
 #ifdef ENHANCED_SERVER
-			((struct gclient_new_s *)(cl->edict->client))->ping = cl->ping;
+		((struct gclient_new_s *)(cl->edict->client))->ping = cl->ping;
 #else
-			((struct gclient_old_s *)(cl->edict->client))->ping = cl->ping;
+		((struct gclient_old_s *)(cl->edict->client))->ping = cl->ping;
 #endif
 	}
 }
@@ -1465,12 +1495,9 @@ void SV_Frame (int msec)
 #endif
 
 	// if server is not active, do nothing
-	if (!svs.initialized) {
-		//r1: update server console
-/*#ifdef WIN32
-		if (dedicated->value)
-			Sys_UpdateConsoleBuffer();
-#endif*/
+	if (!svs.initialized)
+	{
+		Sys_Sleep (1);
 		return;
 	}
 
@@ -1623,11 +1650,25 @@ void SV_UserinfoChanged (client_t *cl)
 	int		i;
 
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
-	if (strstr(cl->userinfo, "\x7F") || strstr (cl->userinfo, "\xFF"))
+	if (strstr (cl->userinfo, "\xFF"))
 	{
-		Blackhole (&cl->netchan.remote_address, "MSG_ReadString exploit");
+		char *ptr;
+		ptr = strstr (cl->userinfo, "\xFF");
+		ptr -= 8;
+		if (ptr < cl->userinfo)
+			ptr = cl->userinfo;
+		Blackhole (&cl->netchan.remote_address, "0xFF in userinfo (%.32s)", MakePrintable (ptr));
 		SV_KickClient (cl, "illegal userinfo", NULL);
 		return;
+	}
+
+	if (sv_strict_userinfo_check->value)
+	{
+		if (!Info_CheckBytes (cl->userinfo))
+		{
+			SV_KickClient (cl, "illegal userinfo", "Userinfo contains illegal bytes.\n");
+			return;
+		}
 	}
 
 	//r1ch: allow filtering of stupid "fun" names etc.
@@ -1646,8 +1687,7 @@ void SV_UserinfoChanged (client_t *cl)
 		else
 		{
 			Com_DPrintf ("dropping %s for malformed userinfo (%s)\n", cl->name, cl->userinfo);
-			SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: bad userinfo)\n", cl->name);
-			SV_DropClient (cl);
+			SV_KickClient (cl, "bad userinfo", NULL);
 		}
 	}
 
@@ -1665,16 +1705,14 @@ void SV_UserinfoChanged (client_t *cl)
 			else
 			{
 				Com_DPrintf ("dropping %s for malformed userinfo (%s)\n", cl->name, cl->userinfo);
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: bad userinfo)\n", cl->name);
-				SV_DropClient (cl);
+				SV_KickClient (cl, "bad userinfo", NULL);
 			}
 		}
 
 		if (Info_KeyExists (cl->userinfo, "ip"))
 		{
 			Com_DPrintf ("dropping %s for attempted IP spoof (%s)\n", cl->name, cl->userinfo);
-			SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: bad userinfo)\n", cl->name);
-			SV_DropClient (cl);
+			SV_KickClient (cl, "bad userinfo", NULL);
 		}
 	}
 
@@ -1811,7 +1849,7 @@ void SV_Init (void)
 	sv_filter_userinfo = Cvar_Get ("sv_filter_userinfo", "0", 0);
 	sv_filter_stringcmds = Cvar_Get ("sv_filter_stringcmds", "0", 0);
 
-	//r1: enable blocking of clients that attempt to attack server
+	//r1: enable blocking of clients that attempt to attack server/clients
 	sv_blackholes = Cvar_Get ("sv_blackholes", "1", 0);
 
 	//r1: allow clients to use cl_nodelta (increases server bw usage)
@@ -1881,6 +1919,12 @@ void SV_Init (void)
 
 	//r1: allow unconnected clients to execute game commands (default enabled in id!)
 	sv_allow_unconnected_cmds = Cvar_Get ("sv_allow_unconnected_cmds", "0", 0);
+
+	//r1: validate userinfo strings explicitly according to info key rules?
+	sv_strict_userinfo_check = Cvar_Get ("sv_strict_userinfo_check", "0", 0);
+
+	//r1: method to calculate pings. 0 = disable entirely, 1 = average, 2 = min
+	sv_calcpings_method = Cvar_Get ("sv_calcpings_method", "1", 0);
 
 	//r1: init pyroadmin
 	if (pyroadminport->value) {

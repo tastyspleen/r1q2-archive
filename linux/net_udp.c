@@ -24,7 +24,7 @@ unsigned long long net_packets_in;
 unsigned long long net_packets_out;
 
 int			server_port;
-netadr_t	net_local_adr;
+//netadr_t	net_local_adr;
 
 #define	LOOPBACK	0x7f000001
 
@@ -165,43 +165,6 @@ LOOPBACK BUFFERS FOR LOCAL PLAYER
 =============================================================================
 */
 
-qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
-{
-	int		i;
-	loopback_t	*loop;
-
-	loop = &loopbacks[sock];
-
-	if (loop->send - loop->get > MAX_LOOPBACK)
-		loop->get = loop->send - MAX_LOOPBACK;
-
-	if (loop->get >= loop->send)
-		return false;
-
-	i = loop->get & (MAX_LOOPBACK-1);
-	loop->get++;
-
-	memcpy (net_message->data, loop->msgs[i].data, loop->msgs[i].datalen);
-	net_message->cursize = loop->msgs[i].datalen;
-	*net_from = net_local_adr;
-	return true;
-
-}
-
-
-void NET_SendLoopPacket (netsrc_t sock, int length, void *data)
-{
-	int		i;
-	loopback_t	*loop;
-
-	loop = &loopbacks[sock^1];
-
-	i = loop->send & (MAX_LOOPBACK-1);
-	loop->send++;
-
-	memcpy (loop->msgs[i].data, data, length);
-	loop->msgs[i].datalen = length;
-}
 
 //=============================================================================
 
@@ -213,8 +176,10 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 	int		net_socket;
 	int		err;
 
+#ifndef DEDICATED_ONLY
 	if (NET_GetLoopPacket (sock, net_from, net_message))
 		return 1;
+#endif
 
 	net_socket = ip_sockets[sock];
 
@@ -270,11 +235,13 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 		if (!net_socket)
 			return 0;
 	}
+#ifndef DEDICATED_ONLY
 	else if ( to->type == NA_LOOPBACK )
 	{
 		NET_SendLoopPacket (sock, length, data);
 		return 1;
 	}
+#endif
 	else if (to->type == NA_BROADCAST)
 	{
 		net_socket = ip_sockets[sock];
@@ -429,21 +396,21 @@ int NET_Socket (char *net_interface, int port)
 
 	if ((newsocket = socket (PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
 	{
-		Com_Printf ("ERROR: UDP_OpenSocket: socket:", NET_ErrorString());
+		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't make socket: %s", NET_ErrorString());
 		return 0;
 	}
 
 	// make it non-blocking
 	if (ioctl (newsocket, FIONBIO, &_true) == -1)
 	{
-		Com_Printf ("ERROR: UDP_OpenSocket: ioctl FIONBIO:%s\n", NET_ErrorString());
+		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't make non-blocking: %s", NET_ErrorString());
 		return 0;
 	}
 
 	// make it broadcast capable
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
-		Com_Printf ("ERROR: UDP_OpenSocket: setsockopt SO_BROADCAST:%s\n", NET_ErrorString());
+		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't set SO_BROADCAST: %s", NET_ErrorString());
 		return 0;
 	}
 
@@ -461,8 +428,8 @@ int NET_Socket (char *net_interface, int port)
 
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
-		Com_Printf ("ERROR: UDP_OpenSocket: bind: %s\n", NET_ErrorString());
 		close (newsocket);
+		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't bind to port %d: %s", port, NET_ErrorString());
 		return 0;
 	}
 
@@ -500,14 +467,14 @@ void NET_Sleep(int msec)
     struct timeval timeout;
 	fd_set	fdset;
 	extern cvar_t *dedicated;
-	extern qboolean stdin_active;
+	//extern qboolean stdin_active;
 
 	if (!ip_sockets[NS_SERVER] || (dedicated && !dedicated->value))
 		return; // we're not a server, just run full speed
 
 	FD_ZERO(&fdset);
-	if (stdin_active)
-		FD_SET(0, &fdset); // stdin is processed too
+	//if (stdin_active)
+	//	FD_SET(0, &fdset); // stdin is processed too
 	FD_SET(ip_sockets[NS_SERVER], &fdset); // network socket
 	timeout.tv_sec = msec/1000;
 	timeout.tv_usec = (msec%1000)*1000;

@@ -191,8 +191,8 @@ cvar_t * EXPORT Cvar_Get (char *var_name, char *var_value, int flags)
 	}
 
 	var = Z_TagMalloc (sizeof(*var), TAGMALLOC_CVAR);
-	var->name = CopyString (var_name);
-	var->string = CopyString (var_value);
+	var->name = CopyString (var_name, TAGMALLOC_CVAR);
+	var->string = CopyString (var_value, TAGMALLOC_CVAR);
 	var->modified = true;
 	var->changed = NULL;
 	var->value = atof (var->string);
@@ -262,11 +262,11 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 			if (Com_ServerState())
 			{
 				Com_Printf ("%s will be changed for next game.\n", var_name);
-				var->latched_string = CopyString(value);
+				var->latched_string = CopyString(value, TAGMALLOC_CVAR);
 			}
 			else
 			{
-				var->string = CopyString(value);
+				var->string = CopyString(value, TAGMALLOC_CVAR);
 				var->value = atof (var->string);
 				if (!strcmp(var->name, "game"))
 				{
@@ -290,7 +290,7 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 		return var;		// not changed
 
 	old_string = var->string;
-	var->string = CopyString(value);
+	var->string = CopyString(value, TAGMALLOC_CVAR);
 	var->value = atof (var->string);
 
 	var->modified = true;
@@ -348,7 +348,7 @@ cvar_t *Cvar_FullSet (char *var_name, char *value, int flags)
 	
 	Z_Free (var->string);	// free the old value string
 	
-	var->string = CopyString(value);
+	var->string = CopyString(value, TAGMALLOC_CVAR);
 	var->value = atof (var->string);
 	var->flags = flags;
 

@@ -149,3 +149,49 @@ char	*NET_BaseAdrToString (netadr_t *a)
 
 	return s;
 }
+
+
+#ifndef DEDICATED_ONLY
+
+qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
+{
+	int		i;
+	loopback_t	*loop;
+
+	loop = &loopbacks[sock];
+
+	if (loop->send - loop->get > MAX_LOOPBACK)
+		loop->get = loop->send - MAX_LOOPBACK;
+
+	if (loop->get >= loop->send)
+		return false;
+
+	i = loop->get & (MAX_LOOPBACK-1);
+	loop->get++;
+
+	memcpy (net_message->data, loop->msgs[i].data, loop->msgs[i].datalen);
+	net_message->cursize = loop->msgs[i].datalen;
+	memset (net_from, 0, sizeof(*net_from));
+	net_from->type = NA_LOOPBACK;
+	net_from->ip[0] = 127;
+	net_from->ip[3] = 1;
+	return true;
+
+}
+
+
+void NET_SendLoopPacket (netsrc_t sock, int length, void *data)
+{
+	int		i;
+	loopback_t	*loop;
+
+	loop = &loopbacks[sock^1];
+
+	i = loop->send & (MAX_LOOPBACK-1);
+	loop->send++;
+
+	memcpy (loop->msgs[i].data, data, length);
+	loop->msgs[i].datalen = length;
+}
+
+#endif

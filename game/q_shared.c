@@ -1393,6 +1393,17 @@ qboolean Info_Validate (char *s)
 	return true;
 }
 
+qboolean Info_CheckBytes (char *s)
+{
+	while (*s)
+	{
+		if (*s < 32 || *s >= 127)
+			return false;
+	}
+
+	return true;
+}
+
 void Info_SetValueForKey (char *s, char *key, char *value)
 {
 	char	newi[MAX_INFO_STRING], *v;
@@ -1448,7 +1459,7 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 
 //====================================================================
 
-#ifndef _WIN32
+#ifndef WIN32
 int Q_vsnprintf (char *buff, size_t len, char *fmt, va_list va)
 {
 	int ret;

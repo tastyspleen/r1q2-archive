@@ -101,7 +101,7 @@ typedef struct
 	int					senttime;			// for ping calculations
 } client_frame_t;
 
-#define	LATENCY_COUNTS	16
+#define	LATENCY_COUNTS	64
 #define	RATE_MESSAGES	10
 
 //#define MAX_DELTA_SAMPLES 30
@@ -482,15 +482,23 @@ struct blackhole_s
 
 extern blackhole_t blackholes;
 
+typedef struct banmatch_s banmatch_t;
+
+struct banmatch_s
+{
+	banmatch_t	*next;
+	char		*matchvalue;
+	char		*message;
+	int			blockmethod;
+};
+
 typedef struct cvarban_s cvarban_t;
 
 struct cvarban_s
 {
 	cvarban_t	*next;
 	char		*cvarname;
-	char		*matchvalue;
-	char		*message;
-	int			blockmethod;
+	banmatch_t	match;
 };
 
 extern cvarban_t cvarbans;

@@ -25,6 +25,7 @@
 
 #include "../linux/rw_linux.h"
 
+cvar_t *nostdin;
 cvar_t *nostdout;
 
 unsigned	sys_frame_time;
@@ -44,6 +45,11 @@ void Sys_ConsoleOutput (char *string)
 	fputs(string, stdout);
 }
 #endif
+
+void Sys_Sleep (int msec)
+{
+	usleep (msec*1000);
+}
 
 void Sys_SetWindowText (char *dummy)
 {
@@ -97,11 +103,14 @@ void Sys_Quit (void)
 #endif
 	Qcommon_Shutdown ();
     fcntl (0, F_SETFL, fcntl (0, F_GETFL, 0) & ~FNDELAY);
-	_exit(0);
+	exit(0);
 }
 
 void Sys_KillServer (int sig)
 {
+	signal (SIGTERM, SIG_DFL);
+	signal (SIGINT, SIG_DFL);
+
 	Com_Printf ("Got sig %d, shutting down.\n", sig);
 	Cmd_TokenizeString (va("Exiting on signal %d\n", sig), 0);
 	Com_Quit();
@@ -113,6 +122,7 @@ void Sys_Init(void)
 //	Sys_SetFPCW();
 #endif
 	signal (SIGTERM, Sys_KillServer);
+	signal (SIGINT, Sys_KillServer);
 }
 
 void Sys_Error (char *error, ...)
@@ -133,7 +143,7 @@ void Sys_Error (char *error, ...)
     va_end (argptr);
 	fprintf(stderr, "Error: %s\n", string);
 
-	_exit (1);
+	exit (1);
 
 } 
 
@@ -181,7 +191,7 @@ char *Sys_ConsoleInput(void)
 	if (!dedicated || !dedicated->value)
 		return NULL;
 
-	if (!stdin_active)
+	if (!stdin_active || (nostdin && nostdin->value))
 		return NULL;
 
 	FD_ZERO(&fdset);
@@ -330,6 +340,7 @@ int main (int argc, char **argv)
 
 	fcntl(0, F_SETFL, fcntl (0, F_GETFL, 0) | FNDELAY);
 
+	nostdin = Cvar_Get ("nostdin", "0", 0);
 	nostdout = Cvar_Get("nostdout", "0", 0);
 	if (!nostdout->value) {
 		fcntl(0, F_SETFL, fcntl (0, F_GETFL, 0) | FNDELAY);

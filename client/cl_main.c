@@ -210,7 +210,6 @@ void CL_Record_f (void)
 	int		i;
 	int		len;
 	entity_state_t	*ent;
-	entity_state_t	nullstate;
 
 	if (Cmd_Argc() != 2)
 	{
@@ -250,7 +249,7 @@ void CL_Record_f (void)
 	}
 
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-		Com_Printf ("Warning: demos recorded at cl_protocol %d may not be compatible with non-R1Q2 clients!\n", ENHANCED_PROTOCOL_VERSION);
+		Com_Printf ("WARNING: demos recorded at cl_protocol %d may not be compatible with non-R1Q2 clients!\n", ENHANCED_PROTOCOL_VERSION);
 
 	Com_Printf ("recording to %s.\n", name);
 
@@ -295,7 +294,7 @@ void CL_Record_f (void)
 	}
 
 	// baselines
-	memset (&nullstate, 0, sizeof(nullstate));
+
 	for (i=0; i<MAX_EDICTS ; i++)
 	{
 		ent = &cl_entities[i].baseline;
@@ -311,7 +310,7 @@ void CL_Record_f (void)
 		}
 
 		MSG_BeginWriteByte (&buf, svc_spawnbaseline);		
-		MSG_WriteDeltaEntity (NULL, &nullstate, &cl_entities[i].baseline, &buf, true, true, 0, ENHANCED_PROTOCOL_VERSION);
+		MSG_WriteDeltaEntity (NULL, &null_entity_state, &cl_entities[i].baseline, &buf, true, true, 0, ENHANCED_PROTOCOL_VERSION);
 	}
 
 	MSG_BeginWriteByte (&buf, svc_stufftext);
@@ -956,7 +955,7 @@ void CL_ParseStatusMessage (void)
 {
 	char	*s;
 
-	s = MSG_ReadString(&net_message);
+	s = MSG_ReadString (&net_message);
 
 	Com_Printf ("%s\n", s);
 	M_AddToServerList (net_from, s);

@@ -451,8 +451,10 @@ void Key_Console (int key)
 			strtok( cbd, "\n\r\b" );
 
 			i = strlen( cbd );
-			if ( i + key_linepos >= MAXCMDLINE)
-				i = MAXCMDLINE - key_linepos;
+
+			//r1: save byte for null terminator!!
+			if ( i + key_linepos >= MAXCMDLINE - 1)
+				i = MAXCMDLINE - key_linepos - 1;
 
 			if ( i > 0 )
 			{

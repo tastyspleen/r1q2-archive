@@ -674,13 +674,10 @@ void CL_ParseBaseline (void)
 	entity_state_t	*es;
 	unsigned int	bits;
 	int				newnum;
-	entity_state_t	nullstate;
-
-	memset (&nullstate, 0, sizeof(nullstate));
 
 	newnum = CL_ParseEntityBits (&bits);
 	es = &cl_entities[newnum].baseline;
-	CL_ParseDelta (&nullstate, es, newnum, bits);
+	CL_ParseDelta (&null_entity_state, es, newnum, bits);
 }
 
 void CL_ParseZPacket (void)

@@ -948,7 +948,7 @@ void FS_Link_f (void)
 				Z_Free (l);
 				return;
 			}
-			l->to = CopyString (Cmd_Argv(2));
+			l->to = CopyString (Cmd_Argv(2), TAGMALLOC_LINK);
 			return;
 		}
 		prev = &l->next;
@@ -958,9 +958,9 @@ void FS_Link_f (void)
 	l = Z_TagMalloc(sizeof(*l), TAGMALLOC_LINK);
 	l->next = fs_links;
 	fs_links = l;
-	l->from = CopyString(Cmd_Argv(1));
+	l->from = CopyString(Cmd_Argv(1), TAGMALLOC_LINK);
 	l->fromlength = strlen(l->from);
-	l->to = CopyString(Cmd_Argv(2));
+	l->to = CopyString(Cmd_Argv(2), TAGMALLOC_LINK);
 }
 
 /*

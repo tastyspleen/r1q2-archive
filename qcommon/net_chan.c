@@ -318,7 +318,8 @@ modifies net_message so that it points to the packet payload
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 {
 	unsigned	sequence, sequence_ack;
-	unsigned	reliable_ack, reliable_message;
+	int			reliable_ack;
+	unsigned	reliable_message;
 
 	// get sequence numbers		
 	MSG_BeginReading (msg);

@@ -149,7 +149,8 @@ static void SV_New_f (void)
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
 		MSG_WriteString (&sv_client->netchan.message, "cmd .c version $version\n");
 
-		while (bans->next) {
+		while (bans->next)
+		{
 			bans = bans->next;
 			MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
 			MSG_WriteString (&sv_client->netchan.message, va("cmd .c %s $%s\n", bans->cvarname, bans->cvarname));
@@ -354,7 +355,7 @@ void SV_BaselinesMessage (qboolean userCmd)
 {
 	int				startPos;
 	int				start;
-	entity_state_t	nullstate;
+
 	entity_state_t	*base;
 
 	Com_DPrintf ("Baselines() from %s\n", sv_client->name);
@@ -393,8 +394,6 @@ void SV_BaselinesMessage (qboolean userCmd)
 
 	start = startPos;
 
-	memset (&nullstate, 0, sizeof(nullstate));
-
 	// write a packet full of data
 	//r1: use new per-client baselines
 	if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION)
@@ -408,7 +407,7 @@ plainLines:
 			if (base->modelindex || base->sound || base->effects)
 			{
 				MSG_BeginWriteByte (&sv_client->netchan.message, svc_spawnbaseline);
-				MSG_WriteDeltaEntity (NULL, &nullstate, base, &sv_client->netchan.message, true, true, false, sv_client->protocol);
+				MSG_WriteDeltaEntity (NULL, &null_entity_state, base, &sv_client->netchan.message, true, true, false, sv_client->protocol);
 			}
 			start++;
 		}
@@ -445,7 +444,7 @@ plainLines:
 				if (base->modelindex || base->sound || base->effects)
 				{
 					MSG_BeginWriteByte (&zBuff, svc_spawnbaseline);
-					MSG_WriteDeltaEntity (NULL, &nullstate, base, &zBuff, true, true, false, sv_client->protocol);
+					MSG_WriteDeltaEntity (NULL, &null_entity_state, base, &zBuff, true, true, false, sv_client->protocol);
 
 					if (zBuff.cursize >= 150 || z.total_out > (1000 - sv_client->netchan.message.cursize))
 					{
@@ -790,69 +789,111 @@ static void SV_NoGameData_f (void)
 	sv_client->nodata ^= 1;
 }
 
-static void CvarBanDrop (cvarban_t *ban)
+static void CvarBanDrop (cvarban_t *cvar, banmatch_t *ban)
 {
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
 	if (ban->blockmethod == CVARBAN_BLACKHOLE)
-		Blackhole (&sv_client->netchan.remote_address, "cvarban: %s == %s", ban->cvarname, Cmd_Argv(2));
-	Com_Printf ("Dropped client %s, cvarban: %s == %s\n", sv_client->name, ban->cvarname, Cmd_Argv(2));
+		Blackhole (&sv_client->netchan.remote_address, "cvarban: %s == %s", cvar->cvarname, Cmd_Args2(2));
+	Com_Printf ("Dropped client %s, cvarban: %s == %s\n", sv_client->name, cvar->cvarname, Cmd_Args2(2));
 	SV_DropClient (sv_client);
 }
 
 static void SV_CvarResult_f (void)
 {
 	cvarban_t *bans = &cvarbans;
+	banmatch_t *match;
+	char *result = Cmd_Args2(2);
 
 	if (!Q_stricmp (Cmd_Argv(1), "version"))
 	{
-		sv_client->versionString = CopyString (Cmd_Args2(2));
+		sv_client->versionString = CopyString (result, TAGMALLOC_CVARBANS);
 		if (Cvar_VariableValue ("dedicated"))
-			Com_Printf ("%s[%s]: protocol %d: \"%s\"\n", sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), sv_client->protocol, sv_client->versionString);
+			Com_Printf ("%s[%s]: protocol %d: \"%s\"\n", sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), sv_client->protocol, result);
 	}
 
-	while (bans->next) {
+	if (!*result)
+		return;
+
+	while (bans->next)
+	{
 		bans = bans->next;
-		if (!Q_stricmp (bans->cvarname, Cmd_Argv(1))) {
-			char *result = Cmd_Args2(2);
 
-			if (!*result) {
-				return;
-			} 
+		if (!Q_stricmp (bans->cvarname, Cmd_Argv(1)))
+		{
+			match = &bans->match;
 
-			if (*bans->matchvalue == '*') {
-				CvarBanDrop (bans);
-				return;
-			}
+			while (match->next)
+			{
+				match = match->next;
 
-			if (*bans->matchvalue+1) {
-				int intresult, matchint;
-				intresult = atoi(result);
-				matchint = atoi(bans->matchvalue+1);
-
-				if (*bans->matchvalue == '>' && intresult > matchint) {
-					CvarBanDrop (bans);
-					return;
-				} else if (*bans->matchvalue == '<' && intresult < matchint) {
-					CvarBanDrop (bans);
-					return;
-				} else if (*bans->matchvalue == '=' && intresult == matchint) {
-					CvarBanDrop (bans);
+				if (*match->matchvalue == '*')
+				{
+					CvarBanDrop (bans, match);
 					return;
 				}
 
-				if (*bans->matchvalue == '!') {
-					char *matchstring = bans->matchvalue + 1;
-					if (Q_stricmp (matchstring, result)) {
-						CvarBanDrop (bans);
-						return;
+				if (*match->matchvalue+1)
+				{
+					float intresult, matchint;
+					intresult = atof(result);
+					matchint = atof(match->matchvalue+1);
+
+					if (*match->matchvalue == '>')
+					{
+						if (intresult > matchint) {
+							CvarBanDrop (bans, match);
+							return;
+						}
+						else
+						{
+							continue;
+						}					
+					}
+					else if (*match->matchvalue == '<')
+					{
+						if (intresult < matchint)
+						{
+							CvarBanDrop (bans, match);
+							return;
+						}
+						else
+						{
+							continue;
+						}
+					}
+					else if (*match->matchvalue == '=')
+					{
+						if (intresult == matchint)
+						{
+							CvarBanDrop (bans, match);
+							return;
+						}
+						else
+						{
+							continue;
+						}
+					}
+
+					if (*match->matchvalue == '!')
+					{
+						char *matchstring = match->matchvalue + 1;
+						if (Q_stricmp (matchstring, result))
+						{
+							CvarBanDrop (bans, match);
+							return;
+						}
+						else
+						{
+							continue;
+						}
 					}
 				}
-			}
 
-			if (!Q_stricmp (bans->matchvalue, result))
-			{
-				CvarBanDrop (bans);
-				return;
+				if (!Q_stricmp (match->matchvalue, result))
+				{
+					CvarBanDrop (bans, match);
+					return;
+				}
 			}
 
 			return;
@@ -968,30 +1009,36 @@ void SV_ExecuteUserCommand (char *s)
 	bannedcommands_t	*x;
 	
 	//r1: catch attempted server exploits
-	teststring = Cmd_MacroExpandString(s);
-	if (!teststring)
-		return;
-
-	if (strcmp (teststring, s))
+	if (strstr(s, "$"))
 	{
-		Blackhole (&net_from, "attempted command expansion: %s", s);
-		SV_KickClient (sv_client, "attempted server exploit", NULL);
-		return;
+		teststring = Cmd_MacroExpandString(s);
+		if (!teststring)
+			return;
+
+		if (strcmp (teststring, s))
+		{
+			Blackhole (&net_from, "attempted command expansion: %s", s);
+			SV_KickClient (sv_client, "attempted server exploit", NULL);
+			return;
+		}
 	}
 
 	//r1: catch end-of-message exploit
 	if (strstr (s, "\xFF"))
 	{
-		Blackhole (&net_from, "tried to use 0xFF in command packet");
+		char *ptr;
+		ptr = strstr (s, "\xFF");
+		ptr -= 8;
+		if (ptr < s)
+			ptr = s;
+		Blackhole (&net_from, "0xFF in command packet (%.32s)", MakePrintable (ptr));
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
 		return;
 	}
-	else if (strstr (s, "\x7F"))
-	{
-		Blackhole (&net_from, "tried to use 0x7F in command packet");
-		SV_KickClient (sv_client, "attempted command exploit", NULL);
-		return;
-	}
+
+	//r1: allow filter of high bit commands (eg \n\r in say cmds)
+	if (sv_filter_stringcmds->value)
+		strcpy (s, StripHighBits(s, (int)sv_filter_stringcmds->value == 2));
 
 	Cmd_TokenizeString (s, false);
 	sv_player = sv_client->edict;
@@ -1127,8 +1174,6 @@ static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 	ge->ClientThink (cl->edict, cmd);
 }
 
-
-
 #define	MAX_STRINGCMDS	8
 /*
 ===================
@@ -1141,14 +1186,13 @@ void SV_ExecuteClientMessage (client_t *cl)
 {
 	int		c;
 	char	*s;
-
-	usercmd_t	nullcmd;
+	static usercmd_t	nullcmd = {0};
 	usercmd_t	oldest, oldcmd, newcmd;
 	int		net_drop;
 	int		stringCmdCount;
 	//int		checksum, calculatedChecksum;
 	//int		checksumIndex;
-	qboolean	move_issued;
+	qboolean	move_issued, userinfo_updated;
 	int		lastframe;
 
 	sv_client = cl;
@@ -1156,6 +1200,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 	// only allow one move command
 	move_issued = false;
+	userinfo_updated = false;
 	stringCmdCount = 0;
 
 	for (;;)
@@ -1174,7 +1219,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 		{
 		default:
 			Com_Printf ("SV_ExecuteClientMessage: unknown command byte %d\n", c);
-			SV_KickClient (cl, "unknown command byte", va("unknown command byte %d", c));
+			SV_KickClient (cl, "unknown command byte", va("unknown command byte %d\n", c));
 			return;
 					
 			//FIXME: remove this?
@@ -1182,8 +1227,18 @@ void SV_ExecuteClientMessage (client_t *cl)
 			break;
 
 		case clc_userinfo:
-			strncpy (cl->userinfo, MSG_ReadString (&net_message), sizeof(cl->userinfo)-1);
-			SV_UserinfoChanged (cl);
+			//r1: should only be one of these per packet
+			if (!userinfo_updated)
+			{
+				strncpy (cl->userinfo, MSG_ReadString (&net_message), sizeof(cl->userinfo)-1);
+				SV_UserinfoChanged (cl);
+				userinfo_updated = true;
+			}
+			else
+			{
+				Com_Printf ("Warning, received multiple userinfo updates in single packet from %s\n", cl->name);
+				MSG_ReadString (&net_message);
+			}
 			break;
 
 		case clc_move:
@@ -1204,7 +1259,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			else if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
 			{
 				Com_Printf ("SV_ReadClientMessage: bad protocol %d (memory overwritten!)\n", cl->protocol);
-				SV_KickClient (cl, "client state corrupted", "SV_ExecuteClientMessage: client state corrupted");
+				SV_KickClient (cl, "client state corrupted", "SV_ExecuteClientMessage: client state corrupted\n");
 				return;
 			}
 
@@ -1227,15 +1282,21 @@ void SV_ExecuteClientMessage (client_t *cl)
 				cl->nodeltaframes = 0;
 			}
 
-			if (lastframe != cl->lastframe) {
+			if (lastframe != cl->lastframe)
+			{
 				cl->lastframe = lastframe;
-				if (cl->lastframe > 0) {
+				if (cl->lastframe > 0)
+				{
+					//FIXME: should we adjust for FPS latency?
 					cl->frame_latency[cl->lastframe&(LATENCY_COUNTS-1)] = 
 						svs.realtime - cl->frames[cl->lastframe & UPDATE_MASK].senttime;
+
+					//if (cl->fps)
+					//	cl->frame_latency[cl->lastframe&(LATENCY_COUNTS-1)] -= 1000 / (cl->fps * 2);
 				}
 			}
 
-			memset (&nullcmd, 0, sizeof(nullcmd));
+			//memset (&nullcmd, 0, sizeof(nullcmd));
 
 			//r1: check there are actually enough usercmds in the message!
 			MSG_ReadDeltaUsercmd (&net_message, &nullcmd, &oldest);
@@ -1317,21 +1378,22 @@ void SV_ExecuteClientMessage (client_t *cl)
 			cl->lastcmd = newcmd;
 			break;
 
-		case clc_stringcmd:	
+		case clc_stringcmd:
+			c = net_message.readcount;
 			s = MSG_ReadString (&net_message);
 
 			//r1: another security check, client caps at 256+1, but a hacked client could
 			//    send huge strings, if they are then used in a mod which sends a %s cprintf
 			//    to the exe, this could result in a buffer overflow for example.
-			if (strlen(s) > 257)
-			{
-				Com_Printf ("%s: excessive stringcmd discarded.\n", cl->name);
-				break;
-			}
 
-			//r1: allow filter of high bit commands (eg \n\r in say cmds)
-			if (sv_filter_stringcmds->value)
-				strcpy (s, StripHighBits(s, (int)sv_filter_stringcmds->value == 2));
+			// XXX: where is this capped?
+			c = net_message.readcount - c;
+			if (c > 256)
+			{
+				//Com_Printf ("%s: excessive stringcmd discarded.\n", cl->name);
+				//break;
+				Com_Printf ("Warning, %d byte stringcmd from %s: '%.20s...'\n", c, cl->name, s);
+			}
 
 			// malicious users may try using too many string commands
 			if (++stringCmdCount < MAX_STRINGCMDS)

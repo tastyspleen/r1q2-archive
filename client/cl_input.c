@@ -510,7 +510,7 @@ void CL_SendCmd (void)
 	byte		data[128];
 	int			i;
 	usercmd_t	*cmd, *oldcmd;
-	usercmd_t	nullcmd;
+	static usercmd_t	nullcmd = {0};
 	int			checksumIndex;
 
 	if (cls.state == ca_disconnected || cls.state == ca_connecting)
@@ -581,7 +581,7 @@ void CL_SendCmd (void)
 	// if the last packet was dropped, it can be recovered
 	i = (cls.netchan.outgoing_sequence-2) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	memset (&nullcmd, 0, sizeof(nullcmd));
+	//memset (&nullcmd, 0, sizeof(nullcmd));
 	MSG_WriteDeltaUsercmd (&buf, &nullcmd, cmd);
 	oldcmd = cmd;
 

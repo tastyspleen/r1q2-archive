@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_NUM_ARGVS	50
 
+entity_state_t null_entity_state = {0};
 
 int		com_argc;
 char	*com_argv[MAX_NUM_ARGVS+1];
@@ -79,34 +80,33 @@ int		time_after_ref;
 
 tagmalloc_tag_t tagmalloc_tags[] =
 {
-	{TAGMALLOC_NOT_TAGGED, "NOT_TAGGED"},
-	{TAGMALLOC_CMDBUFF, "CMDBUFF"},
-	{TAGMALLOC_CMDTOKEN, "CMDTOKEN"},
-	{TAGMALLOC_CMD, "CMD"},
-	{TAGMALLOC_LOADMAP, "LOADMAP"},
-	{TAGMALLOC_COPYSTRING, "COPYSTRING"},
-	{TAGMALLOC_CVAR, "CVAR"},
-	{TAGMALLOC_FSCACHE, "FSCACHE"},
-	{TAGMALLOC_FSLOADFILE, "FSLOADFILE"},
-	{TAGMALLOC_FSLOADPAK, "FSLOADPAK"},
-	{TAGMALLOC_SEARCHPATH, "SEARCHPATH"},
-	{TAGMALLOC_LINK, "LINK"},
-	{TAGMALLOC_CLIENTS, "CLIENTS"},
-	{TAGMALLOC_CL_ENTS, "CL_ENTS"},
-	{TAGMALLOC_CL_BASELINES, "CL_BASELINES"},
+	{TAGMALLOC_NOT_TAGGED, "NOT_TAGGED", 0},
+	{TAGMALLOC_CMDBUFF, "CMDBUFF", 0},
+	{TAGMALLOC_CMDTOKEN, "CMDTOKEN", 0},
+	{TAGMALLOC_CMD, "CMD", 0},
+	{TAGMALLOC_LOADMAP, "LOADMAP", 0},
+	{TAGMALLOC_ALIAS, "ALIAS", 0},
+	{TAGMALLOC_CVAR, "CVAR", 0},
+	{TAGMALLOC_FSCACHE, "FSCACHE", 0},
+	{TAGMALLOC_FSLOADFILE, "FSLOADFILE", 0},
+	{TAGMALLOC_FSLOADPAK, "FSLOADPAK", 0},
+	{TAGMALLOC_SEARCHPATH, "SEARCHPATH", 0},
+	{TAGMALLOC_LINK, "LINK", 0},
+	{TAGMALLOC_CLIENTS, "CLIENTS", 0},
+	{TAGMALLOC_CL_ENTS, "CL_ENTS", 0},
+	{TAGMALLOC_CL_BASELINES, "CL_BASELINES", 0},
 
-	{TAGMALLOC_CLIENT_DOWNLOAD, "CLIENT_DOWNLOAD"},
-	{TAGMALLOC_CLIENT_KEYBIND, "CLIENT_KEYBIND"},
-	{TAGMALLOC_CLIENT_SFX, "CLIENT_SFX"},
-	{TAGMALLOC_CLIENT_SOUNDCACHE, "CLIENT_SOUNDCACHE"},
-	{TAGMALLOC_CLIENT_DLL, "CLIENT_DLL"},
-	{TAGMALLOC_CLIENT_LOC, "CLIENT_LOC"},
-	{TAGMALLOC_X86_SHIT, "X86_SHIT"},
-	{TAGMALLOC_BLACKHOLE, "BLACKHOLE"},
-	{TAGMALLOC_CVARBANS, "CVARBANS"},
-	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE"},
-	{TAGMALLOC_CMDBANS, "CMDBANS"},
-	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***"}
+	{TAGMALLOC_CLIENT_DOWNLOAD, "CLIENT_DOWNLOAD", 0},
+	{TAGMALLOC_CLIENT_KEYBIND, "CLIENT_KEYBIND", 0},
+	{TAGMALLOC_CLIENT_SFX, "CLIENT_SFX", 0},
+	{TAGMALLOC_CLIENT_SOUNDCACHE, "CLIENT_SOUNDCACHE", 0},
+	{TAGMALLOC_CLIENT_DLL, "CLIENT_DLL", 0},
+	{TAGMALLOC_CLIENT_LOC, "CLIENT_LOC", 0},
+	{TAGMALLOC_BLACKHOLE, "BLACKHOLE", 0},
+	{TAGMALLOC_CVARBANS, "CVARBANS", 0},
+	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE", 0},
+	{TAGMALLOC_CMDBANS, "CMDBANS", 0},
+	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
 };
 
 /*
@@ -122,7 +122,7 @@ static char	*rd_buffer;
 static int	rd_buffersize;
 static void	(*rd_flush)(int target, char *buffer);
 
-void Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush))
+void Com_BeginRedirect (int target, char *buffer, int buffersize, void *flush)
 {
 	if (!target || !buffer || !buffersize || !flush)
 		return;
@@ -1176,11 +1176,11 @@ int	memsearch (byte *start, int count, int search)
 }
 
 
-char *CopyString (char *in)
+char *CopyString (char *in, short tag)
 {
 	char	*out;
 	
-	out = Z_TagMalloc (strlen(in)+1, TAGMALLOC_COPYSTRING);
+	out = Z_TagMalloc (strlen(in)+1, tag);
 	strcpy (out, in);
 	return out;
 }
@@ -1251,10 +1251,10 @@ typedef struct zhead_s
 	int		size;
 } zhead_t;
 
-static zhead_t	z_chain;
+static zhead_t	z_chain = {0};
 static int		z_count = 0;
 static int		z_bytes = 0;
-unsigned long long z_allocs = 0;
+unsigned long	z_allocs = 0;
 
 /*
 ========================
@@ -1326,7 +1326,7 @@ void Z_Stats_f (void)
 		}
 		bigtotal += total;
 		bignum += num;
-		Com_Printf ("%14.14s: %8i bytes %5i blocks\n", tagmalloc_tags[i].name, total, num);
+		Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", tagmalloc_tags[i].name, total, num, tagmalloc_tags[i].allocs);
 	}
 
 	bigtotal += game_size;
@@ -1336,15 +1336,12 @@ void Z_Stats_f (void)
 	bignum += level_count;
 
 	Com_Printf ("%14.14s: %8i bytes %5i blocks\n", "DLL_LEVEL", level_size, level_count);
-	Com_Printf ("%14.14s: %8i bytes %5i blocks\n", "DLL_GAME", game_size, game_count);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks\n\n", "DLL_GAME", game_size, game_count);
+	
+	Com_Printf ("%i miscellaneous allocations\n", z_allocs);
 
-	Com_Printf ("\n  CALCED_TOTAL: %i bytes in %i blocks\n", bigtotal, bignum);
+	Com_Printf ("  CALCED_TOTAL: %i bytes in %i blocks\n", bigtotal, bignum);
 	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", z_bytes, z_count);
-#ifdef WIN32
-	Com_Printf ("%I64u total allocations\n", z_allocs);
-#else
-	Com_Printf ("%llu total allocations\n", z_allocs);
-#endif
 }
 
 /*
@@ -1388,7 +1385,11 @@ void * EXPORT Z_TagMalloc (int size, int tag)
 	memset (z, 0, size);
 
 	z_count++;
-	z_allocs++;
+
+	if (tag < TAGMALLOC_MAX_TAGS)
+		tagmalloc_tags[tag].allocs++;
+	else
+		z_allocs++;
 
 	z_bytes += size;
 
@@ -1933,6 +1934,44 @@ char *StripHighBits (char *string, int highbits)
 	*p = '\0';
 
 	return stripped;
+}
+
+char *MakePrintable (unsigned char *s)
+{
+	int len;
+	static char printable[1024];
+	char tmp[8];
+	char *p;
+
+	p = printable;
+
+	len = 0;
+
+	while (*s)
+	{
+		if (isprint(*s))
+		{
+			*p++ = *s;
+			len++;
+		}
+		else
+		{
+			sprintf (tmp, "%.3d", *s);
+			*p++ = '\\';
+			*p++ = tmp[0];
+			*p++ = tmp[1];
+			*p++ = tmp[2];
+			len += 4;
+		}
+
+		if (len >= sizeof(printable)-5)
+			break;
+
+		s++;
+	}
+
+	printable[len] = 0;
+	return printable;
 }
 
 /*
