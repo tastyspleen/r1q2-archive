@@ -82,6 +82,7 @@ void Con_ToggleConsole_f (void)
 
 		//r1: fucking annoying.
 		//Cbuf_AddText ("d1\n");
+		cls.key_dest = key_console;
 		return;
 	}
 
@@ -91,16 +92,16 @@ void Con_ToggleConsole_f (void)
 	if (cls.key_dest == key_console)
 	{
 		M_ForceMenuOff ();
-		Cvar_Set ("paused", "0");
+		//Cvar_Set ("paused", "0");
 	}
 	else
 	{
 		M_ForceMenuOff ();
 		cls.key_dest = key_console;	
 
-		if (Cvar_VariableValue ("maxclients") == 1 
+		/*if (Cvar_VariableValue ("maxclients") == 1 
 			&& Com_ServerState ())
-			Cvar_Set ("paused", "1");
+			Cvar_Set ("paused", "1");*/
 	}
 }
 
@@ -162,7 +163,7 @@ void Con_Dump_f (void)
 	//r1: consolidate condumps to their own dir
 	Com_sprintf (name, sizeof(name), "%s/condumps/%s.txt", FS_Gamedir(), Cmd_Argv(1));
 
-	if (strstr (Cmd_Argv(1), "..") || strstr (Cmd_Argv(1), "/") || strstr (Cmd_Argv(1), "\\") )
+	if (strstr (Cmd_Argv(1), "..") || strchr (Cmd_Argv(1), '/') || strchr (Cmd_Argv(1), '\\') )
 	{
 		Com_Printf ("Illegal filename.\n");
 		return;
@@ -226,10 +227,11 @@ Con_ClearNotify
 */
 void Con_ClearNotify (void)
 {
-	int		i;
+	/*int		i;
 	
 	for (i=0 ; i<NUM_CON_TIMES ; i++)
-		con.times[i] = 0;
+		con.times[i] = 0;*/
+	memset (&con.times, 0, sizeof (con.times));
 }
 
 						
@@ -255,6 +257,38 @@ void Con_MessageMode2_f (void)
 	cls.key_dest = key_message;
 }
 
+void Con_Resize (int width)
+{
+	char	tbuf[CON_TEXTSIZE];
+	int		i, j, oldwidth, oldtotallines, numlines, numchars;
+
+	oldwidth = con.linewidth;
+	con.linewidth = width;
+	oldtotallines = con.totallines;
+	con.totallines = CON_TEXTSIZE / con.linewidth;
+	numlines = oldtotallines;
+
+	if (con.totallines < numlines)
+		numlines = con.totallines;
+
+	numchars = oldwidth;
+
+	if (con.linewidth < numchars)
+		numchars = con.linewidth;
+
+	memcpy (tbuf, con.text, CON_TEXTSIZE);
+	memset (con.text, ' ', CON_TEXTSIZE);
+
+	for (i=0 ; i<numlines ; i++)
+	{
+		for (j=0 ; j<numchars ; j++)
+		{
+			con.text[(con.totallines - 1 - i) * con.linewidth + j] =
+					tbuf[((con.current - i + oldtotallines) %
+							oldtotallines) * oldwidth + j];
+		}
+	}
+}
 /*
 ================
 Con_CheckResize
@@ -264,8 +298,7 @@ If the line width has changed, reformat the buffer.
 */
 void Con_CheckResize (void)
 {
-	int		i, j, width, oldwidth, oldtotallines, numlines, numchars;
-	char	tbuf[CON_TEXTSIZE];
+	int		width;
 
 	width = (viddef.width >> 3) - 2;
 
@@ -281,33 +314,7 @@ void Con_CheckResize (void)
 	}
 	else
 	{
-		oldwidth = con.linewidth;
-		con.linewidth = width;
-		oldtotallines = con.totallines;
-		con.totallines = CON_TEXTSIZE / con.linewidth;
-		numlines = oldtotallines;
-
-		if (con.totallines < numlines)
-			numlines = con.totallines;
-
-		numchars = oldwidth;
-	
-		if (con.linewidth < numchars)
-			numchars = con.linewidth;
-
-		memcpy (tbuf, con.text, CON_TEXTSIZE);
-		memset (con.text, ' ', CON_TEXTSIZE);
-
-		for (i=0 ; i<numlines ; i++)
-		{
-			for (j=0 ; j<numchars ; j++)
-			{
-				con.text[(con.totallines - 1 - i) * con.linewidth + j] =
-						tbuf[((con.current - i + oldtotallines) %
-							  oldtotallines) * oldwidth + j];
-			}
-		}
-
+		Con_Resize (width);
 		Con_ClearNotify ();
 	}
 
@@ -534,7 +541,7 @@ void Con_DrawNotify (void)
 		if (time == 0)
 			continue;
 		time = cls.realtime - time;
-		if (time > con_notifytime->value*1000)
+		if (time > con_notifytime->intvalue*1000)
 			continue;
 		text = con.text + (i % con.totallines)*con.linewidth;
 		
@@ -587,7 +594,7 @@ Draws the console with the solid background
 */
 void Con_DrawConsole (float frac)
 {
-	int				i, j, x, y, n;
+	int				i, j, x, y, n, len, offset;
 	int				rows;
 	char			*text;
 	int				row;
@@ -608,15 +615,23 @@ void Con_DrawConsole (float frac)
 	SCR_AddDirtyPoint (0,0);
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
+	len = strlen(key_lines[edit_line]);
+
 	i = Com_sprintf (version, sizeof(version), "r1q2 %s", VERSION);
+
+	if (len >= (viddef.width * 0.125) - (i+2))
+		offset = 20;
+	else
+		offset = 0;
+
 	for (x=i-1; x>=0 ; x--)
-		re.DrawChar (viddef.width-2-(i*8)+x*8, lines-12, 128 + version[x] );
+		re.DrawChar (viddef.width-2-(i*8)+x*8, lines-12-offset, 128 + version[x] );
 
 	t = time (NULL);
 	today = localtime(&t);
 	i = strftime (version, sizeof(version), "%H:%M:%S", today);
 	for (x=0 ; x<i ; x++)
-		re.DrawChar (viddef.width-66+x*8, lines-22, 128 + version[x] );
+		re.DrawChar (viddef.width-66+x*8, lines-22-offset, 128 + version[x] );
 
 // draw the text
 	con.vislines = lines;
@@ -670,8 +685,7 @@ void Con_DrawConsole (float frac)
 		i = con.linewidth/3;
 		if (strlen(text) > i) {
 			y = x - i - 11;
-			strncpy(dlbar, text, i);
-			dlbar[i] = 0;
+			Q_strncpy(dlbar, text, i);
 			strcat(dlbar, "...");
 		} else
 			strcpy(dlbar, text);

@@ -270,10 +270,10 @@ void AppActivate(BOOL fActive, BOOL minimize)
 		CDAudio_Activate (false);
 #endif
 
-		if (s_focusfree && s_focusfree->value)
+		if (s_focusfree->intvalue)
 			S_Activate (false);
 
-		if ( win_noalttab->value )
+		if ( win_noalttab->intvalue )
 		{
 			WIN_EnableAltTab();
 		}
@@ -290,10 +290,10 @@ void AppActivate(BOOL fActive, BOOL minimize)
 		CDAudio_Activate (true);
 #endif
 
-		if (s_focusfree && s_focusfree->value)
+		if (s_focusfree->intvalue)
 			S_Activate (true);
 
-		if (win_noalttab->value)
+		if (win_noalttab->intvalue)
 			WIN_DisableAltTab();
 	}
 }
@@ -324,7 +324,7 @@ LONG WINAPI MainWndProc (
 	{
 		if ( ( ( int ) wParam ) > 0 )
 		{
-			if (cls.state < ca_active) {
+			if (cls.key_dest == key_console) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGUP, true, sys_msg_time );
@@ -337,7 +337,7 @@ LONG WINAPI MainWndProc (
 		}
 		else
 		{
-			if (cls.state < ca_active) {
+			if (cls.key_dest == key_console) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGDN, true, sys_msg_time );
@@ -360,7 +360,7 @@ LONG WINAPI MainWndProc (
 		*/
 		if ( ( short ) HIWORD( wParam ) > 0 )
 		{
-			if (cls.state < ca_active) {
+			if (cls.key_dest == key_console) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGUP, true, sys_msg_time );
@@ -373,7 +373,7 @@ LONG WINAPI MainWndProc (
 		}
 		else
 		{
-			if (cls.state < ca_active) {
+			if (cls.key_dest == key_console) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGDN, true, sys_msg_time );
@@ -419,7 +419,6 @@ LONG WINAPI MainWndProc (
 		MSH_MOUSEWHEEL = RegisterWindowMessage("MSWHEEL_ROLLMSG"); 
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
 
-
 	case WM_PAINT:
 		SCR_DirtyScreen ();	// force entire screen to update next frame
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
@@ -449,10 +448,12 @@ LONG WINAPI MainWndProc (
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
 
 	case WM_SIZE:
-		if (wParam  == SIZE_MAXIMIZED) {
+		if (wParam  == SIZE_MAXIMIZED)
+		{
 			if ( vid_fullscreen )
 			{
-				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->value );
+				Com_Printf ("WM_SIZE: Going fullscreen!\n");
+				Cvar_Set( "vid_fullscreen", "1" );
 			}
 		}
 		return 0;
@@ -463,7 +464,7 @@ LONG WINAPI MainWndProc (
 			RECT r;
 			int		style;
 
-			if (!vid_fullscreen->value)
+			if (!vid_fullscreen->intvalue)
 			{
 				xPos = (short) LOWORD(lParam);    // horizontal position 
 				yPos = (short) HIWORD(lParam);    // vertical position 
@@ -531,7 +532,8 @@ LONG WINAPI MainWndProc (
 		{
 			if ( vid_fullscreen )
 			{
-				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->value );
+				Com_Printf ("ALT+Enter, setting fullscreen %d.\n", !vid_fullscreen->intvalue);
+				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
 			}
 			return 0;
 		}
@@ -557,8 +559,10 @@ LONG WINAPI MainWndProc (
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
     }
 
+	return 0;
+
     /* return 0 if handled message, 1 if not */
-    return DefWindowProc( hWnd, uMsg, wParam, lParam );
+    //return DefWindowProc( hWnd, uMsg, wParam, lParam );
 }
 
 
@@ -578,7 +582,7 @@ void VID_Restart_f (void)
 	VID_ReloadRefresh ();
 }
 
-void VID_Front_f( void )
+static void VID_Front_f( void )
 {
 	SetWindowLong( cl_hwnd, GWL_EXSTYLE, WS_EX_TOPMOST );
 	SetForegroundWindow( cl_hwnd );
@@ -642,7 +646,7 @@ void VID_UpdateWindowPosAndSize(void)
 	w = r.right - r.left;
 	h = r.bottom - r.top;
 
-	MoveWindow( cl_hwnd, vid_xpos->value, vid_ypos->value, w, h, TRUE );
+	MoveWindow( cl_hwnd, vid_xpos->intvalue, vid_ypos->intvalue, w, h, TRUE );
 }
 
 /*
@@ -869,24 +873,26 @@ void VID_ReloadRefresh (void)
 			}
 		}
 
-		//r1ch: restart our sound/input devices as the window handle most likely changed
-		if (old_hwnd && cl_hwnd != old_hwnd) {
-			IN_Restart_f ();
-		}
 		{
 			HICON icon;
 			icon = LoadIcon (global_hInstance, (MAKEINTRESOURCE(IDI_ICON1)));
 			SendMessage (cl_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)icon);
 			SendMessage (cl_hwnd, WM_SETICON, ICON_BIG, (LPARAM)icon);
 		}
+
+		//r1ch: restart our sound/input devices as the window handle most likely changed
+		if (old_hwnd && cl_hwnd != old_hwnd) {
+			IN_Restart_f ();
+		}
 		old_hwnd = cl_hwnd;
 		cls.disable_screen = false;
+		Con_CheckResize();
 	}
 }
 
 void VID_AltTab_Modified (cvar_t *cvar, char *old, char *newv)
 {
-	if ( win_noalttab->value )
+	if ( win_noalttab->intvalue )
 	{
 		WIN_DisableAltTab();
 	}
@@ -899,7 +905,7 @@ void VID_AltTab_Modified (cvar_t *cvar, char *old, char *newv)
 
 void VID_XY_Modified (cvar_t *cvar, char *old, char *newv)
 {
-	if (!vid_fullscreen->value)
+	if (!vid_fullscreen->intvalue)
 		VID_UpdateWindowPosAndSize();
 
 	vid_xpos->modified = false;
@@ -948,9 +954,9 @@ void VID_Init (void)
 		cvar_t *gl_driver = Cvar_Get( "gl_driver", "opengl32", 0 );
 		cvar_t *gl_mode = Cvar_Get( "gl_mode", "3", 0 );
 
-		if ( stricmp( gl_driver->string, "3dfxgl" ) == 0 )
+		if ( Q_stricmp( gl_driver->string, "3dfxgl" ) == 0 )
 		{
-			Cvar_SetValue( "gl_mode", 3 );
+			Cvar_Set( "gl_mode", "3" );
 			viddef.width  = 640;
 			viddef.height = 480;
 		}

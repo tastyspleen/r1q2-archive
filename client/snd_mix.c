@@ -152,7 +152,7 @@ void S_TransferPaintBuffer(int endtime)
 
 	pbuf = (unsigned long *)dma.buffer;
 
-	if (s_testsound->value)
+	if (s_testsound->intvalue)
 	{
 		int		i;
 		int		count;

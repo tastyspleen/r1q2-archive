@@ -74,7 +74,6 @@ BUILD_RELEASE_DIR=release$(ARCH)
 CLIENT_DIR=$(MOUNT_DIR)/client
 
 SERVER_DIR=$(MOUNT_DIR)/server
-NULL_DIR=$(MOUNT_DIR)/null
 
 REF_SOFT_DIR=$(MOUNT_DIR)/ref_soft
 REF_GL_DIR=$(MOUNT_DIR)/ref_gl
@@ -82,7 +81,7 @@ COMMON_DIR=$(MOUNT_DIR)/qcommon
 LINUX_DIR=$(MOUNT_DIR)/linux
 GAME_DIR=$(MOUNT_DIR)/game
 
-BASE_CFLAGS=-Dstricmp=strcasecmp
+BASE_CFLAGS=
 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g -Wall
 
@@ -261,10 +260,7 @@ Q2DED_OBJS = \
 	$(BUILDDIR)/svded/net_udp.o \
 	\
 	$(BUILDDIR)/svded/q_shared.o \
-	$(BUILDDIR)/svded/pmove.o \
-	\
-	$(BUILDDIR)/svded/cl_null.o \
-	$(BUILDDIR)/svded/cd_null.o
+	$(BUILDDIR)/svded/pmove.o
 
 	
 $(BUILDDIR)/r1q2ded : $(Q2DED_OBJS)
@@ -341,13 +337,7 @@ $(BUILDDIR)/svded/glob.o :       $(LINUX_DIR)/glob.c
 	
 $(BUILDDIR)/svded/net_udp.o :    $(LINUX_DIR)/net_udp.c
 	$(DO_DED_CC)
-	
-$(BUILDDIR)/svded/cl_null.o :    $(NULL_DIR)/cl_null.c
-	$(DO_DED_CC)
-	
-$(BUILDDIR)/svded/cd_null.o :    $(NULL_DIR)/cd_null.c
-	$(DO_DED_CC)
-	
+
 
 
 

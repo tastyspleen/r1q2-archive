@@ -194,7 +194,7 @@ static qboolean DS_CreateBuffers( void )
 		Com_Printf ("failed (%s)\n", DSoundError(ret));
 	}
 
-	if ( !primary_format_set || !s_primary->value)
+	if ( !primary_format_set || !s_primary->intvalue)
 	{
 		// create the secondary buffer we'll actually work with
 		memset (&dsbuf, 0, sizeof(dsbuf));
@@ -396,11 +396,11 @@ sndinitstat SNDDMA_InitDirect (void)
 	dma.channels = 2;
 	dma.samplebits = 16;
 
-	if (s_khz->value == 48)
+	if (s_khz->intvalue == 48)
 		dma.speed = 48000;
-	else if (s_khz->value == 44)
+	else if (s_khz->intvalue == 44)
 		dma.speed = 44100;
-	else if (s_khz->value == 22)
+	else if (s_khz->intvalue == 22)
 		dma.speed = 22050;
 	else
 		dma.speed = 11025;
@@ -534,9 +534,9 @@ qboolean SNDDMA_InitWav (void)
 	dma.channels = 2;
 	dma.samplebits = 16;
 
-	if (s_khz->value == 44)
+	if (s_khz->intvalue == 44)
 		dma.speed = 44100;
-	else if (s_khz->value == 22)
+	else if (s_khz->intvalue == 22)
 		dma.speed = 22050;
 	else
 		dma.speed = 11025;
@@ -684,7 +684,7 @@ int SNDDMA_Init (qboolean fullInit)
 	stat = SIS_FAILURE;	// assume DirectSound won't initialize
 
 	/* Init DirectSound */
-	if (!s_wavonly->value)
+	if (!s_wavonly->intvalue)
 	{
 		if (snd_firsttime || snd_isdirect)
 		{

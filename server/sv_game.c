@@ -40,9 +40,9 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 		return;
 
 	p = NUM_FOR_EDICT(ent);
-	if (p < 1 || p > maxclients->value)
+	if (p < 1 || p > maxclients->intvalue)
 	{
-		if (sv_gamedebug->value >= 2)
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
 	}
@@ -74,7 +74,7 @@ void EXPORT PF_dprintf (char *fmt, ...)
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 	{
 		Com_Printf ("WARNING: PF_dprintf: message overflow.\n");
-		if (sv_gamedebug->value >= 2)
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 	}
 	va_end (argptr);
@@ -99,10 +99,10 @@ void EXPORT PF_cprintf (edict_t *ent, int level, char *fmt, ...)
 	if (ent)
 	{
 		n = NUM_FOR_EDICT(ent);
-		if (n < 1 || n > maxclients->value)
+		if (n < 1 || n > maxclients->intvalue)
 		{
 			Com_Printf ("WARNING: cprintf to a non-client (%d)\n", n);
-			if (sv_gamedebug->value >= 2)
+			if (sv_gamedebug->intvalue >= 2)
 				DEBUGBREAKPOINT;
 			return;
 		}
@@ -115,7 +115,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, char *fmt, ...)
 	if (len < 0)
 	{
 		Com_Printf ("ERROR: PF_cprintf: overflow.\n");
-		if (sv_gamedebug->value)
+		if (sv_gamedebug->intvalue)
 			DEBUGBREAKPOINT;
 		return;
 	}
@@ -143,16 +143,16 @@ void EXPORT PF_centerprintf (edict_t *ent, char *fmt, ...)
 	if (!ent)
 	{
 		Com_Printf ("WARNING: PF_centerprintf to NULL ent, ignored\n");
-		if (sv_gamedebug->value >= 2)
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
 	}
 		
 	n = NUM_FOR_EDICT(ent);
-	if (n < 1 || n > maxclients->value)
+	if (n < 1 || n > maxclients->intvalue)
 	{
 		Com_Printf ("WARNING: PF_centerprintf to non-client (ent=%d), ignored\n", n);
-		if (sv_gamedebug->value >= 2)
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
 	}
@@ -161,7 +161,7 @@ void EXPORT PF_centerprintf (edict_t *ent, char *fmt, ...)
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 	{
 		Com_Printf ("WARNING: PF_centerprintf: message overflow.\n");
-		if (sv_gamedebug->value >= 2)
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 	}
 	va_end (argptr);
@@ -226,6 +226,18 @@ void EXPORT PF_setmodel (edict_t *ent, char *name)
 
 }
 
+__inline char *SV_FixPlayerSkin (char *val, char *player_name)
+{
+	static char	fixed_skin[MAX_QPATH];
+
+	Com_Printf ("PF_Configstring: Overriding malformed playerskin '%s' with '%s\\male/grunt'\n", val, player_name);
+
+	strcpy (fixed_skin, player_name);
+	strcat (fixed_skin, "\\male/grunt");
+
+	return fixed_skin;
+}
+
 /*
 ===============
 PF_Configstring
@@ -234,22 +246,108 @@ PF_Configstring
 */
 void EXPORT PF_Configstring (int index, char *val)
 {
+	int length;
+
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
-		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)\n", index, val);
+		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)", index, val);
 
 	if (!val)
 		val = "";
 
-	// change the string in sv
+	//r1: note, only checking up to maxclients. some mod authors are unaware of CS_GENERAL
+	//and override playerskins with custom info, ugh :(
+	if (*val && sv_validate_playerskins->intvalue && index >= CS_PLAYERSKINS && index < CS_PLAYERSKINS + maxclients->intvalue)
+	{
+		char	*p;
+		char	*player_name;
+		char	*model_name;
+		char	*skin_name;
+		int		i;
+		char	pname[MAX_QPATH];
+
+		Q_strncpy (pname, val, sizeof(pname)-1);
+
+		player_name = pname;
+		
+		p = strchr (pname, '\\');
+
+		if (!p)
+		{
+			SV_FixPlayerSkin (val, pname);
+			goto fixed;
+		}
+
+		*p = 0;
+		p++;
+		model_name = p;
+		if (!*model_name)
+		{
+			SV_FixPlayerSkin (val, player_name);
+			goto fixed;
+		}
+
+		p = strchr (model_name+1, '/');
+		if (!p)
+			p = strchr (model_name+1, '\\');
+
+		if (!p)
+		{
+			SV_FixPlayerSkin (val, player_name);
+			goto fixed;
+		}
+
+		*p = 0;
+		p++;
+		skin_name = p;
+
+		if (!*skin_name)
+		{
+			val = SV_FixPlayerSkin (val, player_name);
+			goto fixed;
+		}
+
+		length = strlen (model_name);
+		for (i = 0; i < length; i++)
+		{
+			if (!isalnum(model_name[i]) && model_name[i] != '_')
+			{
+				Com_Printf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", model_name[i], val);
+				val = SV_FixPlayerSkin (val, player_name);
+				goto fixed;
+			}
+		}
+
+		length = strlen (skin_name);
+		for (i = 0; i < length; i++)
+		{
+			if (!isalnum(skin_name[i]) && skin_name[i] != '_')
+			{
+				Com_Printf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", skin_name[i], val);
+				val = SV_FixPlayerSkin (val, player_name);
+				break;
+			}
+		}
+	}
+
+fixed:
+
+	length = strlen(val);
+
+	if (length > (sizeof(sv.configstrings[index])*(MAX_CONFIGSTRINGS-index))-1)
+		Com_Error (ERR_DROP, "configstring: index %d, '%s': too long", index, val);
+	else if (index != CS_STATUSBAR && length > sizeof(sv.configstrings[index])-1)
+		Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", index, MakePrintable(val));
+
 	strcpy (sv.configstrings[index], val);
-	
+
+	// send the update to everyone
 	if (sv.state != ss_loading)
-	{	// send the update to everyone
-		SZ_Clear (&sv.multicast);
+	{
+		//r1: why clear?
+		//SZ_Clear (&sv.multicast);
 		MSG_BeginWriteByte (&sv.multicast, svc_configstring);
 		MSG_WriteShort (&sv.multicast, index);
 		MSG_WriteString (&sv.multicast, val);
-
 		SV_Multicast (vec3_origin, MULTICAST_ALL_R);
 	}
 }
@@ -359,7 +457,7 @@ void EXPORT PF_StartSound (edict_t *entity, int channel, int sound_num, float vo
 	if (!entity)
 	{
 		Com_DPrintf ("PF_StartSound: NULL entity, ignored\n");
-		if (sv_gamedebug->value >= 2)
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
 	}
@@ -405,7 +503,7 @@ void EXPORT SV_Pmove (pmove_t *pm)
 	else
 		epm.multiplier = 1;
 
-	epm.strafehack = (qboolean)sv_strafejump_hack->value;
+	epm.strafehack = (qboolean)sv_strafejump_hack->intvalue;
 
 	//pmove
 	Pmove (&epm);
@@ -421,10 +519,16 @@ SV_InitGameProgs
 Init the game subsystem for a new map
 ===============
 */
-void EXPORT SCR_DebugGraph (float value, int color);
+#ifdef DEDICATED_ONLY
+void EXPORT SCR_DebugGraph (float value, int color)
+{
+}
+#endif
 
 void SV_InitGameProgs (void)
 {
+	edict_t			*ent;
+	int				i;
 	game_import_t	import;
 
 	// unload anything we have now
@@ -472,7 +576,7 @@ void SV_InitGameProgs (void)
 	import.TagFree = Z_Free;
 	import.FreeTags = Z_FreeTags;
 
-	import.cvar = Cvar_Get;
+	import.cvar = Cvar_GameGet;
 	import.cvar_set = Cvar_Set;
 	import.cvar_forceset = Cvar_ForceSet;
 
@@ -490,18 +594,35 @@ void SV_InitGameProgs (void)
 	if (!ge)
 		Com_Error (ERR_DROP, "failed to load game DLL");
 
-	if (ge->apiversion != GAME_API_VERSION) {
-		int i = ge->apiversion;
+	i = ge->apiversion;
+
+	if (i != GAME_API_VERSION)
+	{
 		//note, don't call usual unloadgame since that executes DLL code (which is invalid)
 		Sys_UnloadGame ();
 		ge = NULL;
-		Com_Error (ERR_DROP, "game version %i is not supported by this engine.", i);
+		Com_Error (ERR_DROP, "Game is API version %i (not supported by this version R1Q2).", i);
 		return;
 	}
 
 	Com_Printf ("Loaded Game DLL, version %d\n", ge->apiversion);
 
+	//r1: verify we got essential exports
+	if (!ge->ClientCommand || !ge->ClientBegin || !ge->ClientConnect || !ge->ClientDisconnect || !ge->ClientUserinfoChanged ||
+		!ge->ReadGame || !ge->ReadLevel || !ge->RunFrame || !ge->ServerCommand || !ge->Shutdown || !ge->SpawnEntities ||
+		!ge->WriteGame || !ge->WriteLevel || !ge->Init)
+		Com_Error (ERR_DROP, "Game is missing required exports");
+
 	ge->Init ();
 	if (!ge->edicts)
-		Com_Error (ERR_DROP, "game failed to initialize correctly");
+		Com_Error (ERR_DROP, "Game failed to initialize correctly");
+
+	//r1: moved from SV_InitGame to here.
+	for (i=0 ; i<maxclients->intvalue ; i++)
+	{
+		ent = EDICT_NUM(i+1);
+		ent->s.number = i+1;
+		svs.clients[i].edict = ent;
+		memset (&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd));
+	}
 }

@@ -46,6 +46,7 @@ void M_Menu_Main_f (void);
 			void M_Menu_DMOptions_f (void);
 	void M_Menu_Video_f (void);
 	void M_Menu_Options_f (void);
+		void M_Menu_R1Q2_f (void);
 		void M_Menu_Keys_f (void);
 	void M_Menu_Quit_f (void);
 
@@ -80,13 +81,13 @@ static void M_Banner( char *name )
 	re.DrawPic( viddef.width / 2 - w / 2, viddef.height / 2 - 110, name );
 }
 
-void M_PushMenu ( void (*draw) (void), const char *(*key) (int k) )
+static void M_PushMenu ( void (*draw) (void), const char *(*key) (int k) )
 {
 	int		i;
 
-	if (Cvar_VariableValue ("maxclients") == 1 
+	/*if (Cvar_VariableValue ("maxclients") == 1 
 		&& Com_ServerState ())
-		Cvar_Set ("paused", "1");
+		Cvar_Set ("paused", "1");*/
 
 	// if this menu is already present, drop back to that level
 	// to avoid stacking menus by hotkeys
@@ -121,7 +122,7 @@ void M_ForceMenuOff (void)
 	cls.key_dest = key_game;
 	m_menudepth = 0;
 	Key_ClearStates ();
-	Cvar_Set ("paused", "0");
+	//Cvar_Set ("paused", "0");
 }
 
 void M_PopMenu (void)
@@ -139,7 +140,7 @@ void M_PopMenu (void)
 }
 
 
-const char *Default_MenuKey( menuframework_s *m, int key )
+static const char *Default_MenuKey( menuframework_s *m, int key )
 {
 	const char *sound = NULL;
 	menucommon_s *item;
@@ -266,12 +267,12 @@ cx and cy are in 320*240 coordinates, and will be centered on
 higher res screens.
 ================
 */
-void M_DrawCharacter (int cx, int cy, int num)
+static void M_DrawCharacter (int cx, int cy, int num)
 {
 	re.DrawChar ( cx + ((viddef.width - 320)>>1), cy + ((viddef.height - 240)>>1), num);
 }
 
-void M_Print (int cx, int cy, char *str)
+static void M_Print (int cx, int cy, char *str)
 {
 	while (*str)
 	{
@@ -281,7 +282,7 @@ void M_Print (int cx, int cy, char *str)
 	}
 }
 
-void M_PrintWhite (int cx, int cy, char *str)
+static void M_PrintWhite (int cx, int cy, char *str)
 {
 	while (*str)
 	{
@@ -291,7 +292,7 @@ void M_PrintWhite (int cx, int cy, char *str)
 	}
 }
 
-void M_DrawPic (int x, int y, char *pic)
+static void M_DrawPic (int x, int y, char *pic)
 {
 	re.DrawPic (x + ((viddef.width - 320)>>1), y + ((viddef.height - 240)>>1), pic);
 }
@@ -306,7 +307,7 @@ x,y.  The pic will extend to the left of x,
 and both above and below y.
 =============
 */
-void M_DrawCursor( int x, int y, int f )
+static void M_DrawCursor( int x, int y, int f )
 {
 	char	cursorname[80];
 	static qboolean cached;
@@ -328,7 +329,7 @@ void M_DrawCursor( int x, int y, int f )
 	re.DrawPic( x, y, cursorname );
 }
 
-void M_DrawTextBox (int x, int y, int width, int lines)
+static void M_DrawTextBox (int x, int y, int width, int lines)
 {
 	int		cx, cy;
 	int		n;
@@ -382,7 +383,7 @@ MAIN MENU
 #define	MAIN_ITEMS	5
 
 
-void M_Main_Draw (void)
+static void M_Main_Draw (void)
 {
 	int i;
 	int w, h;
@@ -431,7 +432,7 @@ void M_Main_Draw (void)
 }
 
 
-const char *M_Main_Key (int key)
+static const char *M_Main_Key (int key)
 {
 	const char *sound = menu_move_sound;
 
@@ -525,7 +526,7 @@ static void StartNetworkServerFunc( void *unused )
 	M_Menu_StartServer_f ();
 }
 
-void Multiplayer_MenuInit( void )
+static void Multiplayer_MenuInit( void )
 {
 	s_multiplayer_menu.x = viddef.width * 0.50 - 64;
 	s_multiplayer_menu.nitems = 0;
@@ -560,12 +561,12 @@ void Multiplayer_MenuInit( void )
 	Menu_Center( &s_multiplayer_menu );
 }
 
-const char *Multiplayer_MenuKey( int key )
+static const char *Multiplayer_MenuKey( int key )
 {
 	return Default_MenuKey( &s_multiplayer_menu, key );
 }
 
-void M_Menu_Multiplayer_f( void )
+static void M_Menu_Multiplayer_f( void )
 {
 	Multiplayer_MenuInit();
 	M_PushMenu( Multiplayer_MenuDraw, Multiplayer_MenuKey );
@@ -998,7 +999,7 @@ static const char *Keys_MenuKey( int key )
 	}
 }
 
-void M_Menu_Keys_f (void)
+static void M_Menu_Keys_f (void)
 {
 	Keys_MenuInit();
 	M_PushMenu( Keys_MenuDraw, Keys_MenuKey );
@@ -1017,7 +1018,19 @@ CONTROLS MENU
 extern cvar_t *in_joystick;
 #endif
 
+
+static menuframework_s	s_r1q2_options_menu;
+static menuseparator_s	s_r1q2_warning;
+static menuseparator_s	s_r1q2_warning2;
+static menulist_s		s_r1q2_dinput;
+static menulist_s		s_r1q2_winxp;
+
+static menulist_s		s_r1q2_defer;
+static menulist_s		s_r1q2_async;
+static menulist_s		s_r1q2_smooth;
+
 static menuframework_s	s_options_menu;
+static menuaction_s		s_options_r1q2_action;
 static menuaction_s		s_options_defaults_action;
 static menuaction_s		s_options_customize_options_action;
 static menuslider_s		s_options_sensitivity_slider;
@@ -1052,6 +1065,170 @@ static void JoystickFunc( void *unused )
 static void CustomizeControlsFunc( void *unused )
 {
 	M_Menu_Keys_f();
+}
+
+static void DirectInputFunc (void *unused)
+{
+	Cvar_SetValue ("m_directinput", s_r1q2_dinput.curvalue);
+	IN_Restart_f();
+}
+
+static void AccelFixFunc (void *unused)
+{
+	Cvar_SetValue ("m_fixaccel", s_r1q2_winxp.curvalue);
+	IN_Restart_f();
+}
+
+static void DeferFunc (void *unused)
+{
+	Cvar_SetValue ("cl_defermodels", s_r1q2_defer.curvalue);
+}
+
+static void AsyncFunc (void *unused)
+{
+	Cvar_SetValue ("cl_async", s_r1q2_async.curvalue);
+}
+
+static void SmoothFunc (void *unused)
+{
+	Cvar_SetValue ("cl_smoothsteps", s_r1q2_smooth.curvalue);
+}
+
+static void R1Q2_MenuInit (void)
+{
+	static const char *yesno_names[] =
+	{
+		"disabled",
+		"enabled",
+		0
+	};
+
+	/*
+	** configure controls menu and menu items
+	*/
+	s_r1q2_options_menu.x = viddef.width / 2;
+	s_r1q2_options_menu.y = viddef.height / 2 - 58;
+
+	s_r1q2_options_menu.nitems = 0;
+
+	s_r1q2_warning.generic.type = MTYPE_SEPARATOR;
+	s_r1q2_warning.generic.name = "WARNING: Settings here will not be saved. Any settings";
+	s_r1q2_warning.generic.x    = 160;
+	s_r1q2_warning.generic.y	 = 0;
+
+	s_r1q2_warning2.generic.type = MTYPE_SEPARATOR;
+	s_r1q2_warning2.generic.name = "that you wish to be keep will need adding to a config.";
+	s_r1q2_warning2.generic.x    = 160;
+	s_r1q2_warning2.generic.y	 = 10;
+
+
+	s_r1q2_dinput.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_dinput.generic.x	= 0;
+	s_r1q2_dinput.generic.y	= 30;
+	s_r1q2_dinput.generic.name	= "directinput mouse";
+	s_r1q2_dinput.generic.callback = DirectInputFunc;
+	s_r1q2_dinput.itemnames = yesno_names;
+	s_r1q2_dinput.curvalue = Cvar_VariableValue ("m_directinput");
+
+	s_r1q2_winxp.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_winxp.generic.x	= 0;
+	s_r1q2_winxp.generic.y	= 40;
+	s_r1q2_winxp.generic.name	= "mouse acceleration fix";
+	s_r1q2_winxp.generic.callback = AccelFixFunc;
+	s_r1q2_winxp.itemnames = yesno_names;
+	s_r1q2_winxp.curvalue = Cvar_VariableValue ("m_fixaccel");
+
+	s_r1q2_defer.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_defer.generic.x	= 0;
+	s_r1q2_defer.generic.y	= 60;
+	s_r1q2_defer.generic.name	= "defer model loading";
+	s_r1q2_defer.generic.callback = DeferFunc;
+	s_r1q2_defer.itemnames = yesno_names;
+	s_r1q2_defer.curvalue = Cvar_VariableValue ("cl_defermodels");
+
+	s_r1q2_async.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_async.generic.x	= 0;
+	s_r1q2_async.generic.y	= 70;
+	s_r1q2_async.generic.name	= "asynchronous net/fps";
+	s_r1q2_async.generic.callback = AsyncFunc;
+	s_r1q2_async.itemnames = yesno_names;
+	s_r1q2_async.curvalue = Cvar_VariableValue ("cl_async");
+
+	s_r1q2_smooth.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_smooth.generic.x	= 0;
+	s_r1q2_smooth.generic.y	= 80;
+	s_r1q2_smooth.generic.name	= "smooth stair climbing";
+	s_r1q2_smooth.generic.callback = SmoothFunc;
+	s_r1q2_smooth.itemnames = yesno_names;
+	s_r1q2_smooth.curvalue = Cvar_VariableValue ("cl_smoothsteps");
+
+/*
+	s_options_invertmouse_box.generic.type = MTYPE_SPINCONTROL;
+	s_options_invertmouse_box.generic.x	= 0;
+	s_options_invertmouse_box.generic.y	= 70;
+	s_options_invertmouse_box.generic.name	= "invert mouse";
+	s_options_invertmouse_box.generic.callback = InvertMouseFunc;
+	s_options_invertmouse_box.itemnames = yesno_names;
+
+	s_options_lookspring_box.generic.type = MTYPE_SPINCONTROL;
+	s_options_lookspring_box.generic.x	= 0;
+	s_options_lookspring_box.generic.y	= 80;
+	s_options_lookspring_box.generic.name	= "lookspring";
+	s_options_lookspring_box.generic.callback = LookspringFunc;
+	s_options_lookspring_box.itemnames = yesno_names;
+
+	s_options_lookstrafe_box.generic.type = MTYPE_SPINCONTROL;
+	s_options_lookstrafe_box.generic.x	= 0;
+	s_options_lookstrafe_box.generic.y	= 90;
+	s_options_lookstrafe_box.generic.name	= "lookstrafe";
+	s_options_lookstrafe_box.generic.callback = LookstrafeFunc;
+	s_options_lookstrafe_box.itemnames = yesno_names;
+
+	s_options_freelook_box.generic.type = MTYPE_SPINCONTROL;
+	s_options_freelook_box.generic.x	= 0;
+	s_options_freelook_box.generic.y	= 100;
+	s_options_freelook_box.generic.name	= "free look";
+	s_options_freelook_box.generic.callback = FreeLookFunc;
+	s_options_freelook_box.itemnames = yesno_names;
+
+	s_options_crosshair_box.generic.type = MTYPE_SPINCONTROL;
+	s_options_crosshair_box.generic.x	= 0;
+	s_options_crosshair_box.generic.y	= 110;
+	s_options_crosshair_box.generic.name	= "crosshair";
+	s_options_crosshair_box.generic.callback = CrosshairFunc;
+	s_options_crosshair_box.itemnames = crosshair_names;
+*/
+
+	Menu_AddItem (&s_r1q2_options_menu, (void *)&s_r1q2_warning);
+	Menu_AddItem (&s_r1q2_options_menu, (void *)&s_r1q2_warning2);
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_dinput );
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_winxp );
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_defer );
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_async );
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_smooth );
+}
+
+static void R1Q2_MenuDraw (void)
+{
+	M_Banner ("m_banner_options");
+	Menu_AdjustCursor( &s_r1q2_options_menu, 2 );
+	Menu_Draw( &s_r1q2_options_menu );
+}
+
+static const char *R1Q2_MenuKey( int key )
+{
+	return Default_MenuKey( &s_r1q2_options_menu, key );
+}
+
+static void M_Menu_R1Q2_f (void)
+{
+	R1Q2_MenuInit();
+	M_PushMenu ( R1Q2_MenuDraw, R1Q2_MenuKey);
+}
+
+static void R1Q2OptionsMenu ( void *unused )
+{
+	M_Menu_R1Q2_f();
 }
 
 static void AlwaysRunFunc( void *unused )
@@ -1170,18 +1347,18 @@ static void UpdateSoundQualityFunc( void *unused )
 {
 	if ( s_options_quality_list.curvalue == 2)
 	{
-		Cvar_SetValue( "s_khz", 44 );
-		Cvar_SetValue( "s_loadas8bit", false );
+		Cvar_Set ( "s_khz", "44" );
+		Cvar_Set ( "s_loadas8bit", "0" );
 	}
 	else if ( s_options_quality_list.curvalue == 1)
 	{
-		Cvar_SetValue( "s_khz", 22 );
-		Cvar_SetValue( "s_loadas8bit", false );
+		Cvar_Set ( "s_khz", "22" );
+		Cvar_Set ( "s_loadas8bit", "0" );
 	}
 	else
 	{
-		Cvar_SetValue( "s_khz", 11 );
-		Cvar_SetValue( "s_loadas8bit", true );
+		Cvar_Set ( "s_khz", "11" );
+		Cvar_Set ( "s_loadas8bit", "1" );
 	}
 	
 	Cvar_SetValue( "s_primary", s_options_compatibility_list.curvalue );
@@ -1197,7 +1374,7 @@ static void UpdateSoundQualityFunc( void *unused )
 	CL_Snd_Restart_f();
 }
 
-void Options_MenuInit( void )
+static void Options_MenuInit( void )
 {
 	int squality;
 
@@ -1358,21 +1535,27 @@ void Options_MenuInit( void )
 	s_options_joystick_box.itemnames = yesno_names;
 #endif
 
+	s_options_r1q2_action.generic.type = MTYPE_ACTION;
+	s_options_r1q2_action.generic.x		= 0;
+	s_options_r1q2_action.generic.y		= 140;
+	s_options_r1q2_action.generic.name	= "r1q2 options";
+	s_options_r1q2_action.generic.callback = R1Q2OptionsMenu;
+
 	s_options_customize_options_action.generic.type	= MTYPE_ACTION;
 	s_options_customize_options_action.generic.x		= 0;
-	s_options_customize_options_action.generic.y		= 140;
+	s_options_customize_options_action.generic.y		= 160;
 	s_options_customize_options_action.generic.name	= "customize controls";
 	s_options_customize_options_action.generic.callback = CustomizeControlsFunc;
 
 	s_options_defaults_action.generic.type	= MTYPE_ACTION;
 	s_options_defaults_action.generic.x		= 0;
-	s_options_defaults_action.generic.y		= 150;
+	s_options_defaults_action.generic.y		= 170;
 	s_options_defaults_action.generic.name	= "reset defaults";
 	s_options_defaults_action.generic.callback = ControlsResetDefaultsFunc;
 
 	s_options_console_action.generic.type	= MTYPE_ACTION;
 	s_options_console_action.generic.x		= 0;
-	s_options_console_action.generic.y		= 160;
+	s_options_console_action.generic.y		= 180;
 	s_options_console_action.generic.name	= "go to console";
 	s_options_console_action.generic.callback = ConsoleFunc;
 
@@ -1392,24 +1575,25 @@ void Options_MenuInit( void )
 #ifdef JOYSTICK
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_joystick_box );
 #endif
+	Menu_AddItem( &s_options_menu, ( void * ) &s_options_r1q2_action );
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_customize_options_action );
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_defaults_action );
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_console_action );
 }
 
-void Options_MenuDraw (void)
+static void Options_MenuDraw (void)
 {
 	M_Banner( "m_banner_options" );
 	Menu_AdjustCursor( &s_options_menu, 1 );
 	Menu_Draw( &s_options_menu );
 }
 
-const char *Options_MenuKey( int key )
+static const char *Options_MenuKey( int key )
 {
 	return Default_MenuKey( &s_options_menu, key );
 }
 
-void M_Menu_Options_f (void)
+static void M_Menu_Options_f (void)
 {
 	Options_MenuInit();
 	M_PushMenu ( Options_MenuDraw, Options_MenuKey );
@@ -1423,7 +1607,7 @@ VIDEO MENU
 =======================================================================
 */
 
-void M_Menu_Video_f (void)
+static void M_Menu_Video_f (void)
 {
 	VID_MenuInit();
 	M_PushMenu( VID_MenuDraw, VID_MenuKey );
@@ -1787,7 +1971,7 @@ static const char *roguecredits[] =
 };
 
 
-void M_Credits_MenuDraw( void )
+static void M_Credits_MenuDraw( void )
 {
 	int i, y;
 
@@ -1830,7 +2014,7 @@ void M_Credits_MenuDraw( void )
 		credits_start_time = cls.realtime;
 }
 
-const char *M_Credits_Key( int key )
+static const char *M_Credits_Key( int key )
 {
 	switch (key)
 	{
@@ -1847,7 +2031,7 @@ const char *M_Credits_Key( int key )
 
 extern int Developer_searchpath (void);
 
-void M_Menu_Credits_f( void )
+static void M_Menu_Credits_f( void )
 {
 	int		n;
 	int		count;
@@ -1966,7 +2150,7 @@ static void CreditsFunc( void *unused )
 	M_Menu_Credits_f();
 }
 
-void Game_MenuInit( void )
+static void Game_MenuInit( void )
 {
 	/*static const char *difficulty_names[] =
 	{
@@ -2035,19 +2219,19 @@ void Game_MenuInit( void )
 	Menu_Center( &s_game_menu );
 }
 
-void Game_MenuDraw( void )
+static void Game_MenuDraw( void )
 {
 	M_Banner( "m_banner_game" );
 	Menu_AdjustCursor( &s_game_menu, 1 );
 	Menu_Draw( &s_game_menu );
 }
 
-const char *Game_MenuKey( int key )
+static const char *Game_MenuKey( int key )
 {
 	return Default_MenuKey( &s_game_menu, key );
 }
 
-void M_Menu_Game_f (void)
+static void M_Menu_Game_f (void)
 {
 	Game_MenuInit();
 	M_PushMenu( Game_MenuDraw, Game_MenuKey );
@@ -2072,7 +2256,7 @@ static menuaction_s		s_loadgame_actions[MAX_SAVEGAMES];
 char		m_savestrings[MAX_SAVEGAMES][32];
 qboolean	m_savevalid[MAX_SAVEGAMES];
 
-void Create_Savestrings (void)
+static void Create_Savestrings (void)
 {
 	int		i;
 	FILE	*f;
@@ -2096,7 +2280,7 @@ void Create_Savestrings (void)
 	}
 }
 
-void LoadGameCallback( void *self )
+static void LoadGameCallback( void *self )
 {
 	menuaction_s *a = ( menuaction_s * ) self;
 
@@ -2105,7 +2289,7 @@ void LoadGameCallback( void *self )
 	M_ForceMenuOff ();
 }
 
-void LoadGame_MenuInit( void )
+static void LoadGame_MenuInit( void )
 {
 	int i;
 
@@ -2133,14 +2317,14 @@ void LoadGame_MenuInit( void )
 	}
 }
 
-void LoadGame_MenuDraw( void )
+static void LoadGame_MenuDraw( void )
 {
 	M_Banner( "m_banner_load_game" );
 //	Menu_AdjustCursor( &s_loadgame_menu, 1 );
 	Menu_Draw( &s_loadgame_menu );
 }
 
-const char *LoadGame_MenuKey( int key )
+static const char *LoadGame_MenuKey( int key )
 {
 	if ( key == K_ESCAPE || key == K_ENTER )
 	{
@@ -2151,7 +2335,7 @@ const char *LoadGame_MenuKey( int key )
 	return Default_MenuKey( &s_loadgame_menu, key );
 }
 
-void M_Menu_LoadGame_f (void)
+static void M_Menu_LoadGame_f (void)
 {
 	LoadGame_MenuInit();
 	M_PushMenu( LoadGame_MenuDraw, LoadGame_MenuKey );
@@ -2168,7 +2352,7 @@ SAVEGAME MENU
 static menuframework_s	s_savegame_menu;
 static menuaction_s		s_savegame_actions[MAX_SAVEGAMES];
 
-void SaveGameCallback( void *self )
+static void SaveGameCallback( void *self )
 {
 	menuaction_s *a = ( menuaction_s * ) self;
 
@@ -2176,14 +2360,14 @@ void SaveGameCallback( void *self )
 	M_ForceMenuOff ();
 }
 
-void SaveGame_MenuDraw( void )
+static void SaveGame_MenuDraw( void )
 {
 	M_Banner( "m_banner_save_game" );
 	Menu_AdjustCursor( &s_savegame_menu, 1 );
 	Menu_Draw( &s_savegame_menu );
 }
 
-void SaveGame_MenuInit( void )
+static void SaveGame_MenuInit( void )
 {
 	int i;
 
@@ -2210,7 +2394,7 @@ void SaveGame_MenuInit( void )
 	}
 }
 
-const char *SaveGame_MenuKey( int key )
+static const char *SaveGame_MenuKey( int key )
 {
 	if ( key == K_ENTER || key == K_ESCAPE )
 	{
@@ -2221,7 +2405,7 @@ const char *SaveGame_MenuKey( int key )
 	return Default_MenuKey( &s_savegame_menu, key );
 }
 
-void M_Menu_SaveGame_f (void)
+static void M_Menu_SaveGame_f (void)
 {
 	if (!Com_ServerState())
 		return;		// not playing a game
@@ -2276,7 +2460,7 @@ void M_AddToServerList (netadr_t adr, char *info)
 }
 
 
-void JoinServerFunc( void *self )
+static void JoinServerFunc( void *self )
 {
 	char	buffer[128];
 	int		index;
@@ -2294,16 +2478,16 @@ void JoinServerFunc( void *self )
 	M_ForceMenuOff ();
 }
 
-void AddressBookFunc( void *self )
+static void AddressBookFunc( void *self )
 {
 	M_Menu_AddressBook_f();
 }
 
-void NullCursorDraw( void *self )
+static void NullCursorDraw( void *self )
 {
 }
 
-void SearchLocalGames( void )
+static void SearchLocalGames( void )
 {
 	int		i;
 
@@ -2323,12 +2507,12 @@ void SearchLocalGames( void )
 	CL_PingServers_f();
 }
 
-void SearchLocalGamesFunc( void *self )
+static void SearchLocalGamesFunc( void *self )
 {
 	SearchLocalGames();
 }
 
-void JoinServer_MenuInit( void )
+static void JoinServer_MenuInit( void )
 {
 	int i;
 
@@ -2379,19 +2563,19 @@ void JoinServer_MenuInit( void )
 	SearchLocalGames();
 }
 
-void JoinServer_MenuDraw(void)
+static void JoinServer_MenuDraw(void)
 {
 	M_Banner( "m_banner_join_server" );
 	Menu_Draw( &s_joinserver_menu );
 }
 
 
-const char *JoinServer_MenuKey( int key )
+static const char *JoinServer_MenuKey( int key )
 {
 	return Default_MenuKey( &s_joinserver_menu, key );
 }
 
-void M_Menu_JoinServer_f (void)
+static void M_Menu_JoinServer_f (void)
 {
 	JoinServer_MenuInit();
 	M_PushMenu( JoinServer_MenuDraw, JoinServer_MenuKey );
@@ -2418,14 +2602,14 @@ static menufield_s	s_hostname_field;
 static menulist_s	s_startmap_list;
 static menulist_s	s_rules_box;
 
-void DMOptionsFunc( void *self )
+static void DMOptionsFunc( void *self )
 {
 	if (s_rules_box.curvalue == 1)
 		return;
 	M_Menu_DMOptions_f();
 }
 
-void RulesChangeFunc ( void *self )
+static void RulesChangeFunc ( void *self )
 {
 	// DM
 	if (s_rules_box.curvalue == 0)
@@ -2462,7 +2646,7 @@ void RulesChangeFunc ( void *self )
 //=====
 }
 
-void StartServerActionFunc( void *self )
+static void StartServerActionFunc( void *self )
 {
 	char	startmap[1024];
 	int		timelimit;
@@ -2488,12 +2672,12 @@ void StartServerActionFunc( void *self )
 	{
 		Cvar_SetValue ("deathmatch", !s_rules_box.curvalue );
 		Cvar_SetValue ("coop", s_rules_box.curvalue );
-		Cvar_SetValue ("gamerules", 0 );
+		Cvar_Set ("gamerules", "0" );
 	}
 	else
 	{
-		Cvar_SetValue ("deathmatch", 1 );	// deathmatch is always true for rogue games, right?
-		Cvar_SetValue ("coop", 0 );			// FIXME - this might need to depend on which game we're running
+		Cvar_Set ("deathmatch", "1" );	// deathmatch is always true for rogue games, right?
+		Cvar_Set ("coop", "0" );			// FIXME - this might need to depend on which game we're running
 		Cvar_SetValue ("gamerules", s_rules_box.curvalue );
 	}
 //PGM
@@ -2533,7 +2717,7 @@ void StartServerActionFunc( void *self )
 	M_ForceMenuOff ();
 }
 
-void StartServer_MenuInit( void )
+static void StartServer_MenuInit( void )
 {
 	static const char *dm_coop_names[] =
 	{
@@ -2738,12 +2922,12 @@ void StartServer_MenuInit( void )
 	RulesChangeFunc ( NULL );
 }
 
-void StartServer_MenuDraw(void)
+static void StartServer_MenuDraw(void)
 {
 	Menu_Draw( &s_startserver_menu );
 }
 
-const char *StartServer_MenuKey( int key )
+static const char *StartServer_MenuKey( int key )
 {
 	if ( key == K_ESCAPE )
 	{
@@ -2762,7 +2946,7 @@ const char *StartServer_MenuKey( int key )
 	return Default_MenuKey( &s_startserver_menu, key );
 }
 
-void M_Menu_StartServer_f (void)
+static void M_Menu_StartServer_f (void)
 {
 	StartServer_MenuInit();
 	M_PushMenu( StartServer_MenuDraw, StartServer_MenuKey );
@@ -2945,7 +3129,7 @@ setvalue:
 
 }
 
-void DMOptions_MenuInit( void )
+static void DMOptions_MenuInit( void )
 {
 	static const char *yes_no_names[] =
 	{
@@ -3155,7 +3339,7 @@ void DMOptions_MenuInit( void )
 	Menu_SetStatusBar( &s_dmoptions_menu, dmoptions_statusbar );
 }
 
-void DMOptions_MenuDraw(void)
+static void DMOptions_MenuDraw(void)
 {
 	Menu_Draw( &s_dmoptions_menu );
 }
@@ -3165,7 +3349,7 @@ const char *DMOptions_MenuKey( int key )
 	return Default_MenuKey( &s_dmoptions_menu, key );
 }
 
-void M_Menu_DMOptions_f (void)
+static void M_Menu_DMOptions_f (void)
 {
 	DMOptions_MenuInit();
 	M_PushMenu( DMOptions_MenuDraw, DMOptions_MenuKey );
@@ -3217,7 +3401,7 @@ static void DownloadCallback( void *self )
 	}
 }
 
-void DownloadOptions_MenuInit( void )
+static void DownloadOptions_MenuInit( void )
 {
 	static const char *yes_no_names[] =
 	{
@@ -3287,17 +3471,17 @@ void DownloadOptions_MenuInit( void )
 		s_downloadoptions_menu.cursor = 1;
 }
 
-void DownloadOptions_MenuDraw(void)
+static void DownloadOptions_MenuDraw(void)
 {
 	Menu_Draw( &s_downloadoptions_menu );
 }
 
-const char *DownloadOptions_MenuKey( int key )
+static const char *DownloadOptions_MenuKey( int key )
 {
 	return Default_MenuKey( &s_downloadoptions_menu, key );
 }
 
-void M_Menu_DownloadOptions_f (void)
+static void M_Menu_DownloadOptions_f (void)
 {
 	DownloadOptions_MenuInit();
 	M_PushMenu( DownloadOptions_MenuDraw, DownloadOptions_MenuKey );
@@ -3314,7 +3498,7 @@ ADDRESS BOOK MENU
 static menuframework_s	s_addressbook_menu;
 static menufield_s		s_addressbook_fields[NUM_ADDRESSBOOK_ENTRIES];
 
-void AddressBook_MenuInit( void )
+static void AddressBook_MenuInit( void )
 {
 	int i;
 
@@ -3363,13 +3547,13 @@ const char *AddressBook_MenuKey( int key )
 	return Default_MenuKey( &s_addressbook_menu, key );
 }
 
-void AddressBook_MenuDraw(void)
+static void AddressBook_MenuDraw(void)
 {
 	M_Banner( "m_banner_addressbook" );
 	Menu_Draw( &s_addressbook_menu );
 }
 
-void M_Menu_AddressBook_f(void)
+static void M_Menu_AddressBook_f(void)
 {
 	AddressBook_MenuInit();
 	M_PushMenu( AddressBook_MenuDraw, AddressBook_MenuKey );
@@ -3413,7 +3597,7 @@ static int rate_tbl[] = { 2500, 3200, 4300, 5000, 10000, 12000, 25000, 0 };
 static const char *rate_names[] = { "28.8 Modem", "33.6 Modem", "56.6 Modem", "ISDN",
 	"Cable Modem", "DSL Modem", "T1/LAN", "User defined", 0 };
 
-void DownloadOptionsFunc( void *self )
+static void DownloadOptionsFunc( void *self )
 {
 	M_Menu_DownloadOptions_f();
 }
@@ -3632,7 +3816,7 @@ static int __cdecl pmicmpfnc( const void *_a, const void *_b )
 }
 
 
-qboolean PlayerConfig_MenuInit( void )
+static qboolean PlayerConfig_MenuInit( void )
 {
 	extern cvar_t *name;
 	extern cvar_t *team;
@@ -3654,7 +3838,7 @@ qboolean PlayerConfig_MenuInit( void )
 		return false;
 
 	if ( hand->value < 0 || hand->value > 2 )
-		Cvar_SetValue( "hand", 0 );
+		Cvar_Set( "hand", "0" );
 
 	strcpy( currentdirectory, skin->string );
 
@@ -3796,7 +3980,7 @@ qboolean PlayerConfig_MenuInit( void )
 }
 
 extern float CalcFov( float fov_x, float w, float h );
-void PlayerConfig_MenuDraw( void )
+static void PlayerConfig_MenuDraw( void )
 {
 	refdef_t refdef;
 	char scratch[MAX_QPATH];
@@ -3855,7 +4039,7 @@ void PlayerConfig_MenuDraw( void )
 	}
 }
 
-const char *PlayerConfig_MenuKey (int key)
+static const char *PlayerConfig_MenuKey (int key)
 {
 	int i;
 
@@ -3890,7 +4074,7 @@ const char *PlayerConfig_MenuKey (int key)
 }
 
 
-void M_Menu_PlayerConfig_f (void)
+static void M_Menu_PlayerConfig_f (void)
 {
 	if (!PlayerConfig_MenuInit())
 	{
@@ -3927,7 +4111,7 @@ QUIT MENU
 =======================================================================
 */
 
-const char *M_Quit_Key (int key)
+static const char *M_Quit_Key (int key)
 {
 	switch (key)
 	{
@@ -3952,7 +4136,7 @@ const char *M_Quit_Key (int key)
 }
 
 
-void M_Quit_Draw (void)
+static void M_Quit_Draw (void)
 {
 	int		w, h;
 
@@ -3961,7 +4145,7 @@ void M_Quit_Draw (void)
 }
 
 
-void M_Menu_Quit_f (void)
+static void M_Menu_Quit_f (void)
 {
 	M_PushMenu (M_Quit_Draw, M_Quit_Key);
 }
@@ -3993,6 +4177,7 @@ void M_Init (void)
 	Cmd_AddCommand ("menu_multiplayer", M_Menu_Multiplayer_f );
 	Cmd_AddCommand ("menu_video", M_Menu_Video_f);
 	Cmd_AddCommand ("menu_options", M_Menu_Options_f);
+		Cmd_AddCommand ("menu_r1q2", M_Menu_R1Q2_f);
 		Cmd_AddCommand ("menu_keys", M_Menu_Keys_f);
 	Cmd_AddCommand ("menu_quit", M_Menu_Quit_f);
 }

@@ -24,22 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#include "wsipx.h"
 #include "../qcommon/qcommon.h"
 
-#define	MAX_LOOPBACK	4
-
-qboolean			_true = true;
-
-typedef struct
-{
-	byte	data[MAX_MSGLEN];
-	int		datalen;
-} loopmsg_t;
-
-typedef struct
-{
-	loopmsg_t	msgs[MAX_LOOPBACK];
-	int			get, send;
-} loopback_t;
-
 int net_inittime;
 
 unsigned __int64 net_total_in;
@@ -54,8 +38,7 @@ unsigned __int64 net_packets_out;
 static cvar_t	*net_rcvbuf;
 static cvar_t	*net_sndbuf;
 
-loopback_t	loopbacks[3];
-SOCKET		ip_sockets[3];
+SOCKET		ip_sockets[2];
 int			server_port;
 //int			ipx_sockets[2];
 
@@ -127,7 +110,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 			return -1; 
 		}
 #ifndef NO_SERVER
-		if (dedicated->value)	// let dedicated servers continue after errors
+		if (dedicated->intvalue)	// let dedicated servers continue after errors
 			Com_Printf ("NET_GetPacket: %s\n", NET_ErrorString());
 		else
 #endif
@@ -157,120 +140,6 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 }
 
 //=============================================================================
-
-int NET_Accept (int serversocket, netadr_t *address)
-{
-	int socket;
-	struct sockaddr_in	addr;
-	int addrlen = sizeof(addr);
-
-	socket = accept (serversocket, (struct sockaddr *)&addr, &addrlen);
-
-	if (socket != SOCKET_ERROR)
-	{
-		address->type = NA_IP;
-		address->port = ntohs (addr.sin_port);
-		memcpy (address->ip, &addr.sin_addr.S_un.S_addr, sizeof(int));
-	}
-
-	return socket;
-}
-
-int NET_SendTCP (int s, byte *data, int len)
-{
-	return send (s, data, len, 0);
-}
-
-int NET_RecvTCP (int s, byte *buffer, int len)
-{
-	return recv (s, buffer, len, 0);
-}
-
-void NET_CloseSocket (int s)
-{
-	Com_Printf ("NET_CloseSocket: shutting down socket %d\n", s);
-	shutdown (s, 0x02);
-	closesocket (s);
-}
-
-int NET_Listen (unsigned short port)
-{
-	struct sockaddr_in addr;
-	SOCKET s;
-
-	s = socket (AF_INET, SOCK_STREAM, 0);
-
-	if (s == -1)
-		return s;
-
-	addr.sin_addr.S_un.S_addr = INADDR_ANY;
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	memset (&addr.sin_zero, 0, sizeof(addr.sin_zero));
-
-	if (ioctlsocket (s, FIONBIO, (u_long *)&_true) == -1)
-	{
-		Com_Printf ("WARNING: NET_Listen: ioctl FIONBIO: %s\n", NET_ErrorString());
-		return -1;
-	}
-
-	if ((bind (s, (struct sockaddr *)&addr, sizeof(addr))) == -1)
-		return -1;
-
-	if ((listen (s, SOMAXCONN)) == -1)
-		return -1;
-
-	Com_Printf ("NET_Listen: socket %d is listening\n", s);
-
-	return s;
-}
-
-int NET_Select (int s, int msec)
-{
-	struct timeval timeout;
-	fd_set fdset;
-
-	FD_ZERO(&fdset);
-
-	FD_SET (s, &fdset);
-
-	if (msec > 0)
-	{
-		timeout.tv_sec = msec/1000;
-		timeout.tv_usec = (msec%1000)*1000;
-		return select(s+1, &fdset, NULL, NULL, &timeout);
-	}
-	else
-	{
-		return select(s+1, &fdset, NULL, NULL, NULL);
-	}
-}
-
-int NET_Connect (netadr_t *to, int port)
-{
-	struct sockaddr_in	addr;
-	SOCKET s;
-
-	s = socket (AF_INET, SOCK_STREAM, 0);
-	if (s == -1)
-		return s;
-
-	memset (&addr.sin_zero, 0, sizeof(addr.sin_zero));
-	addr.sin_port = htons ((unsigned short)port);
-	addr.sin_family = AF_INET;
-	addr.sin_addr.S_un.S_addr = *(unsigned long *)to->ip;
-
-	if (ioctlsocket (s, FIONBIO, (u_long *)&_true) == -1)
-	{
-		Com_Printf ("WARNING: NET_Connect: ioctl FIONBIO: %s\n", NET_ErrorString());
-		return -1;
-	}
-
-	connect (s, (struct sockaddr *)&addr, sizeof(addr));
-
-	return s;
-}
-
 
 int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 {
@@ -319,7 +188,7 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 			return 0;
 
 #ifndef NO_SERVER
-		if (dedicated->value)	// let dedicated servers continue after errors
+		if (dedicated->intvalue)	// let dedicated servers continue after errors
 		{
 			//r1: this error is "normal" in Win2k TCP/IP stack, don't bother spamming server
 			//    console with it.
@@ -365,9 +234,9 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 NET_Socket
 ====================
 */
-SOCKET NET_IPSocket (char *net_interface, int port)
+int NET_IPSocket (char *net_interface, int port)
 {
-	SOCKET				newsocket;
+	int					newsocket;
 	struct sockaddr_in	address;
 	int					i;
 	int					j;
@@ -382,13 +251,13 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 		return 0;
 	}
 
-	i = (int)net_rcvbuf->value * 1024.0f;
+	i = net_rcvbuf->intvalue * 1024.0f;
 	setsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&i, sizeof(i));
 	getsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&j, &x);
 	if (i != j)
 		Com_Printf ("WARNING: Setting SO_RCVBUF: wanted %d, got %d\n", i, j);
 
-	i = (int)net_sndbuf->value * 1024.0f;
+	i = net_sndbuf->intvalue * 1024.0f;
 	setsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&i, sizeof(i));
 	getsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&j, &x);
 	if (i != j)
@@ -399,7 +268,7 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 	// make it non-blocking
 	if (ioctlsocket (newsocket, FIONBIO, (u_long *)&_true) == -1)
 	{
-		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't make non-blocking: %s", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't make non-blocking: %s\n", NET_ErrorString());
 		return 0;
 	}
 
@@ -408,7 +277,7 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 	// make it broadcast capable
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
-		Com_Error (ERR_DROP, "UDP_OpenSocket: setsockopt SO_BROADCAST: %s", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: setsockopt SO_BROADCAST: %s\n", NET_ErrorString());
 		return 0;
 	}
 
@@ -417,7 +286,7 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 	if (setsockopt(newsocket, IPPROTO_IP, IP_TOS, (char *)&i, sizeof(i)) == -1)
 		Com_Printf ("WARNING: UDP_OpenSocket: setsockopt IP_TOS: %s\n", NET_ErrorString());
 
-	if (!net_interface || !net_interface[0] || !stricmp(net_interface, "localhost"))
+	if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost"))
 		address.sin_addr.s_addr = INADDR_ANY;
 	else
 		NET_StringToSockaddr (net_interface, (struct sockaddr *)&address);
@@ -431,84 +300,12 @@ SOCKET NET_IPSocket (char *net_interface, int port)
 
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
-		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't bind to port %d: %s", port, NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't bind to port %d: %s\n", port, NET_ErrorString());
 		closesocket (newsocket);
 		return 0;
 	}
 
 	return newsocket;
-}
-
-
-/*
-====================
-NET_OpenIP
-====================
-*/
-void NET_OpenIP (int flags)
-{
-	cvar_t	*ip;
-	int		port;
-	int		dedicated;
-
-	srand ((unsigned int) Sys_Milliseconds());
-
-	net_total_in = net_packets_in = net_total_out = net_packets_out = 0;
-	net_inittime = time(0);
-
-	ip = Cvar_Get ("ip", "localhost", CVAR_NOSET);
-
-	dedicated = Cvar_VariableValue ("dedicated");
-
-	if (flags & NET_SERVER)
-	{
-		if (!ip_sockets[NS_SERVER])
-		{
-			port = Cvar_Get("ip_hostport", "0", CVAR_NOSET)->value;
-			if (!port)
-			{
-				port = Cvar_Get("hostport", "0", CVAR_NOSET)->value;
-				if (!port)
-				{
-					port = Cvar_Get("port", va("%i", PORT_SERVER), CVAR_NOSET)->value;
-				}
-			}
-			server_port = port;
-			ip_sockets[NS_SERVER] = NET_IPSocket (ip->string, port);
-			if (!ip_sockets[NS_SERVER] && dedicated)
-				Com_Error (ERR_FATAL, "Couldn't allocate dedicated server IP port. Another application is probably using it.");
-		}
-	}
-
-	// dedicated servers don't need client ports
-	if (dedicated)
-		return;
-
-	if (!ip_sockets[NS_CLIENT])
-	{
-		int newport = random() * 64000 + 1024;
-		port = Cvar_Get("ip_clientport", va("%i", newport), CVAR_NOSET)->value;
-		if (!port)
-		{
-			
-			port = Cvar_Get("clientport", va("%i", newport) , CVAR_NOSET)->value;
-			if (!port) {
-				port = PORT_ANY;
-				Cvar_Set ("clientport", va ("%d", newport));
-			}
-		}
-
-		ip_sockets[NS_CLIENT] = NET_IPSocket (ip->string, port);
-		if (!ip_sockets[NS_CLIENT])
-			ip_sockets[NS_CLIENT] = NET_IPSocket (ip->string, PORT_ANY);
-	}
-}
-
-void Net_Restart_f (void)
-{
-	int old;
-	old = NET_Config (NET_NONE);
-	NET_Config (old);
 }
 
 void Net_Stats_f (void)
@@ -525,46 +322,6 @@ void Net_Stats_f (void)
 				net_total_out, net_packets_out, (int)((net_total_out * 8) / 1024) / diff);
 }
 
-/*
-====================
-NET_Config
-
-A single player game will only use the loopback code
-====================
-*/
-int	NET_Config (int toOpen)
-{
-	int		i;
-	static	int	old_config;
-
-	i = old_config;
-
-	if (old_config == toOpen)
-		return i;
-
-	old_config |= toOpen;
-
-	if (toOpen == NET_NONE)
-	{
-		if (ip_sockets[NS_CLIENT])
-		{
-			closesocket (ip_sockets[NS_CLIENT]);
-			ip_sockets[NS_CLIENT] = 0;
-		}
-
-		if (ip_sockets[NET_SERVER])
-		{
-			closesocket (ip_sockets[NET_SERVER]);
-			ip_sockets[NET_SERVER] = 0;
-		}
-
-		old_config = NET_NONE;
-	}
-
-	NET_OpenIP (toOpen);
-
-	return i;
-}
 
 void NET_Client_Sleep (int msec)
 {
@@ -585,7 +342,7 @@ void NET_Client_Sleep (int msec)
 }
 
 // sleeps msec or until net socket is ready
-#ifndef NO_SERVER
+#if 0
 void NET_Sleep(int msec)
 {
     struct timeval timeout;
@@ -595,7 +352,7 @@ void NET_Sleep(int msec)
 
 	int i;
 
-	if (!dedicated || !dedicated->value)
+	if (!dedicated || !dedicated->intvalue)
 		return; // we're not a server, just run full speed
 
 	FD_ZERO(&fdset);
@@ -642,7 +399,7 @@ void NET_Init (void)
 
 	//r1: needed for pyroadmin hooks
 #ifndef NO_SERVER
-	if (dedicated->value)
+	if (dedicated->intvalue)
 		NET_Config (NET_SERVER);
 #endif
 

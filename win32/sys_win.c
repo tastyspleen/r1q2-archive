@@ -36,11 +36,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <openssl/sha.h>
 #endif
 
-//#include "../win32/conproc.h"
+#include "../win32/conproc.h"
 
 int SV_CountPlayers (void);
-
-BOOL noWindow = FALSE;
 
 //#define DEMO
 
@@ -63,6 +61,7 @@ HWND		hwnd_Server;
 extern netadr_t netaddress_pyroadmin;
 #endif
 static HANDLE		hinput, houtput;
+BOOL	oldStyleConsole = FALSE;
 #endif
 
 unsigned	sys_msg_time;
@@ -81,18 +80,19 @@ char		*argv[MAX_NUM_ARGVS];
 //cvar_t	*win_priority;
 
 sizebuf_t	console_buffer;
-byte console_buff[8192];
+byte console_buff[8192] = {0};
 //int console_lines = 0;
 
 int consoleBufferPointer = 0;
-byte consoleFullBuffer[16384];
+byte consoleFullBuffer[16384] = {0};
 
 //r1: service support
 SERVICE_STATUS          MyServiceStatus; 
 SERVICE_STATUS_HANDLE   MyServiceStatusHandle; 
 
 //original game command line
-char cmdline[4096];
+char	cmdline[4096];
+char	bname[MAX_QPATH];
 /*
 ===============================================================================
 
@@ -111,7 +111,7 @@ void Sys_Error (char *error, ...)
 
 #ifndef DEDICATED_ONLY
 	DestroyWindow (cl_hwnd);
-	if (dbg_unload->value)
+	if (dbg_unload->intvalue)
 		CL_Shutdown ();
 #endif
 
@@ -455,13 +455,6 @@ LRESULT ServerWindowProcCommand(HWND hwnd, UINT message, WPARAM wParam, LONG lPa
 					ServerWindowProcCommandExecute();
 					break;
 			}
-		case IDC_COMMAND:
-			//r1: this is for shitty software like GAMEHOST that writes to the GUI directly (!!!!)
-			//and is incompatible with new GUI.
-			if (wNotifyCode == EN_CHANGE && noWindow == TRUE) {
-					ServerWindowProcCommandExecute();
-					break;
-			}
 	}
 
 	return FALSE;
@@ -599,50 +592,75 @@ void Sys_Init (void)
 
 #ifndef NO_SERVER
 
-	if (dedicated->value)
+	if (dedicated->intvalue)
 	{
 		HICON hIcon;
 		BOOL hide = FALSE;
+
 		int i;
 
-		for (i = 1; i < argc; i++) {
-			if (!strcmp (argv[i], "-noconsole")) {
-				noWindow = TRUE;
-				break;
-			} else if (!strcmp (argv[i], "-hideconsole")) {
+		for (i = 1; i < argc; i++)
+		{
+			if (!strcmp (argv[i], "-hideconsole"))
+			{
 				hide = TRUE;
-				noWindow = TRUE;
+			}
+			else if (!strcmp (argv[i], "-oldconsole"))
+			{
+				if (global_Service)
+					Sys_Error ("-oldconsole and service mode are incompatible");
+				oldStyleConsole = TRUE;
+				break;
+			}
+			else if (!Q_stricmp (argv[i], "-HCHILD") || !Q_stricmp (argv[i], "-HPARENT") || !Q_stricmp (argv[i], "-HFILE"))
+			{
+				//for gamehost compatibility
+				oldStyleConsole = TRUE;
 			}
 		}
 
-		if (!global_Service) {
-			hwnd_Server = CreateDialog (global_hInstance, MAKEINTRESOURCE(IDD_SERVER_GUI), NULL, (DLGPROC)ServerWindowProc);
+		if (oldStyleConsole)
+		{
+			if (!AllocConsole ())
+				Sys_Error ("Couldn't create dedicated server console");
+			hinput = GetStdHandle (STD_INPUT_HANDLE);
+			houtput = GetStdHandle (STD_OUTPUT_HANDLE);
+		
+			// let QHOST hook in
+			InitConProc (argc, argv);	
+		}
+		else
+		{
+			if (!global_Service)
+			{
+				hwnd_Server = CreateDialog (global_hInstance, MAKEINTRESOURCE(IDD_SERVER_GUI), NULL, (DLGPROC)ServerWindowProc);
 
-			if (!hwnd_Server)
-				Sys_Error ("Couldn't create dedicated server window. GetLastError() = %d", GetLastError());
+				if (!hwnd_Server)
+					Sys_Error ("Couldn't create dedicated server window. GetLastError() = %d", GetLastError());
 
-			if (hide)
-				ShowWindow (hwnd_Server, SW_HIDE);
+				if (hide)
+					ShowWindow (hwnd_Server, SW_HIDE);
 
-			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_SETREADONLY, TRUE, 0);
+				SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_SETREADONLY, TRUE, 0);
 
-			SZ_Init (&console_buffer, console_buff, sizeof(console_buff));
-			console_buffer.allowoverflow = true;
+				SZ_Init (&console_buffer, console_buff, sizeof(console_buff));
+				console_buffer.allowoverflow = true;
 
-			memset (consoleFullBuffer, 0, sizeof(consoleFullBuffer));
+				//memset (consoleFullBuffer, 0, sizeof(consoleFullBuffer));
 
-			hIcon = (HICON)LoadImage(   global_hInstance,
-										MAKEINTRESOURCE(IDI_ICON2),
-										IMAGE_ICON,
-										GetSystemMetrics(SM_CXSMICON),
-										GetSystemMetrics(SM_CYSMICON),
-										0);
+				hIcon = (HICON)LoadImage(   global_hInstance,
+											MAKEINTRESOURCE(IDI_ICON2),
+											IMAGE_ICON,
+											GetSystemMetrics(SM_CXSMICON),
+											GetSystemMetrics(SM_CYSMICON),
+											0);
 
-			//FIXME: if compiled with ICL, this icon turns into the win32 'info' icon (???)
-			if(hIcon)
-				SendMessage(hwnd_Server, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+				//FIXME: if compiled with ICL, this icon turns into the win32 'info' icon (???)
+				if(hIcon)
+					SendMessage(hwnd_Server, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
 
-			SetFocus (GetDlgItem (hwnd_Server, IDC_COMMAND));
+				SetFocus (GetDlgItem (hwnd_Server, IDC_COMMAND));
+			}
 		}
 	}
 
@@ -658,6 +676,108 @@ static int	console_textlen;
 
 /*
 ================
+Sys_ConsoleInput
+================
+*/
+char *Sys_ConsoleInput (void)
+{
+	if (!oldStyleConsole)
+	{
+		return NULL;
+	}
+	else
+	{
+		INPUT_RECORD	recs[1024];
+		int		dummy;
+		int		ch, numread, numevents;
+
+		if (!dedicated || !dedicated->intvalue)
+			return NULL;
+
+		for ( ;; )
+		{
+			if (!GetNumberOfConsoleInputEvents (hinput, &numevents))
+				Sys_Error ("Error getting # of console events");
+
+			if (numevents <= 0)
+				break;
+
+			if (!ReadConsoleInput(hinput, recs, 1, &numread))
+				Sys_Error ("Error reading console input");
+
+			if (numread != 1)
+				Sys_Error ("Couldn't read console input");
+
+			if (recs[0].EventType == KEY_EVENT)
+			{
+				if (!recs[0].Event.KeyEvent.bKeyDown)
+				{
+					ch = recs[0].Event.KeyEvent.uChar.AsciiChar;
+
+					switch (ch)
+					{
+						case '\r':
+							WriteFile(houtput, "\r\n", 2, &dummy, NULL);	
+
+							if (console_textlen)
+							{
+								console_text[console_textlen] = 0;
+								console_textlen = 0;
+								return console_text;
+							}
+							break;
+
+						case '\b':
+							if (console_textlen)
+							{
+								console_textlen--;
+								WriteFile(houtput, "\b \b", 3, &dummy, NULL);	
+							}
+							break;
+
+						default:
+							if (ch >= ' ')
+							{
+								if (console_textlen < sizeof(console_text)-2)
+								{
+									WriteFile(houtput, &ch, 1, &dummy, NULL);	
+									console_text[console_textlen] = ch;
+									console_textlen++;
+								}
+							}
+
+							break;
+
+					}
+				}
+			}
+		}
+		return NULL;
+	}
+}
+
+void Sys_ConsoleOutputOld (char *string)
+{
+	int		dummy;
+	char	text[256];
+
+	if (console_textlen)
+	{
+		text[0] = '\r';
+		memset(&text[1], ' ', console_textlen);
+		text[console_textlen+1] = '\r';
+		text[console_textlen+2] = 0;
+		WriteFile(houtput, text, console_textlen+2, &dummy, NULL);
+	}
+
+	WriteFile(houtput, string, strlen(string), &dummy, NULL);
+
+	if (console_textlen)
+		WriteFile(houtput, console_text, console_textlen, &dummy, NULL);
+}
+
+/*
+================
 Sys_ConsoleOutput
 
 Print text to the dedicated console
@@ -669,14 +789,23 @@ void Sys_ConsoleOutput (char *string)
 	char *p, *s;
 	//int n = 0;
 
+	if (!dedicated || !dedicated->intvalue)
+		return;
+
+	if (oldStyleConsole)
+	{
+		Sys_ConsoleOutputOld (string);
+		return;
+	}
+
 	//r1: no output for services, non dedicated and not before buffer is initialized.
-	if (global_Service || !dedicated || !dedicated->value || !console_buffer.maxsize)
+	if (global_Service || !console_buffer.maxsize)
 		return;
 
 	Sys_AcquireConsoleMutex();
 
 #ifdef USE_PYROADMIN
-	if (pyroadminport && pyroadminport->value)
+	if (pyroadminport->intvalue)
 	{
 		int len;
 		char buff[1152];
@@ -880,7 +1009,7 @@ void *Sys_GetGameAPI (void *parms)
 	}
 	else
 	{
-#ifdef DEBUG
+#ifdef _DEBUG
 		// check the current directory for other development purposes
 		Com_sprintf (name, sizeof(name), "%s/%s", cwd, gamename);
 		Com_sprintf (newname, sizeof(newname), "%s/%s.new", cwd, gamename);
@@ -949,8 +1078,17 @@ ParseCommandLine
 */
 void ParseCommandLine (LPSTR lpCmdLine)
 {
+	char *p;
+
 	argc = 1;
 	argv[0] = "exe";
+
+	GetModuleFileName (NULL, bname, sizeof(bname)-1);
+	p = strrchr (bname, '\\');
+	if (p)
+		binary_name = p + 1;
+	else
+		binary_name = bname;
 
 	while (*lpCmdLine && (argc < MAX_NUM_ARGVS))
 	{
@@ -989,8 +1127,10 @@ void QuakeMain (void)
 
 	oldtime = Sys_Milliseconds ();
 
+	_controlfp( _PC_24, _MCW_PC );
+
 	for (;;) {
-		if (Minimized || (dedicated && dedicated->value))
+		if (Minimized || dedicated->intvalue)
 			Sleep (1);
 
 		do
@@ -999,7 +1139,6 @@ void QuakeMain (void)
 			time = newtime - oldtime;
 		} while (time < 1);
 
-		_controlfp( _PC_24, _MCW_PC );
 		Qcommon_Frame (time);
 
 		oldtime = newtime;
@@ -1027,6 +1166,9 @@ WinMain
 */
 HINSTANCE	global_hInstance;
 
+#define FLOAT2INTCAST(f)(*((int *)(&f)))
+#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
+
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 #ifndef NO_SERVER
@@ -1042,7 +1184,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
         return 0;
 
 	if (hInstance)
-		strncpy (cmdline, lpCmdLine, sizeof(cmdline)-1);
+		Q_strncpy (cmdline, lpCmdLine, sizeof(cmdline)-1);
 
 	global_hInstance = hInstance;
 
@@ -1063,9 +1205,11 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	Qcommon_Init (argc, argv);
 
+	_controlfp( _PC_24, _MCW_PC );
+
 #ifndef NO_SERVER
 
-	if (dedicated && dedicated->value) {
+	if (dedicated->intvalue) {
 		_beginthreadex (NULL, 0, (unsigned int (__stdcall *)(void *))QuakeMain, NULL, 0, &handle);
 
 		while (GetMessage (&msg, NULL, 0, 0))
@@ -1088,7 +1232,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			// if at a full screen console, don't update unless needed
 			if (Minimized
 	#ifndef NO_SERVER			
-				|| (dedicated && dedicated->value)
+				|| (dedicated->intvalue)
 	#endif
 			)
 			{
@@ -1123,7 +1267,6 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 					time = newtime - oldtime;
 				} while (time < 1);
 
-				_controlfp( _PC_24, _MCW_PC );
 				Qcommon_Frame (time);
 
 				oldtime = newtime;

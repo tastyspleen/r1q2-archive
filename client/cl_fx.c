@@ -45,7 +45,8 @@ typedef struct
 } clightstyle_t;
 
 clightstyle_t	cl_lightstyle[MAX_LIGHTSTYLES];
-int			lastofs;
+int				lastofs;
+int				numLightStyles;
 
 /*
 ================
@@ -54,6 +55,7 @@ CL_ClearLightStyles
 */
 void CL_ClearLightStyles (void)
 {
+	numLightStyles = 0;
 	memset (cl_lightstyle, 0, sizeof(cl_lightstyle));
 	lastofs = -1;
 }
@@ -70,11 +72,13 @@ void CL_RunLightStyles (void)
 	clightstyle_t	*ls;
 
 	ofs = cl.time / 100;
+
 	if (ofs == lastofs)
 		return;
+
 	lastofs = ofs;
 
-	for (i=0,ls=cl_lightstyle ; i<MAX_LIGHTSTYLES ; i++, ls++)
+	for (i=0,ls=cl_lightstyle ; i<numLightStyles ; i++, ls++)
 	{
 		if (!ls->length)
 		{
@@ -102,6 +106,8 @@ void CL_SetLightstyle (int i)
 
 	cl_lightstyle[i].length = j;
 
+	numLightStyles = max(i, numLightStyles);
+
 	for (k=0 ; k<j ; k++)
 		cl_lightstyle[i].map[k] = (float)(s[k]-'a')/(float)('m'-'a');
 }
@@ -116,7 +122,7 @@ void CL_AddLightStyles (void)
 	int		i;
 	clightstyle_t	*ls;
 
-	for (i=0,ls=cl_lightstyle ; i<MAX_LIGHTSTYLES ; i++, ls++)
+	for (i=0,ls=cl_lightstyle ; i<numLightStyles; i++, ls++)
 		V_AddLightStyle (i, ls->value[0], ls->value[1], ls->value[2]);
 }
 
@@ -2269,7 +2275,7 @@ void CL_EntityEvent (entity_state_t *ent)
 		CL_TeleportParticles (ent->origin);
 		break;
 	case EV_FOOTSTEP:
-		if (cl_footsteps->value)
+		if (cl_footsteps->intvalue)
 			S_StartSound (NULL, ent->number, CHAN_BODY, cl_sfx_footsteps[randomMT()&3], 1, ATTN_NORM, 0);
 		break;
 	case EV_FALLSHORT:

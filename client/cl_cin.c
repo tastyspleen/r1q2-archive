@@ -587,7 +587,7 @@ void SCR_PlayCinematic (char *arg)
 #endif
 
 	cl.cinematicframe = 0;
-	dot = strstr (arg, ".");
+	dot = strchr (arg, '.');
 	if (dot && !strcmp (dot, ".pcx"))
 	{	// static pcx image
 		Com_sprintf (name, sizeof(name), "pics/%s", arg);

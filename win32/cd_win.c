@@ -388,8 +388,8 @@ LONG CDAudio_MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				{
 					// if the track has played the given number of times,
 					// go to the ambient track
-					if (++loopcounter >= cd_loopcount->value)
-						CDAudio_Play2(cd_looptrack->value, true);
+					if (++loopcounter >= cd_loopcount->intvalue)
+						CDAudio_Play2(cd_looptrack->intvalue, true);
 					else
 						CDAudio_Play2(playTrack, true);
 				}
@@ -417,9 +417,9 @@ LONG CDAudio_MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 void CDAudio_Update(void)
 {
-	if ( cd_nocd->value != !enabled )
+	if ( cd_nocd->intvalue != !enabled )
 	{
-		if ( cd_nocd->value )
+		if ( cd_nocd->intvalue )
 		{
 			CDAudio_Stop();
 			enabled = false;
@@ -443,7 +443,7 @@ int CDAudio_Init(void)
 	cd_nocd = Cvar_Get ("cd_nocd", "0", CVAR_ARCHIVE );
 	cd_loopcount = Cvar_Get ("cd_loopcount", "4", 0);
 	cd_looptrack = Cvar_Get ("cd_looptrack", "11", 0);
-	if ( cd_nocd->value)
+	if ( cd_nocd->intvalue)
 		return -1;
 
 	mciOpenParms.lpstrDeviceType = "cdaudio";

@@ -21,7 +21,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-char *svc_strings[] =
+int serverPacketCount;
+
+char *svc_strings[256] =
 {
 	"svc_bad",
 
@@ -46,9 +48,11 @@ char *svc_strings[] =
 	"svc_packetentities",
 	"svc_deltapacketentities",
 	"svc_frame",
-	"svc_zpacket"
+	"svc_zpacket",
+	"svc_zdownload"
 };
 
+#ifdef _DEBUG
 typedef struct dlqueue_s
 {
 	struct dlqueue_s	*next;
@@ -61,6 +65,8 @@ dlqueue_t downloadqueue;
 void CL_AddToDownloadQueue (char *path)
 {
 	dlqueue_t *dlq = &downloadqueue;
+
+	return;
 
 	if (!Cvar_VariableValue ("allow_download"))
 		return;
@@ -143,6 +149,7 @@ void CL_RunDownloadQueue (void)
 		}
 	}
 }
+#endif
 
 //=============================================================================
 
@@ -156,7 +163,9 @@ void CL_DownloadFileName(char *dest, int destlen, char *fn)
 
 void CL_FinishDownload (void)
 {
+#ifdef _DEBUG
 	clientinfo_t *ci;
+#endif
 
 	int r;
 	char	oldn[MAX_OSPATH];
@@ -174,98 +183,20 @@ void CL_FinishDownload (void)
 	if (r)
 		Com_Printf ("failed to rename.\n");
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && (strstr(newn, ".pcx") || strstr(newn, ".md2"))) {
+#ifdef _DEBUG
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && (strstr(newn, "players"))) {
 		for (r = 0; r < MAX_CLIENTS; r++) {
 			ci = &cl.clientinfo[r];
 			if (ci->deferred)
 				CL_ParseClientinfo (r);
 		}
 	}
+#endif
 
 	cls.downloadpending = false;
 	cls.download = NULL;
 	cls.downloadpercent = 0;
 }
-/*
-unsigned int __stdcall ClientDownloadThread (void)
-{
-	int expected = 0, buffPos = 0;
-	byte *zbuffer;
-	byte buffRecv[1024];
-	byte buffer[262144];
-	int socket, ret, len;
-
-	memset (buffer, 0, sizeof(buffer));
-
-	socket = NET_Connect (&cls.netchan.remote_address, cls.dlserverport);
-	if (socket == -1) {
-		Com_Printf ("ClientDownloadThread: couldn't connect to download server on %s.\n", NET_AdrToString (cls.netchan.remote_address));
-		fclose (cls.download);
-		cls.download = NULL;
-		_endthread ();
-	}
-
-	for (;;) {
-		ret = NET_Select (socket, 15000);
-		if (ret < 1) {
-			Com_Printf ("ClientDownloadThread: NET_Select connection error.\n");
-			NET_CloseSocket (socket);
-
-			//could be caused by disconnect
-			if (cls.download)
-				fclose (cls.download);
-			cls.download = NULL;
-			_endthread ();
-		}
-
-		expected = 0;
-		for (;;) {
-			if (!buffPos || buffPos < expected) {
-				ret = NET_RecvTCP (socket, buffRecv, sizeof(buffRecv));
-
-				if (ret == -1) {
-					Com_Printf ("ClientDownloadThread: NET_RecvTCP connection error.\n");
-					NET_CloseSocket (socket);
-					fclose (cls.download);
-					cls.download = NULL;
-					_endthread ();
-				} else if (ret == 0) {
-					NET_CloseSocket (socket);
-					CL_FinishDownload ();
-					_endthread ();
-				}
-
-				memcpy (buffer + buffPos, buffRecv, ret);
-				buffPos += ret;
-			}
-
-			if (!expected) {
-				expected = *(int *)buffer;
-			}
-
-			if (buffPos >= expected)
-				break;
-		}
-
-		len = *(int *)(buffer + sizeof(int));
-		if (len) {
-			zbuffer = Z_TagMalloc (len, TAGMALLOC_CLIENT_DOWNLOAD);
-			ret = ZLibDecompress (buffer+(sizeof(int)*2), expected-(sizeof(int)*2), zbuffer, len, -15);
-			fwrite (zbuffer, ret, 1, cls.download);
-			Z_Free (zbuffer);
-		}
-
-		cls.downloadpercent = ((float)ftell(cls.download)/(float)cls.downloadsize) * 100.0;
-
-		memmove (buffer, buffer + expected, sizeof(buffer)-expected);
-
-		buffPos -= expected;
-	}
-
-	//FIXME: should we ever get here?
-	//NET_CloseSocket (socket);
-}
-*/
 
 /*
 ===============
@@ -280,23 +211,59 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 	FILE *fp;
 	char	*p;
 	char	name[MAX_OSPATH];
+	static char lastfilename[MAX_QPATH] = {0};
+
+	//r1: don't attempt same file many times
+	if (!Q_stricmp (filename, lastfilename))
+	{
+		Com_DPrintf ("Duplicate path check (%s)\n", filename);
+		return true;
+	}
+
+	Q_strncpy (lastfilename, filename, sizeof(lastfilename)-1);
 
 	if (strstr (filename, ".."))
 	{
-		Com_Printf ("Refusing to download a path with .. (%s)\n", filename);
+		Com_Printf ("Refusing to check a path with .. (%s)\n", filename);
+		return true;
+	}
+
+	if (strchr (filename, ' '))
+	{
+		Com_Printf ("Refusing to check a path containing spaces (%s)\n", filename);
+		return true;
+	}
+
+	if (strchr (filename, ':'))
+	{
+		Com_Printf ("Refusing to check a path containing a colon (%s)\n", filename);
+		return true;
+	}
+
+	if (*filename == '/')
+	{
+		Com_Printf ("Refusing to check a path starting with / (%s)\n", filename);
 		return true;
 	}
 
 	if (FS_LoadFile (filename, NULL) != -1)
-	{	// it exists, no need to download
+	{	
+		// it exists, no need to download
 		return true;
 	}
 
-	strncpy (cls.downloadname, filename, sizeof(cls.downloadname)-1);
+	Q_strncpy (cls.downloadname, filename, sizeof(cls.downloadname)-1);
 
 	//r1: fix \ to /
 	while ((p = strstr(cls.downloadname, "\\")))
 		*p = '/';
+
+	//r1: verify we are giving the server a legal path
+	if (cls.downloadname[strlen(cls.downloadname)-1] == '/' || !strstr (cls.downloadname, "/"))
+	{
+		Com_Printf ("Refusing to download bad path (%s)\n", filename);
+		return true;
+	}
 
 	// download to a temp name, and only rename
 	// to the real name when done, so if interrupted
@@ -323,18 +290,18 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 		// give the server an offset to start the download
 		Com_Printf ("Resuming %s\n", cls.downloadname);
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && cls.dlserverport) {
-			MSG_WriteString (&cls.netchan.message, va("download %s %i DOWNLOAD_TCP", cls.downloadname, len));
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i udp-zlib", cls.downloadname, len));
 		} else {
-			MSG_WriteString (&cls.netchan.message, va("download %s %i", cls.downloadname, len));
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i", cls.downloadname, len));
 		}
 	} else {
 		Com_Printf ("Downloading %s\n", cls.downloadname);
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && cls.dlserverport) {
-			MSG_WriteString (&cls.netchan.message, va("download %s 0 DOWNLOAD_TCP", cls.downloadname));
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0 udp-zlib", cls.downloadname));
 		} else {
-			MSG_WriteString (&cls.netchan.message, va("download %s", cls.downloadname));
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\"", cls.downloadname));
 		}
 	}
 
@@ -356,14 +323,15 @@ void CL_Download_f (void)
 	char	name[MAX_OSPATH];
 	FILE	*fp;
 	char	*p;
-	char	filename[MAX_OSPATH];
+	char	*filename;
 
 	if (Cmd_Argc() != 2) {
 		Com_Printf("Usage: download <filename>\n");
 		return;
 	}
 
-	Com_sprintf(filename, sizeof(filename), "%s", Cmd_Argv(1));
+	//Com_sprintf(filename, sizeof(filename), "%s", Cmd_Argv(1));
+	filename = Cmd_Argv(1);
 
 	if (strstr (filename, ".."))
 	{
@@ -371,7 +339,8 @@ void CL_Download_f (void)
 		return;
 	}
 
-	if (cls.state <= ca_connecting) {
+	if (cls.state < ca_connected)
+	{
 		Com_Printf ("Not connected.\n");
 		return;
 	}
@@ -411,25 +380,23 @@ void CL_Download_f (void)
 		// give the server an offset to start the download
 		Com_Printf ("Resuming %s\n", cls.downloadname);
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && cls.dlserverport) {
-			MSG_WriteString (&cls.netchan.message, va("download %s %i DOWNLOAD_TCP", cls.downloadname, len));
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i udp-zlib", cls.downloadname, len));
 		} else {
-			MSG_WriteString (&cls.netchan.message, va("download %s %i", cls.downloadname, len));
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i", cls.downloadname, len));
 		}
 	} else {
 		Com_Printf ("Downloading %s\n", cls.downloadname);
 	
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-			MSG_WriteString (&cls.netchan.message, va("download %s 0 DOWNLOAD_TCP", cls.downloadname));
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0 udp-zlib", cls.downloadname));
 		} else {
-			MSG_WriteString (&cls.netchan.message, va("download %s 0", cls.downloadname));
+			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0", cls.downloadname));
 		}
 	}
 
 	send_packet_now = true;
-
-	//cls.downloadnumber++;
 }
 
 void CL_Passive_f (void)
@@ -477,7 +444,7 @@ A download message has been received from the server
 =====================
 */
 
-void CL_ParseDownload (void)
+void CL_ParseDownload (qboolean dataIsCompressed)
 {
 	int		size, percent;
 	char	name[MAX_OSPATH];
@@ -499,47 +466,20 @@ void CL_ParseDownload (void)
 			fclose (cls.download);
 			cls.download = NULL;
 		}
+#ifdef _DEBUG
 		CL_RemoveFromDownloadQueue (cls.downloadname);
+#endif
 		cls.downloadpending = false;
 		CL_RequestNextDownload ();
 		return;
 	}
-		
-	/*if (cls.dlserverport) {
-		if (percent == 0xFF) {
-			unsigned int threadID;
-			cls.downloadsize = (size+1) * 1024;
-			// open the file if not opened yet
-			if (!cls.download)
-			{
-				CL_DownloadFileName(name, sizeof(name), cls.downloadtempname);
-
-				FS_CreatePath (name);
-
-				cls.download = fopen (name, "wb");
-				if (!cls.download)
-				{
-					Com_Printf ("Failed to open %s\n", cls.downloadtempname);
-					cls.downloadpending = false;
-					CL_RequestNextDownload ();
-					return;
-				}
-			}
-			_beginthreadex (NULL, 0, (unsigned int (__stdcall *)(void *))ClientDownloadThread, NULL, 0, &threadID);
-		} else if (percent == 100) {
-			while (cls.download)
-				Sys_Sleep (10);
-			CL_RequestNextDownload ();
-		}
-		return;
-	}*/
 
 	// open the file if not opened yet
 	if (!cls.download)
 	{
 		if (!*cls.downloadtempname)
 		{
-			Com_DPrintf ("Received download packet without request. Ignored.\n");
+			Com_Printf ("Received download packet without request. Ignored.\n");
 			return;
 		}
 		CL_DownloadFileName(name, sizeof(name), cls.downloadtempname);
@@ -558,25 +498,35 @@ void CL_ParseDownload (void)
 		}
 	}
 
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION || !cls.dlserverport) {
+	//r1: if we're stuck with udp, may as well make best use of the bandwidth...
+	if (dataIsCompressed)
+	{
+		unsigned short	uncompressedLen;
+		byte			uncompressed[0xFFFF];
+
+		uncompressedLen = MSG_ReadShort (&net_message);
+
+		if (!uncompressedLen)
+			Com_Error (ERR_DROP, "uncompressedLen == 0");
+
+		ZLibDecompress (net_message.data + net_message.readcount, size, uncompressed, uncompressedLen, -15);
+		fwrite (uncompressed, 1, uncompressedLen, cls.download);
+		Com_DPrintf ("svc_zdownload(%s): %d -> %d\n", cls.downloadname, size, uncompressedLen);
+	}
+	else
+	{
 		fwrite (net_message.data + net_message.readcount, 1, size, cls.download);
 	}
 
-	if (!cls.dlserverport) {
-		net_message.readcount += size;
-	}
+	net_message.readcount += size;
 
 	if (percent != 100)
 	{
 		cls.downloadpercent = percent;
 
-		//r1: enhanced server only sends download messages as status updates.
-		if (!cls.dlserverport)
-		{
-			MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-			SZ_Print (&cls.netchan.message, "nextdl");
-			send_packet_now = true;
-		}
+		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+		SZ_Print (&cls.netchan.message, "nextdl");
+		send_packet_now = true;
 	}
 	else
 	{
@@ -748,8 +698,8 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 {
 	int i;
 	char		*t;
-	char		original_model_name[MAX_QPATH];
-	char		original_skin_name[MAX_QPATH];
+	//char		original_model_name[MAX_QPATH];
+	//char		original_skin_name[MAX_QPATH];
 
 	char		model_name[MAX_QPATH];
 	char		skin_name[MAX_QPATH];
@@ -757,15 +707,14 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	char		skin_filename[MAX_QPATH];
 	char		weapon_filename[MAX_QPATH];
 
-	strncpy(ci->cinfo, s, sizeof(ci->cinfo));
-	ci->cinfo[sizeof(ci->cinfo)-1] = 0;
+	Q_strncpy(ci->cinfo, s, sizeof(ci->cinfo)-1);
 
 	ci->deferred = false;
 
 	// isolate the player's name
-	strncpy(ci->name, s, sizeof(ci->name));
-	ci->name[sizeof(ci->name)-1] = 0;
-	t = strstr (s, "\\");
+	Q_strncpy(ci->name, s, sizeof(ci->name)-1);
+
+	t = strchr (s, '\\');
 	if (t)
 	{
 		ci->name[t-s] = 0;
@@ -786,33 +735,40 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 
 	if (*s == 0)
 	{
-		strcpy (model_filename, "players/male/tris.md2");
-		strcpy (weapon_filename, "players/male/weapon.md2");
-		strcpy (skin_filename, "players/male/grunt.pcx");
+		//strcpy (model_filename, "players/male/tris.md2");
+		//strcpy (weapon_filename, "players/male/weapon.md2");
+		//strcpy (skin_filename, "players/male/grunt.pcx");
 		strcpy (ci->iconname, "/players/male/grunt_i.pcx");
-		ci->model = re.RegisterModel (model_filename);
-		memset(ci->weaponmodel, 0, sizeof(ci->weaponmodel));
-		ci->weaponmodel[0] = re.RegisterModel (weapon_filename);
-		ci->skin = re.RegisterSkin (skin_filename);
+		strcpy (model_name, "male");
+		ci->model = re.RegisterModel ("players/male/tris.md2");
+		//memset(ci->weaponmodel, 0, sizeof(ci->weaponmodel));
+		//ci->weaponmodel[0] = re.RegisterModel (weapon_filename);
+		ci->skin = re.RegisterSkin ("players/male/grunt.pcx");
 		ci->icon = re.RegisterPic (ci->iconname);
 	}
 	else
 	{
-		// isolate the model name
 		strcpy (model_name, s);
 
-		t = strstr(model_name, "/");
+		t = strchr(model_name, '/');
 		if (!t)
-			t = strstr(model_name, "\\");
-		if (!t)
-			t = model_name;
-		*t = 0;
+			t = strchr(model_name, '\\');
 
-		strcpy (original_model_name, model_name);
+		if (!t)
+		{
+			memcpy (model_name, "male\0grunt\0", 11);
+			s = "male\0grunt";
+		}
+		else
+		{
+			*t = 0;
+		}
+
+		//strcpy (original_model_name, model_name);
 
 		// isolate the skin name
 		strcpy (skin_name, s + strlen(model_name) + 1);
-		strcpy (original_skin_name, s + strlen(model_name) + 1);
+		//strcpy (original_skin_name, s + strlen(model_name) + 1);
 
 		// model file
 		Com_sprintf (model_filename, sizeof(model_filename), "players/%s/tris.md2", model_name);
@@ -822,7 +778,9 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 			ci->deferred = true;
 			//if (!CL_CheckOrDownloadFile (model_filename))
 			//	return;
+#ifdef _DEBUG
 			CL_AddToDownloadQueue (model_filename);
+#endif
 			strcpy(model_name, "male");
 			//Com_sprintf (model_filename, sizeof(model_filename), "players/male/tris.md2");
 			strcpy (model_filename, "players/male/tris.md2");
@@ -835,10 +793,12 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 
 		if (!ci->skin)
 		{
-			Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/%s.pcx", original_model_name, original_skin_name);
+			//Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/%s.pcx", original_model_name, original_skin_name);
 			ci->deferred = true;
 			//CL_CheckOrDownloadFile (skin_filename);
+#ifdef _DEBUG
 			CL_AddToDownloadQueue (skin_filename);
+#endif
 		}
 
 		// if we don't have the skin and the model wasn't male,
@@ -863,34 +823,38 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 			ci->skin = re.RegisterSkin (skin_filename);
 		}
 
-		// weapon file
-		for (i = 0; i < num_cl_weaponmodels; i++) {
-			Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/%s/%s", model_name, cl_weaponmodels[i]);
-			ci->weaponmodel[i] = re.RegisterModel(weapon_filename);
-			if (!ci->weaponmodel[i]) {
-				Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/%s.pcx", original_model_name, cl_weaponmodels[i]);
-				ci->deferred = true;
-				CL_AddToDownloadQueue (weapon_filename);
-			}
-			if (!ci->weaponmodel[i] && strcmp(model_name, "cyborg") == 0) {
-				// try male
-				Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/male/%s", cl_weaponmodels[i]);
-				ci->weaponmodel[i] = re.RegisterModel(weapon_filename);
-			}
-			if (!cl_vwep->value)
-				break; // only one when vwep is off
-		}
-
 		// icon file
 		Com_sprintf (ci->iconname, sizeof(ci->iconname), "/players/%s/%s_i.pcx", model_name, skin_name);
 		ci->icon = re.RegisterPic (ci->iconname);
 
 		if (!ci->icon) {
-			Com_sprintf (ci->iconname, sizeof(ci->iconname), "players/%s/%s_i.pcx", original_model_name, original_skin_name);
+			//Com_sprintf (ci->iconname, sizeof(ci->iconname), "players/%s/%s_i.pcx", original_model_name, original_skin_name);
 			ci->deferred = true;
+#ifdef _DEBUG
 			CL_AddToDownloadQueue (ci->iconname);
+#endif
 			//ci->icon = re.RegisterPic ("/players/male/grunt_i.pcx");
 		}
+	}
+
+	// weapon file
+	for (i = 0; i < num_cl_weaponmodels; i++) {
+		Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/%s/%s", model_name, cl_weaponmodels[i]);
+		ci->weaponmodel[i] = re.RegisterModel(weapon_filename);
+		if (!ci->weaponmodel[i]) {
+			//Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/%s.pcx", original_model_name, cl_weaponmodels[i]);
+			ci->deferred = true;
+#ifdef _DEBUG
+			CL_AddToDownloadQueue (weapon_filename);
+#endif
+		}
+		if (!ci->weaponmodel[i] && strcmp(model_name, "cyborg") == 0) {
+			// try male
+			Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/male/%s", cl_weaponmodels[i]);
+			ci->weaponmodel[i] = re.RegisterModel(weapon_filename);
+		}
+		if (!cl_vwep->intvalue)
+			break; // only one when vwep is off
 	}
 
 	// must have loaded all data types to be valud
@@ -940,16 +904,13 @@ void CL_ParseConfigString (void)
 		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring >= MAX_CONFIGSTRINGS");
 	s = MSG_ReadString(&net_message);
 
-	strncpy (olds, cl.configstrings[i], sizeof(olds));
-	olds[sizeof(olds) - 1] = 0;
+	Q_strncpy (olds, cl.configstrings[i], sizeof(olds)-1);
 
 	//r1ch: only allow statusbar to overflow
 	if (i >= CS_STATUSBAR && i < CS_AIRACCEL)
 		strncpy (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (CS_AIRACCEL - i))-1);
 	else
-		strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
-
-	//Com_Printf ("configstring %i: %s\n", i, s);
+		Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
 
 	// do something apropriate
 
@@ -994,8 +955,18 @@ void CL_ParseConfigString (void)
 	}
 	else if (i >= CS_PLAYERSKINS && i < CS_PLAYERSKINS+MAX_CLIENTS)
 	{
-		if (cl.refresh_prepped && strcmp(olds, s))
-			CL_ParseClientinfo (i-CS_PLAYERSKINS);
+		//r1: hack to avoid parsing non-skins from mods that overload CS_PLAYERSKINS
+		//FIXME: how reliable is CS_MAXCLIENTS?
+		i -= CS_PLAYERSKINS;
+		if (cl.configstrings[CS_MAXCLIENTS][0] && i < atoi(cl.configstrings[CS_MAXCLIENTS]))
+		{
+			if (cl.refresh_prepped && strcmp(olds, s))
+				CL_ParseClientinfo (i);
+		}
+		else
+		{
+			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin '%s'\n", s);
+		}
 	}
 }
 
@@ -1074,7 +1045,7 @@ void CL_ParseStartSoundPacket(void)
 
 void SHOWNET(char *s)
 {
-	if (cl_shownet->value>=2)
+	if (cl_shownet->intvalue>=2)
 		Com_Printf ("%3i:%s\n", net_message.readcount-1, s);
 }
 
@@ -1092,11 +1063,12 @@ void CL_ParseServerMessage (void)
 //
 // if recording demos, copy the message out
 //
-	if (cl_shownet->value == 1)
+	if (cl_shownet->intvalue == 1)
 		Com_Printf ("%i ",net_message.cursize);
-	else if (cl_shownet->value >= 2)
+	else if (cl_shownet->intvalue >= 2)
 		Com_Printf ("------------------\n");
 
+	serverPacketCount++;
 
 //
 // parse the message
@@ -1117,7 +1089,7 @@ void CL_ParseServerMessage (void)
 			break;
 		}
 
-		if (cl_shownet->value>=2)
+		if (cl_shownet->intvalue>=2)
 		{
 			if (cmd >= svc_max_enttypes)
 				Com_Printf ("%3i:BAD CMD %i\n", net_message.readcount-1,cmd);
@@ -1129,7 +1101,7 @@ void CL_ParseServerMessage (void)
 		switch (cmd)
 		{
 		default:
-			if (developer->value)
+			if (developer->intvalue)
 				Com_Printf ("Unknown command char %d, ignoring!!\n", cmd);
 			else
 				Com_Error (ERR_DROP,"CL_ParseServerMessage: Illegible server message %d (0x%.2x)\n", cmd, cmd);
@@ -1160,9 +1132,9 @@ void CL_ParseServerMessage (void)
 			if (i == PRINT_CHAT)
 			{
 				S_StartLocalSound ("misc/talk.wav");
-				if (cl_filterchat->value)
+				if (cl_filterchat->intvalue)
 				{
-					strcpy (s, StripHighBits(s, (int)cl_filterchat->value == 2));
+					strcpy (s, StripHighBits(s, (int)cl_filterchat->intvalue == 2));
 					strcat (s, "\n");
 				}
 				con.ormask = 128;
@@ -1222,7 +1194,7 @@ void CL_ParseServerMessage (void)
 			break;
 
 		case svc_download:
-			CL_ParseDownload ();
+			CL_ParseDownload (false);
 			break;
 
 		case svc_frame:
@@ -1241,6 +1213,10 @@ void CL_ParseServerMessage (void)
 		// ************** r1q2 specific BEGIN ****************
 		case svc_zpacket:
 			CL_ParseZPacket();
+			break;
+
+		case svc_zdownload:
+			CL_ParseDownload(true);
 			break;
 		// ************** r1q2 specific END ******************
 

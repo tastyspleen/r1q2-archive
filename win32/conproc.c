@@ -284,7 +284,6 @@ BOOL ReadText (LPTSTR pszText, int iBeginLine, int iEndLine)
 	return bRet;
 }
 
-void ServerWindowProcCommandExecute (void);
 BOOL WriteText (LPCTSTR szText)
 {
 	DWORD			dwWritten;

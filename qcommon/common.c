@@ -33,10 +33,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_NUM_ARGVS	50
 
-entity_state_t null_entity_state = {0};
+entity_state_t	null_entity_state = {0};
+usercmd_t		null_usercmd = {0};
+cvar_t			uninitialized_cvar = {0};
 
 int		com_argc;
 char	*com_argv[MAX_NUM_ARGVS+1];
+
+char	*binary_name;
 
 int		realtime;
 jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
@@ -45,28 +49,29 @@ FILE	*log_stats_file;
 
 cvar_t	*host_speeds;
 cvar_t	*log_stats;
-cvar_t	*developer;
+cvar_t	*developer = &uninitialized_cvar;
 cvar_t	*timescale;
 cvar_t	*fixedtime;
 cvar_t	*logfile_active;	// 1 = buffer log, 2 = flush after each print
+cvar_t	*logfile_timestamp;
+cvar_t	*logfile_timestamp_format;
 
 #ifndef DEDICATED_ONLY
 cvar_t	*showtrace;
 #endif
 
 #ifndef NO_SERVER
-cvar_t	*dedicated;
-//cvar_t	*pyroadminport;
+cvar_t	*dedicated = &uninitialized_cvar;
 #endif
 
 //r1: unload DLLs on crash?
-cvar_t	*dbg_unload;
+cvar_t	*dbg_unload = &uninitialized_cvar;
 
 //r1: throw int3 on ERR_FATAL?
-cvar_t	*dbg_crash_on_fatal_error;
+cvar_t	*dbg_crash_on_fatal_error = &uninitialized_cvar;
 
 //r1: throw all err as fatal?
-cvar_t	*err_fatal;
+cvar_t	*err_fatal = &uninitialized_cvar;
 
 FILE	*logfile;
 
@@ -106,6 +111,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CVARBANS, "CVARBANS", 0},
 	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE", 0},
 	{TAGMALLOC_CMDBANS, "CMDBANS", 0},
+	{TAGMALLOC_REDBLACK, "REDBLACK", 0},
 	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
 };
 
@@ -183,23 +189,57 @@ void Com_Printf (char *fmt, ...)
 #endif
 
 	// logfile
-	if (logfile_active && logfile_active->value)
+	if (logfile_active && logfile_active->intvalue)
 	{
 		char	name[MAX_QPATH];
-		
+		char	timestamp[64];
+
 		if (!logfile)
 		{
 			Com_sprintf (name, sizeof(name), "%s/qconsole.log", FS_Gamedir ());
-			if (logfile_active->value > 2)
+			if (logfile_active->intvalue > 2)
 				logfile = fopen (name, "a");
 			else
 				logfile = fopen (name, "w");
 		}
+
 		if (logfile)
-			fprintf (logfile, "%s", msg);
+		{
+			if (logfile_timestamp->intvalue)
+			{
+				char	*line;
+				char	*msgptr;
+				time_t	tm;
+
+				time(&tm);
+
+				strftime(timestamp, sizeof(timestamp)-1, logfile_timestamp_format->string, localtime(&tm));
+
+				msgptr = msg;
+				line = strstr (msgptr, "\n");
+				while (line)
+				{
+					*line = 0;
+					fprintf (logfile, "%s %s\n", timestamp, msgptr);
+					line++;
+					msgptr = line;
+
+					if (!*line)
+						break;
+
+					line = strstr (msgptr, "\n");
+				}
+
+				fprintf (logfile, "%s", msgptr);
+			}
+			else
+			{
+				fwrite (msg, strlen(msg), 1, logfile);
+			}
+		}
 
 		//r1: allow logging > 2 (append) but not forcing flushing.
-		if (!((int)logfile_active->value & 1))
+		if (logfile_active->intvalue & 1)
 			fflush (logfile);
 	}
 }
@@ -214,18 +254,22 @@ A Com_Printf that only shows up if the "developer" cvar is set
 */
 void Com_DPrintf (char *fmt, ...)
 {
-	va_list		argptr;
-	char		msg[MAXPRINTMSG];
+	if (!developer->intvalue)
+	{
+		return;
+	}
+	else
+	{
+		va_list		argptr;
+		char		msg[MAXPRINTMSG];
 
-	if (!developer || !developer->value)
-		return;			// don't confuse non-developers with techie stuff...
-
-	va_start (argptr,fmt);
-	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
-		Com_Printf ("WARNING: Com_DPrintf: message overflow.\n");
-	va_end (argptr);
-	
-	Com_Printf ("%s", msg);
+		va_start (argptr,fmt);
+		if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
+			Com_Printf ("WARNING: Com_DPrintf: message overflow.\n");
+		va_end (argptr);
+		
+		Com_Printf ("%s", msg);
+	}
 }
 
 
@@ -251,7 +295,7 @@ void Com_Error (int code, char *fmt, ...)
 	vsnprintf (msg, sizeof(msg)-1, fmt,argptr);
 	va_end (argptr);
 
-	if (err_fatal && err_fatal->value)
+	if (err_fatal->intvalue)
 		code = ERR_FATAL;
 	
 	if (code == ERR_DISCONNECT)
@@ -265,7 +309,9 @@ void Com_Error (int code, char *fmt, ...)
 	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET)
 	{
 		Com_Printf ("********************\nERROR: %s\n********************\n", msg);
+#ifndef NO_SERVER
 		SV_Shutdown (va("Server exited: %s\n", msg), false, false);
+#endif
 #ifndef DEDICATED_ONLY
 		CL_Drop (code == ERR_NET);
 #endif
@@ -281,11 +327,13 @@ void Com_Error (int code, char *fmt, ...)
 	}
 	else
 	{
-		if (dbg_crash_on_fatal_error->value)
+		if (dbg_crash_on_fatal_error->intvalue)
 			DEBUGBREAKPOINT;
+#ifndef NO_SERVER
 		SV_Shutdown (va("Server fatal crashed: %s\n", msg), false, true);
+#endif
 #ifndef DEDICATED_ONLY
-		if (dbg_unload->value)
+		if (dbg_unload->intvalue)
 			CL_Shutdown ();
 #endif
 	}
@@ -312,11 +360,12 @@ do the apropriate things.
 void Com_Quit (void)
 {
 	//r1: optional quit message, reworded "Server quit"
+#ifndef NO_SERVER
 	if (Cmd_Argc() > 1)
 		SV_Shutdown (va("Server has shut down: %s\n", Cmd_Args()), false, false);
 	else
 		SV_Shutdown ("Server has shut down\n", false, false);
-
+#endif
 #ifndef DEDICATED_ONLY
 	CL_Shutdown ();
 #endif
@@ -336,20 +385,20 @@ void Com_Quit (void)
 Com_ServerState
 ==================
 */
-int Com_ServerState (void)
+/*int Com_ServerState (void)
 {
 	return server_state;
-}
+}*/
 
 /*
 ==================
 Com_SetServerState
 ==================
 */
-void Com_SetServerState (int state)
+/*void Com_SetServerState (int state)
 {
 	server_state = state;
-}
+}*/
 
 
 /*
@@ -374,10 +423,11 @@ void MSG_WriteChar (sizebuf_t *sb, int c)
 {
 	byte	*buf;
 	
-#ifdef PARANOID
+/*#ifdef PARANOID
 	if (c < -128 || c > 127)
 		Com_Error (ERR_FATAL, "MSG_WriteChar: range error");
-#endif
+#endif*/
+	assert (!(c < -128 || c > 127));
 
 	buf = SZ_GetSpace (sb, 1);
 	buf[0] = c;
@@ -387,10 +437,11 @@ void MSG_BeginWriteByte (sizebuf_t *sb, int c)
 {
 	byte	*buf;
 
-#ifdef PARANOID
+/*#ifdef PARANOID
 	if (c < 0 || c > 255)
 		Com_Error (ERR_FATAL, "MSG_WriteByte: range error");
-#endif
+#endif*/
+	assert (!(c < 0 || c > 255));
 
 	buf = SZ_GetSpace (sb, 1);
 	buf[0] = c;
@@ -400,10 +451,11 @@ void MSG_WriteByte (sizebuf_t *sb, int c)
 {
 	byte	*buf;
 
-#ifdef PARANOID
+/*#ifdef PARANOID
 	if (c < 0 || c > 255)
 		Com_Error (ERR_FATAL, "MSG_WriteByte: range error");
-#endif
+#endif*/
+	assert (!(c < 0 || c > 255));
 
 	buf = SZ_GetSpace (sb, 1);
 	buf[0] = c;
@@ -413,10 +465,12 @@ void MSG_WriteShort (sizebuf_t *sb, int c)
 {
 	byte	*buf;
 	
-#ifdef PARANOID
+/*#ifdef PARANOID
 	if (c < ((short)0x8000) || c > (short)0x7fff)
 		Com_Error (ERR_FATAL, "MSG_WriteShort: range error");
-#endif
+#endif*/
+	//XXX: unsigned shorts are written here too...
+	//assert (!(c < ((short)0x8000) || c > (short)0x7fff));
 
 	buf = SZ_GetSpace (sb, 2);
 	buf[0] = c&0xff;
@@ -582,6 +636,7 @@ void MSG_WriteDeltaEntity (entity_state_t *storeas, entity_state_t *from, entity
 
 	if (!to->number)
 		Com_Error (ERR_FATAL, "Unset entity number");
+
 	if (to->number >= MAX_EDICTS)
 		Com_Error (ERR_FATAL, "Entity number >= MAX_EDICTS");
 
@@ -1030,6 +1085,8 @@ void SZ_Clear (sizebuf_t /*@out@*/*buf)
 void *SZ_GetSpace (sizebuf_t /*@out@*/*buf, int length)
 {
 	void	*data;
+
+	assert (length > 0);
 	
 	if (buf->cursize + length > buf->maxsize)
 	{
@@ -1069,6 +1126,8 @@ void SZ_Print (sizebuf_t /*@out@*/*buf, char *data)
 	int		len;
 	
 	len = strlen(data)+1;
+
+	assert (len > 1);
 
 	if (buf->cursize)
 	{
@@ -1176,7 +1235,7 @@ int	memsearch (byte *start, int count, int search)
 }
 
 
-char *CopyString (char *in, short tag)
+char *CopyString (const char *in, short tag)
 {
 	char	*out;
 	
@@ -1361,6 +1420,23 @@ void EXPORT Z_FreeTags (int tag)
 		next = z->next;
 		if (z->tag == tag)
 			Z_Free ((void *)(z+1));
+	}
+}
+
+/*
+========================
+Z_FreeTags
+========================
+*/
+void EXPORT Z_Verify (const char *entry)
+{
+	zhead_t	*z, *next;
+
+	for (z=z_chain.next ; z != &z_chain ; z=next)
+	{
+		next = z->next;
+		if (z->magic != Z_MAGIC)
+			Com_Error (ERR_FATAL, "Z_Verify: memory corruption detected at '%s' (tag %d)", entry);
 	}
 }
 
@@ -1559,7 +1635,7 @@ unsigned Com_BlockChecksum (void *buffer, int length)
 
 //========================================================
 
-float	frand(void)
+/*float	frand(void)
 {
 	return (randomMT()&32767)* (1.0/32767);
 }
@@ -1567,7 +1643,7 @@ float	frand(void)
 float	crand(void)
 {
 	return (randomMT()&32767)* (2.0/32767) - 1;
-}
+}*/
 
 void Key_Init (void);
 void SCR_EndLoadingPlaque (void);
@@ -1652,10 +1728,11 @@ void Qcommon_Init (int argc, char **argv)
 
 	host_speeds = Cvar_Get ("host_speeds", "0", 0);
 	log_stats = Cvar_Get ("log_stats", "0", 0);
-	developer = Cvar_Get ("developer", "0", 0);
 	timescale = Cvar_Get ("timescale", "1", 0);
 	fixedtime = Cvar_Get ("fixedtime", "0", 0);
 	logfile_active = Cvar_Get ("logfile", "0", 0);
+	logfile_timestamp = Cvar_Get ("logfile_timestamp", "1", 0);
+	logfile_timestamp_format = Cvar_Get ("logfile_timestamp_format", "[%Y-%m-%d %H:%M]", 0);
 #ifndef DEDICATED_ONLY
 	showtrace = Cvar_Get ("showtrace", "0", 0);
 #endif
@@ -1672,7 +1749,7 @@ void Qcommon_Init (int argc, char **argv)
 	Cvar_Get ("version", s, CVAR_SERVERINFO|CVAR_NOSET);
 
 #ifndef NO_SERVER
-	if (dedicated->value)
+	if (dedicated->intvalue)
 		Cmd_AddCommand ("quit", Com_Quit);
 #endif
 
@@ -1684,11 +1761,14 @@ void Qcommon_Init (int argc, char **argv)
 	NET_Init ();
 	Netchan_Init ();
 
-
+#ifndef NO_SERVER
 	SV_Init ();
+#endif
 
 	Com_Printf ("====== Quake2 Initialized ======\n");	
-	Com_Printf ("R1Q2 build " BUILD ", compiled " __DATE__ ".\nhttp://www.r1ch.net/stuff/r1q2/\n\n");
+	Com_Printf ("R1Q2 build " BUILD ", compiled " __DATE__ ".\n"
+				"http://www.r1ch.net/stuff/r1q2/\n"
+				BUILDSTRING " " CPUSTRING " (%s)\n\n", binary_name);
 
 #ifndef DEDICATED_ONLY
 	CL_Init ();
@@ -1698,7 +1778,7 @@ void Qcommon_Init (int argc, char **argv)
 	if (!Cbuf_AddLateCommands ())
 	{	// if the user didn't give any commands, run default action
 #ifndef NO_SERVER
-		if (!dedicated->value)
+		if (!dedicated->intvalue)
 #endif
 			Cbuf_AddText ("toggleconsole\n");
 #ifndef NO_SERVER
@@ -1723,7 +1803,7 @@ Qcommon_Frame
 */
 void Qcommon_Frame (int msec)
 {
-#if __linux__ || __FreeBSD__
+#ifndef NO_SERVER
 	char *s;
 #endif
 
@@ -1737,7 +1817,7 @@ void Qcommon_Frame (int msec)
 	/*if ( log_stats->modified )
 	{
 		log_stats->modified = false;
-		if ( log_stats->value )
+		if ( log_stats->intvalue )
 		{
 			if ( log_stats_file )
 			{
@@ -1758,17 +1838,20 @@ void Qcommon_Frame (int msec)
 		}
 	}*/
 
-	if (fixedtime->value)
-		msec = fixedtime->value;
-	else if (timescale->value)
+	if (fixedtime->intvalue)
+	{
+		msec = fixedtime->intvalue;
+	}
+	else if (timescale->intvalue)
 	{
 		msec *= timescale->value;
-		if (msec < 1)
-			msec = 1;
 	}
 
+	if (msec < 1)
+		msec = 1;
+
 #ifndef DEDICATED_ONLY
-	if (showtrace->value)
+	if (showtrace->intvalue)
 	{
 		extern	int c_traces, c_brush_traces;
 		extern	int	c_pointcontents;
@@ -1780,42 +1863,40 @@ void Qcommon_Frame (int msec)
 	}
 #endif
 
-#if __linux__ || __FreeBSD__
-	do
-	{
-		s = Sys_ConsoleInput ();
-		if (s)
-			Cbuf_AddText (va("%s\n",s));
-	} while (s);
-/*#else
-#ifndef DEDICATED_ONLY 
 #ifndef NO_SERVER
-	do
+#ifndef DEDICATED_ONLY
+	if (dedicated->intvalue)
 	{
-		s = Sys_ConsoleInput ();
-		if (s)
-			Cbuf_AddText (va("%s\n",s));
-	} while (s);
 #endif
-#endif*/
+		do
+		{
+			s = Sys_ConsoleInput ();
+			if (s)
+				Cbuf_AddText (va("%s\n",s));
+		} while (s);
+#ifndef DEDICATED_ONLY
+	}
+#endif
 #endif
 
 	Cbuf_Execute ();
 
 #ifndef DEDICATED_ONLY
-	if (host_speeds->value)
+	if (host_speeds->intvalue)
 		time_before = Sys_Milliseconds ();
 #endif
 
+#ifndef NO_SERVER
 	SV_Frame (msec);
+#endif
 
 #ifndef DEDICATED_ONLY
-	if (host_speeds->value)
+	if (host_speeds->intvalue)
 		time_between = Sys_Milliseconds ();
 
 	CL_Frame (msec);
 
-	if (host_speeds->value) {
+	if (host_speeds->intvalue) {
 		int			all, sv, gm, cl, rf;
 
 		time_after = Sys_Milliseconds ();
@@ -1913,7 +1994,7 @@ int ZLibCompressChunk(byte *in, int len_in, byte *out, int len_out, int method, 
 }
 #endif
 
-char *StripHighBits (char *string, int highbits)
+char *StripHighBits (const char *string, int highbits)
 {
 	int c;
 	static char stripped[4096];
@@ -1943,10 +2024,31 @@ char *StripHighBits (char *string, int highbits)
 	return stripped;
 }
 
-char *MakePrintable (unsigned char *s)
+void ExpandNewLines (char *string)
+{
+	char *q = string;
+	char *s = q;
+	while (*(q+1))
+	{
+		if (*q == '\\' && *(q+1) == 'n')
+		{
+			*s++ = '\n';
+			q++;
+		}
+		else
+		{
+			*s++ = *q;
+		}
+		q++;
+	}
+	*s++ = *q;
+	*s = '\0';
+}
+
+char *MakePrintable (const byte *s)
 {
 	int len;
-	static char printable[1024];
+	static char printable[4096];
 	char tmp[8];
 	char *p;
 

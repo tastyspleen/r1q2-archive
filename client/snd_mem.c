@@ -53,7 +53,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 		sc->loopstart = sc->loopstart / stepscale;
 
 	sc->speed = dma.speed;
-	if (s_loadas8bit->value)
+	if (s_loadas8bit->intvalue)
 		sc->width = 1;
 	else
 		sc->width = inwidth;
@@ -72,7 +72,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 	else
 	{
 // general case
-		//Com_DPrintf ("ResampleSfx: general case used, step %f in %d sc %d\n", stepscale, inwidth, sc->width);
+		//Com_Printf ("WARNING: ResampleSfx: general case used, step %f in %d sc %d\n", stepscale, inwidth, sc->width);
 		samplefrac = 0;
 		fracstep = stepscale*256;
 		for (i=0 ; i<outcount ; i++)
@@ -323,7 +323,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	FindChunk("RIFF");
 	if (!(data_p && !strncmp((const char *)data_p+8, "WAVE", 4)))
 	{
-		Com_Printf("Missing RIFF/WAVE chunks\n");
+		Com_Printf("GetWavinfo: Missing RIFF/WAVE chunks (%s)\n", name);
 		return info;
 	}
 
@@ -334,14 +334,14 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	FindChunk("fmt ");
 	if (!data_p)
 	{
-		Com_Printf("Missing fmt chunk\n");
+		Com_Printf("GetWavinfo: Missing fmt chunk (%s)\n", name);
 		return info;
 	}
 	data_p += 8;
 	format = GetLittleShort();
 	if (format != 1)
 	{
-		Com_Printf("Microsoft PCM format only\n");
+		Com_Printf("GetWavinfo: Microsoft PCM format only (%s)\n", name);
 		return info;
 	}
 
@@ -362,7 +362,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 		FindNextChunk ("LIST");
 		if (data_p)
 		{
-			if (!strncmp ((const char *)data_p + 28, "mark", 4))
+			if ((data_p - wav) + 32 <= wavlength && !strncmp ((const char *)data_p + 28, "mark", 4))
 			{	// this is not a proper parse, but it works with cooledit...
 				data_p += 24;
 				i = GetLittleLong ();	// samples in loop
@@ -378,7 +378,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	FindChunk("data");
 	if (!data_p)
 	{
-		Com_Printf("Missing data chunk\n");
+		Com_Printf("GetWavinfo: Missing data chunk (%s)\n", name);
 		return info;
 	}
 

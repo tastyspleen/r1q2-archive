@@ -26,26 +26,8 @@ unsigned long long net_packets_out;
 int			server_port;
 //netadr_t	net_local_adr;
 
-#define	LOOPBACK	0x7f000001
-
-#define	MAX_LOOPBACK	4
-
-typedef struct
-{
-	byte	data[MAX_MSGLEN];
-	int		datalen;
-} loopmsg_t;
-
-typedef struct
-{
-	loopmsg_t	msgs[MAX_LOOPBACK];
-	int			get, send;
-} loopback_t;
-
-loopback_t	loopbacks[2];
 int			ip_sockets[2];
 
-int NET_Socket (char *net_interface, int port);
 char *NET_ErrorString (void);
 
 //Aiee...
@@ -270,107 +252,6 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 
 //=============================================================================
 
-
-void NET_CloseSocket (int s)
-{
-	shutdown (s, 0x02);
-	close (s);
-}
-
-/*
-====================
-NET_OpenIP
-====================
-*/
-void NET_OpenIP (int flags)
-{
-	cvar_t	*port, *ip;
-
-	port = Cvar_Get ("port", va("%i", PORT_SERVER), CVAR_NOSET);
-	ip = Cvar_Get ("ip", "localhost", CVAR_NOSET);
-
-	server_port = (int)port->value;
-
-	net_inittime = time(0);
-
-	if (flags & NET_SERVER)
-	{
-		if (!ip_sockets[NS_SERVER])
-			ip_sockets[NS_SERVER] = NET_Socket (ip->string, port->value);
-	}
-
-	if (!ip_sockets[NS_CLIENT])
-		ip_sockets[NS_CLIENT] = NET_Socket (ip->string, PORT_ANY);
-
-	net_total_in = net_packets_in = net_total_out = net_packets_out = 0;
-}
-
-
-/*
-====================
-NET_Config
-
-A single player game will only use the loopback code
-====================
-*/
-/*void	NET_Config (qboolean multiplayer)
-{
-	int		i;
-
-	if (!multiplayer)
-	{	// shut down any existing sockets
-		for (i=0 ; i<2 ; i++)
-		{
-			if (ip_sockets[i])
-			{
-				close (ip_sockets[i]);
-				ip_sockets[i] = 0;
-			}
-		}
-	}
-	else
-	{	// open sockets
-		NET_OpenIP ();
-	}
-}*/
-
-int	NET_Config (int toOpen)
-{
-	int		i;
-	static	int	old_config;
-
-	i = old_config;
-
-	if (old_config == toOpen)
-		return i;
-
-	old_config |= toOpen;
-
-	if (toOpen == NET_NONE)
-	{
-		if (ip_sockets[NS_CLIENT])
-		{
-			close (ip_sockets[NS_CLIENT]);
-			ip_sockets[NS_CLIENT] = 0;
-		}
-
-		if (ip_sockets[NET_SERVER])
-		{
-			close (ip_sockets[NET_SERVER]);
-			ip_sockets[NET_SERVER] = 0;
-		}
-
-		old_config = NET_NONE;
-	}
-
-	NET_OpenIP (toOpen);
-
-	return i;
-}
-
-//===================================================================
-
-
 /*
 ====================
 NET_Init
@@ -387,7 +268,7 @@ void NET_Init (void)
 NET_Socket
 ====================
 */
-int NET_Socket (char *net_interface, int port)
+int NET_IPSocket (char *net_interface, int port)
 {
 	int newsocket;
 	struct sockaddr_in address;
@@ -396,21 +277,21 @@ int NET_Socket (char *net_interface, int port)
 
 	if ((newsocket = socket (PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
 	{
-		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't make socket: %s", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't make socket: %s\n", NET_ErrorString());
 		return 0;
 	}
 
 	// make it non-blocking
 	if (ioctl (newsocket, FIONBIO, &_true) == -1)
 	{
-		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't make non-blocking: %s", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't make non-blocking: %s\n", NET_ErrorString());
 		return 0;
 	}
 
 	// make it broadcast capable
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
-		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't set SO_BROADCAST: %s", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't set SO_BROADCAST: %s\n", NET_ErrorString());
 		return 0;
 	}
 
@@ -429,7 +310,7 @@ int NET_Socket (char *net_interface, int port)
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
 		close (newsocket);
-		Com_Error (ERR_DROP, "UDP_OpenSocket: Couldn't bind to port %d: %s", port, NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't bind to port %d: %s\n", port, NET_ErrorString());
 		return 0;
 	}
 
@@ -461,22 +342,4 @@ char *NET_ErrorString (void)
 	return strerror (code);
 }
 
-// sleeps msec or until net socket is ready
-void NET_Sleep(int msec)
-{
-    struct timeval timeout;
-	fd_set	fdset;
-	extern cvar_t *dedicated;
-	//extern qboolean stdin_active;
 
-	if (!ip_sockets[NS_SERVER] || (dedicated && !dedicated->value))
-		return; // we're not a server, just run full speed
-
-	FD_ZERO(&fdset);
-	//if (stdin_active)
-	//	FD_SET(0, &fdset); // stdin is processed too
-	FD_SET(ip_sockets[NS_SERVER], &fdset); // network socket
-	timeout.tv_sec = msec/1000;
-	timeout.tv_usec = (msec%1000)*1000;
-	select(ip_sockets[NS_SERVER]+1, &fdset, NULL, NULL, &timeout);
-}

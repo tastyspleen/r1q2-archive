@@ -21,7 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "qcommon.h"
 
-cvar_t	*cvar_vars;
+#include "redblack.h"
+
+cvar_t			*cvar_vars;
+struct rbtree	*cvartree;
 
 /*
 ============
@@ -30,11 +33,11 @@ Cvar_InfoValidate
 */
 static qboolean Cvar_InfoValidate (char *s)
 {
-	if (strstr (s, "\\"))
+	if (strchr (s, '\\'))
 		return false;
-	if (strstr (s, "\""))
+	if (strchr (s, '"'))
 		return false;
-	if (strstr (s, ";"))
+	if (strchr (s, ';'))
 		return false;
 	return true;
 }
@@ -47,10 +50,22 @@ Cvar_FindVar
 cvar_t *Cvar_FindVar (char *var_name)
 {
 	cvar_t	*var;
+	void	**data;
+
+	//not inited yet
+	if (!cvartree)
+		return NULL;
+
+	data = rbfind (var_name, cvartree);
+	if (data)
+	{
+		var = *(cvar_t **)data;
+		return var;
+	}
 	
-	for (var=cvar_vars ; var ; var=var->next)
+	/*for (var=cvar_vars ; var ; var=var->next)
 		if (!strcmp (var_name, var->name))
-			return var;
+			return var;*/
 
 	return NULL;
 }
@@ -63,11 +78,15 @@ Cvar_VariableValue
 float Cvar_VariableValue (char *var_name)
 {
 	cvar_t	*var;
+
+	assert (var_name != NULL);
 	
 	var = Cvar_FindVar (var_name);
+	
 	if (!var)
 		return 0;
-	return atof (var->string);
+
+	return var->value;
 }
 
 char dateBuff[32];
@@ -80,6 +99,8 @@ Cvar_VariableString
 char *Cvar_VariableString (char *var_name)
 {
 	cvar_t *var;
+
+	assert (var_name != NULL);
 	
 	var = Cvar_FindVar (var_name);
 
@@ -130,13 +151,15 @@ char *Cvar_CompleteVariable (char *partial)
 {
 	cvar_t		*cvar;
 	int			len;
+
+	assert (partial != NULL);
 	
 	len = strlen(partial);
 	
 	if (!len)
 		return NULL;
 		
-	// check exact match
+	// check exact match (note, don't use rbtree since we want some kind of order here)
 	for (cvar=cvar_vars ; cvar ; cvar=cvar->next)
 		if (!strcmp (partial,cvar->name))
 			return cvar->name;
@@ -147,6 +170,36 @@ char *Cvar_CompleteVariable (char *partial)
 			return cvar->name;
 
 	return NULL;
+}
+
+cvar_t *Cvar_Add (char *var_name, char *var_value, int flags)
+{
+	cvar_t	*var;
+	void	**data;
+
+	var = Z_TagMalloc (sizeof(*var), TAGMALLOC_CVAR);
+	var->name = CopyString (var_name, TAGMALLOC_CVAR);
+	var->string = CopyString (var_value, TAGMALLOC_CVAR);
+	var->modified = true;
+	var->changed = NULL;
+
+	var->value = atof (var->string);
+	var->intvalue = var->value;
+	var->flags = flags;
+
+	//r1: fix 0 case
+	if (!var->intvalue && var->value)
+		var->intvalue = 1;
+
+	// link the variable in
+	var->next = cvar_vars;
+	cvar_vars = var;
+
+	//r1: insert to btree
+	data = rbsearch (var->name, cvartree);
+	*data = var;
+
+	return var;
 }
 
 
@@ -161,6 +214,9 @@ The flags will be or'ed in if the variable exists.
 cvar_t * EXPORT Cvar_Get (char *var_name, char *var_value, int flags)
 {
 	cvar_t	*var;
+
+	assert (var_name != NULL);
+	assert (var_value != NULL);
 	
 	if (flags & (CVAR_USERINFO | CVAR_SERVERINFO))
 	{
@@ -190,20 +246,22 @@ cvar_t * EXPORT Cvar_Get (char *var_name, char *var_value, int flags)
 		}
 	}
 
-	var = Z_TagMalloc (sizeof(*var), TAGMALLOC_CVAR);
-	var->name = CopyString (var_name, TAGMALLOC_CVAR);
-	var->string = CopyString (var_value, TAGMALLOC_CVAR);
-	var->modified = true;
-	var->changed = NULL;
-	var->value = atof (var->string);
+	return Cvar_Add (var_name, var_value, flags);
+}
 
-	// link the variable in
-	var->next = cvar_vars;
-	cvar_vars = var;
+/*
+============
+Cvar_GameGet
+============
+R1CH: Use as a wrapper to cvars requested by the mod. Can then apply filtering
+to them such as disallowing serverinfo set by mod.
+*/
+cvar_t * EXPORT Cvar_GameGet (char *var_name, char *var_value, int flags)
+{
+	if (Cvar_VariableValue("sv_no_game_serverinfo"))
+		flags &= ~CVAR_SERVERINFO;
 
-	var->flags = flags;
-
-	return var;
+	return Cvar_Get (var_name, var_value, flags);
 }
 
 /*
@@ -215,6 +273,9 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 {
 	cvar_t	*var;
 	char *old_string;
+
+	assert (var_name != NULL);
+	assert (value != NULL);
 	
 	if (*var_name == '$' && !force)
 	{
@@ -261,13 +322,19 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 
 			if (Com_ServerState())
 			{
-				Com_Printf ("%s will be changed for next game.\n", var_name);
+				Com_Printf ("%s will be changed for next map.\n", var_name);
 				var->latched_string = CopyString(value, TAGMALLOC_CVAR);
 			}
 			else
 			{
 				var->string = CopyString(value, TAGMALLOC_CVAR);
 				var->value = atof (var->string);
+				var->intvalue = var->value;
+
+				//r1: fix 0 case
+				if (!var->intvalue && var->value)
+					var->intvalue = 1;
+
 				if (!strcmp(var->name, "game"))
 				{
 					FS_SetGamedir (var->string);
@@ -291,7 +358,13 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 
 	old_string = var->string;
 	var->string = CopyString(value, TAGMALLOC_CVAR);
+
 	var->value = atof (var->string);
+	var->intvalue = var->value;
+
+	//r1: fix 0 case
+	if (!var->intvalue && var->value)
+		var->intvalue = 1;
 
 	var->modified = true;
 
@@ -350,6 +423,12 @@ cvar_t *Cvar_FullSet (char *var_name, char *value, int flags)
 	
 	var->string = CopyString(value, TAGMALLOC_CVAR);
 	var->value = atof (var->string);
+	var->intvalue = var->value;
+
+	//r1: fix 0 case
+	if (!var->intvalue && var->value)
+		var->intvalue = 1;
+
 	var->flags = flags;
 
 	return var;
@@ -387,10 +466,18 @@ void Cvar_GetLatchedVars (void)
 	{
 		if (!var->latched_string)
 			continue;
+
 		Z_Free (var->string);
+
 		var->string = var->latched_string;
 		var->latched_string = NULL;
 		var->value = atof(var->string);
+		var->intvalue = var->value;
+
+		//r1: fix 0 case
+		if (!var->intvalue && var->value)
+			var->intvalue = 1;
+
 		if (!strcmp(var->name, "game"))
 		{
 			FS_SetGamedir (var->string);
@@ -476,6 +563,36 @@ void Cvar_Set_f (void)
 	}
 	else
 		Cvar_Set (Cmd_Argv(1), Cmd_Argv(2));
+}
+
+void Cvar_UnSet_f (void)
+{
+	cvar_t	*v;
+	cvar_t	*last = cvar_vars;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("usage: unset <variable>\n");
+		return;
+	}
+
+	for (v=cvar_vars ; v ; v=v->next)
+	{
+		if (!strcmp (Cmd_Argv(1), v->name))
+		{
+			last->next = v->next;
+			Z_Free (v->name);
+			Z_Free (v->string);
+			if (v->latched_string)
+				Z_Free (v->latched_string);
+			Z_Free (v);
+			Com_Printf ("Variable '%s' removed.\n", Cmd_Argv(1));
+			return;
+		}
+		last = v;
+	}
+
+	Com_Printf ("Variable '%s' not found.\n", Cmd_Argv(1));
 }
 
 /*
@@ -620,7 +737,11 @@ Reads in all archived cvars
 */
 void Cvar_Init (void)
 {
+	cvartree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
+
 	Cmd_AddCommand ("set", Cvar_Set_f);
+	Cmd_AddCommand ("unset", Cvar_UnSet_f);
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
 
+	developer = Cvar_Get ("developer", "0", 0);
 }

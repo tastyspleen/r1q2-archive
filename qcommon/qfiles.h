@@ -33,11 +33,11 @@ The .pak files are just a linear collapse of a directory tree
 
 #define IDPAKHEADER		(('K'<<24)+('C'<<16)+('A'<<8)+'P')
 
-typedef struct dpackfile_s
+/*typedef struct dpackfile_s
 {
 	char		name[56];
 	size_t		filepos, filelen;
-} dpackfile_t;
+} dpackfile_t;*/
 
 typedef struct dpackheader_s
 {

@@ -652,17 +652,23 @@ Lerror:
 
 void AddPointToBounds (vec3_t v, vec3_t mins, vec3_t maxs)
 {
-	int		i;
-	vec_t	val;
+	if (v[0] < mins[0])
+		mins[0] = v[0];
 
-	for (i=0 ; i<3 ; i++)
-	{
-		val = v[i];
-		if (val < mins[i])
-			mins[i] = val;
-		if (val > maxs[i])
-			maxs[i] = val;
-	}
+	if (v[0] > maxs[0])
+		maxs[0] = v[0];
+
+	if (v[1] < mins[1])
+		mins[1] = v[1];
+
+	if (v[1] > maxs[1])
+		maxs[1] = v[1];
+
+	if (v[2] < mins[2])
+		mins[2] = v[2];
+
+	if (v[2] > maxs[2])
+		maxs[2] = v[2];
 }
 
 
@@ -1212,7 +1218,9 @@ int Com_sprintf (char /*@out@*/*dest, int size, char *fmt, ...)
 	va_start (argptr,fmt);
 	len = Q_vsnprintf (bigbuffer, sizeof(bigbuffer), fmt, argptr);
 	va_end (argptr);
-	if (len >= size) {
+
+	if (len == -1)
+	{
 		Com_Printf ("Com_sprintf: overflow of %i in %i\n", len, size);
 		bigbuffer[size-1] = '\0';
 	}
@@ -1318,7 +1326,7 @@ void Info_RemoveKey (char *s, char *key)
 	char	value[512];
 	char	*o;
 
-	if (strstr (key, "\\"))
+	if (strchr (key, '\\'))
 	{
 //		Com_Printf ("Can't use a key with a \\\n");
 		return;
@@ -1377,9 +1385,9 @@ can mess up the server's parsing
 */
 qboolean Info_Validate (char *s)
 {
-	if (strstr (s, "\""))
+	if (strchr (s, '"'))
 		return false;
-	if (strstr (s, ";"))
+	if (strchr (s, ';'))
 		return false;
 	return true;
 }
@@ -1401,19 +1409,19 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 	char	newi[MAX_INFO_STRING], *v;
 	int		c;
 
-	if (strstr (key, "\\") || strstr (value, "\\") )
+	if (strchr (key, '\\') || strchr (value, '\\') )
 	{
 		Com_Printf ("Can't use keys or values with a \\\n");
 		return;
 	}
 
-	if (strstr (key, ";") )
+	if (strchr (key, ';') )
 	{
 		Com_Printf ("Can't use keys or values with a semicolon\n");
 		return;
 	}
 
-	if (strstr (key, "\"") || strstr (value, "\"") )
+	if (strchr (key, '"') || strchr (value, '"') )
 	{
 		Com_Printf ("Can't use keys or values with a \"\n");
 		return;

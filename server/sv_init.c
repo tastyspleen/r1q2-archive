@@ -37,14 +37,14 @@ SV_FindIndex
 
 ================
 */
-int SV_FindIndex (char *name, int start, int maxIndex, qboolean create)
+int SV_FindIndex (const char *name, int start, int maxIndex, qboolean create)
 {
 	int		i;
 	
 	if (!name || !name[0])
 	{
 		Com_DPrintf ("SV_FindIndex: NULL or empty name, ignored\n");
-		if (sv_gamedebug->value >= 3)
+		if (sv_gamedebug->intvalue >= 3)
 			DEBUGBREAKPOINT;
 		return 0;
 	}
@@ -99,14 +99,16 @@ int SV_FindIndex (char *name, int start, int maxIndex, qboolean create)
 		Com_Error (ERR_GAME, "SV_FindIndex: overflow finding index for %s", name);
 	}
 
-	strncpy (sv.configstrings[start+i], name, sizeof(sv.configstrings[i]));
+	strncpy (sv.configstrings[start+i], name, sizeof(sv.configstrings[i])-1);
 
 	if (sv.state != ss_loading)
 	{	// send the update to everyone
-		SZ_Clear (&sv.multicast);
+
+		//r1: why clear?
+		//SZ_Clear (&sv.multicast);
 		MSG_BeginWriteByte (&sv.multicast, svc_configstring);
 		MSG_WriteShort (&sv.multicast, start+i);
-		MSG_WriteString (&sv.multicast, name);
+		MSG_WriteString (&sv.multicast, sv.configstrings[start+i]);
 		SV_Multicast (vec3_origin, MULTICAST_ALL_R);
 		return i;
 	}
@@ -115,17 +117,17 @@ int SV_FindIndex (char *name, int start, int maxIndex, qboolean create)
 }
 
 
-int EXPORT SV_ModelIndex (char *name)
+int EXPORT SV_ModelIndex (const char *name)
 {
 	return SV_FindIndex (name, CS_MODELS, MAX_MODELS, true);
 }
 
-int EXPORT SV_SoundIndex (char *name)
+int EXPORT SV_SoundIndex (const char *name)
 {
 	return SV_FindIndex (name, CS_SOUNDS, MAX_SOUNDS, true);
 }
 
-int EXPORT SV_ImageIndex (char *name)
+int EXPORT SV_ImageIndex (const char *name)
 {
 	return SV_FindIndex (name, CS_IMAGES, MAX_IMAGES, true);
 }
@@ -141,7 +143,7 @@ void SV_CheckForSavegame (void)
 	FILE		*f;
 	int			i;
 
-	if (sv_noreload->value)
+	if (sv_noreload->intvalue)
 		return;
 
 	if (Cvar_VariableValue ("deathmatch"))
@@ -192,14 +194,23 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	int			i;
 	unsigned	checksum;
 
+	//r1: get latched vars
+	if (Cvar_GetNumLatchedVars())
+	{
+		SV_InitGame();
+	}
+
+	Z_Verify("SV_SpawnServer:START");
+
 	if (attractloop)
 		Cvar_Set ("paused", "0");
 
-	if (sv_recycle->value)
+	if (sv_recycle->intvalue)
 	{
 		Com_Printf ("SV_SpawnServer: Reloading Game DLL.\n");
 		SV_InitGameProgs();
-		Cvar_ForceSet ("sv_recycle", "0");
+		if (sv_recycle->intvalue != 2)
+			Cvar_ForceSet ("sv_recycle", "0");
 	}
 
 	Com_Printf ("------- Server Initialization -------\n");
@@ -216,16 +227,16 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	// wipe the entire per-level structure
 	memset (&sv, 0, sizeof(sv));
 
-	//FIXME: this breaks a bunch of things
-	if (sv_randomframe->value)
-		sv.framenum = random() * 0x00FFFFFF;
+	//r1: randomize serverframe to thwart some map timers
+	if (sv_randomframe->intvalue)
+		sv.randomframe = random() * 0xFFFF;
 
 	svs.realtime = 0;
 	sv.loadgame = loadgame;
 	sv.attractloop = attractloop;
 
 	// save name for levels that don't set message
-	strcpy (sv.configstrings[CS_NAME], server);
+	strncpy (sv.configstrings[CS_NAME], server, sizeof(sv.configstrings[CS_NAME])-1);
 	if (Cvar_VariableValue ("deathmatch"))
 	{
 		Com_sprintf(sv.configstrings[CS_AIRACCEL], sizeof(sv.configstrings[CS_AIRACCEL]), "%g", sv_airaccelerate->value);
@@ -242,12 +253,13 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	strcpy (sv.name, server);
 
 	// leave slots at start for clients only
-	for (i=0 ; i<maxclients->value ; i++)
+	for (i=0 ; i<maxclients->intvalue ; i++)
 	{
 		// needs to reconnect
 		if (svs.clients[i].state > cs_connected)
 			svs.clients[i].state = cs_connected;
 		svs.clients[i].lastframe = -1;
+		svs.clients[i].packetCount = 0;
 	}
 
 	sv.time = 1000;
@@ -274,7 +286,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	//
 	SV_ClearWorld ();
 	
-	for (i=1 ; i< CM_NumInlineModels() ; i++)
+	for (i=1 ; i< CM_NumInlineModels ; i++)
 	{
 		Com_sprintf (sv.configstrings[CS_MODELS+1+i], sizeof(sv.configstrings[CS_MODELS+1+i]),
 			"*%i", i);
@@ -313,6 +325,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	Cvar_FullSet ("mapname", sv.name, CVAR_SERVERINFO | CVAR_NOSET);
 
 	Com_Printf ("-------------------------------------\n");
+	Z_Verify("SV_SpawnServer:END");
 }
 
 /*
@@ -325,7 +338,7 @@ A brand new game has been started
 void SV_InitGame (void)
 {
 	int		i;
-	edict_t	*ent;
+	Z_Verify("SV_InitGame:START");
 
 	if (svs.initialized)
 	{
@@ -355,7 +368,7 @@ void SV_InitGame (void)
 
 	// dedicated servers are can't be single player and are usually DM
 	// so unless they explicity set coop, force it to deathmatch
-	if (dedicated->value)
+	if (dedicated->intvalue)
 	{
 		if (!Cvar_VariableValue ("coop"))
 			Cvar_FullSet ("deathmatch", "1",  CVAR_SERVERINFO | CVAR_LATCH);
@@ -364,14 +377,14 @@ void SV_InitGame (void)
 	// init clients
 	if (Cvar_VariableValue ("deathmatch"))
 	{
-		if (maxclients->value <= 1)
+		if (maxclients->intvalue <= 1)
 			Cvar_FullSet ("maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);
-		else if (maxclients->value > MAX_CLIENTS)
+		else if (maxclients->intvalue > MAX_CLIENTS)
 			Cvar_FullSet ("maxclients", va("%i", MAX_CLIENTS), CVAR_SERVERINFO | CVAR_LATCH);
 	}
 	else if (Cvar_VariableValue ("coop"))
 	{
-		if (maxclients->value <= 1 || maxclients->value > MAX_CLIENTS)
+		if (maxclients->intvalue <= 1 || maxclients->intvalue > MAX_CLIENTS)
 			Cvar_FullSet ("maxclients", "4", CVAR_SERVERINFO | CVAR_LATCH);
 	}
 	else	// non-deathmatch, non-coop is one player
@@ -379,18 +392,24 @@ void SV_InitGame (void)
 		Cvar_FullSet ("maxclients", "1", CVAR_SERVERINFO | CVAR_LATCH);
 	}
 
+	svs.ratelimit_badrcon.period = 500;
+	svs.ratelimit_status.period = sv_ratelimit_status->intvalue;
+
 	svs.spawncount = randomMT()&0x7FFFFFFF;
-	svs.clients = Z_TagMalloc (sizeof(client_t)*maxclients->value, TAGMALLOC_CLIENTS);
-	svs.num_client_entities = maxclients->value*UPDATE_BACKUP*64;
+	svs.clients = Z_TagMalloc (sizeof(client_t)*maxclients->intvalue, TAGMALLOC_CLIENTS);
+	svs.num_client_entities = maxclients->intvalue*UPDATE_BACKUP*64;
 	svs.client_entities = Z_TagMalloc (sizeof(entity_state_t)*svs.num_client_entities, TAGMALLOC_CL_ENTS);
 
 	// r1: spam warning for those stupid servers that run 250 maxclients and 32 player slots
-	if (maxclients->value > 64)
+	if (maxclients->intvalue > 64)
 		Com_Printf ("WARNING: Setting maxclients higher than the maximum number of players you intend to have playing can negatively affect server performance and bandwidth use.\n");
 
 	// init network stuff
-	if (maxclients->value > 1)
+	if (maxclients->intvalue > 1)
 		NET_Config (NET_SERVER);
+
+	// init game
+	SV_InitGameProgs ();
 
 	// heartbeats will always be sent to the id master
 	svs.last_heartbeat = -295000;		// send immediately (r1: give few secs for configs to run)
@@ -405,28 +424,33 @@ void SV_InitGame (void)
 #endif
 
 #ifdef _DEBUG
-	if (sv_downloadport->value)
+	if (sv_downloadport->intvalue)
 	{
-		sv_download_socket = NET_Listen ((unsigned short)sv_downloadport->value);
+		sv_download_socket = NET_Listen ((unsigned short)sv_downloadport->intvalue);
 		if (sv_download_socket == -1)
 		{
-			Com_Printf ("SV_InitGame: couldn't listen on %d!\n", (int)sv_downloadport->value);
+			Com_Printf ("SV_InitGame: couldn't listen on %d!\n", (int)sv_downloadport->intvalue);
 			sv_download_socket = 0;
 		}
 
-		Com_Printf ("DownloadServer running on port %d, socket %d\n", (int)sv_downloadport->value, sv_download_socket);
+		Com_Printf ("DownloadServer running on port %d, socket %d\n", (int)sv_downloadport->intvalue, sv_download_socket);
 	}
 #endif
 
-	// init game
-	SV_InitGameProgs ();
-	for (i=0 ; i<maxclients->value ; i++)
+	//r1: ping masters now that the network is up
+	if (Cvar_VariableValue ("public"))
 	{
-		ent = EDICT_NUM(i+1);
-		ent->s.number = i+1;
-		svs.clients[i].edict = ent;
-		memset (&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd));
+		for (i=0 ; i<MAX_MASTERS ; i++)
+		{
+			if (master_adr[i].port)
+			{
+				Com_Printf ("Pinging master server %s\n", NET_AdrToString (&master_adr[i]));
+				Netchan_OutOfBandPrint (NS_SERVER, &master_adr[i], "ping");
+			}
+		}
 	}
+
+	Z_Verify("SV_InitGame:END");
 }
 
 
@@ -453,27 +477,26 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 	int		l;
 	char	spawnpoint[MAX_QPATH];
 
+	Z_Verify("SV_Map:START");
+
 	sv.loadgame = loadgame;
 	sv.attractloop = attractloop;
 
-	//FIXME: EVIL FIX THIS
-	if (sv.state == ss_dead && !sv.loadgame) {
-		char old_game[MAX_QPATH];
-		//r1: attract loop = demo = no game dll should be used except baseq2 as it might interfere
-		if (attractloop) {
-			strcpy (old_game,  Cvar_VariableString ("game"));
-			Cvar_Set ("game", BASEDIRNAME);
+	if (sv.state == ss_dead && !sv.loadgame)
+	{
+		//r1: attract loop = demo = no game dll should be used since we're just playing packets
+		if (!attractloop)
+		{
+			// the game is just starting
+			SV_InitGame ();
 		}
-		SV_InitGame ();	// the game is just starting
-		if (attractloop)
-			Cvar_Set ("game", old_game);
 	}
 
 	//r1: yet another buffer overflow was here.
-	strncpy (level, levelstring, sizeof(level)-1);
+	Q_strncpy (level, levelstring, sizeof(level)-1);
 
 	// if there is a + in the map, set nextserver to the remainder
-	ch = strstr(level, "+");
+	ch = strchr(level, '+');
 	if (ch)
 	{
 		*ch = 0;
@@ -487,7 +510,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 		Cvar_Set ("nextserver", "gamemap \"*base1\"");
 
 	// if there is a $, use the remainder as a spawnpoint
-	ch = strstr(level, "$");
+	ch = strchr(level, '$');
 	if (ch)
 	{
 		*ch = 0;
@@ -542,4 +565,5 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 	}
 
 	SV_BroadcastCommand ("reconnect\n");
+	Z_Verify("SV_Map:END");
 }

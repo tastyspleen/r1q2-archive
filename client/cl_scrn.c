@@ -98,7 +98,7 @@ void CL_AddNetgraph (void)
 
 	// if using the debuggraph for something else, don't
 	// add the net lines
-	if (scr_debuggraph->value || scr_timegraph->value || scr_sizegraph->value)
+	if (scr_debuggraph->intvalue || scr_timegraph->intvalue || scr_sizegraph->intvalue)
 		return;
 
 	for (i=0 ; i<cls.netchan.dropped ; i++)
@@ -123,7 +123,7 @@ void CL_AddSizegraph (void)
 
 	// if using the debuggraph for something else, don't
 	// add the net lines
-	if (scr_debuggraph->value || scr_timegraph->value || scr_netgraph->value)
+	if (scr_debuggraph->intvalue || scr_timegraph->intvalue || scr_netgraph->intvalue)
 		return;
 	
 	for (ping=0 ; ping<cl.surpressCount ; ping++)
@@ -202,7 +202,7 @@ void SCR_DrawDebugGraph (void)
 		
 		if (v < 0)
 			v += scr_graphheight->value * (1+(int)(-v/scr_graphheight->value));
-		h = (int)v % (int)scr_graphheight->value;
+		h = (int)v % scr_graphheight->intvalue;
 		re.DrawFill (x+w-1-a, y - h, 1,	h, color);
 	}
 }
@@ -216,8 +216,8 @@ CENTER PRINTING
 */
 
 char		scr_centerstring[1024];
-float		scr_centertime_start;	// for slow victory printing
-float		scr_centertime_off;
+//float		scr_centertime_start;	// for slow victory printing
+unsigned	scr_centertime_off;
 int			scr_center_lines;
 int			scr_erase_center;
 
@@ -231,13 +231,17 @@ for a few moments
 */
 void SCR_CenterPrint (char *str)
 {
-	char	*s;
-//	char	line[64];
-//	int		i, j, l;
+	char		*s;
+	qboolean	itsTheSameAsBefore;
+
+	if (!strcmp (scr_centerstring, str))
+		itsTheSameAsBefore = true;
+	else
+		itsTheSameAsBefore = false;
 
 	strncpy (scr_centerstring, str, sizeof(scr_centerstring)-1);
-	scr_centertime_off = scr_centertime->value;
-	scr_centertime_start = cl.time;
+	scr_centertime_off = cls.realtime + scr_centertime->value * 1000;
+	//scr_centertime_start = cl.time;
 
 	// count the number of lines for centering
 	scr_center_lines = 1;
@@ -252,13 +256,17 @@ void SCR_CenterPrint (char *str)
 	// echo it to the console
 
 	//r1: less spam plz
-	s = str;
-	while (*s) {
-		if (*s == '\n')
-			*s = ' ';
-		s++;
+	if (!itsTheSameAsBefore)
+	{
+		/*s = str;
+		while (*s) {
+			if (*s == '\n')
+				*s = ' ';
+			s++;
+		}*/
+		Com_Printf ("%s\n", str);
 	}
-	Com_Printf ("%s\n", str);
+
 	/*s = str;
 	do	
 	{
@@ -342,9 +350,7 @@ void SCR_DrawCenterString (void)
 
 void SCR_CheckDrawCenterString (void)
 {
-	scr_centertime_off -= cls.frametime;
-	
-	if (scr_centertime_off <= 0)
+	if (scr_centertime_off <= cls.realtime)
 		return;
 
 	SCR_DrawCenterString ();
@@ -364,12 +370,12 @@ static void SCR_CalcVrect (void)
 	int		size;
 
 	// bound viewsize
-	if (scr_viewsize->value < 40)
+	if (scr_viewsize->intvalue < 40)
 		Cvar_Set ("viewsize","40");
-	if (scr_viewsize->value > 100)
+	if (scr_viewsize->intvalue > 100)
 		Cvar_Set ("viewsize","100");
 
-	size = scr_viewsize->value;
+	size = scr_viewsize->intvalue;
 
 	scr_vrect.width = viddef.width*size/100;
 	scr_vrect.width &= ~7;
@@ -521,10 +527,10 @@ void SCR_DrawPause (void)
 {
 	int		w, h;
 
-	if (!scr_showpause->value)		// turn off for screenshots
+	if (!scr_showpause->intvalue)		// turn off for screenshots
 		return;
 
-	if (!cl_paused->value)
+	if (!cl_paused->intvalue)
 		return;
 
 	re.DrawGetPicSize (&w, &h, "pause");
@@ -589,9 +595,9 @@ SCR_DrawConsole
 */
 void SCR_DrawConsole (void)
 {
-	Con_CheckResize ();
+	//Con_CheckResize ();
 	
-	if (cls.state == ca_disconnected || cls.state == ca_connecting)
+	if (cls.state <= ca_connecting)
 	{	// forced full screen console
 		Con_DrawConsole (1.0);
 		return;
@@ -631,7 +637,7 @@ void SCR_BeginLoadingPlaque (void)
 #endif
 	if (cls.disable_screen)
 		return;
-	if (developer->value)
+	if (developer->intvalue)
 		return;
 	if (cls.state == ca_disconnected)
 		return;	// if at console, don't bring up the plaque
@@ -767,13 +773,13 @@ void SCR_TileClear (void)
 	int		top, bottom, left, right;
 	dirty_t	clear;
 
-	if (scr_drawall->value)
+	if (scr_drawall->intvalue)
 		SCR_DirtyScreen ();	// for power vr or broken page flippers...
 
 	if (scr_con_current == 1.0)
 		return;		// full screen console
 
-	if (scr_viewsize->value == 100)
+	if (scr_viewsize->intvalue == 100)
 		return;		// full screen rendering
 
 #ifdef CINEMATICS
@@ -1000,12 +1006,12 @@ void SCR_TouchPics (void)
 		for (j=0 ; j<11 ; j++)
 			re.RegisterPic (sb_nums[i][j]);
 
-	if (crosshair->value)
+	if (crosshair->intvalue)
 	{
-		if (crosshair->value > 9 || crosshair->value < 0)
-			crosshair->value = 3;
+		if (crosshair->intvalue > 9 || crosshair->intvalue < 0)
+			Cvar_Set ("crosshair", "3");
 
-		Com_sprintf (crosshair_pic, sizeof(crosshair_pic), "ch%i", (int)(crosshair->value));
+		Com_sprintf (crosshair_pic, sizeof(crosshair_pic), "ch%i", crosshair->intvalue);
 		re.DrawGetPicSize (&crosshair_width, &crosshair_height, crosshair_pic);
 		if (!crosshair_width)
 			crosshair_pic[0] = 0;
@@ -1040,299 +1046,303 @@ void SCR_ExecuteLayoutString (char *s)
 	while (s)
 	{
 		token = COM_Parse (&s);
-		if (!strcmp(token, "xl"))
+
+		//r1: rewrote how this is parsed to minimize use of redundant strcmps
+		//note this only works since token is defined as char[512]
+		switch (token[0])
 		{
-			token = COM_Parse (&s);
-			x = atoi(token);
-			continue;
-		}
-		if (!strcmp(token, "xr"))
-		{
-			token = COM_Parse (&s);
-			x = viddef.width + atoi(token);
-			continue;
-		}
-		if (!strcmp(token, "xv"))
-		{
-			token = COM_Parse (&s);
-			x = viddef.width/2 - 160 + atoi(token);
-			continue;
-		}
-
-		if (!strcmp(token, "yt"))
-		{
-			token = COM_Parse (&s);
-			y = atoi(token);
-			continue;
-		}
-		if (!strcmp(token, "yb"))
-		{
-			token = COM_Parse (&s);
-			y = viddef.height + atoi(token);
-			continue;
-		}
-		if (!strcmp(token, "yv"))
-		{
-			token = COM_Parse (&s);
-			y = viddef.height/2 - 120 + atoi(token);
-			continue;
-		}
-
-		if (!strcmp(token, "pic"))
-		{	// draw a pic from a stat number
-			token = COM_Parse (&s);
-
-			index = atoi(token);
-
-			if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-				Com_Error (ERR_DROP, "Bad stats index %d in block 'pic' whilst parsing following layout:\n%s", index, s);
-
-			value = cl.frame.playerstate.stats[index];
-
-			if (value >= MAX_IMAGES)
-				Com_Error (ERR_DROP, "Bad picture index %d in block 'pic' whilst parsing following layout:\n%s", value, s);
-
-			if (cl.configstrings[CS_IMAGES+value])
-			{
-				SCR_AddDirtyPoint (x, y);
-				SCR_AddDirtyPoint (x+23, y+23);
-				re.DrawPic (x, y, cl.configstrings[CS_IMAGES+value]);
-			}
-			continue;
-		}
-
-		if (!strcmp(token, "client"))
-		{	// draw a deathmatch client block
-			int		score, ping, time;
-
-			token = COM_Parse (&s);
-			x = viddef.width/2 - 160 + atoi(token);
-			token = COM_Parse (&s);
-			y = viddef.height/2 - 120 + atoi(token);
-			SCR_AddDirtyPoint (x, y);
-			SCR_AddDirtyPoint (x+159, y+31);
-
-			token = COM_Parse (&s);
-			value = atoi(token);
-
-			if (value >= MAX_CLIENTS || value < 0)
-				Com_Error (ERR_DROP, "Bad client index %d in block 'client' whilst parsing following layout:\n%s", value, s);
-
-			ci = &cl.clientinfo[value];
-
-			token = COM_Parse (&s);
-			score = atoi(token);
-
-			token = COM_Parse (&s);
-			ping = atoi(token);
-
-			token = COM_Parse (&s);
-			time = atoi(token);
-
-			DrawAltString (x+32, y, ci->name);
-			DrawString (x+32, y+8,  "Score: ");
-			DrawAltString (x+32+7*8, y+8,  va("%i", score));
-
-			//r1: ping is typically an icmp message, change wording to more appropriate.
-			DrawString (x+32, y+16, va("RTT:   %ims", ping));
-			DrawString (x+32, y+24, va("Time:  %i", time));
-
-			if (!ci->icon)
-				ci = &cl.baseclientinfo;
-			re.DrawPic (x, y, ci->iconname);
-			continue;
-		}
-
-		if (!strcmp(token, "ctf"))
-		{	// draw a ctf client block
-			int		score, ping;
-			char	block[80];
-
-			token = COM_Parse (&s);
-			x = viddef.width/2 - 160 + atoi(token);
-			token = COM_Parse (&s);
-			y = viddef.height/2 - 120 + atoi(token);
-			SCR_AddDirtyPoint (x, y);
-			SCR_AddDirtyPoint (x+159, y+31);
-
-			token = COM_Parse (&s);
-
-			value = atoi(token);
-			
-			if (value >= MAX_CLIENTS || value < 0)
-				Com_Error (ERR_DROP, "Bad client index %d in block 'ctf' whilst parsing following layout:\n%s", value, s);
-
-			ci = &cl.clientinfo[value];
-
-			token = COM_Parse (&s);
-			score = atoi(token);
-
-			token = COM_Parse (&s);
-			ping = atoi(token);
-			if (ping > 999)
-				ping = 999;
-
-			sprintf(block, "%3d %3d %-12.12s", score, ping, ci->name);
-
-			if (value == cl.playernum)
-				DrawAltString (x, y, block);
-			else
-				DrawString (x, y, block);
-			continue;
-		}
-
-		if (!strcmp(token, "picn"))
-		{	// draw a pic from a name
-			token = COM_Parse (&s);
-			SCR_AddDirtyPoint (x, y);
-			SCR_AddDirtyPoint (x+23, y+23);
-			re.DrawPic (x, y, token);
-			continue;
-		}
-
-		if (!strcmp(token, "num"))
-		{	// draw a number
-			int index;
-
-			token = COM_Parse (&s);
-			width = atoi(token);
-			token = COM_Parse (&s);
-
-			index = atoi(token);
-
-			if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-				Com_Error (ERR_DROP, "Bad stats index %d in block 'num' whilst parsing following layout:\n%s", index, s);
-
-			value = cl.frame.playerstate.stats[index];
-			SCR_DrawField (x, y, 0, width, value);
-			continue;
-		}
-
-		if (!strcmp(token, "hnum"))
-		{	// health number
-			int		color;
-
-			width = 3;
-			value = cl.frame.playerstate.stats[STAT_HEALTH];
-			if (value > 25)
-				color = 0;	// green
-			else if (value > 0)
-				color = (cl.frame.serverframe>>2) & 1;		// flash
-			else
-				color = 1;
-
-			if (cl.frame.playerstate.stats[STAT_FLASHES] & 1)
-				re.DrawPic (x, y, "field_3");
-
-			SCR_DrawField (x, y, color, width, value);
-			continue;
-		}
-
-		if (!strcmp(token, "anum"))
-		{	// ammo number
-			int		color;
-
-			width = 3;
-			value = cl.frame.playerstate.stats[STAT_AMMO];
-			if (value > 5)
-				color = 0;	// green
-			else if (value >= 0)
-				color = (cl.frame.serverframe>>2) & 1;		// flash
-			else
-				continue;	// negative number = don't show
-
-			if (cl.frame.playerstate.stats[STAT_FLASHES] & 4)
-				re.DrawPic (x, y, "field_3");
-
-			SCR_DrawField (x, y, color, width, value);
-			continue;
-		}
-
-		if (!strcmp(token, "rnum"))
-		{	// armor number
-			int		color;
-
-			width = 3;
-			value = cl.frame.playerstate.stats[STAT_ARMOR];
-			if (value < 1)
-				continue;
-
-			color = 0;	// green
-
-			if (cl.frame.playerstate.stats[STAT_FLASHES] & 2)
-				re.DrawPic (x, y, "field_3");
-
-			SCR_DrawField (x, y, color, width, value);
-			continue;
-		}
-
-
-		if (!strcmp(token, "stat_string"))
-		{
-			token = COM_Parse (&s);
-			index = atoi(token);
-
-			if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-				Com_Error (ERR_DROP, "Bad stats index %d in block 'stat_string' whilst parsing following layout:\n%s", index, s);
-
-			index = cl.frame.playerstate.stats[index];
-
-			if (index < 0 || index >= MAX_CONFIGSTRINGS)
-				Com_Error (ERR_DROP, "Bad stat_string index %d whilst parsing following layout:\n%s", index, s);
-
-			DrawString (x, y, cl.configstrings[index]);
-			continue;
-		}
-
-		if (!strcmp(token, "cstring"))
-		{
-			token = COM_Parse (&s);
-			DrawHUDString (token, x, y, 320, 0);
-			continue;
-		}
-
-		if (!strcmp(token, "string"))
-		{
-			token = COM_Parse (&s);
-			DrawString (x, y, token);
-			continue;
-		}
-
-		if (!strcmp(token, "cstring2"))
-		{
-			token = COM_Parse (&s);
-			DrawHUDString (token, x, y, 320,0x80);
-			continue;
-		}
-
-		if (!strcmp(token, "string2"))
-		{
-			token = COM_Parse (&s);
-			DrawAltString (x, y, token);
-			continue;
-		}
-
-		if (!strcmp(token, "if"))
-		{	// draw a number
-			token = COM_Parse (&s);
-			index = atoi(token);
-
-			if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
-				Com_Error (ERR_DROP, "Bad stats index %d in block 'if' whilst parsing following layout:\n%s", index, s);
-
-			value = cl.frame.playerstate.stats[index];
-			if (!value)
-			{	// skip to endif
-				while (s && strcmp(token, "endif") )
+			case 'x':
+				if (token[1] == 'v')
 				{
 					token = COM_Parse (&s);
+					x = viddef.width/2 - 160 + atoi(token);
+					continue;
 				}
-			}
+				else if (token[1] == 'r')
+				{
+					token = COM_Parse (&s);
+					x = viddef.width + atoi(token);
+					continue;
+				}
+				else if (token[1] == 'l')
+				{
+					token = COM_Parse (&s);
+					x = atoi(token);
+					continue;
+				}
+				break;
 
-			continue;
+			case 'y':
+				if (token[1] == 'v')
+				{
+					token = COM_Parse (&s);
+					y = viddef.height/2 - 120 + atoi(token);
+					continue;
+				}
+				else if (token[1] == 'b')
+				{
+					token = COM_Parse (&s);
+					y = viddef.height + atoi(token);
+					continue;
+				}
+				else if (token[1] == 't')
+				{
+					token = COM_Parse (&s);
+					y = atoi(token);
+					continue;
+				}
+				break;
+			case 0:
+				break;
+			default:
+				if (token[0] == 'p' && token[1] == 'i' && token[2] == 'c')
+				{	// draw a pic from a stat number
+					if (token[3] == 'n' && token[4] == 0)
+					{	// draw a pic from a name
+						token = COM_Parse (&s);
+						SCR_AddDirtyPoint (x, y);
+						SCR_AddDirtyPoint (x+23, y+23);
+						re.DrawPic (x, y, token);
+					}
+					else
+					{
+						token = COM_Parse (&s);
+
+						index = atoi(token);
+
+						if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+							Com_Error (ERR_DROP, "Bad stats index %d in block 'pic' whilst parsing following layout:\n%s", index, s);
+
+						value = cl.frame.playerstate.stats[index];
+
+						if (value >= MAX_IMAGES)
+							Com_Error (ERR_DROP, "Bad picture index %d in block 'pic' whilst parsing following layout:\n%s", value, s);
+
+						if (cl.configstrings[CS_IMAGES+value][0])
+						{
+							SCR_AddDirtyPoint (x, y);
+							SCR_AddDirtyPoint (x+23, y+23);
+							re.DrawPic (x, y, cl.configstrings[CS_IMAGES+value]);
+						}
+					}
+					continue;
+				}
+				else if (token[0] == 'n' && token[1] == 'u' && token[2] == 'm')
+				{	// draw a number
+					int index;
+
+					token = COM_Parse (&s);
+					width = atoi(token);
+					token = COM_Parse (&s);
+
+					index = atoi(token);
+
+					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+						Com_Error (ERR_DROP, "Bad stats index %d in block 'num' whilst parsing following layout:\n%s", index, s);
+
+					value = cl.frame.playerstate.stats[index];
+					SCR_DrawField (x, y, 0, width, value);
+					continue;
+				}
+				else  if (token[1] == 'n' && token[2] == 'u' && token[3] == 'm')
+				{
+					int		color;
+
+					switch (token[0])
+					{
+					case 'a':
+						width = 3;
+						value = cl.frame.playerstate.stats[STAT_AMMO];
+						if (value > 5)
+							color = 0;	// green
+						else if (value >= 0)
+							color = (cl.frame.serverframe>>2) & 1;		// flash
+						else
+							continue;	// negative number = don't show
+
+						if (cl.frame.playerstate.stats[STAT_FLASHES] & 4)
+							re.DrawPic (x, y, "field_3");
+
+						SCR_DrawField (x, y, color, width, value);
+						continue;
+
+					case 'h':
+						// health number
+						width = 3;
+						value = cl.frame.playerstate.stats[STAT_HEALTH];
+						if (value > 25)
+							color = 0;	// green
+						else if (value > 0)
+							color = (cl.frame.serverframe>>2) & 1;		// flash
+						else
+							color = 1;
+
+						if (cl.frame.playerstate.stats[STAT_FLASHES] & 1)
+							re.DrawPic (x, y, "field_3");
+
+						SCR_DrawField (x, y, color, width, value);
+						continue;
+
+					case 'r':
+						width = 3;
+						value = cl.frame.playerstate.stats[STAT_ARMOR];
+						if (value < 1)
+							continue;
+
+						color = 0;	// green
+
+						if (cl.frame.playerstate.stats[STAT_FLASHES] & 2)
+							re.DrawPic (x, y, "field_3");
+
+						SCR_DrawField (x, y, color, width, value);
+						continue;
+					}
+				}
+				else if (!strcmp(token, "stat_string"))
+				{
+					token = COM_Parse (&s);
+					index = atoi(token);
+
+					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+						Com_Error (ERR_DROP, "Bad stats index %d in block 'stat_string' whilst parsing following layout:\n%s", index, s);
+
+					index = cl.frame.playerstate.stats[index];
+
+					if (index < 0 || index >= MAX_CONFIGSTRINGS)
+						Com_Error (ERR_DROP, "Bad stat_string index %d whilst parsing following layout:\n%s", index, s);
+
+					DrawString (x, y, cl.configstrings[index]);
+					continue;
+				}
+
+				if (!strncmp(token, "cstring", 6))
+				{
+					if (token[7] == '2' && token[8] == 0)
+					{
+						token = COM_Parse (&s);
+						DrawHUDString (token, x, y, 320,0x80);
+						continue;
+					}
+					else
+					{
+						token = COM_Parse (&s);
+						DrawHUDString (token, x, y, 320, 0);
+						continue;
+					}
+				}
+				else if (!strncmp(token, "string", 5))
+				{
+					if (token[6] == '2' && token[7] == 0)
+					{
+						token = COM_Parse (&s);
+						DrawAltString (x, y, token);
+						continue;
+					}
+					else
+					{
+						token = COM_Parse (&s);
+						DrawString (x, y, token);
+						continue;
+					}
+				}
+				else if (token[0] == 'i' && token[1] == 'f')
+				{	// draw a number
+					token = COM_Parse (&s);
+					index = atoi(token);
+
+					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+						Com_Error (ERR_DROP, "Bad stats index %d in block 'if' whilst parsing following layout:\n%s", index, s);
+
+					value = cl.frame.playerstate.stats[index];
+					if (!value)
+					{	// skip to endif
+						while (s && strcmp(token, "endif") )
+						{
+							token = COM_Parse (&s);
+						}
+					}
+
+					continue;
+				}
+				else if (!strcmp(token, "client"))
+				{	// draw a deathmatch client block
+					int		score, ping, time;
+
+					token = COM_Parse (&s);
+					x = viddef.width/2 - 160 + atoi(token);
+					token = COM_Parse (&s);
+					y = viddef.height/2 - 120 + atoi(token);
+					SCR_AddDirtyPoint (x, y);
+					SCR_AddDirtyPoint (x+159, y+31);
+
+					token = COM_Parse (&s);
+					value = atoi(token);
+
+					if (value >= MAX_CLIENTS || value < 0)
+						Com_Error (ERR_DROP, "Bad client index %d in block 'client' whilst parsing following layout:\n%s", value, s);
+
+					ci = &cl.clientinfo[value];
+
+					token = COM_Parse (&s);
+					score = atoi(token);
+
+					token = COM_Parse (&s);
+					ping = atoi(token);
+
+					token = COM_Parse (&s);
+					time = atoi(token);
+
+					DrawAltString (x+32, y, ci->name);
+					DrawString (x+32, y+8,  "Score: ");
+					DrawAltString (x+32+7*8, y+8,  va("%i", score));
+
+					//r1: ping is typically an icmp message, change wording to more appropriate.
+					DrawString (x+32, y+16, va("RTT:   %ims", ping));
+					DrawString (x+32, y+24, va("Time:  %i", time));
+
+					if (!ci->icon)
+						ci = &cl.baseclientinfo;
+					re.DrawPic (x, y, ci->iconname);
+					continue;
+				}
+				else if (!strcmp(token, "ctf"))
+				{	// draw a ctf client block
+					int		score, ping;
+					char	block[80];
+
+					token = COM_Parse (&s);
+					x = viddef.width/2 - 160 + atoi(token);
+					token = COM_Parse (&s);
+					y = viddef.height/2 - 120 + atoi(token);
+					SCR_AddDirtyPoint (x, y);
+					SCR_AddDirtyPoint (x+159, y+31);
+
+					token = COM_Parse (&s);
+
+					value = atoi(token);
+					
+					if (value >= MAX_CLIENTS || value < 0)
+						Com_Error (ERR_DROP, "Bad client index %d in block 'ctf' whilst parsing following layout:\n%s", value, s);
+
+					ci = &cl.clientinfo[value];
+
+					token = COM_Parse (&s);
+					score = atoi(token);
+
+					token = COM_Parse (&s);
+					ping = atoi(token);
+					if (ping > 999)
+						ping = 999;
+
+					sprintf(block, "%3d %3d %-12.12s", score, ping, ci->name);
+
+					if (value == cl.playernum)
+						DrawAltString (x, y, block);
+					else
+						DrawString (x, y, block);
+					continue;
+				}
 		}
-
-
 	}
 }
 
@@ -1409,7 +1419,7 @@ void SCR_UpdateScreen (void)
 	else if ( cl_stereo_separation->value < 0 )
 		Cvar_SetValue( "cl_stereo_separation", 0.0 );
 
-	if ( cl_stereo->value )
+	if ( cl_stereo->intvalue )
 	{
 		numframes = 2;
 		separation[0] = -cl_stereo_separation->value / 2;
@@ -1509,10 +1519,10 @@ void SCR_UpdateScreen (void)
 			SCR_DrawNet ();
 			SCR_CheckDrawCenterString ();
 
-			if (scr_timegraph->value)
+			if (scr_timegraph->intvalue)
 				SCR_DebugGraph (cls.frametime*300, cls.frametime*300);
 
-			if (scr_debuggraph->value || scr_timegraph->value || scr_netgraph->value || scr_sizegraph->value)
+			if (scr_debuggraph->intvalue || scr_timegraph->intvalue || scr_netgraph->intvalue || scr_sizegraph->intvalue)
 				SCR_DrawDebugGraph ();
 
 			SCR_DrawPause ();

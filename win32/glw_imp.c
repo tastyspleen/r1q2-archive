@@ -255,7 +255,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 			dm.dmPelsHeight = height;
 			dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
 
-			if ( gl_bitdepth->value != 0 )
+			if ( FLOAT_GT_ZERO(gl_bitdepth->value) )
 			{
 				dm.dmBitsPerPel = gl_bitdepth->value;
 				dm.dmFields |= DM_BITSPERPEL;
@@ -608,7 +608,7 @@ qboolean init_extensions()
     }
     else 
     {
-		if (gl_ext_multisample->value)
+		if (FLOAT_GT_ZERO(gl_ext_multisample->value))
 			ri.Con_Printf (PRINT_ALL, "WGL_ARB_multisample not found.\n");
 		ri.Cvar_Set ("gl_ext_multisample", "0");
         _is_multisample = false;
@@ -694,7 +694,7 @@ qboolean init_regular (void)
 	/*
 	** set PFD_STEREO if necessary
 	*/
-	if ( stereo->value != 0 )
+	if ( FLOAT_GT_ZERO(stereo->value))
 	{
 		ri.Con_Printf( PRINT_ALL, "...attempting to use stereo\n" );
 		pfd.dwFlags |= PFD_STEREO;
@@ -758,7 +758,7 @@ qboolean init_regular (void)
 		{
 			extern cvar_t *gl_allow_software;
 
-			if ( gl_allow_software->value )
+			if ( FLOAT_GT_ZERO(gl_allow_software->value) )
 				glw_state.mcd_accelerated = true;
 			else
 				glw_state.mcd_accelerated = false;
@@ -773,7 +773,7 @@ qboolean init_regular (void)
 	/*
 	** report if stereo is desired but unavailable
 	*/
-	if ( !( pfd.dwFlags & PFD_STEREO ) && ( stereo->value != 0 ) ) 
+	if ( !( pfd.dwFlags & PFD_STEREO ) && ( FLOAT_GT_ZERO(stereo->value)) ) 
 	{
 		ri.Con_Printf( PRINT_ALL, "...failed to select stereo pixel format\n" );
 		ri.Cvar_SetValue( "cl_stereo", 0 );
@@ -964,7 +964,7 @@ qboolean GLimp_InitGL (void)
 	/*
 	** set PFD_STEREO if necessary
 	*/
-	if ( stereo->value != 0 )
+	if ( FLOAT_GT_ZERO(stereo->value))
 	{
 		ri.Con_Printf( PRINT_ALL, "...attempting to use stereo\n" );
 		pfd.dwFlags |= PFD_STEREO;
@@ -976,7 +976,7 @@ qboolean GLimp_InitGL (void)
 	}
 #endif
 
-	if (vid_nowgl->value)
+	if (FLOAT_GT_ZERO(vid_nowgl->value))
 		return init_regular ();
 
 	/*
@@ -1022,10 +1022,10 @@ qboolean GLimp_InitGL (void)
 
 		ReleaseDC( GetDesktopWindow(), hdDesk );
 
-		if (!gl_colorbits->value) 
+		if (FLOAT_LE_ZERO(gl_colorbits->value)) 
 			ri.Cvar_Set ("gl_colorbits", dm.dmBitsPerPel == 32 ? "24" : "16");
 
-		if (!gl_depthbits->value)
+		if (FLOAT_LE_ZERO(gl_depthbits->value))
 			ri.Cvar_Set ("gl_depthbits", dm.dmBitsPerPel == 32 ? "24" : "16");
 
 		if (!*gl_alphabits->string)
@@ -1036,11 +1036,11 @@ qboolean GLimp_InitGL (void)
 	}
 
 	if (gl_colorbits->value < 24) {
-		if (gl_alphabits->value) {
+		if (FLOAT_GT_ZERO(gl_alphabits->value)) {
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - disabling gl_alphabits with colorbits %d\n", (int)gl_colorbits->value);
 			ri.Cvar_Set ("gl_alphabits", "0");
 		}
-		if (gl_stencilbits->value) {
+		if (FLOAT_GT_ZERO(gl_stencilbits->value)) {
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - disabling gl_stencilbits with colorbits %d\n", (int)gl_colorbits->value);
 			ri.Cvar_Set ("gl_stencilbits", "0");
 		}
@@ -1381,7 +1381,7 @@ void GLimp_BeginFrame( void )
 #if 0
 	if ( gl_bitdepth->modified )
 	{
-		if ( gl_bitdepth->value != 0 && !glw_state.allowdisplaydepthchange )
+		if ( FLOAT_GT_ZERO(gl_bitdepth->value) && !glw_state.allowdisplaydepthchange )
 		{
 			ri.Cvar_SetValue( "gl_bitdepth", 0 );
 			ri.Con_Printf( PRINT_ALL, "gl_bitdepth requires Win95 OSR2.x or WinNT 4.x\n" );
@@ -1438,12 +1438,14 @@ void EXPORT GLimp_AppActivate( qboolean active )
 {
 	if ( active )
 	{
+		if (IsIconic (glw_state.hWnd))
+			return;
 		SetForegroundWindow( glw_state.hWnd );
 		ShowWindow( glw_state.hWnd, SW_RESTORE );
 	}
 	else
 	{
-		if ( vid_fullscreen->value )
+		if ( FLOAT_GT_ZERO(vid_fullscreen->value) )
 			ShowWindow( glw_state.hWnd, SW_MINIMIZE );
 	}
 }

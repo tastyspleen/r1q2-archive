@@ -35,17 +35,18 @@ QUAKE FILESYSTEM
 
 typedef struct
 {
-	char	name[MAX_QPATH];
-	int		filepos, filelen;
-	unsigned int hash;
+	char			name[56];
+	unsigned long	filepos;
+	unsigned long	filelen;
 } packfile_t;
 
 typedef struct pack_s
 {
-	char		filename[MAX_OSPATH];
-	FILE		*handle;
-	int			numfiles;
-	packfile_t	*files;
+	char			filename[MAX_OSPATH];
+	FILE			*handle;
+	int				numfiles;
+	//packfile_t		*files;
+	struct rbtree	*rb;
 } pack_t;
 
 char	fs_gamedir[MAX_OSPATH];
@@ -179,6 +180,10 @@ int	Developer_searchpath (void)
 
 }
 
+#define BTREE_SEARCH 1
+//#define HASH_CACHE 1
+//#define MAGIC_BTREE 1
+
 unsigned int hashify (char *S)
 {
   unsigned int hash_PeRlHaSh = 0;
@@ -192,36 +197,76 @@ unsigned int hashify (char *S)
 
 typedef struct fscache_s fscache_t;
 
-struct fscache_s {
+struct fscache_s
+{
+#ifdef HASH_CACHE
 	fscache_t		*next;
 	unsigned int	hash;
-	char			*filepath;
-	char			*filename;
+#endif
+	char			filepath[MAX_OSPATH];
+	char			filename[MAX_QPATH];
 	unsigned int	filelen;
 	unsigned int	fileseek;
 };
 
 struct rbtree *rb;
 
-/*static int _compare(const void *pa, const void *pb)
+#ifdef MAGIC_BTREE
+static int _compare(const void *pa, const void *pb)
 {
-	return strcmp ((const char *)pa, (c.onst char *)pb);
-}*/
+	if ((int *)pa > (int *)pb)
+		return 1;
+	else if ((int *)pa < (int *)pb)
+		return -1;
+	return 0;
+}
+#endif
 
 void FS_InitCache (void)
 {
-	rb = rbinit (strcmp);
+#ifdef MAGIC_BTREE
+	rb = rbinit (_compare, 1);
+#else
+	rb = rbinit ((int (*)(const void *, const void *))Q_stricmp, 0);
+#endif
 
 	if (!rb)
 		Sys_Error (ERR_FATAL, "FS_InitCache: rbinit failed"); 
 }
 
+#ifdef HASH_CACHE
 fscache_t fscache;
+#endif
 
-void FS_FlushCache (void)
+void RB_Purge (struct rbtree *r)
 {
 	RBLIST *rblist;
 	const void *val;
+	void *data;
+	void *ptr;
+
+	if ((rblist=rbopenlist(rb)))
+	{
+		while((val=rbreadlist(rblist)))
+		{
+			data = rbfind (val, rb);
+			ptr = *(void **)data;
+			rbdelete (val, rb);
+
+			if (ptr)
+				Z_Free (ptr);
+		}
+	}
+
+	rbcloselist(rblist);
+	rbdestroy (rb);
+
+	FS_InitCache();
+}
+
+void FS_FlushCache (void)
+{
+#ifdef HASH_CACHE
 	fscache_t *last = NULL, *temp;
 
 	temp = &fscache;
@@ -240,28 +285,39 @@ void FS_FlushCache (void)
 	}
 
 	memset (&fscache, 0, sizeof(fscache));
-
-	if ((rblist=rbopenlist(rb)))
-	{
-		while((val=rbreadlist(rblist)))
-			rbdelete (val, rb);
-	}
-	rbcloselist(rblist);		
+#endif
+	RB_Purge (rb);
 }
 
-void FS_Stats_f (void)
+static void FS_Stats_f (void)
 {
-	int i;
-	const void *val;
+#if BTREE_SEARCH || MAGIC_BTREE
+	int			i;
+	int			j;
+	int			k;
+	const void	*val;
+#endif
+#ifdef HASH_CACHE
 	fscache_t *temp;
+#endif
 
+#if BTREE_SEARCH || MAGIC_BTREE
 	i = 0;
+	j = 1;
+	k = 1;
 
 	for(val=rblookup(RB_LUFIRST, NULL, rb); val!=NULL; val=rblookup(RB_LUNEXT, val, rb))
 		i++;
 
-	Com_Printf ("%d entries in binary search tree cache.\n", i);
+	while (j < i)
+	{
+		k++;
+		j <<= 1;
+	}
+	Com_Printf ("%d entries in binary search tree cache (est. height %d).\n", i, k);
+#endif
 
+#ifdef HASH_CACHE
 	temp = &fscache;
 	temp = temp->next;
 
@@ -277,13 +333,11 @@ void FS_Stats_f (void)
 	}
 
 	Com_Printf ("%d entries in linked list hash cache.\n", i);
+#endif
 }
 
-#define BTREE_SEARCH 1
-//#define HASH_CACHE 1
-
 #if BTREE_SEARCH
-void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename)
+static void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename)
 {
 	void		**newitem;
 	fscache_t	*cache;
@@ -293,19 +347,66 @@ void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, cha
 	cache->fileseek = fileseek;
 
 	if (path)
-		cache->filepath = CopyString (path, TAGMALLOC_FSCACHE);
+		strncpy (cache->filepath, path, sizeof(cache->filepath)-1);
 	else
-		cache->filepath = NULL;
+		cache->filepath[0] = 0;
 
-	cache->filename = CopyString (filename, TAGMALLOC_FSCACHE);
+	strncpy (cache->filename, filename, sizeof(cache->filename)-1);
 
-	//Com_Printf ("Adding %s: ", filename);
-	newitem = rbsearch (filename, rb);
+	newitem = rbsearch (cache->filename, rb);
 	*newitem = cache;
-	//Com_Printf ("\n");
 }
-#else
-void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigned int fileseek, fscache_t *cache, char *filename)
+#endif
+
+#if MAGIC_BTREE
+
+typedef struct magic_s
+{
+	struct magic_s	*next;
+	fscache_t		*entry;
+} magic_t;
+
+static void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename, unsigned int hash)
+{
+	void		**newitem;
+	fscache_t	*cache;
+	magic_t		*magic;
+
+	cache = Z_TagMalloc (sizeof(fscache_t), TAGMALLOC_FSCACHE);
+	cache->filelen = filelen;
+	cache->fileseek = fileseek;
+
+	if (path)
+		strncpy (cache->filepath, path, sizeof(cache->filepath)-1);
+	else
+		cache->filepath[0] = 0;
+
+	strncpy (cache->filename, filename, sizeof(cache->filename)-1);
+
+	newitem = rbfind ((void *)hash, rb);
+	if (newitem)
+	{
+		magic = *(magic_t **)newitem;
+		while (magic->next)
+			magic = magic->next;
+		magic->next = Z_TagMalloc (sizeof(magic_t), TAGMALLOC_FSCACHE);
+		magic = magic->next;
+		magic->entry = cache;
+		magic->next = NULL;
+	}
+	else
+	{
+		newitem = rbsearch ((void *)hash, rb);
+		magic = Z_TagMalloc (sizeof(magic_t), TAGMALLOC_FSCACHE);
+		magic->entry = cache;
+		magic->next = NULL;
+		*newitem = magic;
+	}
+}
+#endif
+
+#if HASH_CACHE
+static void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigned int fileseek, fscache_t *cache, char *filename)
 {
 	cache->next = Z_TagMalloc (sizeof(fscache_t), TAGMALLOC_FSCACHE);
 	cache = cache->next;
@@ -315,11 +416,11 @@ void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigne
 	cache->fileseek = fileseek;
 
 	if (path)
-		cache->filepath = CopyString (path, TAGMALLOC_FSCACHE);
+		strncpy (cache->filepath, path, sizeof(cache->filepath)-1);
 	else
-		cache->filepath = NULL;
+		cache->filepath[0] = 0;
 
-	cache->filename = CopyString (filename, TAGMALLOC_FSCACHE);
+	strncpy (cache->filename, filename, sizeof(cache->filename)-1);
 }
 #endif
 
@@ -336,18 +437,18 @@ a seperate file.
 
 int FS_FOpenFile (char *filename, FILE **file)
 {
-	fscache_t		*cache = &fscache;
+	fscache_t		*cache;
 	searchpath_t	*search;
 	char			netpath[MAX_OSPATH];
 	pack_t			*pak;
-	int				i;
+//	int				i;
 	filelink_t		*link;
 //#ifndef BTREE_SEARCH
-	unsigned int	hash;
+	//unsigned int	hash;
 //#endif
 
 	// check for links firstal
-	if (!fs_noextern->value)
+	if (!fs_noextern->intvalue)
 	{
 		for (link = fs_links ; link ; link=link->next)
 		{
@@ -366,76 +467,118 @@ int FS_FOpenFile (char *filename, FILE **file)
 	}
 
 #ifdef BTREE_SEARCH
-
-	//Com_Printf ("Begin search for %s: ", filename);
 	cache = rbfind (filename, rb);
 	if (cache)
 	{
-		//Com_Printf (" (cached)\n");
 		cache = *(fscache_t **)cache;
-		if (cache->filepath == NULL)
+		if (cache->filepath[0] == 0)
 		{
 			*file = NULL;
 			return -1;
 		}
 		*file = fopen (cache->filepath, "rb");
+		if (!*file)
+			Com_Error (ERR_FATAL, "Couldn't open %s", cache->filepath);	
 		fseek (*file, cache->fileseek, SEEK_SET);
 		return cache->filelen;
 	}
-	//Com_Printf (" (not cached)\n");
+
+#elif HASH_CACHE
 	hash = hashify (filename);
-#else
-	hash = hashify (filename);
+
+	cache = &fscache;
 
 	while (cache->next)
 	{ 
 		cache = cache->next;
 		if (cache->hash == hash && !Q_stricmp (cache->filename, filename))
 		{
-			if (cache->filepath == NULL)
+			Com_Printf (" (cached) ");
+			if (cache->filepath[0] == 0)
 			{
 				*file = NULL;
 				return -1;
 			}
 			*file = fopen (cache->filepath, "rb");
+			if (!*file)
+				Com_Error (ERR_FATAL, "Couldn't open %s", cache->filepath);	
 			fseek (*file, cache->fileseek, SEEK_SET);
 			return cache->filelen;
 		}
 	}
+#elif MAGIC_BTREE
+	{
+		magic_t *magic;
+
+		hash = hashify (filename);
+
+		magic = rbfind ((void *)hash, rb);
+		if (magic)
+		{
+			magic = *(magic_t **)magic;
+
+			do
+			{
+				cache = magic->entry;
+				if (!Q_stricmp (cache->filename, filename))
+				{
+					if (cache->filepath[0] == 0)
+					{
+						*file = NULL;
+						return -1;
+					}
+					*file = fopen (cache->filepath, "rb");
+					if (!*file)
+						Com_Error (ERR_FATAL, "Couldn't open %s", cache->filepath);	
+					fseek (*file, cache->fileseek, SEEK_SET);
+					return cache->filelen;
+				}
+
+				magic = magic->next;
+			} while (magic);
+		}
+	}
 #endif
 
-	//s_len -= 6;
 	for (search = fs_searchpaths ; search ; search = search->next)
 	{
-	// is the element a pak file?
-		if (search->pack) {
-			// look through all the pak file elements
+		// is the element a pak file?
+		if (search->pack)
+		{
+//			char		*lower;
+			packfile_t	*entry;
+
+			//r1: optimized btree search
 			pak = search->pack;
-			for (i=0 ; i<pak->numfiles ; i++) {
-//#ifndef BTREE_SEARCH
-				if (pak->files[i].hash == hash)
-//#endif
-				if (!Q_stricmp (pak->files[i].name, filename))
-				{	// found it!
-					Com_DPrintf ("PackFile: %s : %s\n",pak->filename, filename);
-				// open a new file on the pakfile
-					*file = fopen (pak->filename, "rb");
-					if (!*file)
-						Com_Error (ERR_FATAL, "Couldn't reopen %s", pak->filename);	
-					fseek (*file, pak->files[i].filepos, SEEK_SET);
-					if (fs_cache->value)
-					{
-#ifdef BTREE_SEARCH
-						FS_AddToCache (pak->filename, pak->files[i].filelen, pak->files[i].filepos, filename);
-#else
-						FS_AddToCache (hash, pak->filename, pak->files[i].filelen, pak->files[i].filepos, cache, filename);
+
+			//r1: ick
+			//lower = strdup (filename);
+			//strlwr (lower);
+			entry = rbfind (filename, pak->rb);
+			//free (lower);
+			if (entry)
+			{
+				entry = *(packfile_t **)entry;
+				*file = fopen (pak->filename, "rb");
+				if (!*file)
+					Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
+				fseek (*file, entry->filepos, SEEK_SET);
+
+				if (fs_cache->intvalue)
+				{
+#if BTREE_SEARCH
+					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename);
+#elif HASH_CACHE
+					FS_AddToCache (hash, pak->filename, entry->filelen, entry->filepos, cache, filename);
+#elif MAGIC_BTREE
+					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename, hash);
 #endif
-					}
-					return pak->files[i].filelen;
 				}
+
+				return entry->filelen;
 			}
 		}
-		else if (!fs_noextern->value)
+		else if (!fs_noextern->intvalue)
 		{
 			int filelen;
 			// check a file in the directory tree
@@ -449,12 +592,14 @@ int FS_FOpenFile (char *filename, FILE **file)
 			Com_DPrintf ("FindFile: %s\n",netpath);
 
 			filelen = FS_filelength (*file);
-			if (fs_cache->value)
+			if (fs_cache->intvalue)
 			{
-#ifdef BTREE_SEARCH
+#if BTREE_SEARCH
 				FS_AddToCache (netpath, filelen, 0, filename);
-#else
+#elif HASH_CACHE
 				FS_AddToCache (hash, netpath, filelen, 0, cache, filename);
+#elif MAGIC_BTREE
+				FS_AddToCache (netpath, filelen, 0, filename, hash);
 #endif
 			}
 			return filelen;
@@ -464,12 +609,14 @@ int FS_FOpenFile (char *filename, FILE **file)
 	
 	Com_DPrintf ("FindFile: can't find %s\n", filename);
 
-	if (fs_cache->value >= 2)
+	if (fs_cache->intvalue >= 2)
 	{
-#ifdef BTREE_SEARCH
+#if BTREE_SEARCH
 		FS_AddToCache (NULL, 0, 0, filename);
-#else
+#elif HASH_CACHE
 		FS_AddToCache (hash, NULL, 0, 0, cache, filename);
+#elif MAGIC_BTREE
+		FS_AddToCache (NULL, 0, 0, filename, hash);
 #endif
 	}
 	
@@ -536,6 +683,7 @@ void FS_Read (void *buffer, int len, FILE *f)
 #ifdef _DEBUG
 #include <windows.h>
 LARGE_INTEGER start;
+double totalTime = 0;
 #define START_PERFORMANCE_TIMER _START_PERFORMANCE_TIMER()
 #define STOP_PERFORMANCE_TIMER _STOP_PERFORMANCE_TIMER()
 void _START_PERFORMANCE_TIMER (void)
@@ -548,7 +696,8 @@ void _STOP_PERFORMANCE_TIMER (void)
 	__int64 diff;
 	QueryPerformanceCounter (&stop);
 	diff = stop.QuadPart - start.QuadPart;
-	Com_Printf ("Function executed in %I64u ticks.\n", diff);
+	//Com_Printf ("Function executed in %.2f ms.\n", (float)((float)diff / (float)CLOCKS_PER_SEC));
+	totalTime += (float)((float)diff / (float)CLOCKS_PER_SEC);
 }
 #else
 #define START_PERFORMANCE_TIMER
@@ -569,17 +718,19 @@ int EXPORT FS_LoadFile (char *path, void /*@out@*/ /*@null@*/**buffer)
 {
 	FILE	*h;
 	byte	*buf;
-	int		len;//, i;
+	int		len;
 //	unsigned char message[21];
 //	char	temp[512];
 //	char	temp2[8];
-	buf = NULL;	// quiet compiler warning
+	//buf = NULL;	// quiet compiler warning
 
 // look for it in the filesystem or pack files
 	//START_PERFORMANCE_TIMER;
 	//Com_Printf ("%s... ", path);
 	len = FS_FOpenFile (path, &h);
 	//STOP_PERFORMANCE_TIMER;
+
+	//Com_Printf ("TOTAL SO FAR: %.5f\n", totalTime);
 
 	if (!h)
 	{
@@ -632,15 +783,18 @@ Loads the header and directory, adding the files at the beginning
 of the list so they override previous pack files.
 =================
 */
-pack_t /*@null@*/ *FS_LoadPackFile (char *packfile)
+static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 {
 	dpackheader_t	header;
 	int				i;
-	packfile_t		*newfiles;
+	//packfile_t		*newfiles;
 	int				numpackfiles;
 	pack_t			*pack;
 	FILE			*packhandle;
-	dpackfile_t		info[MAX_FILES_IN_PACK];
+	packfile_t		*info;//[MAX_FILES_IN_PACK];
+
+	void			**newitem;
+	//packfile_t		*entry;
 
 	packhandle = fopen(packfile, "rb");
 	if (!packhandle)
@@ -650,21 +804,24 @@ pack_t /*@null@*/ *FS_LoadPackFile (char *packfile)
 	if (LittleLong(header.ident) != IDPAKHEADER)
 		Com_Error (ERR_FATAL, "%s is not a valid packfile", packfile);
 	
+#if YOU_HAVE_A_BROKEN_COMPUTER
 	header.dirofs = LittleLong (header.dirofs);
 	header.dirlen = LittleLong (header.dirlen);
+#endif
 
-	numpackfiles = header.dirlen / sizeof(dpackfile_t);
+	numpackfiles = header.dirlen / sizeof(packfile_t);
 
 	if (numpackfiles > MAX_FILES_IN_PACK)
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
 
 	if (!numpackfiles)
 	{
-		Com_Printf ("Ignoring empty packfile %s\n", packfile);
+		Com_Printf ("WARNING: Empty packfile %s\n", packfile);
 		return NULL;
 	}
 
-	newfiles = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
+	//newfiles = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
+	info = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
 
 	if (fseek (packhandle, header.dirofs, SEEK_SET))
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %d in %s failed (corrupt packfile?)", header.dirofs, packfile);
@@ -672,26 +829,46 @@ pack_t /*@null@*/ *FS_LoadPackFile (char *packfile)
 	if (fread (info, 1, header.dirlen, packhandle) != header.dirlen)
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory");
 
+	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
+
+	pack->rb = rbinit ((int (*)(const void *, const void *))Q_stricmp, 0);
+
+	//entry = Z_TagMalloc (sizeof(packfile_t) * numpackfiles, TAGMALLOC_FSLOADPAK);
+
 	for (i=0 ; i<numpackfiles ; i++)
 	{
-		strcpy (newfiles[i].name, info[i].name);
-		newfiles[i].filepos = LittleLong(info[i].filepos);
-		newfiles[i].filelen = LittleLong(info[i].filelen);
+		//strcpy (entry[i].name, info[i].name);
 		//strlwr (info[i].name);
-		newfiles[i].hash = hashify (info[i].name);
+#if YOU_HAVE_A_BROKEN_COMPUTER
+		info[i].filepos = LittleLong(info[i].filepos);
+		info[i].filelen = LittleLong(info[i].filelen);
+#endif
+		
+		newitem = rbsearch (info[i].name, pack->rb);
+		*newitem = &info[i];
 	}
 
-	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
 	strcpy (pack->filename, packfile);
 
 	pack->handle = packhandle;
 	pack->numfiles = numpackfiles;
-	pack->files = newfiles;
+
+	//Z_Free (newfiles);
+
+	//pack->files = newfiles;
 
 	Com_Printf ("Added packfile %s (%i files)\n",  packfile, numpackfiles);
 	return pack;
 }
 
+int pakcmp (const void *a, const void *b)
+{
+	if (*(int *)a > *(int *)b)
+		return 1;
+	else if (*(int *)a == *(int *)b)
+		return 0;
+	return -1;
+}
 
 /*
 ================
@@ -701,14 +878,26 @@ Sets fs_gamedir, adds the directory to the head of the path,
 then loads and adds pak1.pak pak2.pak ... 
 ================
 */
-void FS_AddGameDirectory (char *dir)
+static void FS_AddGameDirectory (const char *dir)
 {
 	int				i;
+	int				total;
+	int				totalpaks;
+	int				pakmatchlen;
+
+	char			pakfile[MAX_OSPATH];
+	char			pakmatch[MAX_OSPATH];
+	char			*s;
+
+	char			*filenames[4096];
+	int				pakfiles[1024];
+
 	searchpath_t	*search;
 	pack_t			*pak;
-	char			pakfile[MAX_OSPATH];
 
 	strcpy (fs_gamedir, dir);
+
+	Com_DPrintf ("FS_AddGameDirectory: Added '%s'\n", dir);
 
 	//
 	// add the directory to the search path
@@ -721,7 +910,8 @@ void FS_AddGameDirectory (char *dir)
 	//
 	// add any pak files in the format pak0.pak pak1.pak, ...
 	//
-	for (i=0; i<64; i++)
+	
+	/*for (i=0; i<64; i++)
 	{
 		Com_sprintf (pakfile, sizeof(pakfile), "%s/pak%i.pak", dir, i);
 		pak = FS_LoadPackFile (pakfile);
@@ -732,9 +922,62 @@ void FS_AddGameDirectory (char *dir)
 			search->next = fs_searchpaths;
 			fs_searchpaths = search;
 		}
+	}*/
+
+	//r1: load all *.pak files
+	Com_sprintf (pakfile, sizeof(pakfile), "%s/*.pak", dir);
+	Com_sprintf (pakmatch, sizeof(pakmatch), "%s/pak", dir);
+	pakmatchlen = strlen(pakmatch);
+
+	total = 0;
+	totalpaks = 0;
+
+	if ((s = Sys_FindFirst (pakfile, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM)))
+	{
+		while (s)
+		{
+			if (!Q_strncasecmp (s, pakmatch, pakmatchlen))
+				pakfiles[totalpaks++] = atoi(s+pakmatchlen);
+			else
+				filenames[total++] = strdup(s);
+
+			s = Sys_FindNext (0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM);
+		}
 	}
 
+	Sys_FindClose ();
 
+	//sort for filenames designed to override earlier pak files
+	qsort (filenames, total, sizeof(filenames[0]), (int (*)(const void *, const void *))strcmp);
+	qsort (pakfiles, totalpaks, sizeof(pakfiles[0]), pakcmp);
+
+	//r1: load pak*.pak first
+	for (i = 0; i < totalpaks; i++)
+	{
+		Com_sprintf (pakfile, sizeof(pakfile), "%s/pak%d.pak", dir, pakfiles[i]);
+		pak = FS_LoadPackFile (pakfile);
+		if (pak)
+		{
+			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+			search->pack = pak;
+			search->next = fs_searchpaths;
+			fs_searchpaths = search;
+		}
+	}
+
+	//now the rest of them
+	for (i = 0; i < total; i++)
+	{
+		pak = FS_LoadPackFile (filenames[i]);
+		if (pak)
+		{
+			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+			search->pack = pak;
+			search->next = fs_searchpaths;
+			fs_searchpaths = search;
+		}
+		free (filenames[i]);
+	}
 }
 
 /*
@@ -784,8 +1027,8 @@ void FS_SetGamedir (char *dir)
 {
 	searchpath_t	*next;
 
-	if (strstr(dir, "..") || strstr(dir, "/")
-		|| strstr(dir, "\\") || strstr(dir, ":") )
+	if (strstr(dir, "..") || strchr(dir, '/')
+		|| strchr(dir, '\\') || strchr(dir, ':') )
 	{
 		Com_Printf ("Gamedir should be a single filename, not a path\n");
 		return;
@@ -799,7 +1042,8 @@ void FS_SetGamedir (char *dir)
 		if (fs_searchpaths->pack)
 		{
 			fclose (fs_searchpaths->pack->handle);
-			Z_Free (fs_searchpaths->pack->files);
+			//Z_Free (fs_searchpaths->pack->files);
+			RB_Purge (fs_searchpaths->pack->rb);
 			Z_Free (fs_searchpaths->pack);
 		}
 		next = fs_searchpaths->next;
@@ -814,7 +1058,7 @@ void FS_SetGamedir (char *dir)
 	FS_FlushCache();
 
 #ifndef NO_SERVER
-	if (dedicated && !dedicated->value)
+	if (!dedicated->intvalue)
 #endif
 		Cbuf_AddText ("vid_restart\nsnd_restart\n");
 		//Cbuf_ExecuteText (EXEC_NOW, "vid_restart\nsnd_restart\ncl_restart\n");
@@ -842,7 +1086,7 @@ FS_Link_f
 Creates a filelink_t
 ================
 */
-void FS_Link_f (void)
+static void FS_Link_f (void)
 {
 	filelink_t	*l, **prev;
 
@@ -930,7 +1174,7 @@ char /*@null@*/ **FS_ListFiles( char *findname, int *numfiles, unsigned musthave
 /*
 ** FS_Dir_f
 */
-void FS_Dir_f( void )
+static void FS_Dir_f( void )
 {
 	char	*path = NULL;
 	char	findname[1024];
@@ -983,7 +1227,7 @@ FS_Path_f
 
 ============
 */
-void FS_Path_f (void)
+static void FS_Path_f (void)
 {
 	searchpath_t	*s;
 	filelink_t		*l;
@@ -1011,7 +1255,7 @@ FS_NextPath
 Allows enumerating all of the directories in the search path
 ================
 */
-char /*@null@*/ *FS_NextPath (char *prevpath)
+char /*@null@*/ *FS_NextPath (const char *prevpath)
 {
 	searchpath_t	*s;
 	char			*prev;
@@ -1053,7 +1297,7 @@ void FS_InitFilesystem (void)
 	FS_InitCache ();
 
 	//r1: init fs cache
-	FS_FlushCache ();
+	//FS_FlushCache ();
 
 	//
 	// basedir <path>

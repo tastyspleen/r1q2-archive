@@ -26,6 +26,9 @@ edict_t	*sv_player;
 cvar_t	*sv_max_download_size;
 cvar_t	*sv_downloadwait;
 
+char	svConnectStuffString[1100] = {0};
+char	svBeginStuffString[1100] = {0};
+
 /*
 ============================================================
 
@@ -99,6 +102,7 @@ static void SV_New_f (void)
 	char		*gamedir;
 	int			playernum;
 	edict_t		*ent;
+	cvarban_t	*bans;
 
 	Com_DPrintf ("New() from %s\n", sv_client->name);
 
@@ -140,24 +144,32 @@ static void SV_New_f (void)
 	MSG_WriteString (&sv_client->netchan.message, sv.configstrings[CS_NAME]);
 
 	if (sv_client->protocol == ENHANCED_PROTOCOL_VERSION) {
-		MSG_WriteShort (&sv_client->netchan.message, (unsigned short)sv_downloadport->value);
+		MSG_WriteShort (&sv_client->netchan.message, (unsigned short)sv_downloadport->intvalue);
 	}
 
+	//r1: fix for old clients that don't respond to stufftext due to pending cmd buffer
+	MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
+	MSG_WriteString (&sv_client->netchan.message, "\n");
+
+	MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
+	MSG_WriteString (&sv_client->netchan.message, "cmd \177c version $version\n");
+
+	bans = &cvarbans;
+
+	while (bans->next)
 	{
-		cvarban_t *bans = &cvarbans;
-
-		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
-		MSG_WriteString (&sv_client->netchan.message, "cmd .c version $version\n");
-
-		while (bans->next)
+		bans = bans->next;
+		if (strcmp (bans->cvarname, "version"))
 		{
-			bans = bans->next;
-			if (strcmp (bans->cvarname, "version"))
-			{
-				MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
-				MSG_WriteString (&sv_client->netchan.message, va("cmd .c %s $%s\n", bans->cvarname, bans->cvarname));
-			}
+			MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
+			MSG_WriteString (&sv_client->netchan.message, va("cmd \177c %s $%s\n", bans->cvarname, bans->cvarname));
 		}
+	}
+
+	if (svConnectStuffString[0])
+	{
+		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
+		MSG_WriteString (&sv_client->netchan.message, svConnectStuffString);
 	}
 
 	//
@@ -178,6 +190,10 @@ static void SV_New_f (void)
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
 		MSG_WriteString (&sv_client->netchan.message, va("cmd configstrings %i 0\n", svs.spawncount) );
 	}
+
+	//r1: holy shit ugly, but it works!
+	//if (sv_client->state == cs_connected)
+	//	Netchan_Transmit (&sv_client->netchan, 0, NULL);
 
 }
 
@@ -212,7 +228,7 @@ static void SV_Configstrings_f (void)
 	//r1: huge security fix !! remote DoS by negative here.
 	if (start < 0) {
 		Com_Printf ("Illegal configstrings offset from %s[%s], client dropped\n", sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
-		Blackhole (&sv_client->netchan.remote_address, "attempted DoS (negative configstrings)");
+		Blackhole (&sv_client->netchan.remote_address, true, "attempted DoS (negative configstrings)");
 		SV_DropClient (sv_client);
 		return;
 	}
@@ -245,12 +261,10 @@ plainStrings:
 	{
 		int realBytes;
 		int result;
-		z_stream z;
+		z_stream z = {0};
 		sizebuf_t zBuff;
 		byte tempConfigStringPacket[MAX_USABLEMSG];
 		byte compressedStringStream[MAX_USABLEMSG];
-
-		memset (&z, 0, sizeof(z));
 
 		z.next_out = compressedStringStream;
 		z.avail_out = sizeof(compressedStringStream);
@@ -277,7 +291,7 @@ plainStrings:
 					len = strlen(sv.configstrings[start]);
 					
 					SZ_Write (&zBuff, sv.configstrings[start], len > MAX_QPATH ? MAX_QPATH : len);
-					SZ_Write (&zBuff, "\0", 1);					
+					SZ_Write (&zBuff, "\0", 1);
 					
 					//MSG_WriteString (&zBuff, sv.configstrings[start]);
 
@@ -358,6 +372,10 @@ plainStrings:
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
 		MSG_WriteString (&sv_client->netchan.message, va("cmd configstrings %i %i\n",svs.spawncount, start) );
 	}
+
+	//r1: holy shit ugly, but it works!
+	//if (sv_client->state == cs_connected)
+	//	Netchan_Transmit (&sv_client->netchan, 0, NULL);
 }
 
 /*
@@ -401,7 +419,7 @@ void SV_BaselinesMessage (qboolean userCmd)
 	if (startPos < 0)
 	{
 		Com_Printf ("Illegal baseline offset from %s[%s], client dropped\n", sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
-		Blackhole (&sv_client->netchan.remote_address, "attempted DoS (negative baselines)");
+		Blackhole (&sv_client->netchan.remote_address, true, "attempted DoS (negative baselines)");
 		SV_DropClient (sv_client);
 		return;
 	}
@@ -430,12 +448,12 @@ plainLines:
 	{
 		int realBytes;
 		int result;
-		z_stream z;
+		z_stream z = {0};
 		sizebuf_t zBuff;
 		byte tempBaseLinePacket[MAX_USABLEMSG];
 		byte compressedLineStream[MAX_USABLEMSG];
 
-		memset (&z, 0, sizeof(z));
+		//memset (&z, 0, sizeof(z));
 
 		z.next_out = compressedLineStream;
 		z.avail_out = sizeof(compressedLineStream);
@@ -528,6 +546,10 @@ plainLines:
 		MSG_WriteString (&sv_client->netchan.message, va("cmd baselines %i %i%s\n",svs.spawncount, start, Cmd_Argc() == 4 ? " force" : "") );
 	}
 
+	//r1: holy shit ugly, but it works!
+	//if (sv_client->state == cs_connected)
+	//	Netchan_Transmit (&sv_client->netchan, 0, NULL);
+
 	if (!userCmd)
 		Com_DPrintf ("SV_Baselines_f: netchan is now %d bytes.\n", sv_client->netchan.message.cursize);
 }
@@ -546,7 +568,7 @@ int SV_CountPlayers (void)
 	if (!svs.initialized)
 		return 0;
 
-	for (i=0,cl=svs.clients; i < (int)maxclients->value ; i++,cl++)
+	for (i=0,cl=svs.clients; i < maxclients->intvalue ; i++,cl++)
 	{
 		if (cl->state != cs_spawned)
 			continue;
@@ -574,16 +596,30 @@ static void SV_Begin_f (void)
 		return;
 	}
 
+	//r1: they didn't respond to version probe
+	if (!sv_client->versionString)
+	{
+		Com_Printf ("WARNING: Didn't receive 'version' string from %s, hacked client?\n", sv_client->name);
+		SV_DropClient (sv_client);
+		return;
+	}
+
 	sv_client->state = cs_spawned;
 
 	//r1: check dll versions for struct mismatch
 	if (sv_client->edict->client == NULL)
 		Com_Error (ERR_DROP, "Tried to run API V4 game on a V3 server!!");
 
-	if (sv_deny_q2ace->value)
+	if (sv_deny_q2ace->intvalue)
 	{
-		SV_ClientPrintf (sv_client, PRINT_CHAT, "console: p_auth q2acedetect\r                                         \rWelcome to %s! [%d/%d players, %d minutes into game]\n", hostname->string, SV_CountPlayers(), (int)maxclients->value, (int)((float)sv.time / 1000 / 60));
+		SV_ClientPrintf (sv_client, PRINT_CHAT, "console: p_auth q2acedetect\r                                         \rWelcome to %s! [%d/%d players, %d minutes into game]\n", hostname->string, SV_CountPlayers(), maxclients->intvalue, (int)((float)sv.time / 1000 / 60));
 		//SV_ClientPrintf (sv_client, PRINT_CHAT, "p_auth                                                                                                                                                                                                                                                                                                                                \r                 \r");
+	}
+
+	if (svBeginStuffString[0])
+	{
+		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
+		MSG_WriteString (&sv_client->netchan.message, svBeginStuffString);
 	}
 
 	// call the game begin function
@@ -617,28 +653,137 @@ static void SV_NextDownload_f (void)
 
 	if (!sv_client->download)
 		return;
-
+	
 	r = sv_client->downloadsize - sv_client->downloadcount;
 
 	if (r > 1100)
 		r = 1100;
 
 	if (r + sv_client->datagram.cursize >= MAX_USABLEMSG)
-		r = MAX_USABLEMSG - sv_client->datagram.cursize;
+		r = MAX_USABLEMSG - sv_client->datagram.cursize - 100;
 
-	MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
-	MSG_WriteShort (&sv_client->netchan.message, r);
+	if (sv_client->downloadCompressed)
+	{
+		byte		zOut[0xFFFF];
+		byte		*buff;
+		z_stream	z = {0};
+		int			i, j;
+		int			realBytes;
+		int			result;
 
-	sv_client->downloadcount += r;
-	size = sv_client->downloadsize;
+		z.next_out = zOut;
+		z.avail_out = sizeof(zOut);
 
-	if (!size)
-		size = 1;
+		realBytes = 0;
 
-	percent = sv_client->downloadcount*100/size;
-	MSG_WriteByte (&sv_client->netchan.message, percent);
-	SZ_Write (&sv_client->netchan.message,
-		sv_client->download + sv_client->downloadcount - r, r);
+		if (deflateInit2 (&z, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY) != Z_OK)
+		{
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "deflateInit2() failed.\n");
+			SV_DropClient (sv_client);
+			return;
+		}
+
+		j = 0;
+
+		if (r > 1000)
+			r = 1000;
+
+		if (r + sv_client->datagram.cursize >= MAX_USABLEMSG)
+			r = MAX_USABLEMSG - sv_client->datagram.cursize - 400;
+
+		//if (sv_client->downloadcount >= 871224)
+		//	DEBUGBREAKPOINT;
+
+		while ( z.total_out < r )
+		{
+			i = 300;
+
+			if (sv_client->downloadcount + j + i > sv_client->downloadsize)
+				i = sv_client->downloadsize - (sv_client->downloadcount + j);
+
+			buff = sv_client->download + sv_client->downloadcount + j;
+
+			z.avail_in = i;
+			z.next_in = buff;
+
+			realBytes += i;
+
+			j += i;
+
+			result = deflate(&z, Z_SYNC_FLUSH);
+			if (result != Z_OK)
+			{
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "deflate() Z_SYNC_FLUSH failed.\n");
+				SV_DropClient (sv_client);
+				return;
+			}
+
+			if (z.avail_out == 0)
+			{
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "deflate() ran out of buffer space.\n");
+				SV_DropClient (sv_client);
+				return;
+			}
+
+			if (sv_client->downloadcount + j == sv_client->downloadsize)
+				break;
+		}
+
+		result = deflate(&z, Z_FINISH);
+		if (result != Z_STREAM_END) {
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "deflate() Z_FINISH failed.\n");
+			SV_DropClient (sv_client);
+			return;
+		}
+
+		result = deflateEnd(&z);
+		if (result != Z_OK) {
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "deflateEnd() failed.\n");
+			SV_DropClient (sv_client);
+			return;
+		}
+
+		if (z.total_out >= realBytes)
+			goto olddownload;
+
+		MSG_BeginWriteByte (&sv_client->netchan.message, svc_zdownload);
+		MSG_WriteShort (&sv_client->netchan.message, z.total_out);
+
+		size = sv_client->downloadsize;
+
+		if (!size)
+			size = 1;
+
+		sv_client->downloadcount += realBytes;
+		percent = sv_client->downloadcount*100/size;
+		
+		MSG_WriteByte (&sv_client->netchan.message, percent);
+
+		MSG_WriteShort (&sv_client->netchan.message, realBytes);
+		SZ_Write (&sv_client->netchan.message, zOut, z.total_out);
+	}
+	else
+	{
+olddownload:
+		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
+		MSG_WriteShort (&sv_client->netchan.message, r);
+
+		sv_client->downloadcount += r;
+		size = sv_client->downloadsize;
+
+		if (!size)
+			size = 1;
+
+		percent = sv_client->downloadcount*100/size;
+		MSG_WriteByte (&sv_client->netchan.message, percent);
+
+		SZ_Write (&sv_client->netchan.message,
+			sv_client->download + sv_client->downloadcount - r, r);
+	}
+
+	//r1: holy shit ugly, but it works!
+	//if (sv_client->state == cs_connected)
+	//	Netchan_Transmit (&sv_client->netchan, 0, NULL);
 
 	if (sv_client->downloadcount != sv_client->downloadsize)
 		return;
@@ -660,11 +805,6 @@ static void SV_BeginDownload_f(void)
 {
 	char	*name;
 	int offset = 0;
-#ifdef WIN32
-	qboolean	enhanced = (sv_client->protocol == ENHANCED_PROTOCOL_VERSION && Cmd_Argc() > 3 && !Q_stricmp (Cmd_Argv(3), "DOWNLOAD_TCP") && sv_downloadport->value);
-#else
-	qboolean	enhanced = false;
-#endif
 
 	name = Cmd_Argv(1);
 
@@ -686,7 +826,7 @@ static void SV_BeginDownload_f(void)
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
 		MSG_WriteShort (&sv_client->netchan.message, -1);
 		MSG_WriteByte (&sv_client->netchan.message, 0);
-		Blackhole (&sv_client->netchan.remote_address, "download exploit (%s)", name);
+		Blackhole (&sv_client->netchan.remote_address, true, "download exploit (%s)", name);
 		SV_DropClient (sv_client);
 		return;
 	}
@@ -694,9 +834,9 @@ static void SV_BeginDownload_f(void)
 		// leading slash bad as well, must be in subdir
 		|| *name == '/'
 		// r1: \ is bad
-		|| strstr (name, "\\")
+		|| strchr (name, '\\')
 		// MUST be in a subdirectory	
-		|| !strstr (name, "/"))
+		|| !strchr (name, '/'))
 	{
 		Com_Printf ("Refusing bad download path %s to %s\n", name, sv_client->name);
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
@@ -704,13 +844,23 @@ static void SV_BeginDownload_f(void)
 		MSG_WriteByte (&sv_client->netchan.message, 0);
 		return;
 	}
-	else if	(!allow_download->value
-			|| (strncmp(name, "players/", 8) == 0 && !((!enhanced && (int)allow_download_players->value & DL_UDP)||(enhanced && (int)allow_download_players->value & DL_TCP)))
-			|| (strncmp(name, "models/", 7) == 0 && !((!enhanced && (int)allow_download_models->value & DL_UDP)||(enhanced && (int)allow_download_models->value & DL_TCP)))
-			|| (strncmp(name, "sound/", 6) == 0 && !((!enhanced && (int)allow_download_sounds->value & DL_UDP)||(enhanced && (int)allow_download_sounds->value & DL_TCP)))
-			|| (strncmp(name, "maps/", 5) == 0 && !((!enhanced && (int)allow_download_maps->value & DL_UDP)||(enhanced && (int)allow_download_maps->value & DL_TCP))))
+	else if	(!allow_download->intvalue
+			|| (strncmp(name, "players/", 8) == 0 && !(allow_download_players->intvalue & DL_UDP))
+			|| (strncmp(name, "models/", 7) == 0 && !(allow_download_models->intvalue & DL_UDP))
+			|| (strncmp(name, "sound/", 6) == 0 && !(allow_download_sounds->intvalue & DL_UDP))
+			|| (strncmp(name, "maps/", 5) == 0 && !(allow_download_maps->intvalue & DL_UDP)))
 	{
 		Com_DPrintf ("Refusing to download %s to %s\n", name, sv_client->name);
+		if (strncmp(name, "maps/", 5) == 0 && !(allow_download_maps->intvalue & DL_UDP))
+		{
+			if (sv_mapdownload_denied_message->modified)
+			{
+				ExpandNewLines (sv_mapdownload_denied_message->string);
+				sv_mapdownload_denied_message->modified = false;
+			}
+			if (*sv_mapdownload_denied_message->string)
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", sv_mapdownload_denied_message->string);
+		}
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
 		MSG_WriteShort (&sv_client->netchan.message, -1);
 		MSG_WriteByte (&sv_client->netchan.message, 0);
@@ -732,9 +882,9 @@ static void SV_BeginDownload_f(void)
 		return;
 	}
 
-	if (sv_max_download_size->value && sv_client->downloadsize > (int)sv_max_download_size->value)
+	if (sv_max_download_size->intvalue && sv_client->downloadsize > sv_max_download_size->intvalue)
 	{
-		SV_ClientPrintf (sv_client, PRINT_HIGH, "Server refused %s, %d bytes > %d maximum allowed for auto download.\n", name, sv_client->downloadsize, (int)sv_max_download_size->value);
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "Server refused %s, %d bytes > %d maximum allowed for auto download.\n", name, sv_client->downloadsize, sv_max_download_size->intvalue);
 
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
 		MSG_WriteShort (&sv_client->netchan.message, -1);
@@ -749,17 +899,25 @@ static void SV_BeginDownload_f(void)
 	if (offset > sv_client->downloadsize)
 		sv_client->downloadcount = sv_client->downloadsize;
 
-	if (enhanced)
+	if (strncmp(name, "maps/", 5) == 0)
 	{
-		Com_Printf ("TCP downloading %s to %s\n", name, sv_client->name);
-		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
-		MSG_WriteShort (&sv_client->netchan.message, (int)((float)sv_client->downloadsize/1024.0));
-		MSG_WriteByte (&sv_client->netchan.message, 0xFF);
-		return;
+		if (sv_mapdownload_ok_message->modified)
+		{
+			ExpandNewLines (sv_mapdownload_ok_message->string);
+			sv_mapdownload_ok_message->modified = false;
+		}
+		if (*sv_mapdownload_ok_message->string)
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", sv_mapdownload_ok_message->string);
 	}
 
+	//r1: r1q2 zlib udp downloads?
+	if (!Q_stricmp (Cmd_Argv(3), "udp-zlib"))
+		sv_client->downloadCompressed = true;
+	else
+		sv_client->downloadCompressed = false;
+
 	SV_NextDownload_f ();
-	Com_Printf ("UDP downloading %s to %s\n", name, sv_client->name);
+	Com_Printf ("UDP downloading %s to %s%s\n", name, sv_client->name, sv_client->downloadCompressed ? " with zlib" : "");
 }
 
 
@@ -777,6 +935,7 @@ The client is going to disconnect, so remove the connection immediately
 static void SV_Disconnect_f (void)
 {
 //	SV_EndRedirect ();
+	Com_Printf ("Dropping %s, client issued 'disconnect'.\n", sv_client->name);
 	SV_DropClient (sv_client);	
 }
 
@@ -790,7 +949,37 @@ Dumps the serverinfo info string
 */
 static void SV_ShowServerinfo_f (void)
 {
-	Info_Print (Cvar_Serverinfo());
+	char	*s;
+	char	*p;
+
+	int		flip;
+
+	//r1: this is a client issued command !
+	//Info_Print (Cvar_Serverinfo());
+
+	s = Cvar_Serverinfo();
+
+	//skip beginning \\ char
+	s++;
+
+	flip = 0;
+	p = s;
+
+	//make it more readable
+	while (*p)
+	{
+		if (*p == '\\')
+		{
+			if (flip)
+				*p = '\n';
+			else
+				*p = '=';
+			flip ^= 1;
+		}
+		p++;
+	}
+
+	SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", s);
 }
 
 static void SV_ClientServerinfo_f (void)
@@ -807,7 +996,7 @@ static void CvarBanDrop (cvarban_t *cvar, banmatch_t *ban)
 {
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
 	if (ban->blockmethod == CVARBAN_BLACKHOLE)
-		Blackhole (&sv_client->netchan.remote_address, "cvarban: %s == %s", cvar->cvarname, Cmd_Args2(2));
+		Blackhole (&sv_client->netchan.remote_address, true, "cvarban: %s == %s", cvar->cvarname, Cmd_Args2(2));
 	Com_Printf ("Dropped client %s, cvarban: %s == %s\n", sv_client->name, cvar->cvarname, Cmd_Args2(2));
 	SV_DropClient (sv_client);
 }
@@ -820,8 +1009,10 @@ static void SV_CvarResult_f (void)
 
 	if (!Q_stricmp (Cmd_Argv(1), "version"))
 	{
+		if (sv_client->versionString)
+			Z_Free (sv_client->versionString);
 		sv_client->versionString = CopyString (result, TAGMALLOC_CVARBANS);
-		if (Cvar_VariableValue ("dedicated"))
+		if (dedicated->intvalue)
 			Com_Printf ("%s[%s]: protocol %d: \"%s\"\n", sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), sv_client->protocol, result);
 	}
 
@@ -858,10 +1049,7 @@ static void SV_CvarResult_f (void)
 							CvarBanDrop (bans, match);
 							return;
 						}
-						else
-						{
-							continue;
-						}					
+						continue;					
 					}
 					else if (*match->matchvalue == '<')
 					{
@@ -870,10 +1058,7 @@ static void SV_CvarResult_f (void)
 							CvarBanDrop (bans, match);
 							return;
 						}
-						else
-						{
-							continue;
-						}
+						continue;
 					}
 					else if (*match->matchvalue == '=')
 					{
@@ -882,10 +1067,7 @@ static void SV_CvarResult_f (void)
 							CvarBanDrop (bans, match);
 							return;
 						}
-						else
-						{
-							continue;
-						}
+						continue;
 					}
 
 					if (*match->matchvalue == '!')
@@ -896,10 +1078,17 @@ static void SV_CvarResult_f (void)
 							CvarBanDrop (bans, match);
 							return;
 						}
-						else
+						continue;
+					}
+					else if (*match->matchvalue == '~')
+					{
+						char *matchstring = match->matchvalue + 1;
+						if (strstr (result, matchstring))
 						{
-							continue;
+							CvarBanDrop (bans, match);
+							return;
 						}
+						continue;
 					}
 				}
 
@@ -915,82 +1104,27 @@ static void SV_CvarResult_f (void)
 	}
 
 	if (Q_stricmp (Cmd_Argv(1), "version"))
+	{
+		Com_Printf ("Dropping %s for bad cvar check result ('%s' unrequested).\n", sv_client->name, Cmd_Argv(1));
 		SV_DropClient (sv_client);
+	}
 }
 
 static void SV_Floodme_f (void)
 {
 	unsigned char paket[] = {
-		0x0D, 0x20, 0x05, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
-    0xAB, 0xFE, 0xCA, 0xAD, 0x00, 0x0B, 0x73, 0x6B, 0x69, 0x6E, 0x73, 0x0A, 0x00, 0x0B, 0x70, 0x72,
-	0x65, 0x63, 0x61, 0x63, 0x68, 0x65, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
-
-	/*SV_ClientPrintf (sv_client, PRINT_HIGH, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-											//1500 bytes*/
+	0x0D, 0x20, 0x05, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD, 0xAB, 0xFE, 0xCA, 0xAD,
+    0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+    0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
+    0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+    0xD1, 0xD1, 0xD2, 0xD2, 0xD3, 0xD3, 0xD4, 0xD4, 0xD5, 0xD5, 0xD6, 0xD6, 0xD7, 0xD7, 0xD8, 0xD8,
+    0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 0xEE, 
+    0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 
+	0xFF, 0xFF, 0xFF, 0xFF};
 
 	MSG_WriteByte (&sv_client->netchan.message, svc_configstring);
 	MSG_WriteShort (&sv_client->netchan.message, CS_PLAYERSKINS+2);
-	MSG_WriteString (&sv_client->netchan.message, paket
-		/*
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		*/
-
-
-		);
+	MSG_WriteString (&sv_client->netchan.message, paket);
 }
 
 void SV_Nextserver (void)
@@ -1056,7 +1190,8 @@ static ucmd_t ucmds[] =
 
 	{"sinfo", SV_ClientServerinfo_f},
 	{"floodme", SV_Floodme_f},
-	{".c", SV_CvarResult_f},
+	{"\177c", SV_CvarResult_f},
+
 	{"nogamedata", SV_NoGameData_f},
 
 	{"download", SV_BeginDownload_f},
@@ -1076,9 +1211,10 @@ void SV_ExecuteUserCommand (char *s)
 
 	ucmd_t				*u;
 	bannedcommands_t	*x;
+	nullcmd_t			*y;
 	
 	//r1: catch attempted server exploits
-	if (strstr(s, "$"))
+	if (strchr(s, '$'))
 	{
 		teststring = Cmd_MacroExpandString(s);
 		if (!teststring)
@@ -1086,28 +1222,28 @@ void SV_ExecuteUserCommand (char *s)
 
 		if (strcmp (teststring, s))
 		{
-			Blackhole (&net_from, "attempted command expansion: %s", s);
+			Blackhole (&net_from, true, "attempted command expansion: %s", s);
 			SV_KickClient (sv_client, "attempted server exploit", NULL);
 			return;
 		}
 	}
 
 	//r1: catch end-of-message exploit
-	if (strstr (s, "\xFF"))
+	if (strchr (s, '\xFF'))
 	{
 		char *ptr;
-		ptr = strstr (s, "\xFF");
+		ptr = strchr (s, '\xFF');
 		ptr -= 8;
 		if (ptr < s)
 			ptr = s;
-		Blackhole (&net_from, "0xFF in command packet (%.32s)", MakePrintable (ptr));
+		Blackhole (&net_from, true, "0xFF in command packet (%.32s)", MakePrintable (ptr));
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
 		return;
 	}
 
 	//r1: allow filter of high bit commands (eg \n\r in say cmds)
-	if (sv_filter_stringcmds->value)
-		strcpy (s, StripHighBits(s, (int)sv_filter_stringcmds->value == 2));
+	if (sv_filter_stringcmds->intvalue)
+		strcpy (s, StripHighBits(s, (int)sv_filter_stringcmds->intvalue == 2));
 
 	Cmd_TokenizeString (s, false);
 	sv_player = sv_client->edict;
@@ -1116,8 +1252,14 @@ void SV_ExecuteUserCommand (char *s)
 	{
 		if (!strcmp (Cmd_Argv(0), x->name))
 		{
-			Com_Printf ("SV_ExecuteUserCommand: %s tried to use '%s'\n", sv_client->name, x->name);
-			SV_ClientPrintf (sv_client, PRINT_HIGH, "The '%s' command has been disabled by the server administrator.\n", x->name);
+			if (x->logmethod == CMDBAN_LOG_MESSAGE)
+				Com_Printf ("SV_ExecuteUserCommand: %s tried to use '%s'\n", sv_client->name, x->name);
+
+			if (x->kickmethod == CMDBAN_MESSAGE)
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "The '%s' command has been disabled by the server administrator.\n", x->name);
+			else if (x->kickmethod == CMDBAN_KICK)
+				SV_DropClient (sv_client);
+
 			return;
 		}
 	}
@@ -1137,7 +1279,7 @@ void SV_ExecuteUserCommand (char *s)
 	//to the game dll at this point? doesn't sound like a good idea to me
 	//especially if the game dll does its own banning functions after connect
 	//as banned players could spam game commands (eg say) whilst connecting
-	if (sv_client->state < cs_spawned && !sv_allow_unconnected_cmds->value)
+	if (sv_client->state < cs_spawned && !sv_allow_unconnected_cmds->intvalue)
 		return;
 
 	//r1: say parser (ick)
@@ -1146,52 +1288,52 @@ void SV_ExecuteUserCommand (char *s)
 		//r1: nocheat kicker/spam filter
 		if (!Q_strncasecmp (Cmd_Args(), "\"NoCheat V2.", 12))
 		{
-			if (sv_nc_kick->value)
+			if (sv_nc_kick->intvalue)
 			{
-				if ((int)(sv_nc_kick->value) & 256)
+				if ((int)(sv_nc_kick->intvalue) & 256)
 				{
 					Com_Printf ("%s was dropped for using NoCheat\n", sv_client->name);
-					if (((int)sv_nc_announce->value & 256) && sv_client->state == cs_spawned && *sv_client->name)
+					if (((int)sv_nc_announce->intvalue & 256) && sv_client->state == cs_spawned && *sv_client->name)
 						SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: client is using NoCheat\n", sv_client->name);
 
 					SV_ClientPrintf (sv_client, PRINT_HIGH, "NoCheat is not permitted on this server, please use regular Quake II.\n");
 					SV_DropClient (sv_client);
 					return;
 				}
-				else if (((int)(sv_nc_kick->value) & 1) && strstr(Cmd_Args(), "Code\\-1\\"))
+				else if (((int)(sv_nc_kick->intvalue) & 1) && strstr(Cmd_Args(), "Code\\-1\\"))
 				{
 					Com_Printf ("%s was dropped for failing NoCheat code check\n", sv_client->name);
-					if (((int)sv_nc_announce->value & 1) && sv_client->state == cs_spawned && *sv_client->name)
+					if (((int)sv_nc_announce->intvalue & 1) && sv_client->state == cs_spawned && *sv_client->name)
 						SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: invalid NoCheat code\n", sv_client->name);
 
 					SV_ClientPrintf (sv_client, PRINT_HIGH, "This server requires a valid NoCheat code. Please check you are running in OpenGL mode.\n");
 					SV_DropClient (sv_client);
 					return;
 				}
-				else if (((int)(sv_nc_kick->value) & 2) && strstr(Cmd_Args(), "Video"))
+				else if (((int)(sv_nc_kick->intvalue) & 2) && strstr(Cmd_Args(), "Video"))
 				{
 					Com_Printf ("%s was dropped for failing NoCheat video check\n", sv_client->name);
-					if (((int)sv_nc_announce->value & 2) && sv_client->state == cs_spawned && *sv_client->name)
+					if (((int)sv_nc_announce->intvalue & 2) && sv_client->state == cs_spawned && *sv_client->name)
 						SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: failed NoCheat video check\n", sv_client->name);
 
 					SV_ClientPrintf (sv_client, PRINT_HIGH, "This server requires a NoCheat approved vid_ref.\n");
 					SV_DropClient (sv_client);
 					return;
 				}
-				else if (((int)(sv_nc_kick->value) & 4) && strstr(Cmd_Args(), "modelCheck"))
+				else if (((int)(sv_nc_kick->intvalue) & 4) && strstr(Cmd_Args(), "modelCheck"))
 				{
 					Com_Printf ("%s was dropped for failing NoCheat model check\n", sv_client->name);
-					if (((int)sv_nc_announce->value & 4) && sv_client->state == cs_spawned && *sv_client->name)
+					if (((int)sv_nc_announce->intvalue & 4) && sv_client->state == cs_spawned && *sv_client->name)
 						SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: failed NoCheat model check\n", sv_client->name);
 
 					SV_ClientPrintf (sv_client, PRINT_HIGH, "This server requires NoCheat approved models.\n");
 					SV_DropClient (sv_client);
 					return;
 				}
-				else if (((int)(sv_nc_kick->value) & 8) && (strstr(Cmd_Args(), "FrkQ2") || strstr(Cmd_Args(), "Hack") || strstr(Cmd_Args(), "modelCheck") || strstr(Cmd_Args(), "glCheck")))
+				else if (((int)(sv_nc_kick->intvalue) & 8) && (strstr(Cmd_Args(), "FrkQ2") || strstr(Cmd_Args(), "Hack") || strstr(Cmd_Args(), "modelCheck") || strstr(Cmd_Args(), "glCheck")))
 				{
 					Com_Printf ("%s was dropped for failing additional NoCheat checks\n", sv_client->name);
-					if (((int)sv_nc_announce->value & 8) && sv_client->state == cs_spawned && *sv_client->name)
+					if (((int)sv_nc_announce->intvalue & 8) && sv_client->state == cs_spawned && *sv_client->name)
 						SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: failed NoCheat hack checks\n", sv_client->name);
 
 					SV_ClientPrintf (sv_client, PRINT_HIGH, "This server requires NoCheat approved video settings.\n");
@@ -1200,18 +1342,18 @@ void SV_ExecuteUserCommand (char *s)
 				}
 
 				Com_Printf ("%s passed NoCheat verifications\n", sv_client->name);
-				if (((int)sv_nc_announce->value & 128) && sv_client->state == cs_spawned && *sv_client->name)
+				if (((int)sv_nc_announce->intvalue & 128) && sv_client->state == cs_spawned && *sv_client->name)
 					SV_BroadcastPrintf (PRINT_HIGH, "%s passed NoCheat verifications\n", sv_client->name);
 			}
 
 			sv_client->notes |= CLIENT_NOCHEAT;
 
-			if (sv_filter_nocheat_spam->value)
+			if (sv_filter_nocheat_spam->intvalue)
 				return;
 		}
 
 		//r1: anti q2ace code (for the various hacks that have turned q2ace into cheat)
-		if (sv_deny_q2ace->value && !strncmp (Cmd_Args(), "q2ace v", 7) && (
+		if (sv_deny_q2ace->intvalue && !strncmp (Cmd_Args(), "q2ace v", 7) && (
 			strstr (Cmd_Args(), "- Authentication") ||
 			strstr (Cmd_Args(), "- Failed Auth")
 			))
@@ -1219,6 +1361,16 @@ void SV_ExecuteUserCommand (char *s)
 			SV_KickClient (sv_client, "client is using q2ace", "q2ace is not permitted on this server, please use regular Quake II.\n");
 			return;
 		}
+
+		//r1: note, we can reset on say as it's a "known good" command. resetting on every command is bad
+		//since stuff like q2admin spams tons of stuffcmds all the time...
+		sv_client->idletime = 0;
+	}
+
+	for (y = nullcmds.next; y; y = y->next)
+	{
+		if (!strcmp (Cmd_Argv(0), y->name))
+			return;
 	}
 
 	//r1ch: pointless if !u->name, why would we be here?
@@ -1237,13 +1389,14 @@ static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 {
 	cl->commandMsec -= cmd->msec;
 
-	if (cl->commandMsec < 0 && sv_enforcetime->value)
+	if (cl->commandMsec < 0 && sv_enforcetime->intvalue)
 		return;
 
 	ge->ClientThink (cl->edict, cmd);
 }
 
-#define	MAX_STRINGCMDS	8
+#define	MAX_STRINGCMDS			8
+#define	MAX_USERINFO_UPDATES	8
 /*
 ===================
 SV_ExecuteClientMessage
@@ -1255,13 +1408,13 @@ void SV_ExecuteClientMessage (client_t *cl)
 {
 	int		c;
 	char	*s;
-	static usercmd_t	nullcmd = {0};
 	usercmd_t	oldest, oldcmd, newcmd;
 	int		net_drop;
 	int		stringCmdCount;
+	int		userinfoCount;
 	//int		checksum, calculatedChecksum;
 	//int		checksumIndex;
-	qboolean	move_issued, userinfo_updated;
+	qboolean	move_issued;
 	int		lastframe;
 
 	sv_client = cl;
@@ -1269,7 +1422,8 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 	// only allow one move command
 	move_issued = false;
-	userinfo_updated = false;
+
+	userinfoCount = 0;
 	stringCmdCount = 0;
 
 	for (;;)
@@ -1286,30 +1440,6 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 		switch (c)
 		{
-		default:
-			Com_Printf ("SV_ExecuteClientMessage: unknown command byte %d\n", c);
-			SV_KickClient (cl, "unknown command byte", va("unknown command byte %d\n", c));
-			return;
-					
-			//FIXME: remove this?
-		case clc_nop:
-			break;
-
-		case clc_userinfo:
-			//r1: should only be one of these per packet
-			if (!userinfo_updated)
-			{
-				strncpy (cl->userinfo, MSG_ReadString (&net_message), sizeof(cl->userinfo)-1);
-				SV_UserinfoChanged (cl);
-				userinfo_updated = true;
-			}
-			else
-			{
-				Com_Printf ("Warning, received multiple userinfo updates in single packet from %s\n", cl->name);
-				MSG_ReadString (&net_message);
-			}
-			break;
-
 		case clc_move:
 			if (move_issued)
 			{
@@ -1340,7 +1470,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//nodelta clients typically consume 4-5x bandwidth than normal.
 			if (lastframe == -1 && cl->lastframe == -1)
 			{
-				if (++cl->nodeltaframes >= 100 && !sv_allownodelta->value)
+				if (++cl->nodeltaframes >= 100 && !sv_allownodelta->intvalue)
 				{
 					SV_KickClient (cl, "client is using cl_nodelta", "ERROR: You may not use cl_nodelta on this server as it consumes excessive bandwidth. Please set cl_nodelta 0 if you wish to be able to play on this server.\n");
 					return;
@@ -1368,7 +1498,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//memset (&nullcmd, 0, sizeof(nullcmd));
 
 			//r1: check there are actually enough usercmds in the message!
-			MSG_ReadDeltaUsercmd (&net_message, &nullcmd, &oldest);
+			MSG_ReadDeltaUsercmd (&net_message, &null_usercmd, &oldest);
 			if (net_message.readcount > net_message.cursize)
 			{
 				SV_KickClient (cl, "bad clc_move usercmd read (oldest)", NULL);
@@ -1389,9 +1519,10 @@ void SV_ExecuteClientMessage (client_t *cl)
 				return;
 			}
 
+			//r1: normal q2 client caps at 250 internally so this is a nice hack check
 			if (cl->state == cs_spawned && newcmd.msec > 250)
 			{
-				Blackhole (&cl->netchan.remote_address, "illegal msec value (%d)", newcmd.msec);
+				Blackhole (&cl->netchan.remote_address, true, "illegal msec value (%d)", newcmd.msec);
 				SV_KickClient (cl, "illegal pmove msec detected", NULL);
 				return;
 			}
@@ -1401,6 +1532,12 @@ void SV_ExecuteClientMessage (client_t *cl)
 				cl->lastframe = -1;
 				break;
 			}
+
+			//r1: reset idle time on activity
+			if (newcmd.buttons != oldcmd.buttons ||
+				newcmd.forwardmove != oldcmd.forwardmove ||
+				newcmd.upmove != oldcmd.upmove)
+				cl->idletime = 0;
 
 			// if the checksum fails, ignore the rest of the packet
 			//r1ch: removed, this has been hacked to death anyway
@@ -1417,12 +1554,12 @@ void SV_ExecuteClientMessage (client_t *cl)
 				return;
 			}*/
 
-			if (!sv_paused->value)
+			if (!sv_paused->intvalue)
 			{
 				net_drop = cl->netchan.dropped;
 
 				//r1: server configurable command backup limit
-				if (net_drop < sv_max_netdrop->value)
+				if (net_drop < sv_max_netdrop->intvalue)
 				{
 
 //if (net_drop > 2)
@@ -1461,8 +1598,11 @@ void SV_ExecuteClientMessage (client_t *cl)
 			{
 				//Com_Printf ("%s: excessive stringcmd discarded.\n", cl->name);
 				//break;
-				Com_Printf ("Warning, %d byte stringcmd from %s: '%.20s...'\n", c, cl->name, s);
+				Com_Printf ("Warning, %d byte stringcmd from %s: '%.32s...'\n", c, cl->name, s);
 			}
+
+			if (move_issued)
+				Com_Printf ("Warning, out-of-order stringcmd '%.32s...' from %s\n", s, cl->name);
 
 			// malicious users may try using too many string commands
 			if (++stringCmdCount < MAX_STRINGCMDS)
@@ -1471,6 +1611,36 @@ void SV_ExecuteClientMessage (client_t *cl)
 			if (cl->state == cs_zombie)
 				return;	// disconnect command
 			break;
+
+		case clc_userinfo:
+			//r1: limit amount of userinfo per packet
+			if (++userinfoCount < MAX_USERINFO_UPDATES)
+			{
+				strncpy (cl->userinfo, MSG_ReadString (&net_message), sizeof(cl->userinfo)-1);
+				SV_UserinfoChanged (cl);
+			}
+			else
+			{
+				Com_Printf ("Warning, too many userinfo updates (%d) in single packet from %s\n", userinfoCount, cl->name);
+				MSG_ReadString (&net_message);
+			}
+
+			if (move_issued)
+				Com_Printf ("Warning, out-of-order userinfo from %s\n", cl->name);
+
+			if (cl->state == cs_zombie)
+				return;	//kicked
+
+			break;
+
+			//FIXME: remove this?
+		case clc_nop:
+			break;
+
+		default:
+			Com_Printf ("SV_ExecuteClientMessage: unknown command byte %d\n", c);
+			SV_KickClient (cl, "unknown command byte", va("unknown command byte %d\n", c));
+			return;
 		}
 	}
 }

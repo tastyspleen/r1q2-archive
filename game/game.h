@@ -148,9 +148,9 @@ typedef struct
 	void	(EXPORT *error) (char *fmt, ...);
 
 	// the *index functions create configstrings and some internal server state
-	int		(EXPORT *modelindex) (char *name);
-	int		(EXPORT *soundindex) (char *name);
-	int		(EXPORT *imageindex) (char *name);
+	int		(EXPORT *modelindex) (const char *name);
+	int		(EXPORT *soundindex) (const char *name);
+	int		(EXPORT *imageindex) (const char *name);
 
 	void	(EXPORT *setmodel) (edict_t *ent, char *name);
 

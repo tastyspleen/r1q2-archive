@@ -76,11 +76,6 @@ unacknowledged reliable
 
 cvar_t		*showpackets;
 cvar_t		*showdrop;
-
-#ifndef NO_SERVER
-//extern		cvar_t	*pyroadminport;
-#endif
-
 cvar_t		*qport;
 
 netadr_t	net_from;
@@ -268,7 +263,7 @@ int Netchan_Transmit (netchan_t *chan, int length, byte *data)
 
 	// send the qport if we are a client
 	if (chan->sock == NS_CLIENT && chan->protocol == ORIGINAL_PROTOCOL_VERSION)
-		MSG_WriteShort (&send, qport->value);
+		MSG_WriteShort (&send, qport->intvalue);
 
 // copy the reliable message to the packet first
 	if (send_reliable)
@@ -279,15 +274,22 @@ int Netchan_Transmit (netchan_t *chan, int length, byte *data)
 	
 // add the unreliable part if space is available
 	if (send.maxsize - send.cursize >= length)
-		SZ_Write (&send, data, length);
+	{
+		if (length)
+		{
+			SZ_Write (&send, data, length);
+		}
+	}
 	else
+	{
 		Com_Printf ("Netchan_Transmit: dumped unreliable to %s (max %d - cur %d >= un %d (r=%d))\n", NET_AdrToString(&chan->remote_address), send.maxsize, send.cursize, length, chan->reliable_length);
+	}
 
 // send the datagram
 	if (NET_SendPacket (chan->sock, send.cursize, send.data, &chan->remote_address) == -1)
 		return -1;
 
-	if (showpackets->value)
+	if (showpackets->intvalue)
 	{
 		if (send_reliable)
 			Com_Printf ("send %4i : s=%i reliable=%i ack=%i rack=%i\n"
@@ -337,7 +339,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 	sequence &= ~(1<<31);
 	sequence_ack &= ~(1<<31);	
 
-	if (showpackets->value)
+	if (showpackets->intvalue)
 	{
 		if (reliable_message)
 			Com_Printf ("recv %4i : s=%i reliable=%i ack=%i rack=%i\n"
@@ -360,7 +362,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 
 	if (sequence <= chan->incoming_sequence)
 	{
-		if (showdrop->value)
+		if (showdrop->intvalue)
 			Com_Printf ("%s:Out of order packet %i at %i\n"
 				, NET_AdrToString (&chan->remote_address)
 				,  sequence
@@ -373,7 +375,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 //
 	chan->dropped = sequence - (chan->incoming_sequence+1);
 
-	if (chan->dropped > 0 && showdrop->value)
+	if (chan->dropped > 0 && showdrop->intvalue)
 	{
 		Com_Printf ("%s:Dropped %i packets at %i\n"
 		, NET_AdrToString (&chan->remote_address)

@@ -43,6 +43,7 @@ cvar_t		*cl_stats;
 
 cvar_t		*cl_drawfps;
 cvar_t		*cl_stfu_ilkhan;
+cvar_t		*cl_defermodels;
 
 extern cvar_t		*scr_showturtle;
 
@@ -322,10 +323,33 @@ void CL_PrepRefresh (void)
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
-	deffered_model_index = 1;
+	if (cl_defermodels->intvalue)
+	{
+		deffered_model_index = 1;
+		for (i = 0; i < MAX_MODELS; i++)
+		{
+			cl.model_clip[i] = NULL;
+			cl.model_draw[i] = NULL;
+		}
+	}
+	else
+	{
+		deffered_model_index = MAX_MODELS;
+		for (i = 0; i < MAX_MODELS; i++)
+		{
+			if (!cl.configstrings[CS_MODELS+i][0])
+				continue;
 
-	for (i = 0; i < MAX_MODELS; i++)
-		cl.model_draw[i] = NULL;
+			if (cl.configstrings[CS_MODELS+i][0] != '#')
+			{
+				cl.model_draw[i] = re.RegisterModel (cl.configstrings[CS_MODELS+i]);
+				if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '*')
+					cl.model_clip[i] = CM_InlineModel (cl.configstrings[CS_MODELS+i]);
+				else
+					cl.model_clip[i] = NULL;
+			}
+		}
+	}
 
 	cl.model_draw[1] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
 	if (cl.configstrings[CS_MODELS+1][0] == '*')
@@ -355,7 +379,7 @@ void CL_PrepRefresh (void)
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
-	CL_LoadClientinfo (&cl.baseclientinfo, "unnamed\\male/grunt");
+	CL_LoadClientinfo (&cl.baseclientinfo, "");
 
 	// set sky textures and speed
 	Com_Printf ("sky\r", i); 
@@ -462,7 +486,7 @@ SCR_DrawCrosshair
 */
 void SCR_DrawCrosshair (void)
 {
-	if (!crosshair->value)
+	if (!crosshair->intvalue)
 		return;
 
 	/*if (crosshair->modified)
@@ -478,6 +502,7 @@ void SCR_DrawCrosshair (void)
 	, scr_vrect.y + ((scr_vrect.height - crosshair_height)>>1), crosshair_pic);
 }
 
+int spc = 0;
 int fps = 0;
 int frames_this_second = 0;
 unsigned int frames_seconds = 0;
@@ -506,7 +531,7 @@ void V_RenderView(void)
 	if (!cl.refresh_prepped)
 		return;			// still loading
 
-	if (cl_timedemo->value)
+	if (cl_timedemo->intvalue)
 	{
 		if (!cl.timedemo_start)
 			cl.timedemo_start = Sys_Milliseconds ();
@@ -515,7 +540,7 @@ void V_RenderView(void)
 
 	// an invalid frame will just use the exact previous refdef
 	// we can't use the old frame if the video mode has changed, though...
-	if ( cl.frame.valid && (cl.force_refdef || !cl_paused->value) )
+	if ( cl.frame.valid && (cl.force_refdef || !cl_paused->intvalue) )
 	{
 		cl.force_refdef = false;
 
@@ -526,13 +551,13 @@ void V_RenderView(void)
 		// v_forward, etc.
 		CL_AddEntities ();
 
-		if (cl_testparticles->value)
+		if (cl_testparticles->intvalue)
 			V_TestParticles ();
 
-		if (cl_testentities->value)
+		if (cl_testentities->intvalue)
 			V_TestEntities ();
 		
-		if (cl_testlights->value)
+		if (cl_testlights->intvalue)
 			V_TestLights ();
 		/*if (cl_testblend->value)
 		{
@@ -569,13 +594,13 @@ void V_RenderView(void)
 
 		cl.refdef.areabits = cl.frame.areabits;
 
-		if (!cl_add_entities->value)
+		if (!cl_add_entities->intvalue)
 			r_numentities = 0;
-		if (!cl_add_particles->value)
+		if (!cl_add_particles->intvalue)
 			r_numparticles = 0;
-		if (!cl_add_lights->value)
+		if (!cl_add_lights->intvalue)
 			r_numdlights = 0;
-		if (!cl_add_blend->value)
+		if (!cl_add_blend->intvalue)
 		{
 			VectorClear (cl.refdef.blend);
 		}
@@ -600,21 +625,37 @@ void V_RenderView(void)
 	}
 
 	
-	if (cl_stats->value)
+	if (cl_stats->intvalue)
 		Com_Printf ("ent:%i  lt:%i  part:%i\n", r_numentities, r_numdlights, r_numparticles);
 	//if ( log_stats->value && ( log_stats_file != 0 ) )
 	//	fprintf( log_stats_file, "%i,%i,%i,",r_numentities, r_numdlights, r_numparticles);
 
-	if (cl_drawfps->value) {
+	if (Sys_Milliseconds () - frames_seconds >= 1000)
+	{
+		spc = serverPacketCount;
+		fps = frames_this_second;
+		frames_this_second = 0;
+		serverPacketCount = 0;
+		frames_seconds = Sys_Milliseconds();
+	}
+
+	if (cl_shownet->intvalue == -1)
+	{
+		char buff[16];
+		int x;
+		Com_sprintf (buff, sizeof(buff), "%d", spc);
+		for (x = 0; x < strlen(buff); x++) {
+			re.DrawChar (viddef.width-26+x*8, viddef.height / 2, 128 + buff[x]);
+		}
+	}
+
+	if (cl_drawfps->intvalue)
+	{
 		int x;
 		char buff[16];
 		frames_this_second++;
-		if (Sys_Milliseconds () - frames_seconds > 1000) {
-			fps = frames_this_second;
-			frames_this_second = 0;
-			frames_seconds = Sys_Milliseconds();
-		}
-		if (cl_drawfps->value == 2) {
+
+		if (cl_drawfps->intvalue == 2) {
 			fps = (int)(1.0 / cls.frametime);
 		}
 		Com_sprintf (buff, sizeof(buff), "%d", fps);
@@ -623,7 +664,7 @@ void V_RenderView(void)
 		}
 	}
 
-	if (cl_stfu_ilkhan->value) {
+	if (cl_stfu_ilkhan->intvalue) {
 		char buff[16];
 		int x;
 		int secs = (cl.frame.serverframe % 600) / 10;
@@ -636,7 +677,7 @@ void V_RenderView(void)
 	}
 
 	//FIXME: incorrect use of scr_ prefix
-	if (scr_showturtle->value) {
+	if (scr_showturtle->intvalue) {
 		frame_t *old;
 		if (cl.surpressCount) {
 			int x;
@@ -712,4 +753,5 @@ void V_Init (void)
 	cl_stats = Cvar_Get ("cl_stats", "0", 0);
 	cl_drawfps = Cvar_Get ("cl_drawfps", "0", 0);
 	cl_stfu_ilkhan = Cvar_Get ("cl_stfu_ilkhan", "0", 0);
+	cl_defermodels = Cvar_Get ("cl_defermodels", "1", 0);
 }

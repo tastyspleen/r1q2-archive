@@ -1,5 +1,5 @@
 /*
- * RCS $Id: redblack.h,v 1.2 2004/11/12 00:19:43 r1ch Exp $
+ * RCS $Id: redblack.h,v 1.3 2004/12/19 04:46:37 r1ch Exp $
  */
 
 /*
@@ -81,14 +81,15 @@ const struct RB_ENTRY(node) *nextp;
 struct RB_ENTRY(tree) {
 #ifndef RB_CUSTOMIZE
 		/* comparison routine */
-int (*rb_cmp)(const void *, const void *);
+	int (*rb_cmp)(const void *, const void *);
 		/* root of tree */
 #endif /* RB_CUSTOMIZE */
-struct RB_ENTRY(node) *rb_root;
+	struct RB_ENTRY(node) *rb_root;
+	int rb_dupkey;
 };
 
 #ifndef RB_CUSTOMIZE
-RB_STATIC struct RB_ENTRY(tree) *rbinit(int (*)(const void *, const void *));
+RB_STATIC struct RB_ENTRY(tree) *rbinit(int (*)(const void *, const void *), int);
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void);
 #endif /* RB_CUSTOMIZE */
@@ -135,6 +136,9 @@ RB_STATIC void RB_ENTRY(closelist)(RBLIST *);
 /*
  *
  * $Log: redblack.h,v $
+ * Revision 1.3  2004/12/19 04:46:37  r1ch
+ * redblack delete fixes, rbtree alias/cvar/cmd lookups
+ *
  * Revision 1.2  2004/11/12 00:19:43  r1ch
  * b1619
  *

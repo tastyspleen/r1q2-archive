@@ -123,11 +123,13 @@ Writes a delta update of an entity_state_t list to the message.
 */
 static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg)
 {
-	entity_state_t	*oldent, *newent;
-	int		oldindex, newindex;
-	int		oldnum, newnum;
-	int		from_num_entities;
-	int		bits;
+	entity_state_t	*oldent;
+	entity_state_t 	*newent;
+
+	int				oldindex, newindex;
+	int				oldnum, newnum;
+	int				from_num_entities;
+	int				bits;
 
 #if 0
 	if (numprojs)
@@ -144,13 +146,14 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 
 	newindex = 0;
 	oldindex = 0;
+
 	newent = NULL;
 	oldent = NULL;
+
 	while (newindex < to->num_entities || oldindex < from_num_entities)
 	{
 		//r1: anti-packet overflow
-		//XXX: this breaks delta parsing!!
-		if (msg->cursize > ((MAX_MSGLEN - 100) - cl->datagram.cursize))
+		if (sv_packetentities_hack->intvalue && msg->cursize > (MAX_USABLEMSG - cl->datagram.cursize - cl->netchan.message.cursize))
 			break;
 
 		if (newindex >= to->num_entities)
@@ -186,7 +189,7 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
 
-			MSG_WriteDeltaEntity (NULL, oldent, newent, msg, false, newent->number <= maxclients->value, 0, cl->protocol);
+			MSG_WriteDeltaEntity (NULL, oldent, newent, msg, false, newent->number <= maxclients->intvalue, 0, cl->protocol);
 
 			oldindex++;
 			newindex++;
@@ -485,18 +488,20 @@ SV_WriteFrameToClient
 void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 {
 	client_frame_t		*frame, *oldframe;
-	int					lastframe;
+	int					lastframe, framenum;
+
+	framenum = sv.framenum + sv.randomframe;
 
 //Com_Printf ("%i -> %i\n", client->lastframe, sv.framenum);
 	// this is the frame we are creating
-	frame = &client->frames[sv.framenum & UPDATE_MASK];
+	frame = &client->frames[framenum & UPDATE_MASK];
 
 	if (client->lastframe <= 0)
 	{	// client is asking for a retransmit
 		oldframe = NULL;
 		lastframe = -1;
 	}
-	else if (sv.framenum - client->lastframe >= (UPDATE_BACKUP - 3) )
+	else if (framenum - client->lastframe >= (UPDATE_BACKUP - 3) )
 	{	// client hasn't gotten a good message through in a long time
 //		Com_Printf ("%s: Delta request from out-of-date packet.\n", client->name);
 		oldframe = NULL;
@@ -509,7 +514,7 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	}
 
 	MSG_BeginWriteByte (msg, svc_frame);
-	MSG_WriteLong (msg, sv.framenum);
+	MSG_WriteLong (msg, framenum);
 	MSG_WriteLong (msg, lastframe);	// what we are delta'ing from
 	MSG_WriteByte (msg, client->surpressCount);	// rate dropped packets
 	client->surpressCount = 0;
@@ -552,16 +557,17 @@ static void SV_FatPVS (vec3_t org)
 	byte	*src;
 	vec3_t	mins, maxs;
 
-	for (i=0 ; i<3 ; i++)
-	{
-		mins[i] = org[i] - 8;
-		maxs[i] = org[i] + 8;
-	}
+	mins[0] = org[0] - 8;
+	maxs[0] = org[0] + 8;
+	mins[1] = org[1] - 8;
+	maxs[1] = org[1] + 8;
+	mins[2] = org[2] - 8;
+	maxs[2] = org[2] + 8;
 
 	count = CM_BoxLeafnums (mins, maxs, leafs, 64, NULL);
 	if (count < 1)
 		Com_Error (ERR_FATAL, "SV_FatPVS: count < 1");
-	longs = (CM_NumClusters()+31)>>5;
+	longs = (CM_NumClusters+31)>>5;
 
 	// convert leafs to clusters
 	for (i=0 ; i<count ; i++)
@@ -696,7 +702,7 @@ void SV_BuildClientFrame (client_t *client)
 #endif
 
 	// this is the frame we are creating
-	frame = &client->frames[sv.framenum & UPDATE_MASK];
+	frame = &client->frames[(sv.framenum + sv.randomframe) & UPDATE_MASK];
 
 	frame->senttime = svs.realtime; // save it for ping calc later
 
@@ -752,6 +758,11 @@ void SV_BuildClientFrame (client_t *client)
 			&& !ent->s.event)
 			continue;
 
+		if (!ent->inuse)
+		{
+			Com_Printf ("WARNING: Mod didn't nullify unused entity %d!\n", e);
+		}
+
 		// ignore if not touching a PV leaf
 		if (ent != clent)
 		{
@@ -801,14 +812,18 @@ void SV_BuildClientFrame (client_t *client)
 				}
 
 				if (!ent->s.modelindex)
-				{	// don't send sounds if they will be attenuated away
-					vec3_t	delta;
-					float	len;
+				{	
+					if (ent->s.sound)
+					{
+						// don't send sounds if they will be attenuated away
+						vec3_t	delta;
+						float	len;
 
-					VectorSubtract (org, ent->s.origin, delta);
-					len = VectorLength (delta);
-					if (len > 400)
-						continue;
+						VectorSubtract (org, ent->s.origin, delta);
+						len = VectorLength (delta);
+						if (len > 400)
+							continue;
+					}
 				}
 			}
 		}
@@ -818,7 +833,7 @@ void SV_BuildClientFrame (client_t *client)
 			continue; // added as a special projectile
 #endif
 
-		if (sv_nc_visibilitycheck->value && !(sv_nc_clientsonly->value && !ent->client)) {
+		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client)) {
 			// *********** NiceAss Start ************
 			VectorCopy(org, start);
 #ifdef ENHANCED_SERVER
@@ -863,12 +878,12 @@ void SV_BuildClientFrame (client_t *client)
 			}
 
 			// Don't send player at all. 100% secure but no footsteps unless you see the person.
-			if (!visible && sv_nc_visibilitycheck->value == 2)
+			if (!visible && sv_nc_visibilitycheck->intvalue == 2)
 				continue;
 
 			// Don't send player at all IF there are no events/sounds/etc (like footsteps!) even
 			// if the visibilitycheck is "1" and not "2". Hopefully harder on wallhackers.
-			if (!visible && sv_nc_visibilitycheck->value == 1 &&
+			if (!visible && sv_nc_visibilitycheck->intvalue == 1 &&
 				!ent->s.effects && !ent->s.sound && !ent->s.event)
 				continue;
 		} else {
@@ -889,7 +904,7 @@ void SV_BuildClientFrame (client_t *client)
 		// *********** NiceAss Start ************
 		// Send the entity, but don't associate a model with it. Less secure than sv_nc_visibilitycheck 2
 		// but you can hear footsteps. Default functionality.
-		if (!visible && sv_nc_visibilitycheck->value == 1) {
+		if (!visible && sv_nc_visibilitycheck->intvalue == 1) {
 			// Remove any model associations. Invisible.
 			state->modelindex = state->modelindex2 = state->modelindex3 = state->modelindex4 = 0;
 	

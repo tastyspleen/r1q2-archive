@@ -262,7 +262,7 @@ void CL_BaseMove (usercmd_t *cmd)
 		tspeed = cls.frametime;
 	
 	//adjust for running speed
-	if ( (in_speed.state & 1) ^ (int)(cl_run->value) )
+	if ( (in_speed.state & 1) ^ cl_run->intvalue)
 		mspeed = 2;
 	else
 		mspeed = 1;
@@ -372,7 +372,7 @@ __inline void CL_InitCmd (void)
 //	that occurred since last Init or RefreshCmd
 void CL_RefreshCmd (void)
 {	
-	int i, ms;
+	int ms;
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
 
 	//get delta for this sample.
@@ -395,8 +395,10 @@ void CL_RefreshCmd (void)
 
 	// update cmd viewangles for CL_PredictMove
 	CL_ClampPitch ();
-	for (i=0 ; i<3 ; i++)
-		cmd->angles[i] = ANGLE2SHORT(cl.viewangles[i]);
+
+	cmd->angles[0] = ANGLE2SHORT(cl.viewangles[0]);
+	cmd->angles[1] = ANGLE2SHORT(cl.viewangles[1]);
+	cmd->angles[2] = ANGLE2SHORT(cl.viewangles[2]);
 
 
 	// update cmd->msec for CL_PredictMove
@@ -445,7 +447,7 @@ void CL_FinalizeCmd (void)
 	in_impulse = 0;
 
 	// set the ambient light level at the player's current position
-	cmd->lightlevel = (byte)cl_lightlevel->value;
+	cmd->lightlevel = (byte)cl_lightlevel->intvalue;
 }
 
 
@@ -510,18 +512,17 @@ void CL_SendCmd (void)
 	byte		data[128];
 	int			i;
 	usercmd_t	*cmd, *oldcmd;
-	static usercmd_t	nullcmd = {0};
 	int			checksumIndex;
 
-	if (cls.state == ca_disconnected || cls.state == ca_connecting)
+	if (cls.state <= ca_connecting)
 		return;
 
 	if ( cls.state == ca_connected)
 	{
-		if (cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 1000 ) {
-	 		memset (&buf, 0, sizeof(buf));
-			Com_DPrintf ("connected: flushing netchan (len=%d, %s)\n", cls.netchan.message.cursize, cls.netchan.message.data);
-			Netchan_Transmit (&cls.netchan, 0, buf.data);	
+		if (cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 ) {
+	 		//memset (&buf, 0, sizeof(buf));
+			Com_DPrintf ("connected: flushing netchan (len=%d, %s)\n", cls.netchan.message.cursize, MakePrintable(cls.netchan.message.data));
+			Netchan_Transmit (&cls.netchan, 0, NULL);	
 		}
 		return;
 	}
@@ -572,7 +573,7 @@ void CL_SendCmd (void)
 
 	//r1: after a vid_restart memory locations of models changes! all existing ents
 	//need to be re-sent so the client updates its model to the new memory location.
-	if (cl_nodelta->value || !cl.frame.valid || cls.demowaiting)
+	if (cl_nodelta->intvalue || !cl.frame.valid || cls.demowaiting)
 		MSG_WriteLong (&buf, -1);	// no compression
 	else
 		MSG_WriteLong (&buf, cl.frame.serverframe);
@@ -582,7 +583,7 @@ void CL_SendCmd (void)
 	i = (cls.netchan.outgoing_sequence-2) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
 	//memset (&nullcmd, 0, sizeof(nullcmd));
-	MSG_WriteDeltaUsercmd (&buf, &nullcmd, cmd);
+	MSG_WriteDeltaUsercmd (&buf, &null_usercmd, cmd);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence-1) & (CMD_BACKUP-1);

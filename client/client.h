@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //define	PARANOID			// speed sapping error checking
 
+#ifndef _CLIENT_H
+
 #define	BUILDING_CLIENT		1
 #define	DECOUPLED_RENDERER	1
 
@@ -257,7 +259,7 @@ typedef struct client_static_s
 	unsigned int	lastSpamTime;
 	unsigned int	spamTime;
 	unsigned int	realtime;			// always increasing, no clamping, etc
-	float		frametime;			// seconds since last frame
+	float			frametime;			// seconds since last frame
 
 // screen rendering information
 	float		disable_screen;		// showing loading plaque between levels
@@ -602,6 +604,8 @@ void CL_Record_f (void);
 //
 extern	char *svc_strings[];
 
+extern	int	serverPacketCount;
+
 void CL_ParseServerMessage (void);
 void CL_LoadClientinfo (clientinfo_t *ci, char *s);
 void SHOWNET(char *s);
@@ -762,4 +766,8 @@ typedef	clexport_t	(EXPORT *GetClAPI_t) (climport_t);
 
 extern	clexport_t ce;
 extern	qboolean cllib_active;
+#endif
+
+#define _CLIENT_H
+
 #endif

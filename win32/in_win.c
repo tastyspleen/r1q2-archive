@@ -122,7 +122,7 @@ void IN_MLookDown (void)
 void IN_MLookUp (void)
 {
 	mlooking = false;
-	if (!freelook->value && lookspring->value)
+	if (!freelook->intvalue && lookspring->intvalue)
 		IN_CenterView ();
 }
 
@@ -301,7 +301,220 @@ int IN_InitDInputMouse (void)
 }
 #define MAX_MOUSE_BUTTONS 8
 
-int IN_ReadImmediateData (usercmd_t *cmd)
+void IN_ReadBufferedData( usercmd_t *cmd )
+{
+    DIDEVICEOBJECTDATA didod[ 32 ];  // Receives buffered data 
+    DWORD              dwElements;
+    DWORD              i;
+    HRESULT            hr;
+
+	int					x;
+	float				val;
+
+    if( NULL == g_pMouse ) 
+        return;
+    
+    dwElements = 32;
+	hr = IDirectInputDevice8_GetDeviceData (g_pMouse, sizeof(DIDEVICEOBJECTDATA),
+                                     didod, &dwElements, 0);
+    if( hr != DI_OK ) 
+    {
+        // We got an error or we got DI_BUFFEROVERFLOW.
+        //
+        // Either way, it means that continuous contact with the
+        // device has been lost, either due to an external
+        // interruption, or because the buffer overflowed
+        // and some events were lost.
+        //
+        // Consequently, if a button was pressed at the time
+        // the buffer overflowed or the connection was broken,
+        // the corresponding "up" message might have been lost.
+        //
+        // But since our simple sample doesn't actually have
+        // any state associated with button up or down events,
+        // there is no state to reset.  (In a real game, ignoring
+        // the buffer overflow would result in the game thinking
+        // a key was held down when in fact it isn't; it's just
+        // that the "up" event got lost because the buffer
+        // overflowed.)
+        //
+        // If we want to be cleverer, we could do a
+        // GetDeviceState() and compare the current state
+        // against the state we think the device is in,
+        // and process all the states that are currently
+        // different from our private state.
+        hr = IDirectInputDevice8_Acquire(g_pMouse);
+        while( hr == DIERR_INPUTLOST ) 
+            hr = IDirectInputDevice8_Acquire (g_pMouse);
+
+        // hr may be DIERR_OTHERAPPHASPRIO or other errors.  This
+        // may occur when the app is minimized or in the process of 
+        // switching, so just try again later 
+        return; 
+    }
+
+    if( FAILED(hr) )  
+        return;
+
+	if (m_show->intvalue)
+		Com_Printf ("%d dwElements\n", dwElements);
+
+    // Study each of the buffer elements and process them.
+    //
+    // Since we really don't do anything, our "processing"
+    // consists merely of squirting the name into our
+    // local buffer.
+    for( i = 0; i < dwElements; i++ ) 
+    {
+        // this will display then scan code of the key
+        // plus a 'D' - meaning the key was pressed 
+        //   or a 'U' - meaning the key was released
+        /*switch( didod[ i ].dwOfs )
+        {
+            case DIMOFS_BUTTON0:
+                _tcscat( strNewText, TEXT("B0") );
+                break;
+
+            case DIMOFS_BUTTON1:
+                _tcscat( strNewText, TEXT("B1") );
+                break;
+
+            case DIMOFS_BUTTON2:
+                _tcscat( strNewText, TEXT("B2") );
+                break;
+
+            case DIMOFS_BUTTON3:
+                _tcscat( strNewText, TEXT("B3") );
+                break;
+
+            case DIMOFS_BUTTON4:
+                _tcscat( strNewText, TEXT("B4") );
+                break;
+
+            case DIMOFS_BUTTON5:
+                _tcscat( strNewText, TEXT("B5") );
+                break;
+
+            case DIMOFS_BUTTON6:
+                _tcscat( strNewText, TEXT("B6") );
+                break;
+
+            case DIMOFS_BUTTON7:
+                _tcscat( strNewText, TEXT("B7") );
+                break;
+
+            case DIMOFS_X:
+                _tcscat( strNewText, TEXT("X") );
+                break;
+
+            case DIMOFS_Y:
+                _tcscat( strNewText, TEXT("Y") );
+                break;
+
+            case DIMOFS_Z:
+                _tcscat( strNewText, TEXT("Z") );
+                break;
+
+            default:
+                _tcscat( strNewText, TEXT("") );
+        }*/
+
+        switch( didod[ i ].dwOfs )
+        {
+            case DIMOFS_BUTTON0:
+            case DIMOFS_BUTTON1:
+            case DIMOFS_BUTTON2:
+            case DIMOFS_BUTTON3:
+            case DIMOFS_BUTTON4:
+            case DIMOFS_BUTTON5:
+            case DIMOFS_BUTTON6:
+            case DIMOFS_BUTTON7:
+                /*if( didod[ i ].dwData & 0x80 )
+                    _tcscat( strNewText, TEXT("U ") );
+                else
+                    _tcscat( strNewText, TEXT("D ") );
+                break;*/
+
+				x = didod[ i ].dwOfs - DIMOFS_BUTTON0;
+
+				if( !(didod[ i ].dwData & 0x80) )
+				{
+					Key_Event (K_MOUSE1 + x, false, 10);
+				}
+				else
+				{
+					Key_Event (K_MOUSE1 + x, true, 10);
+				}
+				break;
+
+            case DIMOFS_X:
+				val = (int)didod[ i ].dwData;
+				val *= sensitivity->value;
+				
+				// add mouse X/Y movement to cmd
+				if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
+					cmd->sidemove += m_side->value * val;
+				else
+					cl.viewangles[YAW] -= m_yaw->value * val;
+
+				break;
+
+            case DIMOFS_Y:
+				val = (int)didod[ i ].dwData;
+				val *= sensitivity->value;
+
+				if ( (mlooking || freelook->intvalue) && !(in_strafe.state & 1))
+					cl.viewangles[PITCH] += m_pitch->value * val;
+				else
+					cmd->forwardmove -= m_forward->value * val;
+
+				break;
+
+            case DIMOFS_Z:
+				if ( (int)didod[i].dwData > 0)
+				{
+					if (cls.key_dest == key_console)
+					{
+						Key_Event (K_PGUP, true, 10);
+						Key_Event (K_PGUP, false, 10);
+						Key_Event (K_PGUP, true, 10);
+						Key_Event (K_PGUP, false, 10);
+						Key_Event (K_PGUP, true, 10);
+						Key_Event (K_PGUP, false, 10);
+						Key_Event (K_PGUP, true, 10);
+						Key_Event (K_PGUP, false, 10);
+					}
+					else
+					{
+						Key_Event (K_MWHEELUP, true, 10);
+						Key_Event (K_MWHEELUP, false, 10);
+					}
+				}
+				else if ((int)didod[i].dwData < 0)
+				{
+					if (cls.key_dest == key_console)
+					{
+						Key_Event (K_PGDN, true, 10);
+						Key_Event (K_PGDN, false, 10);
+						Key_Event (K_PGDN, true, 10);
+						Key_Event (K_PGDN, false, 10);
+						Key_Event (K_PGDN, true, 10);
+						Key_Event (K_PGDN, false, 10);
+						Key_Event (K_PGDN, true, 10);
+						Key_Event (K_PGDN, false, 10);
+					}
+					else
+					{
+						Key_Event (K_MWHEELDOWN, true, 10);
+						Key_Event (K_MWHEELDOWN, false, 10);
+					}
+				}
+                break;
+        }
+    }
+}
+
+void IN_ReadImmediateData (usercmd_t *cmd)
 {
 	int i;
 	float		mx, my;
@@ -309,10 +522,11 @@ int IN_ReadImmediateData (usercmd_t *cmd)
     DIMOUSESTATE2 dims2;      // DirectInput mouse state structure
 
     if( NULL == g_pMouse ) 
-        return S_OK;
+        return;
     
     // Get the input's device state, and put the state in dims
     memset(&dims2, 0, sizeof(dims2));
+
     hr = IDirectInputDevice8_GetDeviceState(g_pMouse, sizeof(DIMOUSESTATE2), &dims2 );
     if( FAILED(hr) ) 
     {
@@ -320,7 +534,7 @@ int IN_ReadImmediateData (usercmd_t *cmd)
         // interrupted.  We aren't tracking any state between polls, so
         // we don't have any special reset that needs to be done.
         // We just re-acquire and try again.
-		Com_Printf ("Lost Mouse!\n");
+		//Com_Printf ("Lost Mouse!\n");
         
         // If input is lost then acquire and keep trying 
 		//Com_Printf ("Acquire() from readdata\n");
@@ -334,13 +548,13 @@ int IN_ReadImmediateData (usercmd_t *cmd)
         // hr may be DIERR_OTHERAPPHASPRIO or other errors.  This
         // may occur when the app is minimized or in the process of 
         // switching, so just try again later 
-        return S_OK; 
+        return; 
     }
     
     // The dims structure now has the state of the mouse, so 
     // display mouse coordinates (x, y, z) and buttons.
-	if (m_show->value) {
-    Com_Printf ("(X=% 3.3d, Y=% 3.3d, Z=% 3.3d) B0=%c B1=%c B2=%c B3=%c B4=%c B5=%c B6=%c B7=%c\n",
+	if (m_show->intvalue) {
+		Com_Printf ("(X=% 3.3d, Y=% 3.3d, Z=% 3.3d) B0=%c B1=%c B2=%c B3=%c B4=%c B5=%c B6=%c B7=%c\n",
                          dims2.lX, dims2.lY, dims2.lZ,
                         (dims2.rgbButtons[0] & 0x80) ? '1' : '0',
                         (dims2.rgbButtons[1] & 0x80) ? '1' : '0',
@@ -352,20 +566,55 @@ int IN_ReadImmediateData (usercmd_t *cmd)
                         (dims2.rgbButtons[7] & 0x80) ? '1' : '0');
 	}
 
-	for (i = 0; i < MAX_MOUSE_BUTTONS; i++) {
-		if (old_state.rgbButtons[i] & 0x80 && !(dims2.rgbButtons[i] & 0x80)) {
+	for (i = 0; i < MAX_MOUSE_BUTTONS; i++)
+	{
+		if (old_state.rgbButtons[i] & 0x80 && !(dims2.rgbButtons[i] & 0x80))
+		{
 			Key_Event (K_MOUSE1 + i, false, 10);
-		} else if (dims2.rgbButtons[i] & 0x80 && !(old_state.rgbButtons[i] & 0x80)) {
+		}
+		else if (dims2.rgbButtons[i] & 0x80 && !(old_state.rgbButtons[i] & 0x80))
+		{
 			Key_Event (K_MOUSE1 + i, true, 10);
 		}
 	}
 
-	if (dims2.lZ > 0) {
-		Key_Event (K_MWHEELUP, true, 10);
-		Key_Event (K_MWHEELUP, false, 10);
-	} else if (dims2.lZ < 0) {
-		Key_Event (K_MWHEELDOWN, true, 10);
-		Key_Event (K_MWHEELDOWN, false, 10);
+	if (dims2.lZ > 0)
+	{
+		if (cls.key_dest == key_console)
+		{
+			Key_Event (K_PGUP, true, 10);
+			Key_Event (K_PGUP, false, 10);
+			Key_Event (K_PGUP, true, 10);
+			Key_Event (K_PGUP, false, 10);
+			Key_Event (K_PGUP, true, 10);
+			Key_Event (K_PGUP, false, 10);
+			Key_Event (K_PGUP, true, 10);
+			Key_Event (K_PGUP, false, 10);
+		}
+		else
+		{
+			Key_Event (K_MWHEELUP, true, 10);
+			Key_Event (K_MWHEELUP, false, 10);
+		}
+	}
+	else if (dims2.lZ < 0)
+	{
+		if (cls.key_dest == key_console)
+		{
+			Key_Event (K_PGDN, true, 10);
+			Key_Event (K_PGDN, false, 10);
+			Key_Event (K_PGDN, true, 10);
+			Key_Event (K_PGDN, false, 10);
+			Key_Event (K_PGDN, true, 10);
+			Key_Event (K_PGDN, false, 10);
+			Key_Event (K_PGDN, true, 10);
+			Key_Event (K_PGDN, false, 10);
+		}
+		else
+		{
+			Key_Event (K_MWHEELDOWN, true, 10);
+			Key_Event (K_MWHEELDOWN, false, 10);
+		}
 	}
 
 	memcpy (&old_state, &dims2, sizeof(old_state));
@@ -377,24 +626,17 @@ int IN_ReadImmediateData (usercmd_t *cmd)
 	my *= sensitivity->value;
 
 	// add mouse X/Y movement to cmd
-	if ( (in_strafe.state & 1) || (lookstrafe->value && mlooking )) {
-		if (cmd)
-			cmd->sidemove += m_side->value * mx;
-	} else {
-		cl.viewangles[YAW] -= m_yaw->value * mx;
-	}
-
-	if ( (mlooking || freelook->value) && !(in_strafe.state & 1))
-	{
-		cl.viewangles[PITCH] += m_pitch->value * my;
-	}
+	if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
+		cmd->sidemove += m_side->value * mx;
 	else
-	{
-		if (cmd)
-			cmd->forwardmove -= m_forward->value * my;
-	}
+		cl.viewangles[YAW] -= m_yaw->value * mx;
 
-	return 0;
+	if ( (mlooking || freelook->intvalue) && !(in_strafe.state & 1))
+		cl.viewangles[PITCH] += m_pitch->value * my;
+	else
+		cmd->forwardmove -= m_forward->value * my;
+
+	return;
 }
 #endif
 
@@ -412,7 +654,7 @@ void IN_ActivateMouse (void)
 	if (!mouseinitialized)
 		return;
 
-	if (!in_mouse->value)
+	if (!in_mouse->intvalue)
 	{
 		mouseactive = false;
 		return;
@@ -430,7 +672,7 @@ void IN_ActivateMouse (void)
 	} else {
 #endif
 		if (mouseparmsvalid) {
-			if (m_winxp_fix->value)
+			if (m_winxp_fix->intvalue)
 				restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, winxpmouseparms, 0);
 			else
 				restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
@@ -514,11 +756,11 @@ void IN_StartupMouse (void)
 {
 	//cvar_t		*cv;
 
-	if (!in_mouse->value)
+	if (!in_mouse->intvalue)
 		return;
 
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
-	if (m_directinput->value)
+	if (m_directinput->intvalue)
 	{
 		if (IN_InitDInputMouse())
 		{
@@ -600,8 +842,12 @@ void IN_MouseMove (usercmd_t *cmd)
 		return;
 
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
-	if (g_pDI) {
-		IN_ReadImmediateData (cmd);
+	if (g_pDI)
+	{
+		if (m_directinput->intvalue == 1)
+			IN_ReadBufferedData (cmd);
+		else
+			IN_ReadImmediateData (cmd);
 		return;
 	}
 #endif
@@ -618,7 +864,7 @@ void IN_MouseMove (usercmd_t *cmd)
 		return;
 #endif
 
-	if (m_filter->value)
+	if (m_filter->intvalue)
 	{
 		mouse_x = (mx + old_mouse_x) * 0.5;
 		mouse_y = (my + old_mouse_y) * 0.5;
@@ -636,12 +882,12 @@ void IN_MouseMove (usercmd_t *cmd)
 	mouse_y *= sensitivity->value;
 
 // add mouse X/Y movement to cmd
-	if ( (in_strafe.state & 1) || (lookstrafe->value && mlooking ))
+	if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
 		cmd->sidemove += m_side->value * mouse_x;
 	else
 		cl.viewangles[YAW] -= m_yaw->value * mouse_x;
 
-	if ( (mlooking || freelook->value) && !(in_strafe.state & 1))
+	if ( (mlooking || freelook->intvalue) && !(in_strafe.state & 1))
 	{
 		cl.viewangles[PITCH] += m_pitch->value * mouse_y;
 	}
@@ -847,7 +1093,7 @@ void IN_StartupJoystick (void)
 
 	// abort startup if user requests no joystick
 	cv = Cvar_Get ("in_initjoy", "1", CVAR_NOSET);
-	if ( !cv->value ) 
+	if ( !cv->intvalue ) 
 		return; 
  
 	// verify joystick driver is present

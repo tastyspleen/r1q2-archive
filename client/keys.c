@@ -43,6 +43,8 @@ int		keyshift[256];		// key to map to if shift held down in console
 int		key_repeats[256];	// if > 1, it is autorepeating
 qboolean	keydown[256];
 
+cvar_t	*cl_cmdcomplete;
+
 typedef struct
 {
 	char	/*@null@*/ *name;
@@ -91,6 +93,9 @@ keyname_t keynames[] =
 	{"MOUSE4", K_MOUSE4},
 	{"MOUSE5", K_MOUSE5},
 	{"MOUSE6", K_MOUSE6},
+	{"MOUSE6", K_MOUSE7},
+	{"MOUSE6", K_MOUSE8},
+	{"MOUSE6", K_MOUSE9},
 
 /*	{"JOY1", K_JOY1},
 	{"JOY2", K_JOY2},
@@ -164,7 +169,7 @@ keyname_t keynames[] =
 ==============================================================================
 */
 
-/*void CompleteCommand (void)
+void Key_CompleteCommandOld (void)
 {
 	char	*cmd, *s;
 
@@ -172,7 +177,7 @@ keyname_t keynames[] =
 	if (*s == '\\' || *s == '/')
 		s++;
 
-	cmd = Cmd_CompleteCommand (s);
+	cmd = Cmd_CompleteCommandOld (s);
 	if (!cmd)
 		cmd = Cvar_CompleteVariable (s);
 	if (cmd)
@@ -185,7 +190,7 @@ keyname_t keynames[] =
 		key_lines[edit_line][key_linepos] = 0;
 		return;
 	}
-}*/
+}
 
 /*
 ====================
@@ -499,44 +504,55 @@ void Key_Console (int key)
 	//r1: command completion stolen from proquake
 	if (key == K_TAB)
 	{	// command completion
-		/*char *cmd;
-		int len, i;
-		char *fragment;
-		cvar_t *var;
-		char *best = "~";
-		char *least = "~";
+		if (cl_cmdcomplete->intvalue == 1)
+		{
+			char *cmd;
+			int len, i;
+			char *fragment;
+			cvar_t *var;
+			char *best = "~";
+			char *least = "~";
 
-		len = strlen(key_lines[edit_line]);
-		for (i = 0 ; i < len - 1 ; i++)
-		{
-			if (key_lines[edit_line][i] == ' ')
-				return;
-		}
-		fragment = key_lines[edit_line] + 1;
+			len = strlen(key_lines[edit_line]);
+			for (i = 0 ; i < len - 1 ; i++)
+			{
+				if (key_lines[edit_line][i] == ' ')
+					return;
+			}
+			fragment = key_lines[edit_line] + 1;
 
-		len--;
-		for (var = cvar_vars->next ; var ; var = var->next)
-		{
-			if (strcmp(var->name, fragment) >= 0 && strcmp(best, var->name) > 0)
-				best = var->name;
-			if (strcmp(var->name, least) < 0)
-				least = var->name;
-		}
-		cmd = Cmd_CompleteCommand(fragment);
-		if (strcmp(cmd, fragment) >= 0 && strcmp(best, cmd) > 0)
-			best = cmd;
-		if (best[0] == '~')
-		{
-			cmd = Cmd_CompleteCommand(" ");
-			if (strcmp(cmd, least) < 0)
+			len--;
+			for (var = cvar_vars->next ; var ; var = var->next)
+			{
+				if (strcmp(var->name, fragment) >= 0 && strcmp(best, var->name) > 0)
+					best = var->name;
+				if (strcmp(var->name, least) < 0)
+					least = var->name;
+			}
+			cmd = Cmd_CompleteCommand(fragment);
+			//if (strcmp(cmd, fragment) >= 0 && strcmp(best, cmd) > 0)
+			if (cmd)
 				best = cmd;
-			else
-				best = least;
-		}
+			if (best[0] == '~')
+			{
+				cmd = Cmd_CompleteCommand(" ");
+				if (strcmp(cmd, least) < 0)
+					best = cmd;
+				else
+					best = least;
+			}
 
-		sprintf(key_lines[edit_line], "]%s ", best);
-		key_linepos = strlen(key_lines[edit_line]);*/
-		Key_CompleteCommand();
+			sprintf(key_lines[edit_line], "]%s ", best);
+			key_linepos = strlen(key_lines[edit_line]);
+		}
+		else if (cl_cmdcomplete->value == 2)
+		{
+			Key_CompleteCommand();
+		}
+		else
+		{
+			Key_CompleteCommandOld();
+		}
 		return;
 	}
 	
@@ -966,6 +982,8 @@ void Key_Init (void)
 	Cmd_AddCommand ("unbind",Key_Unbind_f);
 	Cmd_AddCommand ("unbindall",Key_Unbindall_f);
 	Cmd_AddCommand ("bindlist",Key_Bindlist_f);
+
+	cl_cmdcomplete = Cvar_Get ("cl_cmdcomplete", "2", 0);
 }
 
 /*
@@ -978,8 +996,8 @@ Should NOT be called during an interrupt!
 */
 void Key_Event (int key, qboolean down, unsigned time)
 {
-	char	*kb;
-	char	cmd[1024];
+	char		*kb;
+	char		cmd[1024];
 
 	// hack for modal presses
 	if (key_waiting == -1)
@@ -993,7 +1011,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 	if (down)
 	{
 		key_repeats[key]++;
-		if (key != K_BACKSPACE 
+		if (cls.key_dest != key_console && key != K_BACKSPACE 
 			&& key != K_PAUSE 
 			&& key != K_PGUP 
 			&& key != K_KP_PGUP 
@@ -1079,19 +1097,23 @@ void Key_Event (int key, qboolean down, unsigned time)
 //
 	if (!down)
 	{
-		kb = keybindings[key];
-		if (kb && kb[0] == '+')
+		//r1ch: don't run buttons in console
+		if (cls.key_dest != key_console)
 		{
-			Com_sprintf (cmd, sizeof(cmd), "-%s %i %u\n", kb+1, key, time);
-			Cbuf_AddText (cmd);
-		}
-		if (keyshift[key] != key)
-		{
-			kb = keybindings[keyshift[key]];
+			kb = keybindings[key];
 			if (kb && kb[0] == '+')
 			{
 				Com_sprintf (cmd, sizeof(cmd), "-%s %i %u\n", kb+1, key, time);
 				Cbuf_AddText (cmd);
+			}
+			if (keyshift[key] != key)
+			{
+				kb = keybindings[keyshift[key]];
+				if (kb && kb[0] == '+')
+				{
+					Com_sprintf (cmd, sizeof(cmd), "-%s %i %u\n", kb+1, key, time);
+					Cbuf_AddText (cmd);
+				}
 			}
 		}
 		return;
@@ -1105,10 +1127,12 @@ void Key_Event (int key, qboolean down, unsigned time)
 	|| (cls.key_dest == key_game && ( cls.state == ca_active || !consolekeys[key] ) ) )
 	{
 		kb = keybindings[key];
-		if (kb)
+		if (kb && *kb)
 		{
 			if (kb[0] == '+')
 			{	// button commands add keynum and time as a parm
+				if (cls.key_dest == key_console) //r1: don't run buttons in console
+					return;
 				Com_sprintf (cmd, sizeof(cmd), "%s %i %u\n", kb, key, time);
 				Cbuf_AddText (cmd);
 			}
@@ -1121,8 +1145,8 @@ void Key_Event (int key, qboolean down, unsigned time)
 		return;
 	}
 
-	if (!down)
-		return;		// other systems only care about key down events
+	//if (!down)
+	//	return;		// other systems only care about key down events
 
 	if (shift_down)
 		key = keyshift[key];

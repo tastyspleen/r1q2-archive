@@ -14,7 +14,7 @@ localent_t *Le_Alloc (void)
 	int i;
 
 	//r1: disable lents?
-	if (!cl_lents->value)
+	if (!cl_lents->intvalue)
 		return NULL;
 
 	for (i = 0; i < MAX_LOCAL_ENTS; i++) {

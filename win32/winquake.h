@@ -40,7 +40,9 @@ extern DWORD gSndBufSize;
 extern HWND			cl_hwnd;
 extern qboolean		ActiveApp, Minimized;
 
-int IN_ReadImmediateData (usercmd_t *cmd);
+void IN_ReadImmediateData (usercmd_t *cmd);
+void IN_ReadBufferedData( usercmd_t *cmd );
+
 void IN_Activate (qboolean active);
 void IN_MouseEvent (int mstate);
 

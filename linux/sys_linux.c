@@ -30,7 +30,7 @@ cvar_t *nostdout;
 
 unsigned	sys_frame_time;
 
-uid_t saved_euid;
+//uid_t saved_euid;
 qboolean stdin_active = true;
 
 // =======================================================================
@@ -39,7 +39,7 @@ qboolean stdin_active = true;
 #ifndef NO_SERVER
 void Sys_ConsoleOutput (char *string)
 {
-	if (nostdout && nostdout->value)
+	if (nostdout && nostdout->intvalue)
 		return;
 
 	fputs(string, stdout);
@@ -77,15 +77,15 @@ void Sys_Printf (char *fmt, ...)
 	char		text[1024];
 	unsigned char		*p;
 
+    if (nostdout && nostdout->intvalue)
+        return;
+
 	va_start (argptr,fmt);
 	vsprintf (text,fmt,argptr);
 	va_end (argptr);
 
 	if (strlen(text) > sizeof(text))
 		Sys_Error("memory overwrite in Sys_Printf");
-
-    if (nostdout && nostdout->value)
-        return;
 
 	for (p = (unsigned char *)text; *p; p++) {
 		*p &= 0x7f;
@@ -188,10 +188,10 @@ char *Sys_ConsoleInput(void)
 	fd_set	fdset;
     struct timeval timeout;
 
-	if (!dedicated || !dedicated->value)
+	if (!dedicated || !dedicated->intvalue)
 		return NULL;
 
-	if (!stdin_active || (nostdin && nostdin->value))
+	if (!stdin_active || (nostdin && nostdin->intvalue))
 		return NULL;
 
 	FD_ZERO(&fdset);
@@ -252,8 +252,8 @@ void *Sys_GetGameAPI (void *parms)
 #error Unknown arch
 #endif
 
-	setreuid(getuid(), getuid());
-	setegid(getgid());
+	//setreuid(getuid(), getuid());
+	//setegid(getgid());
 
 	if (game_library)
 		Com_Error (ERR_FATAL, "Sys_GetGameAPI without Sys_UnloadingGame");
@@ -333,8 +333,14 @@ int main (int argc, char **argv)
 	int 	time, oldtime, newtime;
 
 	// go back to real user for config loads
-	saved_euid = geteuid();
-	seteuid(getuid());
+	//saved_euid = geteuid();
+	//seteuid(getuid());
+	//
+	
+	if (getuid() == 0 || geteuid() == 0)
+		Sys_Error ("For security reasons, do not run Quake II as root.");
+
+	binary_name = argv[0];
 
 	Qcommon_Init(argc, argv);
 
@@ -342,7 +348,7 @@ int main (int argc, char **argv)
 
 	nostdin = Cvar_Get ("nostdin", "0", 0);
 	nostdout = Cvar_Get("nostdout", "0", 0);
-	if (!nostdout->value) {
+	if (!nostdout->intvalue) {
 		fcntl(0, F_SETFL, fcntl (0, F_GETFL, 0) | FNDELAY);
 //		printf ("Linux Quake -- Version %0.3f\n", LINUX_VERSION);
 	}

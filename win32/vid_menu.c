@@ -102,7 +102,7 @@ static void BrightnessCallback( void *s )
 	else
 		s_brightness_slider[0].curvalue = s_brightness_slider[1].curvalue;
 
-	if ( stricmp( vid_ref->string, "soft" ) == 0 )
+	if ( Q_stricmp( vid_ref->string, "soft" ) == 0 )
 	{
 		float gamma = ( 0.8 - ( slider->curvalue/10.0 - 0.5 ) ) + 0.5;
 
@@ -172,7 +172,7 @@ static void ApplyChanges( void *unused )
 		if ( vid_gamma->modified )
 		{
 			vid_ref->modified = true;
-			if ( stricmp( gl_driver->string, "3dfxgl" ) == 0 )
+			if ( Q_stricmp( gl_driver->string, "3dfxgl" ) == 0 )
 			{
 				char envbuffer[1024];
 				float g;

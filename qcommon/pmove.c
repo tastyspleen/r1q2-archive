@@ -117,7 +117,7 @@ void PM_StepSlideMove_ (void)
 	vec3_t		planes[MAX_CLIP_PLANES];
 	vec3_t		primal_velocity;
 	int			i, j;
-	trace_t	trace;
+	trace_t		trace;
 	vec3_t		end;
 	float		time_left;
 	
@@ -130,8 +130,9 @@ void PM_StepSlideMove_ (void)
 
 	for (bumpcount=0 ; bumpcount<numbumps ; bumpcount++)
 	{
-		for (i=0 ; i<3 ; i++)
-			end[i] = pml.origin[i] + time_left * pml.velocity[i];
+		end[0] = pml.origin[0] + time_left * pml.velocity[0];
+		end[1] = pml.origin[1] + time_left * pml.velocity[1];
+		end[2] = pml.origin[2] + time_left * pml.velocity[2];
 
 		trace = pm->trace (pml.origin, pm->mins, pm->maxs, end);
 
@@ -394,38 +395,41 @@ Handles user intended acceleration
 */
 void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
 {
-	int			i;
 	float		addspeed, accelspeed, currentspeed;
 
 	currentspeed = DotProduct (pml.velocity, wishdir);
 	addspeed = wishspeed - currentspeed;
 	if (addspeed <= 0)
 		return;
+
 	accelspeed = accel*pml.frametime*wishspeed;
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
 	
-	for (i=0 ; i<3 ; i++)
-		pml.velocity[i] += accelspeed*wishdir[i];	
+	pml.velocity[0] += accelspeed*wishdir[0];
+	pml.velocity[1] += accelspeed*wishdir[1];
+	pml.velocity[2] += accelspeed*wishdir[2];
 }
 
 void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 {
-	int			i;
 	float		addspeed, accelspeed, currentspeed, wishspd = wishspeed;
 		
 	if (wishspd > 30)
 		wishspd = 30;
 	currentspeed = DotProduct (pml.velocity, wishdir);
 	addspeed = wishspd - currentspeed;
+
 	if (addspeed <= 0)
 		return;
+
 	accelspeed = accel * wishspeed * pml.frametime;
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
 	
-	for (i=0 ; i<3 ; i++)
-		pml.velocity[i] += accelspeed*wishdir[i];	
+	pml.velocity[0] += accelspeed*wishdir[0];
+	pml.velocity[1] += accelspeed*wishdir[1];
+	pml.velocity[2] += accelspeed*wishdir[2];
 }
 
 /*
@@ -530,7 +534,6 @@ PM_WaterMove
 */
 void PM_WaterMove (void)
 {
-	int		i;
 	vec3_t	wishvel;
 	float	wishspeed;
 	vec3_t	wishdir;
@@ -538,8 +541,9 @@ void PM_WaterMove (void)
 //
 // user intentions
 //
-	for (i=0 ; i<3 ; i++)
-		wishvel[i] = pml.forward[i]*pm->cmd.forwardmove + pml.right[i]*pm->cmd.sidemove;
+	wishvel[0] = pml.forward[0]*pm->cmd.forwardmove + pml.right[0]*pm->cmd.sidemove;
+	wishvel[1] = pml.forward[1]*pm->cmd.forwardmove + pml.right[1]*pm->cmd.sidemove;
+	wishvel[2] = pml.forward[2]*pm->cmd.forwardmove + pml.right[2]*pm->cmd.sidemove;
 
 	if (!pm->cmd.forwardmove && !pm->cmd.sidemove && !pm->cmd.upmove)
 		wishvel[2] -= 60;		// drift towards bottom
@@ -883,7 +887,6 @@ void PM_FlyMove (void)
 {
 	float	speed, drop, friction, control, newspeed;
 	float	currentspeed, addspeed, accelspeed;
-	int			i;
 	vec3_t		wishvel;
 	float		fmove, smove;
 	vec3_t		wishdir;
@@ -924,8 +927,10 @@ void PM_FlyMove (void)
 	VectorNormalize (pml.forward);
 	VectorNormalize (pml.right);
 
-	for (i=0 ; i<3 ; i++)
-		wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
+	wishvel[0] = pml.forward[0]*fmove + pml.right[0]*smove;
+	wishvel[1] = pml.forward[1]*fmove + pml.right[1]*smove;
+	wishvel[2] = pml.forward[2]*fmove + pml.right[2]*smove;
+
 	wishvel[2] += pm->cmd.upmove;
 
 	VectorCopy (wishvel, wishdir);
@@ -949,20 +954,11 @@ void PM_FlyMove (void)
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
 	
-	for (i=0 ; i<3 ; i++)
-		pml.velocity[i] += accelspeed*wishdir[i];	
+	pml.velocity[0] += accelspeed*wishdir[0];
+	pml.velocity[1] += accelspeed*wishdir[1];
+	pml.velocity[2] += accelspeed*wishdir[2];
 
-	/*if (doclip) {
-		for (i=0 ; i<3 ; i++)
-			end[i] = pml.origin[i] + pml.frametime * pml.velocity[i];
-
-		trace = pm->trace (pml.origin, pm->mins, pm->maxs, end);
-
-		VectorCopy (trace.endpos, pml.origin);
-	} else {
-		// move*/
-		VectorMA (pml.origin, pml.frametime, pml.velocity, pml.origin);
-	//}
+	VectorMA (pml.origin, pml.frametime, pml.velocity, pml.origin);
 }
 
 
@@ -1119,13 +1115,13 @@ qboolean	PM_GoodPosition (void)
 {
 	trace_t	trace;
 	vec3_t	origin, end;
-	int		i;
 
 	if (pm->s.pm_type == PM_SPECTATOR)
 		return true;
 
-	for (i=0 ; i<3 ; i++)
-		origin[i] = end[i] = pm->s.origin[i]*0.125;
+	origin[0] = end[0] = pm->s.origin[0]*0.125;
+	origin[1] = end[1] = pm->s.origin[1]*0.125;
+	origin[2] = end[2] = pm->s.origin[2]*0.125;
 	trace = pm->trace (origin, pm->mins, pm->maxs, end);
 
 	return !trace.allsolid;
@@ -1148,8 +1144,9 @@ void PM_SnapPosition (void)
 	static int jitterbits[8] = {0,4,1,2,3,5,6,7};
 
 	// snap velocity to eigths
-	for (i=0 ; i<3 ; i++)
-		pm->s.velocity[i] = (int)(pml.velocity[i]*8);
+	pm->s.velocity[0] = (int)(pml.velocity[0]*8);
+	pm->s.velocity[1] = (int)(pml.velocity[1]*8);
+	pm->s.velocity[2] = (int)(pml.velocity[2]*8);
 
 	for (i=0 ; i<3 ; i++)
 	{

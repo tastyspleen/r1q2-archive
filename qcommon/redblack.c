@@ -1,4 +1,4 @@
-//static char rcsid[]="$Id: redblack.c,v 1.5 2004/11/12 00:19:43 r1ch Exp $";
+//static char rcsid[]="$Id: redblack.c,v 1.10 2004/12/19 04:53:35 r1ch Exp $";
 
 /*
    Redblack balanced tree algorithm
@@ -54,7 +54,7 @@ struct RB_ENTRY(node)
 #define RB_GET(x,y)		&x->y
 #define RB_SET(x,y,v)		x->y = *(v)
 #else
-	RB_ENTRY(data_t) *key;	/* Pointer to user's key (and data) */
+	const RB_ENTRY(data_t) *key;	/* Pointer to user's key (and data) */
 	RB_ENTRY(data_t) *data;
 #define RB_GET(x,y)		x->y
 #define RB_SET(x,y,v)		x->y = v
@@ -86,8 +86,21 @@ static void RB_ENTRY(_free)(struct RB_ENTRY(node) *);
 
 #else
 
-static struct RB_ENTRY(node) /*@null@*/ *RB_ENTRY(_alloc)() {return (struct RB_ENTRY(node) *) malloc(sizeof(struct RB_ENTRY(node)));}
-static void RB_ENTRY(_free)(struct RB_ENTRY(node) *x) {free(x);}
+static struct RB_ENTRY(node) /*@null@*/ *RB_ENTRY(_alloc)() {
+#ifndef REF_GL
+	return (struct RB_ENTRY(node) *) Z_TagMalloc (sizeof(struct RB_ENTRY(node)), TAGMALLOC_REDBLACK);
+#else
+	return (struct RB_ENTRY(node) *) malloc (sizeof(struct RB_ENTRY(node)));
+#endif
+}
+
+static void RB_ENTRY(_free)(struct RB_ENTRY(node) *x) {
+#ifndef REF_GL
+	Z_Free(x);
+#else
+	free (x);
+#endif
+}
 
 #endif
 
@@ -148,20 +161,25 @@ static void RB_ENTRY(_closelist)(RBLIST *);
 
 #ifndef RB_CUSTOMIZE
 RB_STATIC struct RB_ENTRY(tree) *
-rbinit(int (*cmp)(const void *, const void *))
+rbinit(int (*cmp)(const void *, const void *), int dupkey)
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void)
 #endif /* RB_CUSTOMIZE */
 {
 	struct RB_ENTRY(tree) *retval;
 
+#ifndef REF_GL
+	if ((retval=(struct RB_ENTRY(tree) *) Z_TagMalloc(sizeof(struct RB_ENTRY(tree)), TAGMALLOC_REDBLACK))==NULL)
+#else
 	if ((retval=(struct RB_ENTRY(tree) *) malloc(sizeof(struct RB_ENTRY(tree))))==NULL)
+#endif
 		return(NULL);
 	
 #ifndef RB_CUSTOMIZE
 	retval->rb_cmp=cmp;
 #endif /* RB_CUSTOMIZE */
 	retval->rb_root=RBNULL;
+	retval->rb_dupkey = dupkey;
 
 	return(retval);
 }
@@ -175,8 +193,11 @@ RB_ENTRY(destroy)(struct RB_ENTRY(tree) *rbinfo)
 
 	if (rbinfo->rb_root!=RBNULL)
 		RB_ENTRY(_destroy)(rbinfo->rb_root);
-	
-	free(rbinfo);
+#ifndef REF_GL
+	Z_Free (rbinfo);
+#else
+	free (rbinfo);
+#endif
 }
 #endif /* no_destroy */
 
@@ -201,9 +222,6 @@ RB_ENTRY(find)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 {
 	struct RB_ENTRY(node) *x;
 
-	if (rbinfo==NULL)
-		return(NULL);
-
 	/* If we have a NULL root (empty tree) then just return */
 	if (rbinfo->rb_root==RBNULL)
 		return(NULL);
@@ -219,10 +237,7 @@ RB_STATIC const RB_ENTRY(data_t) *
 RB_ENTRY(delete)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 {
 	struct RB_ENTRY(node) *x;
-	RB_ENTRY(data_t) * y;
-
-	if (rbinfo==NULL)
-		return(NULL);
+	const RB_ENTRY(data_t) * y;
 
 	x=RB_ENTRY(_traverse)(0, key, rbinfo);
 
@@ -234,7 +249,14 @@ RB_ENTRY(delete)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 	{
 		y = x->key;
 		RB_ENTRY(_delete)(&rbinfo->rb_root, x);
-		free (y);
+		if (rbinfo->rb_dupkey)
+		{
+#ifndef REF_GL
+			Z_Free ((void *)y);
+#else
+			free ((void *)y);
+#endif
+		}
 		return(NULL);
 	}
 }
@@ -244,9 +266,6 @@ RB_ENTRY(delete)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 RB_STATIC void
 RB_ENTRY(walk)(const struct RB_ENTRY(tree) *rbinfo, void (*action)(const RB_ENTRY(data_t) *, const VISIT, const int, void *), void *arg)
 {
-	if (rbinfo==NULL)
-		return;
-
 	RB_ENTRY(_walk)(rbinfo->rb_root, action, arg, 0);
 }
 #endif /* no_walk */
@@ -255,27 +274,18 @@ RB_ENTRY(walk)(const struct RB_ENTRY(tree) *rbinfo, void (*action)(const RB_ENTR
 RB_STATIC RBLIST *
 RB_ENTRY(openlist)(const struct RB_ENTRY(tree) *rbinfo)
 {
-	if (rbinfo==NULL)
-		return(NULL);
-
 	return(RB_ENTRY(_openlist)(rbinfo->rb_root));
 }
 
 RB_STATIC const RB_ENTRY(data_t) * 
 RB_ENTRY(readlist)(RBLIST *rblistp)
 {
-	if (rblistp==NULL)
-		return(NULL);
-
 	return(RB_ENTRY(_readlist)(rblistp));
 }
 
 RB_STATIC void
 RB_ENTRY(closelist)(RBLIST *rblistp)
 {
-	if (rblistp==NULL)
-		return;
-
 	RB_ENTRY(_closelist)(rblistp);
 }
 #endif /* no_readlist */
@@ -287,7 +297,7 @@ RB_ENTRY(lookup)(int mode, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *r
 	struct RB_ENTRY(node) *x;
 
 	/* If we have a NULL root (empty tree) then just return NULL */
-	if (rbinfo==NULL || rbinfo->rb_root==NULL)
+	if (rbinfo->rb_root==NULL)
 		return(NULL);
 
 	x=RB_ENTRY(_lookup)(mode, key, rbinfo);
@@ -341,7 +351,19 @@ RB_ENTRY(_traverse)(int insert, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tre
 	}
 
 	//RB_SET(z, key, key);
-	z->key = strdup(key);
+	//z->key = strdup(key);
+	if (rbinfo->rb_dupkey)
+	{
+#ifndef REF_GL
+		z->key = CopyString (key, TAGMALLOC_REDBLACK);
+#else
+		z->key = strdup (key);
+#endif
+	}
+	else
+	{
+		z->key = key;
+	}
 	z->data = NULL;
 	z->up=y;
 	if (y==RBNULL)
@@ -547,14 +569,11 @@ RB_ENTRY(_lookup)(int mode, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *
 static void
 RB_ENTRY(_destroy)(struct RB_ENTRY(node) *x)
 {
-	if (x!=RBNULL)
-	{
-		if (x->left!=RBNULL)
-			RB_ENTRY(_destroy)(x->left);
-		if (x->right!=RBNULL)
-			RB_ENTRY(_destroy)(x->right);
-		RB_ENTRY(_free)(x);
-	}
+	if (x->left!=RBNULL)
+		RB_ENTRY(_destroy)(x->left);
+	if (x->right!=RBNULL)
+		RB_ENTRY(_destroy)(x->right);
+	RB_ENTRY(_free)(x);
 }
 #endif /* no_destroy */
 
@@ -753,6 +772,7 @@ RB_ENTRY(_delete)(struct RB_ENTRY(node) **rootp, struct RB_ENTRY(node) *z)
 	if (y!=z)
 	{
 		RB_SET(z, key, RB_GET(y, key));
+		RB_SET(z, data, RB_GET(y, data));
 	}
 
 	if (y->colour == BLACK)
@@ -882,12 +902,9 @@ RB_ENTRY(_openlist)(const struct RB_ENTRY(node) *rootp)
 	rblistp->rootp=rootp;
 	rblistp->nextp=rootp;
 
-	if (rootp!=RBNULL)
+	while(rblistp->nextp->left!=RBNULL)
 	{
-		while(rblistp->nextp->left!=RBNULL)
-		{
-			rblistp->nextp=rblistp->nextp->left;
-		}
+		rblistp->nextp=rblistp->nextp->left;
 	}
 
 	return(rblistp);
@@ -898,7 +915,8 @@ RB_ENTRY(_readlist)(RBLIST *rblistp)
 {
 	const RB_ENTRY(data_t) *key=NULL;
 
-	if (rblistp!=NULL && rblistp->nextp!=RBNULL)
+	//rblistp!=NULL
+	if (rblistp->nextp!=RBNULL)
 	{
 		key=RB_GET(rblistp->nextp, key);
 		rblistp->nextp=RB_ENTRY(_successor)(rblistp->nextp);
@@ -910,8 +928,7 @@ RB_ENTRY(_readlist)(RBLIST *rblistp)
 static void
 rb_closelist(RBLIST *rblistp)
 {
-	if (rblistp)
-		free(rblistp);
+	free(rblistp);
 }
 #endif /* no_readlist */
 
@@ -969,130 +986,23 @@ RB_ENTRY(_free)(struct RB_ENTRY(node) *x)
 
 #endif
 
-#if 0
-int
-RB_ENTRY(_check)(struct RB_ENTRY(node) *rootp)
-{
-	if (rootp==NULL || rootp==RBNULL)
-		return(0);
-
-	if (rootp->up!=RBNULL)
-	{
-		fprintf(stderr, "Root up pointer not RBNULL");
-		dumptree(rootp, 0);
-		return(1);
-	}
-
-	if (RB_ENTRY(_check)1(rootp))
-	{
-		RB_ENTRY(dumptree)(rootp, 0);
-		return(1);
-	}
-
-	if (RB_ENTRY(count_black)(rootp)==-1)
-	{
-		RB_ENTRY(dumptree)(rootp, 0);
-		return(-1);
-	}
-
-	return(0);
-}
-
-int
-RB_ENTRY(_check1)(struct RB_ENTRY(node) *x)
-{
-	if (x->left==NULL || x->right==NULL)
-	{
-		fprintf(stderr, "Left or right is NULL");
-		return(1);
-	}
-
-	if (x->colour==RED)
-	{
-		if (x->left->colour!=BLACK && x->right->colour!=BLACK)
-		{
-			fprintf(stderr, "Children of red node not both black, x=%ld", x);
-			return(1);
-		}
-	}
-
-	if (x->left != RBNULL)
-	{
-		if (x->left->up != x)
-		{
-			fprintf(stderr, "x->left->up != x, x=%ld", x);
-			return(1);
-		}
-
-		if (rb_check1(x->left))
-			return(1);
-	}		
-
-	if (x->right != RBNULL)
-	{
-		if (x->right->up != x)
-		{
-			fprintf(stderr, "x->right->up != x, x=%ld", x);
-			return(1);
-		}
-
-		if (rb_check1(x->right))
-			return(1);
-	}		
-	return(0);
-}
-
-RB_ENTRY(count_black)(struct RB_ENTRY(node) *x)
-{
-	int nleft, nright;
-
-	if (x==RBNULL)
-		return(1);
-
-	nleft=RB_ENTRY(count_black)(x->left);
-	nright=RB_ENTRY(count_black)(x->right);
-
-	if (nleft==-1 || nright==-1)
-		return(-1);
-
-	if (nleft != nright)
-	{
-		fprintf(stderr, "Black count not equal on left & right, x=%ld", x);
-		return(-1);
-	}
-
-	if (x->colour == BLACK)
-	{
-		nleft++;
-	}
-
-	return(nleft);
-}
-
-RB_ENTRY(dumptree)(struct RB_ENTRY(node) *x, int n)
-{
-	char *prkey();
-
-	if (x!=NULL && x!=RBNULL)
-	{
-		n++;
-		fprintf(stderr, "Tree: %*s %ld: left=%ld, right=%ld, colour=%s, key=%s",
-			n,
-			"",
-			x,
-			x->left,
-			x->right,
-			(x->colour==BLACK) ? "BLACK" : "RED",
-			prkey(RB_GET(x, key)));
-
-		RB_ENTRY(dumptree)(x->left, n);
-		RB_ENTRY(dumptree)(x->right, n);
-	}	
-}
-#endif
-
 /*
  * $Log: redblack.c,v $
+ * Revision 1.10  2004/12/19 04:53:35  r1ch
+ * rb const fixes
+ *
+ * Revision 1.9  2004/12/19 04:46:37  r1ch
+ * redblack delete fixes, rbtree alias/cvar/cmd lookups
+ *
+ * Revision 1.8  2004/12/14 23:11:07  r1ch
+ * cvarban, addstuff, etc
+ *
+ * Revision 1.7  2004/12/13 16:18:13  r1ch
+ * const
+ *
+ * Revision 1.6  2004/12/13 16:12:35  r1ch
+ * loop unrolling, configstring fix
+ *
  * Revision 1.5  2004/11/12 00:19:43  r1ch
  * b1619
  *

@@ -40,7 +40,7 @@ static void SV_SetMaster_f (void)
 	int		i, slot;
 
 	// only dedicated servers send heartbeats
-	if (!dedicated->value)
+	if (!dedicated->intvalue)
 	{
 		Com_Printf ("Only dedicated servers use masters.\n");
 		return;
@@ -68,9 +68,12 @@ static void SV_SetMaster_f (void)
 
 		Com_Printf ("Master server at %s\n", NET_AdrToString (&master_adr[slot]));
 
-		Com_Printf ("Sending a ping.\n");
+		if (svs.initialized)
+		{
+			Com_Printf ("Sending a ping.\n");
 
-		Netchan_OutOfBandPrint (NS_SERVER, &master_adr[slot], "ping");
+			Netchan_OutOfBandPrint (NS_SERVER, &master_adr[slot], "ping");
+		}
 
 		slot++;
 	}
@@ -103,7 +106,7 @@ static qboolean SV_SetPlayer (void)
 	if (s[0] >= '0' && s[0] <= '9')
 	{
 		idnum = atoi(Cmd_Argv(1));
-		if (idnum < 0 || idnum >= maxclients->value)
+		if (idnum < 0 || idnum >= maxclients->intvalue)
 		{
 			Com_Printf ("Bad client slot: %i\n", idnum);
 			return false;
@@ -120,7 +123,7 @@ static qboolean SV_SetPlayer (void)
 	}
 
 	// check for a name match
-	for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+	for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
 	{
 		if (!cl->state)
 			continue;
@@ -525,7 +528,7 @@ static void SV_GameMap_f (void)
 	}
 	else
 	{	// save the map just exited
-		if (!strstr (map, ".") && !strstr (map, "$"))
+		if (!strchr (map, '.') && !strchr (map, '$'))
 		{
 			Com_sprintf (expanded, sizeof(expanded), "maps/%s.zbsp", map);
 			//r1: always terminate!
@@ -551,7 +554,7 @@ static void SV_GameMap_f (void)
 			// when the level is re-entered, the clients will spawn
 			// at spawn points instead of occupying body shells
 			//savedInuse = malloc(maxclients->value * sizeof(qboolean));
-			for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+			for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
 			{
 				savedInuse[i] = cl->edict->inuse;
 				cl->edict->inuse = false;
@@ -560,7 +563,7 @@ static void SV_GameMap_f (void)
 			SV_WriteLevelFile ();
 
 			// we must restore these for clients to transfer over correctly
-			for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+			for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
 				cl->edict->inuse = savedInuse[i];
 			//free (savedInuse);
 		}
@@ -573,7 +576,7 @@ static void SV_GameMap_f (void)
 	strncpy (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd)-1);
 
 	// copy off the level to the autosave slot
-	if (!dedicated->value && !Cvar_VariableValue ("deathmatch"))
+	if (!dedicated->intvalue && !Cvar_VariableValue ("deathmatch"))
 	{
 		SV_WriteServerFile (true);
 		SV_CopySaveGame ("current", "save0");
@@ -604,7 +607,7 @@ static void SV_Map_f (void)
 		return;
 	}
 
-	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0 && !sv_allow_map->value)
+	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0 && !sv_allow_map->intvalue)
 	{
 		Com_Printf ("WARNING: Using 'map' will reset the game state. Use 'gamemap' to change levels.\n");
 		if (!warned)
@@ -617,7 +620,7 @@ static void SV_Map_f (void)
 
 	// if not a pcx, demo, or cinematic, check to make sure the level exists
 	map = Cmd_Argv(1);
-	if (!strstr (map, ".") && !strstr (map, "$") && *map != '*')
+	if (!strchr (map, '.') && !strchr (map, '$') && *map != '*')
 	{
 		Com_sprintf (expanded, sizeof(expanded), "maps/%s.zbsp", map);
 
@@ -673,7 +676,7 @@ static void SV_Loadgame_f (void)
 	}
 
 	dir = Cmd_Argv(1);
-	if (strstr (dir, "..") || strstr (dir, "/") || strstr (dir, "\\") )
+	if (strstr (dir, "..") || strchr (dir, '/') || strchr (dir, '\\') )
 	{
 		Com_Printf ("Bad savedir.\n");
 	}
@@ -736,7 +739,7 @@ static void SV_Savegame_f (void)
 	}
 
 	dir = Cmd_Argv(1);
-	if (strstr (dir, "..") || strstr (dir, "/") || strstr (dir, "\\") )
+	if (strstr (dir, "..") || strchr (dir, '/') || strchr (dir, '\\') )
 	{
 		Com_Printf ("Bad savedir.\n");
 	}
@@ -817,6 +820,24 @@ static void SV_CheckCvarBans_f (void)
 	Com_Printf ("cvar checks sent...\n");
 }
 
+static void SV_ListCvarBans_f (void)
+{
+	cvarban_t *bans = &cvarbans;
+	banmatch_t *match;
+
+	Com_Printf ("Current cvar bans:\n");
+	while (bans->next)
+	{
+		bans = bans->next;
+		match = &bans->match;
+		while (match->next)
+		{
+			match = match->next;
+			Com_Printf ("%s: %s (%s:%s)\n", bans->cvarname, match->matchvalue, match->blockmethod == CVARBAN_KICK ? "KICK" : "BLACKHOLE", match->message);
+		}
+	}
+}
+
 static void SV_DelCvarBan_f (void)
 {
 	char *match;
@@ -870,11 +891,12 @@ static void SV_AddCvarBan_f (void)
 	if (Cmd_Argc() < 5)
 	{
 		//Com_Printf ("Usage: addcvarban cvarname ((=|<|>|!)numvalue|string|*) (KICK|BLACKHOLE) message\n");
-		Com_Printf ("Purpose: Add a check for a client cvar.\n"
-					"Syntax : addcvarban <cvarname> <(=|<|>|!)numvalue|string|*> <KICK|BLACKHOLE> <message>\n"
+		Com_Printf ("Purpose: Add a simple check for a client cvar.\n"
+					"Syntax : addcvarban <cvarname> <(=|<|>)numvalue|[~|!]string|*> <KICK|BLACKHOLE> <message>\n"
 					"Example: addcvarban gl_modulate >2 KICK Use a lower gl_modulate\n"
 					"Example: addcvarban frkq2_bot * BLACKHOLE That client is not allowed\n"
 					"Example: addcvarban vid_ref sw KICK Software mode is not allowed\n"
+					"Example: addcvarban version ~R1Q2 KICK R1Q2 is an evil hacked client!\n"
 					"Example: addcvarban version \"Q2 3.20 PPC\" KICK That version is not allowed\n"
 					"WARNING: If the match string requires quotes it can not be added via rcon.\n");
 		return;
@@ -887,8 +909,17 @@ static void SV_AddCvarBan_f (void)
 	x = blocktype;
 	if (*x == '>' || *x == '<' || *x == '=') {
 		x++;
-		if (!isdigit (*x)) {
+		if (!isdigit (*x))
+		{
 			Com_Printf ("Error: digit must follow modifier '%c'\n", *blocktype);
+			return;
+		}
+	} else if (*x == '~')
+	{
+		x++;
+		if (!*x)
+		{
+			Com_Printf ("Error: Missing string after ~ modifiefer.\n");
 			return;
 		}
 	}
@@ -932,7 +963,8 @@ static void SV_AddCvarBan_f (void)
 	match->message = CopyString (Cmd_Args2 (4), TAGMALLOC_CVARBANS);
 	match->blockmethod = blockmethod;
 
-	Com_Printf ("cvarban added.\n");
+	if (sv.state)
+		Com_Printf ("cvarban for '%s %s' added.\n", cvar, blocktype);
 }
 
 //===============================================================
@@ -971,15 +1003,29 @@ static void SV_Delhole_f (void)
 		Com_Printf ("Error removing blackhole %d.\n", x);
 }
 
-static void SV_BanCommand_f (void)
+static char *cmdbanmethodnames[] =
 {
-	bannedcommands_t *x;
+	"message",
+	"kick",
+	"silent"
+};
+
+static void SV_AddCommandBan_f (void)
+{
+	short				logmethod;
+	short				method;
+	bannedcommands_t	*x;
 
 	if (Cmd_Argc() < 2)
 	{
 		Com_Printf ("Purpose: Prevents any client from executing a given command.\n"
-					"Syntax : bancommand <commandname>\n"
-					"Example: bancommand god\n");
+					"Syntax : addcommandban <commandname> [method] [logmethod]\n"
+					"           method=message|kick|silent (default message)\n"
+					"           logmethod=log|silent (default log)\n"
+					"Example: addcommandban god\n"
+					"Example: addcommandban frkq2cmd kick silent\n"
+					"Example: addcommandban invdrop silent\n"
+					"Example: addcommandban invdrop silent silent\n");
 		return;
 	}
 
@@ -991,28 +1037,57 @@ static void SV_BanCommand_f (void)
 
 		if (!strcmp (x->name, Cmd_Argv(1)))
 		{
-			Com_Printf ("Command '%s' is already blocked.\n");
+			Com_Printf ("Command '%s' is already blocked.\n", x->name);
 			return;
 		}
 	}
+
+	if (!Q_stricmp (Cmd_Argv(2), "kick"))
+		method = CMDBAN_KICK;
+	else if (!Q_stricmp (Cmd_Argv(2), "silent"))
+		method = CMDBAN_SILENT;
+	else
+		method = CMDBAN_MESSAGE;
+
+	if (!Q_stricmp (Cmd_Argv(3), "silent"))
+		logmethod = CMDBAN_LOG_SILENT;
+	else
+		logmethod = CMDBAN_LOG_MESSAGE;
 
 	x->next = Z_TagMalloc (sizeof(*x), TAGMALLOC_CMDBANS);
 	x = x->next;
 
 	x->name = CopyString (Cmd_Argv(1), TAGMALLOC_CMDBANS);
+	x->kickmethod = method;
+	x->logmethod = method;
 
-	Com_Printf ("Command '%s' is blocked from use.\n", x->name);
+	if (sv.state)
+		Com_Printf ("Command '%s' is blocked from use with %s.\n", x->name, cmdbanmethodnames[x->kickmethod]);
 }
 
-static void SV_UnBanCommand_f (void)
+static void SV_ListBannedCommands_f (void)
+{
+	bannedcommands_t *x;
+
+	x = &bannedcommands;
+
+	Com_Printf ("Banned commands:\n");
+	while (x->next)
+	{
+		x = x->next;
+		Com_Printf ("%s (%s)\n", x->name, cmdbanmethodnames[x->kickmethod]);
+	}
+}
+
+static void SV_DelCommandBan_f (void)
 {
 	bannedcommands_t *last, *temp;
 
 	if (Cmd_Argc() < 2)
 	{
 		Com_Printf ("Purpose: Allows any client to execute a previously banned command.\n"
-					"Syntax : unbancommand <commandname>\n"
-					"Example: unbancommand god\n");
+					"Syntax : delcommandban <commandname>\n"
+					"Example: delcommandban god\n");
 		return;
 	}
 
@@ -1052,12 +1127,13 @@ static void SV_Addhole_f (void)
 		return;
 	}
 
-	if (!(NET_StringToAdr (Cmd_Argv(1), &adr))) {
+	if (!(NET_StringToAdr (Cmd_Argv(1), &adr)))
+	{
 		Com_Printf ("Can't find address for '%s'\n", Cmd_Argv(1));
 		return;
 	}
 
-	Blackhole (&adr, "%s", Cmd_Args2(2));
+	Blackhole (&adr, false, "%s", Cmd_Args2(2));
 }
 
 /*
@@ -1093,10 +1169,228 @@ static void SV_Kick_f (void)
 	// print directly, because the dropped client won't get the
 	// SV_BroadcastPrintf message
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "You were kicked from the game\n");
+	Com_Printf ("Dropping %s, console kick issued.\n", sv_client->name);
 	SV_DropClient (sv_client);
 	sv_client->lastmessage = svs.realtime;	// min case there is a funny zombie
 }
 
+void SV_Stuff_f (void)
+{
+	char *s;
+
+	if (!svs.initialized)
+	{
+		Com_Printf ("No server running.\n");
+		return;
+	}
+
+	if (Cmd_Argc() < 3)
+	{
+		Com_Printf ("Purpose: stuff raw string to client.\n"
+					"Syntax : stuff <userid> <cmdstring>\n"
+					"Example: stuff 3 say hello\n");
+		return;
+	}
+
+	if (!SV_SetPlayer ())
+		return;
+
+	s = strchr (Cmd_Args(), ' ');
+	if (s)
+	{
+		s++;
+
+		MSG_BeginWriteByte (&sv_client->netchan.message, svc_stufftext);
+		MSG_WriteString (&sv_client->netchan.message, s);
+		Com_Printf ("Wrote '%s' to netchan of %s.\n", s, sv_client->name);
+	}
+}
+
+void SV_AddStuffCmd_f (void)
+{
+	char	*s;
+	char	*dst;
+
+	if (Cmd_Argc() < 3)
+	{
+		Com_Printf ("Purpose: Add a command sent to a client at a chosen time.\n"
+					"Syntax : addstuffcmd <when> <cmdstring>\n"
+					"Example: addstuffcmd connect set allow_download 1\n"
+					"Example: addstuffcmd begin say I have just entered the game!!\n");
+		return;
+	}
+
+	s = strchr (Cmd_Args(), ' ');
+	if (s)
+	{
+		s++;
+
+		if (!Q_stricmp (Cmd_Argv(1), "connect"))
+			dst = svConnectStuffString;
+		else
+			dst = svBeginStuffString;
+
+		if (strlen(dst) + strlen(s) + 2 >= sizeof(svConnectStuffString))
+		{
+			Com_Printf ("SV_AddStuff_f: No more space available for stuffed commands.\n");
+			return;
+		}
+
+		strcat (dst, s);
+		strcat (dst, "\n");
+
+		if (sv.state)
+			Com_Printf ("'%s' added to stuffed commands list.\n", s);
+	}
+}
+
+void SV_ListStuffedCommands_f (void)
+{
+	int		i;
+	char	*s, *p;
+	char	buff[sizeof(svConnectStuffString)];
+
+	i = 0;
+
+	strcpy (buff, svConnectStuffString);
+	p = s = buff;
+
+	s = strchr (s, '\n');
+	Com_Printf ("On Connect:\n");
+	while (s)
+	{
+		*s = 0;
+		Com_Printf ("%d: %s\n", i, p);
+		i++;
+		s++;
+		p = s;
+		s = strchr (s, '\n');
+	}
+
+	i = 0;
+
+	strcpy (buff, svBeginStuffString);
+	p = s = buff;
+
+	s = strchr (s, '\n');
+	Com_Printf ("\nOn Begin:\n");
+	while (s)
+	{
+		*s = 0;
+		Com_Printf ("%d: %s\n", i, p);
+		i++;
+		s++;
+		p = s;
+		s = strchr (s, '\n');
+	}
+}
+
+void SV_DelStuffCmd_f (void)
+{
+	int		length;
+	int		i;
+	int		index;
+	char	*dst, *p;
+
+	if (Cmd_Argc() < 3)
+	{
+		Com_Printf ("Purpose: Remove a stuffed command.\n"
+					"Syntax : delstuffcmd <when> <index>\n"
+					"Example: delstuffcmd connect 1\n");
+		return;
+	}
+
+	index = atoi(Cmd_Argv(2));
+
+	if (!Q_stricmp (Cmd_Argv(1), "connect"))
+		dst = svConnectStuffString;
+	else
+		dst = svBeginStuffString;
+
+	i = 0;
+
+	p = dst;
+
+	dst = strchr (dst, '\n');
+	while (dst)
+	{
+		if (i == index)
+		{
+			char	*s;
+
+			s = strchr (p, '\n');
+			s++;
+			dst++;
+
+			length = strlen(dst);
+
+			memmove (p, dst, length+1);
+			Com_Printf ("Stuffcmd removed.\n");
+			return;
+		}
+		i++;
+		dst++;
+		p = dst;
+		dst = strchr (dst, '\n');
+	}
+
+	Com_Printf ("Index %d not found.\n", index);
+}
+
+void SV_AddNullCmd_f (void)
+{
+	nullcmd_t	*ncmd;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Purpose: Make an otherwise undefined user command do nothing.\n"
+					"Syntax : addnullcmd <command>\n"
+					"Example: addnullcmd invdrop\n");
+		return;
+	}
+
+	ncmd = &nullcmds;
+
+	while (ncmd->next)
+		ncmd = ncmd->next;
+
+	//FIXME: make better tag
+	ncmd->next = Z_TagMalloc (sizeof(nullcmd_t), TAGMALLOC_CMDBANS);
+
+	ncmd = ncmd->next;
+	ncmd->name = CopyString (Cmd_Argv(1), TAGMALLOC_CMDBANS);
+
+	if (sv.state)
+		Com_Printf ("'%s' nullified.\n", ncmd->name);
+}
+
+void SV_DelNullCmd_f(void)
+{
+	char		*match;
+	nullcmd_t	*ncmd;
+	nullcmd_t	*last;
+
+	match = Cmd_Argv(1);
+
+	ncmd = last = &nullcmds;
+
+	while (ncmd->next)
+	{
+		ncmd = ncmd->next;
+		if (!Q_stricmp (match, ncmd->name))
+		{
+			last->next = ncmd->next;
+			Z_Free (ncmd->name);
+			Z_Free (ncmd);
+
+			Com_Printf ("nullcmd '%s' removed.\n", match);
+			return;
+		}
+		last = ncmd;
+	}
+
+	Com_Printf ("%s not found.\n", match);
+}
 
 /*
 ================
@@ -1122,7 +1416,7 @@ void SV_Status_f (void)
 
 	Com_Printf (" # score ping name            lastmsg address               rate/pps ver\n");
 	Com_Printf ("-- ----- ---- --------------- ------- --------------------- -------- ---\n");
-	for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+	for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
 	{
 		if (!cl->state)
 			continue;
@@ -1226,7 +1520,11 @@ static void SV_ConSay_f(void)
 	//r1: safety - use strncat
 	strncat(text, p, 1014);
 
-	for (j = 0, client = svs.clients; j < maxclients->value; j++, client++)
+	//r1: also echo to console
+	Com_Printf ("%s\n", text);
+
+
+	for (j = 0, client = svs.clients; j < maxclients->intvalue; j++, client++)
 	{
 		if (client->state != cs_spawned)
 			continue;
@@ -1307,7 +1605,7 @@ static void SV_Broadcast_f(void)
 
 	strcat(text, p);
 
-	for (j = 0, client = svs.clients; j < maxclients->value; j++, client++)
+	for (j = 0, client = svs.clients; j < maxclients->intvalue; j++, client++)
 	{
 		if (client->state != cs_spawned)
 			continue;
@@ -1418,7 +1716,7 @@ static void SV_ServerRecord_f (void)
 		return;
 	}
 
-	if (strstr (Cmd_Argv(1), "..") || strstr (Cmd_Argv(1), "/") || strstr (Cmd_Argv(1), "\\") )
+	if (strstr (Cmd_Argv(1), "..") || strchr (Cmd_Argv(1), '/') || strchr (Cmd_Argv(1), '\\') )
 	{
 		Com_Printf ("Illegal filename.\n");
 		return;
@@ -1595,7 +1893,7 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("gamemap", SV_GameMap_f);
 	Cmd_AddCommand ("setmaster", SV_SetMaster_f);
 
-	if ( dedicated->value )
+	if ( dedicated->intvalue )
 	{
 		Cmd_AddCommand ("say", SV_ConSay_f);
 		Cmd_AddCommand ("broadcast", SV_Broadcast_f);
@@ -1609,13 +1907,27 @@ void SV_InitOperatorCommands (void)
 
 	Cmd_AddCommand ("killserver", SV_KillServer_f);
 
+	Cmd_AddCommand ("addhole", SV_Addhole_f);
+	Cmd_AddCommand ("delhole", SV_Delhole_f);
 	Cmd_AddCommand ("listholes", SV_Listholes_f);
 
-	Cmd_AddCommand ("delhole", SV_Delhole_f);
-	Cmd_AddCommand ("addhole", SV_Addhole_f);
+	Cmd_AddCommand ("addcommandban", SV_AddCommandBan_f);
+	Cmd_AddCommand ("delcommandban", SV_DelCommandBan_f);
+	Cmd_AddCommand ("listbannedcommands", SV_ListBannedCommands_f);
 
-	Cmd_AddCommand ("bancommand", SV_BanCommand_f);
-	Cmd_AddCommand ("unbancommand", SV_UnBanCommand_f);
+	Cmd_AddCommand ("addcvarban", SV_AddCvarBan_f);
+	Cmd_AddCommand ("delcvarban", SV_DelCvarBan_f);
+	Cmd_AddCommand ("listcvarbans", SV_ListCvarBans_f);
+	Cmd_AddCommand ("checkcvarbans", SV_CheckCvarBans_f);
+
+	Cmd_AddCommand ("stuff", SV_Stuff_f);
+
+	Cmd_AddCommand ("addstuffcmd", SV_AddStuffCmd_f);
+	Cmd_AddCommand ("liststuffcmds", SV_ListStuffedCommands_f);
+	Cmd_AddCommand ("delstuffcmd", SV_DelStuffCmd_f);
+
+	Cmd_AddCommand ("addnullcmd", SV_AddNullCmd_f);
+	Cmd_AddCommand ("delnullcmd", SV_DelNullCmd_f);
 
 	//r1: service support
 #ifdef WIN32
@@ -1630,7 +1942,5 @@ void SV_InitOperatorCommands (void)
 
 	Cmd_AddCommand ("pc", SV_PassiveConnect_f);
 
-	Cmd_AddCommand ("addcvarban", SV_AddCvarBan_f);
-	Cmd_AddCommand ("delcvarban", SV_DelCvarBan_f);
-	Cmd_AddCommand ("checkcvarbans", SV_CheckCvarBans_f);
+
 }

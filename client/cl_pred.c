@@ -29,7 +29,6 @@ void CL_CheckPredictionError (void)
 {
 	int		frame;
 	int		delta[3];
-	int		i;
 	int		len;
 
 	// calculate the last usercmd_t we sent that the server has processed
@@ -47,15 +46,16 @@ void CL_CheckPredictionError (void)
 	}
 	else
 	{
-		if (cl_showmiss->value && (delta[0] || delta[1] || delta[2]) )
+		if (cl_showmiss->intvalue && (delta[0] || delta[1] || delta[2]) )
 			Com_Printf ("prediction miss on %i: %i\n", cl.frame.serverframe, 
 			delta[0] + delta[1] + delta[2]);
 
 		VectorCopy (cl.frame.playerstate.pmove.origin, cl.predicted_origins[frame]);
 
 		// save for error itnerpolation
-		for (i=0 ; i<3 ; i++)
-			cl.prediction_error[i] = delta[i]*0.125;
+		cl.prediction_error[0] = delta[0]*0.125;
+		cl.prediction_error[1] = delta[1]*0.125;
+		cl.prediction_error[2] = delta[2]*0.125;
 	}
 }
 
@@ -199,22 +199,20 @@ void CL_PredictMovement (void)
 	int			oldframe;
 	usercmd_t	*cmd;
 	pmove_new_t		pm;
-	int			i;
 	int			step;
 	int			oldz;
 
 	if (cls.state != ca_active)
 		return;
 
-	if (cl_paused->value)
+	if (cl_paused->intvalue)
 		return;
 
-	if (!cl_predict->value || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
+	if (!cl_predict->intvalue || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
 	{
-		for (i=0 ; i<3 ; i++)
-		{
-			cl.predicted_angles[i] = cl.viewangles[i] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[i]);
-		}
+		cl.predicted_angles[0] = cl.viewangles[0] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[0]);
+		cl.predicted_angles[1] = cl.viewangles[1] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[1]);
+		cl.predicted_angles[2] = cl.viewangles[2] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[2]);
 		return;
 	}
 	//Com_Printf ("predicting %d...\n",rand());
@@ -225,7 +223,7 @@ void CL_PredictMovement (void)
 	// if we are too far out of date, just freeze
 	if (current - ack >= CMD_BACKUP)
 	{
-		if (cl_showmiss->value)
+		if (cl_showmiss->intvalue)
 			Com_Printf ("exceeded CMD_BACKUP\n");
 		return;	
 	}
@@ -268,7 +266,7 @@ void CL_PredictMovement (void)
 		else
 			pm.multiplier = 1;
 
-		pm.strafehack = (qboolean)cl_strafejump_hack->value;
+		pm.strafehack = (qboolean)cl_strafejump_hack->intvalue;
 
 		Pmove (&pm);
 
@@ -312,7 +310,7 @@ void CL_PredictMovement (void)
 	step = pm.s.origin[2] - oldz;
 
 	//r1ch: don't overwrite existing stair moves
-	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame && cl_smoothsteps->value)
+	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame && cl_smoothsteps->intvalue)
 	{
 		last_step_frame = current;
 		cl.predicted_step = step * 0.125;

@@ -33,14 +33,14 @@ typedef struct
 	mapsurface_t	*surface;
 } cbrushside_t;
 
-typedef struct
+/*typedef struct
 {
 	int			contents;
 	int			cluster;
 	int			area;
 	unsigned short	firstleafbrush;
 	unsigned short	numleafbrushes;
-} cleaf_t;
+} cleaf_t;*/
 
 typedef struct
 {
@@ -596,7 +596,7 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 	length = FS_LoadFile (name, (void **)&buf);
 	if (!buf)
 	{
-		if (!developer->value)
+		if (!developer->intvalue)
 		{
 			Com_Error (ERR_DROP, "Couldn't load %s", name);
 		}
@@ -671,41 +671,46 @@ cmodel_t	*CM_InlineModel (char *name)
 	return &map_cmodels[num];
 }
 
-int		CM_NumClusters (void)
+/*__inline int	CM_NumClusters (void)
 {
 	return numclusters;
 }
 
-int		CM_NumInlineModels (void)
+__inline int	CM_NumInlineModels (void)
 {
 	return numcmodels;
-}
+}*/
 
 char	*CM_EntityString (void)
 {
 	return map_entitystring;
 }
 
-int		CM_LeafContents (int leafnum)
+/*int		CM_LeafContents (int leafnum)
 {
 	if (leafnum < 0 || leafnum >= numleafs)
 		Com_Error (ERR_DROP, "CM_LeafContents: bad number");
 	return map_leafs[leafnum].contents;
-}
+}*/
 
-int		CM_LeafCluster (int leafnum)
+/*
+__inline int	CM_LeafCluster (int leafnum)
 {
+#ifndef DEDICATED_ONLY
 	if (leafnum < 0 || leafnum >= numleafs)
 		Com_Error (ERR_DROP, "CM_LeafCluster: bad number");
+#endif
 	return map_leafs[leafnum].cluster;
 }
 
-int		CM_LeafArea (int leafnum)
+__inline int	 CM_LeafArea (int leafnum)
 {
+#ifndef DEDICATED_ONLY
 	if (leafnum < 0 || leafnum >= numleafs)
 		Com_Error (ERR_DROP, "CM_LeafArea: bad number");
+#endif
 	return map_leafs[leafnum].area;
-}
+}*/
 
 //=======================================================================
 
@@ -819,7 +824,7 @@ CM_PointLeafnum_r
 
 ==================
 */
-int CM_PointLeafnum_r (vec3_t p, int num)
+int CM_PointLeafnum_r (const vec3_t p, int num)
 {
 	float		d;
 	cnode_t		*node;
@@ -847,7 +852,7 @@ int CM_PointLeafnum_r (vec3_t p, int num)
 	return -1 - num;
 }
 
-int CM_PointLeafnum (vec3_t p)
+int CM_PointLeafnum (const vec3_t p)
 {
 	if (!numplanes)
 		return 0;		// sound may call this without map loaded
@@ -872,7 +877,7 @@ void CM_BoxLeafnums_r (int nodenum)
 {
 	cplane_t	*plane;
 	cnode_t		*node;
-	int		s;
+	int			s;
 
 	for (;;)
 	{
@@ -938,16 +943,12 @@ CM_PointContents
 
 ==================
 */
-int CM_PointContents (vec3_t p, int headnode)
+int CM_PointContents (const vec3_t p, int headnode)
 {
-	int		l;
-
 	if (!numnodes)	// map not loaded
 		return 0;
 
-	l = CM_PointLeafnum_r (p, headnode);
-
-	return map_leafs[l].contents;
+	return map_leafs[CM_PointLeafnum_r (p, headnode)].contents;
 }
 
 /*
@@ -1257,7 +1258,6 @@ void CM_RecursiveHullCheck (int num, float p1f, float p2f, vec3_t p1, vec3_t p2)
 	float		t1, t2, offset;
 	float		frac, frac2;
 	float		idist;
-	int			i;
 	vec3_t		mid;
 	int			side;
 	float		midf;
@@ -1348,8 +1348,10 @@ return;
 		frac = 1;
 		
 	midf = p1f + (p2f - p1f)*frac;
-	for (i=0 ; i<3 ; i++)
-		mid[i] = p1[i] + frac*(p2[i] - p1[i]);
+
+	mid[0] = p1[0] + frac*(p2[0] - p1[0]);
+	mid[1] = p1[1] + frac*(p2[1] - p1[1]);
+	mid[2] = p1[2] + frac*(p2[2] - p1[2]);
 
 	CM_RecursiveHullCheck (node->children[side], p1f, midf, p1, mid);
 
@@ -1361,8 +1363,9 @@ return;
 		frac2 = 1;
 		
 	midf = p1f + (p2f - p1f)*frac2;
-	for (i=0 ; i<3 ; i++)
-		mid[i] = p1[i] + frac2*(p2[i] - p1[i]);
+	mid[0] = p1[0] + frac2*(p2[0] - p1[0]);
+	mid[1] = p1[1] + frac2*(p2[1] - p1[1]);
+	mid[2] = p1[2] + frac2*(p2[2] - p1[2]);
 
 	CM_RecursiveHullCheck (node->children[side^1], midf, p2f, mid, p2);
 }
@@ -1380,8 +1383,6 @@ trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
 						  vec3_t mins, vec3_t maxs,
 						  int headnode, int brushmask)
 {
-	int		i;
-
 	checkcount++;		// for multi-check avoidance
 
 #ifndef DEDICATED_ONLY
@@ -1414,11 +1415,13 @@ trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
 
 		VectorAdd (start, mins, c1);
 		VectorAdd (start, maxs, c2);
-		for (i=0 ; i<3 ; i++)
-		{
-			c1[i] -= 1;
-			c2[i] += 1;
-		}
+
+		c1[0] -= 1;
+		c2[0] += 1;
+		c1[1] -= 1;
+		c2[1] += 1;
+		c1[2] -= 1;
+		c2[2] += 1;
 
 		numleafs = CM_BoxLeafnums_headnode (c1, c2, leafs, 1024, headnode, &topnode);
 		for (i=0 ; i<numleafs ; i++)
@@ -1460,8 +1463,9 @@ trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
 	}
 	else
 	{
-		for (i=0 ; i<3 ; i++)
-			trace_trace.endpos[i] = start[i] + trace_trace.fraction * (end[i] - start[i]);
+		trace_trace.endpos[0] = start[0] + trace_trace.fraction * (end[0] - start[0]);
+		trace_trace.endpos[1] = start[1] + trace_trace.fraction * (end[1] - start[1]);
+		trace_trace.endpos[2] = start[2] + trace_trace.fraction * (end[2] - start[2]);
 	}
 	return trace_trace;
 }
@@ -1692,7 +1696,7 @@ void	EXPORT CM_SetAreaPortalState (int portalnum, qboolean open)
 
 qboolean	EXPORT CM_AreasConnected (int area1, int area2)
 {
-	if (map_noareas->value)
+	if (map_noareas->intvalue)
 		return true;
 
 	if (area1 > numareas || area2 > numareas)
@@ -1722,7 +1726,7 @@ int CM_WriteAreaBits (byte *buffer, int area)
 
 	bytes = (numareas+7)>>3;
 
-	if (map_noareas->value)
+	if (map_noareas->intvalue)
 	{	// for debugging, send everything
 		memset (buffer, 255, bytes);
 	}

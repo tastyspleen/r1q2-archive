@@ -390,7 +390,7 @@ void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
 
 void ShowBits (unsigned int bits)
 {
-	if (cl_shownet->value < 4)
+	if (cl_shownet->intvalue < 4)
 		return;
 
 	if (bits &	U_ORIGIN1)
@@ -521,12 +521,12 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 		if (!newnum)
 			break;
 
-		if (cl_shownet->value >= 4)
+		if (cl_shownet->intvalue >= 4)
 			Com_Printf ("%i bytes.\n", net_message.readcount-1);
 
 		while (oldnum < newnum)
 		{	// one or more entities from the old packet are unchanged
-			if (cl_shownet->value >= 3)
+			if (cl_shownet->intvalue >= 3)
 				Com_Printf ("   unchanged: %i\n", oldnum);
 			CL_DeltaEntity (newframe, oldnum, oldstate, 0);
 			
@@ -546,7 +546,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 			if (!oldframe)
 				Com_Error (ERR_DROP, "CL_ParsePacketEntities: U_REMOVE with no oldframe");
 
-			if (cl_shownet->value >= 3)
+			if (cl_shownet->intvalue >= 3)
 				Com_Printf ("   remove: %i\n", newnum);
 			if (oldnum != newnum)
 				Com_DPrintf ("U_REMOVE: oldnum != newnum\n");
@@ -571,7 +571,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 			if (!oldframe)
 				Com_Error (ERR_DROP, "CL_ParsePacketEntities: delta with no oldframe");
 
-			if (cl_shownet->value >= 3)
+			if (cl_shownet->intvalue >= 3)
 				Com_Printf ("   delta: %i\n", newnum);
 			CL_DeltaEntity (newframe, newnum, oldstate, bits);
 
@@ -589,7 +589,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 
 		if (oldnum > newnum)
 		{	// delta from baseline
-			if (cl_shownet->value >= 3)
+			if (cl_shownet->intvalue >= 3)
 				Com_Printf ("   baseline: %i\n", newnum);
 			ShowBits (bits);
 			//Com_Printf ("using baseline for entity %d\n", newnum);
@@ -603,7 +603,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 	// any remaining entities in the old frame are copied over
 	while (oldnum != 99999)
 	{	// one or more entities from the old packet are unchanged
-		if (cl_shownet->value >= 3)
+		if (cl_shownet->intvalue >= 3)
 			Com_Printf ("   unchanged: %i\n", oldnum);
 		CL_DeltaEntity (newframe, oldnum, oldstate, 0);
 		
@@ -809,13 +809,13 @@ void CL_ParseFrame (void)
 	if (cls.state != ca_active)
 		cl.frame.servertime = 0;
 	else
-		cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) *100;
+		cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) *100; //r1: fix for precision loss with high serverframes
 
 	// BIG HACK to let old demos continue to work
 	if (cls.serverProtocol != 26)
 		cl.surpressCount = MSG_ReadByte (&net_message);
 
-	if (cl_shownet->value >= 3)
+	if (cl_shownet->intvalue >= 3)
 		Com_Printf ("   frame:%i  delta:%i\n", cl.frame.serverframe,
 		cl.frame.deltaframe);
 
@@ -887,8 +887,11 @@ void CL_ParseFrame (void)
 		if (cls.state != ca_active)
 		{
 			cls.state = ca_active;
+
+			//r1: fix for precision loss with high serverframes (when map runs for over several hours)
 			cl.initial_server_frame = cl.frame.serverframe;
 			cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) * 100;
+
 			cl.force_refdef = true;
 			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125;
 			cl.predicted_origin[1] = cl.frame.playerstate.pmove.origin[1]*0.125;
@@ -904,7 +907,7 @@ void CL_ParseFrame (void)
 		CL_FireEntityEvents (&cl.frame);
 
 		//r1: save function call
-		if (!(!cl_predict->value || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION)))
+		if (!(!cl_predict->intvalue || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION)))
 			CL_CheckPredictionError ();
 	}
 }
@@ -974,7 +977,7 @@ CL_AddPacketEntities
 */
 void CL_AddPacketEntities (frame_t *frame)
 {
-	entity_t			ent;
+	entity_t			ent = {0};
 	entity_state_t		*s1;
 	float				autorotate;
 	int					i;
@@ -990,7 +993,7 @@ void CL_AddPacketEntities (frame_t *frame)
 	// brush models can auto animate their frames
 	autoanim = 2*cl.time/1000;
 
-	memset (&ent, 0, sizeof(ent));
+	//memset (&ent, 0, sizeof(ent));
 
 	for (pnum = 0 ; pnum<frame->num_entities ; pnum++)
 	{
@@ -1126,7 +1129,6 @@ void CL_AddPacketEntities (frame_t *frame)
 					ent.skin = cl.baseclientinfo.skin;
 					ent.model = cl.baseclientinfo.model;
 				}
-
 //============
 //PGM
 				if (renderfx & RF_USE_DISGUISE)
@@ -1273,7 +1275,7 @@ void CL_AddPacketEntities (frame_t *frame)
 			{	// custom weapon
 				ci = &cl.clientinfo[s1->skinnum & 0xff];
 				i = (s1->skinnum >> 8); // 0 is default weapon model
-				if (!cl_vwep->value || i > MAX_CLIENTWEAPONMODELS - 1)
+				if (!cl_vwep->intvalue || i > MAX_CLIENTWEAPONMODELS - 1)
 					i = 0;
 				ent.model = ci->weaponmodel[i];
 				if (!ent.model) {
@@ -1426,7 +1428,7 @@ void CL_AddPacketEntities (frame_t *frame)
 				{
 					float intensity;
 
-					intensity = 50 + (500 * (sin(cl.time/500.0) + 1.0));
+					intensity = 50 + (500 * (sin(cl.time/500.0f) + 1.0f));
 					// FIXME - check out this effect in rendition
 					if(vidref_val == VIDREF_GL)
 						V_AddLight (ent.origin, intensity, -1.0, -1.0, -1.0);
@@ -1490,18 +1492,18 @@ CL_AddViewWeapon
 */
 void CL_AddViewWeapon (player_state_new *ps, player_state_new *ops)
 {
-	entity_t	gun;		// view model
+	entity_t	gun = {0};		// view model
 	int			i;
 
 	// allow the gun to be completely removed
-	if (!cl_gun->value)
+	if (!cl_gun->intvalue)
 		return;
 
 	// don't draw gun if in wide angle view
 	if (ps->fov > 90)
 		return;
 
-	memset (&gun, 0, sizeof(gun));
+	//memset (&gun, 0, sizeof(gun));
 
 	if (gun_model)
 		gun.model = gun_model;	// development tool
@@ -1571,17 +1573,17 @@ void CL_CalcViewValues (void)
 		ops = ps;		// don't interpolate
 
 	//ent = &cl_entities[cl.playernum+1];
-	if (cl_nolerp->value)
+	if (cl_nolerp->intvalue)
 		lerp = 1.0;
 	else
 		lerp = cl.lerpfrac;
 
 	// calculate the origin
-	if ((cl_predict->value) && !(cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
+	if ((cl_predict->intvalue) && !(cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
 	{	// use predicted values
 		unsigned	delta;
 
-		if (cl_backlerp->value)
+		if (cl_backlerp->intvalue)
 			backlerp = 1.0 - lerp;
 		else
 			backlerp = 1.0;
@@ -1616,28 +1618,29 @@ void CL_CalcViewValues (void)
 	{
 		if (!keydown[K_SHIFT])
 		{
-			for (i=0 ; i<3 ; i++)
-				cl.refdef.viewangles[i] = LerpAngle (ops->viewangles[i], ps->viewangles[i], lerp);
+			cl.refdef.viewangles[0] = LerpAngle (ops->viewangles[0], ps->viewangles[0], lerp);
+			cl.refdef.viewangles[1] = LerpAngle (ops->viewangles[1], ps->viewangles[1], lerp);
+			cl.refdef.viewangles[2] = LerpAngle (ops->viewangles[2], ps->viewangles[2], lerp);
 		}
 		else
 		{
-			for (i=0 ; i<3 ; i++)
-				cl.refdef.viewangles[i] = cl.predicted_angles[i];
+			VectorCopy (cl.refdef.viewangles, cl.predicted_angles);
 		}
 	}
 	else if ( cl.frame.playerstate.pmove.pm_type < PM_DEAD)
 	{	// use predicted values
-		for (i=0 ; i<3 ; i++)
-			cl.refdef.viewangles[i] = cl.predicted_angles[i];
+		VectorCopy (cl.predicted_angles, cl.refdef.viewangles);
 	}
 	else
 	{	// just use interpolated values
-		for (i=0 ; i<3 ; i++)
-			cl.refdef.viewangles[i] = LerpAngle (ops->viewangles[i], ps->viewangles[i], lerp);
+		cl.refdef.viewangles[0] = LerpAngle (ops->viewangles[0], ps->viewangles[0], lerp);
+		cl.refdef.viewangles[1] = LerpAngle (ops->viewangles[1], ps->viewangles[1], lerp);
+		cl.refdef.viewangles[2] = LerpAngle (ops->viewangles[2], ps->viewangles[2], lerp);
 	}
 
-	for (i=0 ; i<3 ; i++)
-		cl.refdef.viewangles[i] += LerpAngle (ops->kick_angles[i], ps->kick_angles[i], lerp);
+	cl.refdef.viewangles[0] += LerpAngle (ops->kick_angles[0], ps->kick_angles[0], lerp);
+	cl.refdef.viewangles[1] += LerpAngle (ops->kick_angles[1], ps->kick_angles[1], lerp);
+	cl.refdef.viewangles[2] += LerpAngle (ops->kick_angles[2], ps->kick_angles[2], lerp);
 
 	AngleVectors (cl.refdef.viewangles, cl.v_forward, cl.v_right, cl.v_up);
 
@@ -1645,8 +1648,10 @@ void CL_CalcViewValues (void)
 	cl.refdef.fov_x = ops->fov + lerp * (ps->fov - ops->fov);
 
 	// don't interpolate blend color
-	for (i=0 ; i<4 ; i++)
-		cl.refdef.blend[i] = ps->blend[i];
+	cl.refdef.blend[0] = ps->blend[0];
+	cl.refdef.blend[1] = ps->blend[1];
+	cl.refdef.blend[2] = ps->blend[2];
+	cl.refdef.blend[3] = ps->blend[3];
 
 	// add the weapon
 	CL_AddViewWeapon (ps, ops);
@@ -1673,14 +1678,14 @@ void CL_AddEntities (void)
 
 	if (cl.time > cl.frame.servertime)
 	{
-		if (cl_showclamp->value)
+		if (cl_showclamp->intvalue)
 			Com_Printf ("high clamp %i\n", cl.time - cl.frame.servertime);
 		cl.time = cl.frame.servertime;
 		cl.lerpfrac = 1.0;
 	}
 	else if (cl.time < cl.frame.servertime - 100)
 	{
-		if (cl_showclamp->value)
+		if (cl_showclamp->intvalue)
 			Com_Printf ("low clamp %i\n", cl.frame.servertime-100 - cl.time);
 		cl.time = cl.frame.servertime - 100;
 		cl.lerpfrac = 0;
@@ -1688,7 +1693,7 @@ void CL_AddEntities (void)
 	else
 		cl.lerpfrac = 1.0 - (cl.frame.servertime - cl.time) * 0.01;
 
-	if (cl_timedemo->value)
+	if (cl_timedemo->intvalue)
 		cl.lerpfrac = 1.0;
 
 //	CL_AddPacketEntities (&cl.frame);
@@ -1703,7 +1708,7 @@ void CL_AddEntities (void)
 #if 0
 	CL_AddProjectiles ();
 #endif
-	if (cl_lents->value)
+	if (cl_lents->intvalue)
 		CL_AddLocalEnts ();
 	CL_AddTEnts ();
 	CL_AddParticles ();

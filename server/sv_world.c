@@ -48,6 +48,8 @@ typedef struct areanode_s
 #define	AREA_DEPTH	4
 #define	AREA_NODES	32
 
+int	sv_tracecount;
+
 areanode_t	sv_areanodes[AREA_NODES];
 int			sv_numareanodes;
 
@@ -60,18 +62,18 @@ int SV_HullForEntity (edict_t *ent);
 
 
 // ClearLink is used for new headnodes
-void ClearLink (link_t *l)
+__inline void ClearLink (link_t *l)
 {
 	l->prev = l->next = l;
 }
 
-void RemoveLink (link_t *l)
+__inline void RemoveLink (link_t *l)
 {
 	l->next->prev = l->prev;
 	l->prev->next = l->next;
 }
 
-void InsertLinkBefore (link_t *l, link_t *before)
+__inline void InsertLinkBefore (link_t *l, link_t *before)
 {
 	l->next = before;
 	l->prev = before->prev;
@@ -152,7 +154,7 @@ void EXPORT SV_UnlinkEdict (edict_t *ent)
 		if (ent->s.solid != SOLID_NOT)
 		{
 			Com_DPrintf ("SV_UnlinkEdict: unlinking an entity that isn't linked\n");
-			if (sv_gamedebug->value >= 4)
+			if (sv_gamedebug->intvalue >= 4)
 				DEBUGBREAKPOINT;
 		}
 		return;		// not linked in anywhere
@@ -189,7 +191,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	if (!ent->inuse)
 	{
 		Com_DPrintf ("SV_LinkEdict: linking an ent that isn't in use\n");
-		if (sv_gamedebug->value >= 4)
+		if (sv_gamedebug->intvalue >= 4)
 			DEBUGBREAKPOINT;
 		return;
 	}
@@ -198,7 +200,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	VectorSubtract (ent->maxs, ent->mins, ent->size);
 	
 	// encode the size into the entity_state for client prediction
-	if (ent->solid == SOLID_BBOX && !(ent->svflags & (SVF_DEADMONSTER|SVF_NOPREDICTION)))
+	if (ent->solid == SOLID_BBOX && !(ent->svflags & SVF_DEADMONSTER) && !(sv_new_entflags->intvalue && ent->svflags & SVF_NOPREDICTION))
 	{	// assume that x/y are equal and symetric
 		i = ent->maxs[0]/8;
 		if (i<1)
@@ -606,27 +608,38 @@ SV_TraceBounds
 */
 void SV_TraceBounds (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, vec3_t boxmins, vec3_t boxmaxs)
 {
-#if 0
-// debug to test against everything
-boxmins[0] = boxmins[1] = boxmins[2] = -9999;
-boxmaxs[0] = boxmaxs[1] = boxmaxs[2] = 9999;
-#else
-	int		i;
-	
-	for (i=0 ; i<3 ; i++)
+	if (end[0] > start[0])
 	{
-		if (end[i] > start[i])
-		{
-			boxmins[i] = start[i] + mins[i] - 1;
-			boxmaxs[i] = end[i] + maxs[i] + 1;
-		}
-		else
-		{
-			boxmins[i] = end[i] + mins[i] - 1;
-			boxmaxs[i] = start[i] + maxs[i] + 1;
-		}
+		boxmins[0] = start[0] + mins[0] - 1;
+		boxmaxs[0] = end[0] + maxs[0] + 1;
 	}
-#endif
+	else
+	{
+		boxmins[0] = end[0] + mins[0] - 1;
+		boxmaxs[0] = start[0] + maxs[0] + 1;
+	}
+
+	if (end[1] > start[1])
+	{
+		boxmins[1] = start[1] + mins[1] - 1;
+		boxmaxs[1] = end[1] + maxs[1] + 1;
+	}
+	else
+	{
+		boxmins[1] = end[1] + mins[1] - 1;
+		boxmaxs[1] = start[1] + maxs[1] + 1;
+	}
+
+	if (end[2] > start[2])
+	{
+		boxmins[2] = start[2] + mins[2] - 1;
+		boxmaxs[2] = end[2] + maxs[2] + 1;
+	}
+	else
+	{
+		boxmins[2] = end[2] + mins[2] - 1;
+		boxmaxs[2] = start[2] + maxs[2] + 1;
+	}
 }
 
 /*
@@ -649,6 +662,17 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 		maxs = vec3_origin;
 
 	memset ( &clip, 0, sizeof ( moveclip_t ) );
+
+	//r1: server-side hax for bad looping traces
+	if (++sv_tracecount == sv_max_traces_per_frame->intvalue)
+	{
+		clip.trace.fraction = 1.0;
+		clip.trace.ent = ge->edicts;
+		VectorCopy (end, clip.trace.endpos);
+		Com_Printf ("ALERT: Bad SV_Trace: %d calls in single frame, aborting!\n", sv_tracecount);
+		sv_tracecount = 0;
+		return clip.trace;
+	}
 
 	// clip to world
 	clip.trace = CM_BoxTrace (start, end, mins, maxs, 0, contentmask);

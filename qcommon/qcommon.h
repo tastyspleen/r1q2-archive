@@ -20,6 +20,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // qcommon.h -- definitions common between client and server, but not game.dll
 
+#ifndef _QCOMMON_H
+
 #ifdef NDEBUG
 #include "../build.h"
 #define	VERSION		"b"BUILD
@@ -120,7 +122,9 @@ void SZ_Print (sizebuf_t *buf, char *data);	// strcats onto the sizebuf
 //struct usercmd_s;
 //struct entity_state_s;
 
-extern entity_state_t null_entity_state;
+extern	entity_state_t	null_entity_state;
+extern	usercmd_t		null_usercmd;
+extern	cvar_t			uninitialized_cvar;
 
 void MSG_WriteChar (sizebuf_t *sb, int c);
 void MSG_BeginWriteByte (sizebuf_t *sb, int c);
@@ -179,10 +183,11 @@ void COM_AddParm (char *parm);
 void COM_Init (void);
 void COM_InitArgv (int argc, char **argv);
 
-char *CopyString (char *in, short tag);
+char *CopyString (const char *in, short tag);
 
-char *StripHighBits (char *string, int highbits);
-char *MakePrintable (unsigned char *s);
+char *StripHighBits (const char *string, int highbits);
+void ExpandNewLines (char *string);
+char *MakePrintable (const byte *s);
 
 //============================================================================
 
@@ -195,7 +200,6 @@ void CRC_Init(unsigned short /*@out@*/*crcvalue);
 void CRC_ProcessByte(unsigned short *crcvalue, byte data);
 unsigned short CRC_Value(unsigned short crcvalue);
 unsigned short CRC_Block (byte *start, int count);
-
 
 
 /*
@@ -214,7 +218,7 @@ PROTOCOL
 //=========================================
 
 #define	PORT_MASTER	27900
-#define	PORT_CLIENT	27901
+//#define	PORT_CLIENT	27901
 #define	PORT_SERVER	27910
 
 //=========================================
@@ -265,6 +269,7 @@ enum svc_ops_e
 
 	// ********** r1q2 specific ***********
 	svc_zpacket,
+	svc_zdownload,
 	// ********** end r1q2 specific *******
 
 	svc_max_enttypes
@@ -458,10 +463,11 @@ void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function);
 // as a clc_stringcmd instead of executed locally
 void	EXPORT Cmd_RemoveCommand (char *cmd_name);
 
-qboolean Cmd_Exists (char *cmd_name);
+//qboolean Cmd_Exists (char *cmd_name);
 // used by the cvar code to check for cvar / command name overlap
 
 char 	*Cmd_CompleteCommand (char *partial);
+char 	*Cmd_CompleteCommandOld (char *partial);
 // attempts to match a partial command for automatic command line completion
 // returns NULL if nothing fits
 
@@ -517,6 +523,7 @@ extern	cvar_t	*cvar_vars;
 cvar_t *Cvar_FindVar (char *var_name);
 
 cvar_t * EXPORT Cvar_Get (char *var_name, char *value, int flags);
+cvar_t * EXPORT Cvar_GameGet (char *var_name, char *var_value, int flags);
 // creates the variable if it doesn't exist, or returns the existing one
 // if it exists, the value will not be changed, but flags will be ORed in
 // that allows variables to be unarchived without needing bitflags
@@ -636,7 +643,9 @@ int NET_Connect (netadr_t *to, int port);
 
 char		*NET_AdrToString (netadr_t *a);
 qboolean	NET_StringToAdr (char *s, netadr_t *a);
+#ifndef NO_SERVER
 void		NET_Sleep(int msec);
+#endif
 void NET_Client_Sleep (int msec);
 
 //============================================================================
@@ -709,8 +718,8 @@ CMODEL
 cmodel_t	*CM_LoadMap (char *name, qboolean clientload, unsigned *checksum);
 cmodel_t	*CM_InlineModel (char *name);	// *1, *2, etc
 
-int			CM_NumClusters (void);
-int			CM_NumInlineModels (void);
+//extern int			CM_NumClusters (void);
+//extern int			CM_NumInlineModels (void);
 char		*CM_EntityString (void);
 
 // creates a clipping hull for an arbitrary box
@@ -718,7 +727,7 @@ int			CM_HeadnodeForBox (vec3_t mins, vec3_t maxs);
 
 
 // returns an ORed contents mask
-int			CM_PointContents (vec3_t p, int headnode);
+int			CM_PointContents (const vec3_t p, int headnode);
 int			CM_TransformedPointContents (vec3_t p, int headnode, vec3_t origin, vec3_t angles);
 
 trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
@@ -732,16 +741,46 @@ trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
 byte		*CM_ClusterPVS (int cluster);
 byte		*CM_ClusterPHS (int cluster);
 
-int			CM_PointLeafnum (vec3_t p);
+int			CM_PointLeafnum (const vec3_t p);
 
 // call with topnode set to the headnode, returns with topnode
 // set to the first node that splits the box
 int			CM_BoxLeafnums (vec3_t mins, vec3_t maxs, int *list,
 							int listsize, int *topnode);
 
-int			CM_LeafContents (int leafnum);
-int			CM_LeafCluster (int leafnum);
-int			CM_LeafArea (int leafnum);
+
+//int			CM_LeafContents (int leafnum);
+//extern int			CM_LeafCluster (int leafnum);
+//extern int			CM_LeafArea (int leafnum);
+
+
+/*__inline int	CM_NumClusters (void)
+{
+	return numclusters;
+}
+
+__inline int	CM_NumInlineModels (void)
+{
+	return numcmodels;
+*/
+
+typedef struct
+{
+	int			contents;
+	int			cluster;
+	int			area;
+	unsigned short	firstleafbrush;
+	unsigned short	numleafbrushes;
+} cleaf_t;
+
+extern	int			numclusters;
+extern	int			numcmodels;
+extern	cleaf_t		map_leafs[MAX_MAP_LEAFS];
+
+#define	CM_NumClusters	(numclusters)
+#define	CM_NumInlineModels	(numcmodels)
+#define CM_LeafCluster(x) (map_leafs[x].cluster)
+#define CM_LeafArea(x) (map_leafs[x].area)
 
 void		EXPORT CM_SetAreaPortalState (int portalnum, qboolean open);
 qboolean	EXPORT CM_AreasConnected (int area1, int area2);
@@ -777,7 +816,7 @@ FILESYSTEM
 void	FS_InitFilesystem (void);
 void	FS_SetGamedir (char *dir);
 char	*EXPORT FS_Gamedir (void);
-char	*FS_NextPath (char *prevpath);
+char	*FS_NextPath (const char *prevpath);
 void	FS_ExecAutoexec (void);
 
 int		FS_FOpenFile (char *filename, FILE /*@out@*/**file);
@@ -819,6 +858,18 @@ MISC
 #define	PRINT_ALL		0
 #define PRINT_DEVELOPER	1	// only print when "developer 1"
 
+//r1: use variadic macros where possible to avoid overhead of varargs onto stack
+//except this doesn't seem to work even with gcc 2.x. oh well, viva la c99.
+/*#if __GNUC__ > 2
+#define		Com_DPrintf(args)	\
+{ \
+	if (developer->intvalue) \
+		Com_DPrintf_Real (##args); \
+}
+#else
+#define Com_DPrintf Com_DPrintf_Real
+#endif*/
+
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
 void		Com_EndRedirect (void);
 void 		Com_Printf (char *fmt, ...);
@@ -826,14 +877,21 @@ void 		Com_DPrintf (char *fmt, ...);
 void 		Com_Error (int code, char *fmt, ...);
 void 		Com_Quit (void);
 
-int			Com_ServerState (void);		// this should have just been a cvar...
-void		Com_SetServerState (int state);
+//extern __inline int			Com_ServerState (void);		// this should have just been a cvar...
+//extern __inline void		Com_SetServerState (int state);
+
+
+//r1: why the hell does inline never work on MSVC...
+extern	int	server_state;
+
+#define	Com_SetServerState(state) (server_state = state)
+#define	Com_ServerState()	(server_state)
 
 unsigned	Com_BlockChecksum (void *buffer, int length);
 byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
 
-float	frand(void);	// 0 ti 1
-float	crand(void);	// -1 to 1
+//float	frand(void);	// 0 ti 1
+//float	crand(void);	// -1 to 1
 
 extern	cvar_t	*developer;
 #ifndef NO_SERVER
@@ -843,6 +901,8 @@ extern	cvar_t	*host_speeds;
 extern	cvar_t	*log_stats;
 
 extern	FILE *log_stats_file;
+
+extern char	*binary_name;
 
 extern	cvar_t	*dbg_unload;
 
@@ -888,6 +948,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CVARBANS,
 	TAGMALLOC_MSG_QUEUE,
 	TAGMALLOC_CMDBANS,
+	TAGMALLOC_REDBLACK,
 	TAGMALLOC_MAX_TAGS
 };
 
@@ -896,6 +957,7 @@ void EXPORT Z_Free (void *ptr);
 //void *Z_Malloc (int size);			// returns 0 filled memory
 void * EXPORT Z_TagMalloc (int size, int tag);
 void EXPORT Z_FreeTags (int tag);
+void Z_Verify(const char *entry);
 
 void Qcommon_Init (int argc, char **argv);
 void Qcommon_Frame (int msec);
@@ -960,5 +1022,5 @@ void SV_Init (void);
 void SV_Shutdown (char *finalmsg, qboolean reconnect, qboolean crashing);
 void SV_Frame (int msec);
 
-
-
+#define _QCOMMON_H
+#endif

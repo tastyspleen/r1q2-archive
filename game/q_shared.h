@@ -18,13 +18,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#ifndef _QSHARED_H
+
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <assert.h>
 
 #ifndef NO_ZLIB
 #include <zlib.h>
@@ -46,7 +50,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #pragma warning(disable : 4096)		// __cdecl must be used with '...'*/
 
+#pragma warning(disable : 4142)		//benign redefinition
+
 #pragma warning(2 : 4189 4210 4389)	// useful warnings
+
+//"off by default" warnings
+#pragma warning(3 : 4056)
+#pragma warning(3 : 4191)
+#pragma warning(3 : 4254)
 
 #if _MSC_VER >= 1400
 #pragma warning(disable: 4996)		// deprecated functions
@@ -74,7 +85,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define Q_strncasecmp strncasecmp
 #define EXPORT
 #define IMPORT
-
+int Q_vsnprintf (char *buff, size_t len, char *fmt, va_list va);
+int Q_snprintf (char *buff, size_t len, char *fmt, ...);
 #ifdef LINUX
 #define DEBUGBREAKPOINT asm ("int $3")
 #else
@@ -101,12 +113,22 @@ typedef enum {false, true}	qboolean;
 //r1: set this to 1 if you have a stupid little endian thingy
 #define YOU_HAVE_A_BROKEN_COMPUTER 0
 
-#define random()	(randomMT() / ((float)0xFFFFFFFFU))
+//#define random()	(randomMT() / ((float)0xFFFFFFFFU))
+#define	random()	(randomMT() * 0.00000000023283064365386962890625f)
+
+#define	frand()		(random())
+#define	crand()		(((int)randomMT() - 0x7FFFFFFF) * 0.000000000465661287307739257812f)
 
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
 
+//terminating strncpy
+#define Q_strncpy(dst, src, len) \
+{ \
+	strncpy ((dst), (src), (len)); \
+	(dst)[(len)] = 0; \
+} 
 
 // angle indexes
 #define	PITCH				0		// up / down
@@ -208,7 +230,7 @@ extern long __cdecl Q_ftol( float f );
 #define DotProduct(x,y)			(x[0]*y[0]+x[1]*y[1]+x[2]*y[2])
 #define VectorSubtract(a,b,c)	(c[0]=a[0]-b[0],c[1]=a[1]-b[1],c[2]=a[2]-b[2])
 #define VectorAdd(a,b,c)		(c[0]=a[0]+b[0],c[1]=a[1]+b[1],c[2]=a[2]+b[2])
-#define VectorCopy(a,b)			(b[0]=a[0],b[1]=a[1],b[2]=a[2])
+#define VectorCopy(src,dst)		(dst[0]=src[0],dst[1]=src[1],dst[2]=src[2])
 #define VectorClear(a)			(a[0]=a[1]=a[2]=0)
 #define VectorNegate(a,b)		(b[0]=-a[0],b[1]=-a[1],b[2]=-a[2])
 #define VectorSet(v, x, y, z)	(v[0]=(x), v[1]=(y), v[2]=(z))
@@ -405,6 +427,7 @@ typedef struct cvar_s
 
 	//r1ch: added this to avoid all the if (x->modified) bloat
 	void		(*changed) (struct cvar_s *self, char *old, char *new);
+	int			intvalue;
 } cvar_t;
 
 #define	MAX_ALIAS_NAME	32
@@ -1424,3 +1447,6 @@ extern int vidref_val;
 // PGM
 // ==================
 
+#define _QSHARED_H
+
+#endif

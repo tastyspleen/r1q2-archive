@@ -21,6 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "qcommon.h"
 
+#include "redblack.h"
+
 void Cmd_ForwardToServer (void);
 
 cmdalias_t	*cmd_alias;
@@ -33,6 +35,9 @@ int		alias_count;		// for detecting runaway loops
 #ifndef DEDICATED_ONLY
 extern qboolean send_packet_now;
 #endif
+
+struct rbtree	*cmdtree;
+struct rbtree	*aliastree;
 
 //=============================================================================
 
@@ -84,6 +89,9 @@ Adds command text at the end of the buffer
 void EXPORT Cbuf_AddText (char *text)
 {
 	int		l;
+
+	if (!*text)
+		return;
 	
 	l = strlen (text);
 
@@ -428,7 +436,7 @@ void Cmd_Exec_f (void)
 	f2[len] = '\n';
 	f2[len+1] = 0;
 
-	if ((p = strstr(f2, "\r")) && *(p+1) != '\n')
+	if ((p = strchr(f2, '\r')) && *(p+1) != '\n')
 		Com_Printf ("WARNING: Raw \\r found in config file %s\n", Cmd_Argv(1));
 
 	Cbuf_InsertText (f2);
@@ -513,8 +521,8 @@ void Cmd_Alias_f (void)
 {
 	cmdalias_t	*a;
 	char		cmd[1024];
-	int			i, c;
 	char		*s;
+	void		**data;
 
 	if (Cmd_Argc() == 1)
 	{
@@ -531,32 +539,49 @@ void Cmd_Alias_f (void)
 	}
 
 	// if the alias already exists, reuse it
-	for (a = cmd_alias ; a ; a=a->next)
+	/*for (a = cmd_alias ; a ; a=a->next)
 	{
 		if (!strcmp(s, a->name))
 		{
 			Z_Free (a->value);
 			break;
 		}
-	}
+	}*/
+
+	data = rbfind (s, aliastree);
+	if (data)
+		a = *(cmdalias_t **)data;
+	else
+		a = NULL;
+
 
 	if (!a)
 	{
 		a = Z_TagMalloc (sizeof(cmdalias_t), TAGMALLOC_ALIAS);
 		a->next = cmd_alias;
 		cmd_alias = a;
+
+		strcpy (a->name, s);
+
+		data = rbsearch (a->name, aliastree);
+		*data = a;
 	}
-	strcpy (a->name, s);	
+	else
+	{
+		strcpy (a->name, s);
+	}
 
 // copy the rest of the command line
-	cmd[0] = 0;		// start out with a null string
+	/*cmd[0] = 0;		// start out with a null string
 	c = Cmd_Argc();
 	for (i=2 ; i< c ; i++)
 	{
 		strcat (cmd, Cmd_Argv(i));
 		if (i != (c - 1))
 			strcat (cmd, " ");
-	}
+	}*/
+
+	Q_strncpy (cmd, Cmd_Args2(2), sizeof(cmd)-2);
 	strcat (cmd, "\n");
 	
 	a->value = CopyString (cmd, TAGMALLOC_ALIAS);
@@ -615,7 +640,7 @@ char		* EXPORT Cmd_Args (void)
 //r1ch: added this, returns all args from specified argv offset until argc()-1
 char *Cmd_Args2 (int arg)
 {
-	static char args[1024];
+	static char args[2048];
 	int i;
 
 	args[0] = 0;
@@ -670,6 +695,11 @@ char *Cmd_MacroExpandString (char *text)
 			continue;	// don't expand inside quotes
 		if (scan[i] != '$')
 			continue;
+		if (i && scan[i-1] == '\\')
+		{
+			memmove (scan + i - 1, scan + i, len-i+1);
+			continue;
+		}
 		// scan out the complete macro
 		start = scan+i+1;
 		token = COM_Parse (&start);
@@ -739,7 +769,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 	cmd_pointer = 0;
 
 	// macro expand the text
-	if (macroExpand && strstr(text, "$"))
+	if (macroExpand && strchr(text, '$'))
 		text = Cmd_MacroExpandString (text);
 
 	if (!text)
@@ -815,6 +845,7 @@ Cmd_AddCommand
 */
 void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function)
 {
+	void			**data;
 	cmd_function_t	*cmd;
 	
 // fail if the command is a variable name
@@ -825,13 +856,19 @@ void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function)
 	}
 	
 // fail if the command already exists
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
+	/*for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
 	{
 		if (!strcmp (cmd_name, cmd->name))
 		{
 			Com_Printf ("Cmd_AddCommand: %s already defined\n", cmd_name);
 			return;
 		}
+	}*/
+
+	if (rbfind (cmd_name, cmdtree))
+	{
+		Com_Printf ("Cmd_AddCommand: %s already defined\n", cmd_name);
+		return;
 	}
 
 	cmd = Z_TagMalloc (sizeof(cmd_function_t), TAGMALLOC_CMD);
@@ -839,6 +876,9 @@ void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function)
 	cmd->function = function;
 	cmd->next = cmd_functions;
 	cmd_functions = cmd;
+
+	data = rbsearch (cmd->name, cmdtree);
+	*data = cmd;
 }
 
 /*
@@ -859,8 +899,11 @@ void	EXPORT Cmd_RemoveCommand (char *cmd_name)
 			Com_Printf ("Cmd_RemoveCommand: %s not added\n", cmd_name);
 			return;
 		}
+
 		if (!strcmp (cmd_name, cmd->name))
 		{
+			rbdelete (cmd->name, cmdtree);
+
 			*back = cmd->next;
 			Z_Free (cmd);
 			return;
@@ -874,7 +917,7 @@ void	EXPORT Cmd_RemoveCommand (char *cmd_name)
 Cmd_Exists
 ============
 */
-qboolean	Cmd_Exists (char *cmd_name)
+/*qboolean	Cmd_Exists (char *cmd_name)
 {
 	cmd_function_t	*cmd;
 
@@ -885,7 +928,7 @@ qboolean	Cmd_Exists (char *cmd_name)
 	}
 
 	return false;
-}
+}*.
 
 
 
@@ -894,7 +937,7 @@ qboolean	Cmd_Exists (char *cmd_name)
 Cmd_CompleteCommand
 ============
 */
-/*char *Cmd_CompleteCommand (char *partial)
+char *Cmd_CompleteCommandOld (char *partial)
 {
 	cmd_function_t	*cmd;
 	int				len;
@@ -923,7 +966,7 @@ Cmd_CompleteCommand
 			return a->name;
 
 	return NULL;
-}*/
+}
 
 // JPG 1.05 - completely rewrote this; includes aliases
 char *Cmd_CompleteCommand (char *partial)
@@ -965,17 +1008,19 @@ void	Cmd_ExecuteString (char *text)
 {	
 	cmd_function_t	*cmd;
 	cmdalias_t		*a;
+	void			**data;
 
 	Cmd_TokenizeString (text, true);
-			
+
 	// execute the command line
-	if (!Cmd_Argc()) {
-		Com_DPrintf ("Cmd_ExecuteString: no tokens on '%s'\n", text);
+	if (!Cmd_Argc())
+	{
+		//Com_DPrintf ("Cmd_ExecuteString: no tokens on '%s'\n", text);
 		return;		// no tokens
 	}
 
 	// check functions
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
+	/*for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
 	{
 		if (!Q_stricmp (cmd_argv[0],cmd->name))
 		{
@@ -991,10 +1036,28 @@ void	Cmd_ExecuteString (char *text)
 			}
 			return;
 		}
+	}*/
+
+	data = rbfind (cmd_argv[0], cmdtree);
+	if (data)
+	{
+		cmd = *(cmd_function_t **)data;
+		if (!cmd->function)
+		{	// forward to server command
+			Cmd_ExecuteString (va("cmd %s", text));
+			//Com_DPrintf ("Cmd_ExecuteString: no function '%s' for '%s', using 'cmd'\n", cmd->name, text);
+		}
+		else
+		{
+			//Com_DPrintf ("Cmd_ExecuteString: function '%s' called for '%s'\n", cmd->name, text);
+			cmd->function ();
+		}
+		return;
 	}
 
+
 	// check alias
-	for (a=cmd_alias ; a ; a=a->next)
+	/*for (a=cmd_alias ; a ; a=a->next)
 	{
 		if (!Q_stricmp (cmd_argv[0], a->name))
 		{
@@ -1006,11 +1069,25 @@ void	Cmd_ExecuteString (char *text)
 			Cbuf_InsertText (a->value);
 			return;
 		}
-	}
+	}*/
 	
+	data = rbfind (cmd_argv[0], aliastree);
+	if (data)
+	{
+		a = *(cmdalias_t **)data;
+		if (++alias_count == ALIAS_LOOP_COUNT)
+		{
+			Com_Printf ("ALIAS_LOOP_COUNT\n");
+			return;
+		}
+		Cbuf_InsertText (a->value);
+		return;
+	}
+
 	// check cvars
-	if (Cvar_Command ()) {
-		Com_DPrintf ("Cmd_ExecuteString: '%s' : is cvar\n", text);
+	if (Cvar_Command ())
+	{
+		//Com_DPrintf ("Cmd_ExecuteString: '%s' : is cvar\n", text);
 		return;
 	}
 
@@ -1081,6 +1158,8 @@ Cmd_Init
 */
 void Cmd_Init (void)
 {
+	cmdtree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
+	aliastree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
 //
 // register our commands
 //

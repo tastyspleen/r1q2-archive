@@ -23,26 +23,47 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //define	PARANOID			// speed sapping error checking
 
 #include "../qcommon/qcommon.h"
+#include "../qcommon/md4.h"
 #include "../game/game.h"
 
 //=============================================================================
 
 #define	MAX_MASTERS	8				// max recipients for heartbeat packets
 
+#define	CMDBAN_MESSAGE	0
+#define	CMDBAN_KICK		1
+#define	CMDBAN_SILENT	2
+
+#define	CMDBAN_LOG_MESSAGE	0
+#define	CMDBAN_LOG_SILENT	1
+
 typedef struct bannedcommands_s
 {
 	struct bannedcommands_s *next;
 	char					*name;
+	short					kickmethod;
+	short					logmethod;
 } bannedcommands_t;
 
 extern bannedcommands_t bannedcommands;
 
 typedef struct ratelimit_s
 {
-	netadr_t	from;
 	int			count;
-	int			time[16];
+	int			period;
+	unsigned	time;
 } ratelimit_t;
+
+typedef struct nullcmd_s
+{
+	struct nullcmd_s	*next;
+	char				*name;
+} nullcmd_t;
+
+extern nullcmd_t nullcmds;
+
+extern	char svConnectStuffString[1100];
+extern	char svBeginStuffString[1100];
 
 // some qc commands are only valid before the server has finished
 // initializing (precache commands, static sounds / objects, etc)
@@ -73,10 +94,12 @@ typedef struct
 
 	// demo server information
 	FILE		*demofile;
-	
-	// rate limit status requests
-	ratelimit_t	ratelimit_status[16];
+
+	unsigned	randomframe;
 } server_t;
+
+qboolean RateLimited (ratelimit_t *limit, int maxCount);
+void RateSample (ratelimit_t *limit);
 
 #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
 #define NUM_FOR_EDICT(e) ( ((byte *)(e)-(byte *)ge->edicts ) / ge->edict_size)
@@ -106,15 +129,50 @@ typedef struct
 
 //#define MAX_DELTA_SAMPLES 30
 
+#define DL_COMP_NONE	0x00		//No compression used, <len> represents size of <data>.
+#define	DL_COMP_ZLIB	0x01		//zlib deflate() used. WINDOWBITS MUST BE NEGATIVE.
+#define	DL_COMP_BZIP2	0x02		//bzip2 compression.
+#define	DL_COMP_LZMA	0x04		//lzma compression.
+#define	DL_COMP_FLAC	0x08		//flac (for audio files) compression.
+#define	DL_COMP_LZO		0x10		//lzo compression.
+#define	DL_COMP_UCL		0x20		//ucl compression.
+
+#define	DL_REASON_NOTFOUND		0x01	//"Server does not have this file."
+#define	DL_REASON_NOTALLOWED	0x02	//"Server does not allow downloading of this file type."
+#define	DL_REASON_TOOLARGE		0x03	//"Server will not send files this large."
+#define	DL_REASON_BADPATH		0x04	//"Server refused path '%s'."
+#define	DL_REASON_TOOBUSY		0x05	//"Server is too busy."
+#define	DL_REASON_TOOMANY		0x06	//"Server has too many downloads queued from your client."
+
+#define	DL_REASON_CUSTOMMSG	0xFF	//A custom message.
+
 typedef struct message_queue_s
 {
 	struct message_queue_s	*next;
 	byte					type;
 	byte					*data;
 	sizebuf_t				buf;
-	int						queued_frame;
+	//int						queued_frame;
 	int						len;
 } message_queue_t;
+
+typedef struct download_queue_s
+{
+	struct download_queue_s	*next;
+	char					path[MAX_QPATH];
+	unsigned int			downloadID;
+} download_queue_t;
+
+typedef struct download_state_s
+{
+	download_queue_t	*queueEntry;
+	FILE				*fileHandle;
+	size_t				fileOffset;
+	size_t				fileLength;
+	int					compMethod;
+	MD4_CTX				MD4Context;
+	z_stream			zlibStream;
+} download_state_t;
 
 typedef struct client_s
 {
@@ -147,8 +205,8 @@ typedef struct client_s
 	client_frame_t	frames[UPDATE_BACKUP];	// updates can be delta'd from here
 
 	byte			*download;			// file being downloaded
-	unsigned int				downloadsize;		// total bytes (can't use EOF because of paks)
-	unsigned int				downloadcount;		// bytes sent
+	unsigned int	downloadsize;		// total bytes (can't use EOF because of paks)
+	unsigned int	downloadcount;		// bytes sent
 	unsigned short	downloadport;
 
 	int				lastmessage;		// sv.framenum when packet was last received
@@ -171,7 +229,7 @@ typedef struct client_s
 	//r1: don't send game data to this client (bots etc)
 	qboolean					nodata;
 
-	//r1: client-specificlast deltas (kind of like dynamic baselines)
+	//r1: client-specific last deltas (kind of like dynamic baselines)
 	entity_state_t				*lastlines;
 
 	//r1: misc flags
@@ -183,10 +241,21 @@ typedef struct client_s
 	//r1: estimated FPS
 	int							fps;
 
+	//r1: number of frames since last activity
+	int							idletime;
+
 	//r1: version string
 	char						*versionString;
 
+	//r1: message queuing framework
 	message_queue_t				messageQueue;
+
+	//r1: tcp download queue
+	download_queue_t			downloadQueue;
+	download_state_t			downloadState;
+
+	//r1: compress downloads?
+	qboolean					downloadCompressed;
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -206,7 +275,7 @@ typedef struct
 {
 	netadr_t	adr;
 	int			challenge;
-	unsigned int			time;
+	unsigned 	time;
 } challenge_t;
 
 
@@ -221,8 +290,8 @@ typedef struct
 											// used to check late spawns
 
 	client_t	*clients;					// [maxclients->value];
-	unsigned int			num_client_entities;		// maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES
-	unsigned int			next_client_entities;		// next client_entity to use
+	unsigned 	num_client_entities;		// maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES
+	unsigned 	next_client_entities;		// next client_entity to use
 	entity_state_t	*client_entities;		// [num_client_entities]
 
 	int			last_heartbeat;
@@ -233,13 +302,13 @@ typedef struct
 	FILE		*demofile;
 	sizebuf_t	demo_multicast;
 	byte		demo_multicast_buf[MAX_MSGLEN];
+
+	// rate limit status requests
+	ratelimit_t	ratelimit_status;
+	ratelimit_t	ratelimit_badrcon;
 } server_static_t;
 
-typedef struct dlinfo_s
-{
-	int	sock;
-	client_t	*cl;
-} dlinfo_t;
+extern	cvar_t	*sv_ratelimit_status;
 
 //=============================================================================
 
@@ -279,6 +348,15 @@ extern	cvar_t		*sv_strafejump_hack;
 extern	cvar_t		*sv_allow_map;
 extern	cvar_t		*sv_allow_unconnected_cmds;
 
+extern	cvar_t		*sv_mapdownload_denied_message;
+extern	cvar_t		*sv_mapdownload_ok_message;
+
+extern	cvar_t		*sv_new_entflags;
+
+extern	cvar_t		*sv_validate_playerskins;
+
+extern	cvar_t		*sv_idlekick;
+
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
 
@@ -297,11 +375,11 @@ extern	cvar_t	*allow_download_maps;
 //
 void SV_FinalMessage (char *message, qboolean reconnect);
 void SV_DropClient (client_t *drop);
-void SV_KickClient (client_t *cl, char /*@null@*/*reason, char /*@null@*/*cprintf);
+void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@null@*/*cprintf);
 
-int EXPORT SV_ModelIndex (char *name);
-int EXPORT SV_SoundIndex (char *name);
-int EXPORT SV_ImageIndex (char *name);
+int EXPORT SV_ModelIndex (const char *name);
+int EXPORT SV_SoundIndex (const char *name);
+int EXPORT SV_ImageIndex (const char *name);
 
 void SV_WriteClientdataToMessage (client_t *client, sizebuf_t *msg);
 
@@ -319,6 +397,7 @@ extern cvar_t	*sv_allownodelta;
 extern cvar_t	*sv_deny_q2ace;
 
 extern cvar_t	*sv_gamedebug;
+extern cvar_t	*sv_packetentities_hack;
 
 void Master_Heartbeat (void);
 void Master_Packet (void);
@@ -344,7 +423,7 @@ void Sys_DisableTray (void);
 void Sys_Minimize (void);
 #endif
 
-void Blackhole (netadr_t *from, char *fmt, ...);
+void Blackhole (netadr_t *from, qboolean isAutomatic, char *fmt, ...);
 
 //
 // sv_phys.c
@@ -502,3 +581,6 @@ struct cvarban_s
 };
 
 extern cvarban_t cvarbans;
+
+extern	cvar_t	*sv_max_traces_per_frame;
+extern	int		sv_tracecount;
