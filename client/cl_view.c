@@ -381,7 +381,7 @@ void CL_PrepRefresh (void)
 	else
 		maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
 
-	Com_Printf ("clients\r", LOG_CLIENT, i);
+	Com_Printf ("clients\r", LOG_CLIENT);
 	SCR_UpdateScreen ();
 
 	for (i=0 ; i<maxclients ; i++)

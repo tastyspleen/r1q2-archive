@@ -1173,7 +1173,10 @@ void Key_Event (int key, qboolean down, unsigned time)
 		if (down)
 			key_waiting = key;
 		return;
-	}*/
+		}*/
+
+	//if (key == 201)
+	//	Com_Printf ("%d is %d for %u\n", LOG_GENERAL, key, down, time);
 
 	// update auto-repeat status
 	if (down)
@@ -1194,6 +1197,13 @@ void Key_Event (int key, qboolean down, unsigned time)
 	else
 	{
 		key_repeats[key] = 0;
+	}
+
+	//for dinput
+	if (keydown[K_ALT] && key == K_ENTER)
+	{
+		Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
+		return;
 	}
 
 	if (key == K_SHIFT)

@@ -860,7 +860,7 @@ void SVC_DirectConnect (void)
 		}
 		if (i == MAX_CHALLENGES)
 		{
-			Com_DPrintf ("    no challenge\n", challenge);
+			Com_DPrintf ("    no challenge\n");
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nNo challenge for address.\n");
 			return;
 		}
@@ -869,7 +869,7 @@ void SVC_DirectConnect (void)
 	//r1: deny if server is locked
 	if (sv_locked->intvalue)
 	{
-		Com_DPrintf ("    server locked\n", challenge);
+		Com_DPrintf ("    server locked\n");
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer is locked.\n");
 		return;
 	}
@@ -1977,7 +1977,8 @@ void SV_Frame (int msec)
 		}
 
 		//r1: execute commands now
-		Cbuf_Execute();
+		if (dedicated->intvalue)
+			Cbuf_Execute();
 		NET_Sleep(sv.time - svs.realtime);
 		return;
 	}

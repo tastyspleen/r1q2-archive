@@ -283,6 +283,9 @@ int NET_IPSocket (char *net_interface, int port)
 		return 0;
 	}
 
+	if (newsocket >= FD_SETSIZE)
+		Com_Error (ERR_FATAL, "NET_IPSocket: socket is higher than FD_SETSIZE");
+
 	// make it non-blocking
 	if (ioctl (newsocket, FIONBIO, &_true) == -1)
 	{

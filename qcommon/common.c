@@ -1607,35 +1607,35 @@ void EXPORT Z_FreeDebug (void *ptr)
 
 	z = ((zhead_t *)ptr) - 1;
 
-	Z_Verify (va ("Z_FreeDebug: START FREE FROM %s OF %.8p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", ptr));
+	Z_Verify (va ("Z_FreeDebug: START FREE FROM %s OF %p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", ptr));
 
 	//magic test
 	if (z->magic != Z_MAGIC && z->magic != Z_MAGIC_DEBUG)
-		Com_Error (ERR_DIE, "Z_Free: bad magic freeing %.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
+		Com_Error (ERR_DIE, "Z_Free: bad magic freeing %p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
 
 	//size sanity test
 	if (z->size <= 0 || z->size > 0x40000000)
-		Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+		Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
 
 	//we could segfault here if size is invalid :(
 	if (z->magic == Z_MAGIC_DEBUG && (*(byte **)&z)[z->size-1] != 0xCC)
-		Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+		Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
 
 	z->prev->next = z->next;
 	z->next->prev = z->prev;
 
 	if (z->next->magic != Z_MAGIC && z->next->magic != Z_MAGIC_DEBUG)
-		Com_Error (ERR_DIE, "Z_Free: memory corruption detected after free of block at %.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
+		Com_Error (ERR_DIE, "Z_Free: memory corruption detected after free of block at %p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
 
 	z_count--;
 	z_bytes -= z->size;
 
 	if (z_count < 0 || z_bytes < 0)
-		Com_Error (ERR_DIE, "Z_Free: counters are screwed after free of %d bytes at %.8p tagged %d (%s) from %s", z->size, z, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE");
+		Com_Error (ERR_DIE, "Z_Free: counters are screwed after free of %d bytes at %p tagged %d (%s) from %s", z->size, z, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE");
 
 	free (z);
 
-	Z_Verify (va ("Z_FreeDebug: END FREE OF %.8p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE"));
+	Z_Verify (va ("Z_FreeDebug: END FREE OF %p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE"));
 }
 
 /*
@@ -1685,13 +1685,13 @@ void Z_Stats_f (void)
 	bignum += game_count;
 	bignum += level_count;
 
-	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", LOG_GENERAL, "DLL_LEVEL", level_size, level_count, z_level_allocs);
-	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n\n", LOG_GENERAL, "DLL_GAME", game_size, game_count, z_game_allocs);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks %8lu allocs\n", LOG_GENERAL, "DLL_LEVEL", level_size, level_count, z_level_allocs);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks %8lu allocs\n\n", LOG_GENERAL, "DLL_GAME", game_size, game_count, z_game_allocs);
 	
-	Com_Printf ("%i unaccounted allocations\n", LOG_GENERAL, z_allocs);
+	Com_Printf ("%lu unaccounted allocations\n", LOG_GENERAL, z_allocs);
 
 	Com_Printf ("  CALCED_TOTAL: %i bytes in %i blocks\n", LOG_GENERAL, bigtotal, bignum);
-	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", LOG_GENERAL, z_bytes, z_count);
+	Com_Printf (" RUNNING_TOTAL: %li bytes in %li blocks\n", LOG_GENERAL, z_bytes, z_count);
 }
 
 /*
@@ -1736,15 +1736,15 @@ void Z_Verify (const char *entry)
 			{
 				//size sanity test
 				if (z->size <= 0 || z->size > 0x40000000)
-					Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
+					Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
 
 				//we could segfault here if size is invalid :(
 				if ((*(byte **)&z)[z->size-1] != 0xCC)
-					Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
+					Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
 			}
 			else
 			{
-				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %.8p", entry, (void *)(z+1));
+				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p", entry, (void *)(z+1));
 			}
 		}
 
@@ -1772,7 +1772,7 @@ void *Z_TagMallocDebug (int size, int tag)
 	z = malloc(size);
 
 	if (!z)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %i bytes in %i blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %li bytes in %li blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
 
 	//memset (z, 0xCC, size);
 
@@ -1812,7 +1812,7 @@ void *Z_TagMallocRelease (int size, int tag)
 	z = malloc(size);
 
 	if (!z)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %i bytes in %i blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %li bytes in %li blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
 
 	z_count++;
 
@@ -1878,7 +1878,7 @@ void EXPORT Z_FreeGame (void *buf)
 			if (*(int *)((byte *)buf + loc->size) != 0xFDFEFDFE)
 			{
 				Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %.8p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
+				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
 			}
 			free_from_game = true;
 			Z_Free (buf);
@@ -1893,12 +1893,12 @@ void EXPORT Z_FreeGame (void *buf)
 
 	if (z_buggygame->intvalue)
 	{
-		Com_Printf ("ERROR: Game DLL tried to free non-existant/freed memory at %.8p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf);
+		Com_Printf ("ERROR: Game DLL tried to free non-existant/freed memory at %p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf);
 	}
 	else
 	{
 		Com_Printf ("Memory management problem detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at %.8p", buf);
+		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at %p", buf);
 	}
 }
 
@@ -1917,7 +1917,7 @@ void EXPORT Z_FreeTagsGame (int tag)
 		if (*(int *)((byte *)loc->address + loc->size) != 0xFDFEFDFE)
 		{
 			Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %.8p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
+			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
 		}
 	}
 

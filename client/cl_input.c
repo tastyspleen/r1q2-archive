@@ -198,15 +198,13 @@ float CL_KeyState (kbutton_t *key)
 		key->downtime = sys_frame_time;
 	}
 
-#if 0
-	if (msec)
-	{
-		Com_Printf ("%i ", LOG_CLIENT, msec);
-	}
-#endif
-
 	val = (float)msec / frame_msec;
 	
+	/*if (msec)
+	{
+		Com_Printf ("%i/%u -> %f\n", LOG_CLIENT, msec, frame_msec, val);
+	}*/
+
 	if (FLOAT_LT_ZERO(val))
 		val = 0;
 
@@ -615,8 +613,10 @@ usercmd_t CL_CreateCmd (void)
 	usercmd_t	cmd;
 
 	frame_msec = sys_frame_time - old_sys_frame_time;
+
 	if (frame_msec < 1)
 		frame_msec = 1;
+
 	if (frame_msec > 200)
 		frame_msec = 200;
 	

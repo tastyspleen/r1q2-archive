@@ -238,7 +238,7 @@ void FS_InitCache (void)
 #endif
 
 	if (!rb)
-		Sys_Error (ERR_FATAL, "FS_InitCache: rbinit failed"); 
+		Com_Error (ERR_FATAL, "FS_InitCache: rbinit failed"); 
 }
 
 #ifdef HASH_CACHE
@@ -822,7 +822,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 #endif
 
 	if (header.dirlen % sizeof(packfile_t))
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %d is not a multiple of %d)", packfile, header.dirlen, sizeof(packfile_t));
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %ld is not a multiple of %d)", packfile, header.dirlen, sizeof(packfile_t));
 
 	numpackfiles = header.dirlen / sizeof(packfile_t);
 
@@ -839,10 +839,10 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	info = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
 
 	if (fseek (packhandle, header.dirofs, SEEK_SET))
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %d in %s failed (corrupt packfile?)", header.dirofs, packfile);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %ld in %s failed (corrupt packfile?)", header.dirofs, packfile);
 
 	if ((int)fread (info, 1, header.dirlen, packhandle) != header.dirlen)
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %d bytes at %d)", packfile, header.dirofs, header.dirlen);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %ld bytes at %ld)", packfile, header.dirofs, header.dirlen);
 
 	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
 

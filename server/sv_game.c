@@ -419,7 +419,7 @@ void EXPORT PF_WriteChar (int c)
 	{
 		if (c > 127 || c < -128)
 		{
-			Com_Printf ("GAME WARNING: Called gi.WriteChar (%d) which exceeds range for char.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG);
+			Com_Printf ("GAME WARNING: Called gi.WriteChar (%d) which exceeds range for char.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, c);
 			if (sv_gamedebug->intvalue > 1)
 				DEBUGBREAKPOINT;
 		}
@@ -433,7 +433,7 @@ void EXPORT PF_WriteByte (int c)
 	{
 		if (c > 255 || c < 0)
 		{
-			Com_Printf ("GAME WARNING: Called gi.WriteByte (%d) which exceeds range for byte.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG);
+			Com_Printf ("GAME WARNING: Called gi.WriteByte (%d) which exceeds range for byte.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, c);
 			if (sv_gamedebug->intvalue > 1)
 				DEBUGBREAKPOINT;
 		}

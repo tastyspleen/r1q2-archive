@@ -95,6 +95,8 @@ typedef	int			INTPTR;
 #define IMPORT __cdecl
 #define DEBUGBREAKPOINT _asm int 3
 
+#define __attribute__(x) 
+
 #else /* NON-WIN32 */
 //XXX: are these portable enough on non-win32?
 #define Q_stricmp strcasecmp

@@ -697,7 +697,7 @@ qboolean	NET_StringToAdr (char *s, netadr_t *a);
 #ifndef NO_SERVER
 void		NET_Sleep(int msec);
 #endif
-void NET_Client_Sleep (int msec);
+int NET_Client_Sleep (int msec);
 
 //============================================================================
 
@@ -914,8 +914,9 @@ MISC
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
 void		Com_EndRedirect (void);
 void 		Com_Printf (char *fmt, int level, ...);
-void 		Com_DPrintf (char *fmt, ...);
-void 		Com_Error (int code, char *fmt, ...);
+void 		Com_Printf (char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
+void 		Com_DPrintf (char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+void 		Com_Error (int code, char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 void 		Com_Quit (void);
 
 //extern __inline int			Com_ServerState (void);		// this should have just been a cvar...
@@ -1070,7 +1071,7 @@ char	*Sys_ConsoleInput (void);
 void	Sys_ConsoleOutput (const char *string);
 #endif
 void	Sys_SendKeyEvents (void);
-void	Sys_Error (char *error, ...);
+void	Sys_Error (char *error, ...) __attribute__ ((format (printf, 1, 2)));
 void	Sys_Quit (void);
 char	*Sys_GetClipboardData( void );
 void	Sys_CopyProtect (void);

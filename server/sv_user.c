@@ -232,13 +232,13 @@ plainStrings:
 
 			if (z.total_out > realBytes)
 			{
-				Com_DPrintf ("SV_Configstrings_f: %d bytes would be a %d byte zPacket\n", realBytes, z.total_out);
+				Com_DPrintf ("SV_Configstrings_f: %d bytes would be a %lud byte zPacket\n", realBytes, z.total_out);
 				goto plainStrings;
 			}
 
 			start = index;
 
-			Com_DPrintf ("SV_Configstrings_f: wrote %d bytes in a %d byte zPacket\n", realBytes, z.total_out);
+			Com_DPrintf ("SV_Configstrings_f: wrote %d bytes in a %lud byte zPacket\n", realBytes, z.total_out);
 
 			MSG_BeginWriting (svc_zpacket);
 			MSG_WriteShort (z.total_out);
@@ -813,13 +813,13 @@ plainLines:
 
 			if (z.total_out > realBytes)
 			{
-				Com_DPrintf ("SV_Baselines_f: %d bytes would be a %d byte zPacket\n", realBytes, z.total_out);
+				Com_DPrintf ("SV_Baselines_f: %d bytes would be a %lud byte zPacket\n", realBytes, z.total_out);
 				goto plainLines;
 			}
 
 			startPos = start;
 
-			Com_DPrintf ("SV_Baselines_f: wrote %d bytes in a %d byte zPacket\n", realBytes, z.total_out);
+			Com_DPrintf ("SV_Baselines_f: wrote %d bytes in a %lud byte zPacket\n", realBytes, z.total_out);
 
 			MSG_BeginWriting (svc_zpacket);
 			MSG_WriteShort (z.total_out);

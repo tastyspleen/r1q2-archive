@@ -193,7 +193,7 @@ const byte		dinputkeymap[256] =
 	'b',		'n',		'm',		',',		'.',		'/',		K_SHIFT,	'*',		//48-55
 	K_ALT,		' ',		K_CAPSLOCK,	K_F1,		K_F2,		K_F3,		K_F4,		K_F5,		//56-63
 	K_F6,		K_F7,		K_F8,		K_F9,		K_F10,		K_NUMLOCK,	K_SCROLLLOCK,K_KP_HOME,	//64-71
-	K_KP_UPARROW,K_KP_PGUP,	K_KP_PLUS,	K_KP_LEFTARROW,K_KP_5,	K_KP_RIGHTARROW,K_KP_MINUS,K_KP_END,	//72-79
+	K_KP_UPARROW,K_KP_PGUP,	K_KP_MINUS,	K_KP_LEFTARROW,K_KP_5,	K_KP_RIGHTARROW,K_KP_PLUS,K_KP_END,	//72-79
 	K_KP_DOWNARROW,K_KP_PGDN,K_KP_INS,	K_KP_DEL,	0,			0,			'\\',			K_F11,		//80-87
 	K_F12,		0,			0,			0,			0,			0,			0,			0,			//88-95
 	0,			0,			0,			0,			0,			0,			0,			0,			//96-103
@@ -456,7 +456,7 @@ LONG WINAPI MainWndProc (
 
 	case WM_QUIT:
 	case WM_CLOSE:
-		Com_Quit ();
+		CL_Quit_f();
 		return 0;
 
 	case WM_DESTROY:
@@ -548,7 +548,7 @@ LONG WINAPI MainWndProc (
 //#define MK_XBUTTON1         0x0020
 //#define MK_XBUTTON2         0x0040
 
-			if (wParam & 0x0020)	//X_BUTTON1
+			if (wParam & 0x0020)
 				temp |= 8;
 
 			if (wParam & 0x0040)

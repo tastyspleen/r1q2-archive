@@ -242,7 +242,7 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 		if (chan->reliable_length)
 			SZ_Write (&send, chan->reliable_buf, chan->reliable_length);
 		else
-			Com_DPrintf ("Netchan_Transmit: send_reliable with empty buffer to %s!\n", LOG_NET|LOG_WARNING, NET_AdrToString (&chan->remote_address));
+			Com_DPrintf ("Netchan_Transmit: send_reliable with empty buffer to %s!\n", NET_AdrToString (&chan->remote_address));
 		chan->last_reliable_sequence = chan->outgoing_sequence;
 	}
 	

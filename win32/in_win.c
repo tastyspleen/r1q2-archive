@@ -263,10 +263,15 @@ int IN_InitDInputKeyboard (void)
 	}
 
 	// Detrimine where the buffer would like to be allocated 
-    bExclusive         = 0;//( IsDlgButtonChecked( hDlg, IDC_EXCLUSIVE  ) == BST_CHECKED );
-    bForeground        = 1;//( IsDlgButtonChecked( hDlg, IDC_FOREGROUND ) == BST_CHECKED );
-    bImmediate         = 0;//( IsDlgButtonChecked( hDlg, IDC_IMMEDIATE  ) == BST_CHECKED );
-    bDisableWindowsKey = 1;//( IsDlgButtonChecked( hDlg, IDC_WINDOWSKEY ) == BST_CHECKED );
+#ifdef _DEBUG
+    bExclusive         = 0;
+#else
+	bExclusive         = 1;
+#endif
+
+    bForeground        = 1;
+    bImmediate         = 0;
+    bDisableWindowsKey = 1;
 
     if( bExclusive )
         dwCoopFlags = DISCL_EXCLUSIVE;
@@ -394,8 +399,8 @@ void IN_ReadKeyboard (void)
         return; 
     }
 
-	if (dwElements)
-		sys_msg_time = timeGetTime();
+	//if (dwElements)
+	//	sys_msg_time = timeGetTime();
 
 	Key_GenerateRepeats ();
 
@@ -410,7 +415,7 @@ void IN_ReadKeyboard (void)
         // plus a 'D' - meaning the key was pressed 
         //   or a 'U' - meaning the key was released
 		//Com_Printf ("scancode: %d\n", LOG_GENERAL, didod[i].dwOfs);
-		Key_Event ( dinputkeymap[didod[i].dwOfs], (didod[i].dwData & 0x80) ? true : false, sys_msg_time);
+		Key_Event ( dinputkeymap[didod[i].dwOfs], (didod[i].dwData & 0x80) ? true : false, didod[i].dwTimeStamp);
     }
 }
 
@@ -433,9 +438,14 @@ int IN_InitDInputMouse (void)
 	}
 
     // Detrimine where the buffer would like to be allocated 
-    bExclusive         = 0;//( IsDlgButtonChecked( hDlg, IDC_EXCLUSIVE  ) == BST_CHECKED );
-    bForeground        = 1;//( IsDlgButtonChecked( hDlg, IDC_FOREGROUND ) == BST_CHECKED );
-    bImmediate         = 0;//( IsDlgButtonChecked( hDlg, IDC_IMMEDIATE  ) == BST_CHECKED );
+#ifdef _DEBUG
+    bExclusive         = 0;
+#else
+	bExclusive         = 1;
+#endif
+
+    bForeground        = 1;
+    bImmediate         = 0;
 
     if( bExclusive )
         dwCoopFlags = DISCL_EXCLUSIVE;
@@ -579,8 +589,8 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 	if (m_show->intvalue)
 		Com_Printf ("%d dwElements\n", LOG_CLIENT, dwElements);
 
-	if (dwElements)
-		sys_msg_time = timeGetTime();
+	//if (dwElements)
+	//	sys_msg_time = timeGetTime();
 
     // Study each of the buffer elements and process them.
     //
@@ -662,11 +672,11 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 
 				if( !(didod[ i ].dwData & 0x80) )
 				{
-					Key_Event (K_MOUSE1 + x, false, sys_msg_time);
+					Key_Event (K_MOUSE1 + x, false, didod[i].dwTimeStamp);
 				}
 				else
 				{
-					Key_Event (K_MOUSE1 + x, true, sys_msg_time);
+					Key_Event (K_MOUSE1 + x, true, didod[i].dwTimeStamp);
 				}
 				break;
 
@@ -709,8 +719,8 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 					}
 					else
 					{
-						Key_Event (K_MWHEELUP, true, sys_msg_time);
-						Key_Event (K_MWHEELUP, false, sys_msg_time);
+						Key_Event (K_MWHEELUP, true, didod[i].dwTimeStamp);
+						Key_Event (K_MWHEELUP, false, didod[i].dwTimeStamp);
 					}
 				}
 				else if ((int)didod[i].dwData < 0)
@@ -728,8 +738,8 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 					}
 					else
 					{
-						Key_Event (K_MWHEELDOWN, true, sys_msg_time);
-						Key_Event (K_MWHEELDOWN, false, sys_msg_time);
+						Key_Event (K_MWHEELDOWN, true, didod[i].dwTimeStamp);
+						Key_Event (K_MWHEELDOWN, false, didod[i].dwTimeStamp);
 					}
 				}
                 break;
@@ -750,7 +760,7 @@ void IN_ReadImmediateData (usercmd_t *cmd)
     // Get the input's device state, and put the state in dims
     //memset(&dims2, 0, sizeof(dims2));
 
-	sys_msg_time = timeGetTime();
+	//sys_msg_time = timeGetTime();
 
     hr = IDirectInputDevice8_GetDeviceState(g_pMouse, sizeof(DIMOUSESTATE2), &dims2 );
     if( FAILED(hr) ) 

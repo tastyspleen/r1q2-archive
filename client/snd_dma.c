@@ -116,7 +116,7 @@ void S_SoundInfo_f(void)
     Com_Printf("%5d samplebits\n", LOG_CLIENT, dma.samplebits);
     Com_Printf("%5d submission_chunk\n", LOG_CLIENT, dma.submission_chunk);
     Com_Printf("%5d speed\n", LOG_CLIENT, dma.speed);
-    Com_Printf("0x%x dma buffer\n", LOG_CLIENT, dma.buffer);
+    Com_Printf("%p dma buffer\n", LOG_CLIENT, dma.buffer);
 }
 
 

@@ -711,7 +711,7 @@ void Cvar_List_f (void)
 		}
 		else
 		{
-			Com_Printf ("v %s\n", LOG_GENERAL, var->name, var->string);
+			Com_Printf ("v %s\n", LOG_GENERAL, var->name);
 		}
 	}
 	if (!argLen)

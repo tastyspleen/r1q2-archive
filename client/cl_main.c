@@ -737,8 +737,8 @@ void CL_Connect_f (void)
 	//reset protocol attempt if we're connecting to a different server
 	if (!NET_CompareAdr (&adr, &cls.netchan.remote_address))
 	{
-		Com_DPrintf ("Resetting protocol attempt since %s is not ", LOG_GENERAL, NET_AdrToString (&adr));
-		Com_DPrintf ("%s.\n", LOG_GENERAL, NET_AdrToString (&cls.netchan.remote_address));
+		Com_DPrintf ("Resetting protocol attempt since %s is not ", NET_AdrToString (&adr));
+		Com_DPrintf ("%s.\n", NET_AdrToString (&cls.netchan.remote_address));
 		cls.serverProtocol = 0;
 	}
 
@@ -2965,19 +2965,22 @@ void CL_SendCommand_Synchronous (void)
 void CL_Synchronous_Frame (int msec)
 {
 	static int	extratime;
-	static int  lasttimecalled;
 
 	if (dedicated->value)
 		return;
 
 	extratime += msec;
 
-	if (!cl_timedemo->value && !send_packet_now)
+	if (!cl_timedemo->value)
 	{
 		if (cls.state == ca_connected && extratime < 100)
 			return;			// don't flood packets out while connecting
 		if (extratime < 1000/cl_maxfps->value)
-			return;			// framerate is too high
+		{
+			//avoid 100% cpu usage
+			if (!NET_Client_Sleep (1))	// framerate is too high
+				return;
+		}
 	}
 
 	// let the mouse activate or deactivate
@@ -3239,6 +3242,11 @@ void CL_Frame (int msec)
 		CL_RunDLights ();
 		CL_RunLightStyles ();
 		SCR_RunConsole ();
+	}
+	else
+	{
+		//avoid 100% cpu usage
+		NET_Client_Sleep (1);
 	}
 		//cls.framecount++;
 	//}

@@ -1171,7 +1171,7 @@ void CL_ParseServerMessage (void)
 			//uuuuugly...
 			if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
 			{
-				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\n", LOG_CLIENT, cmd);
+				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\n", LOG_CLIENT);
 				CL_Disconnect(false);
 				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 				CL_Reconnect_f ();

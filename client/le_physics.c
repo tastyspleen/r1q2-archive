@@ -113,7 +113,7 @@ void LE_RunEntity (localent_t *ent)
 			//LE_Physics_Fly (ent);
 			break;
 		default:
-			Com_Printf ("LE_RunEntity: bad movetype %i", LOG_CLIENT, ent->movetype, ent->classname);
+			Com_Printf ("LE_RunEntity: bad movetype %i", LOG_CLIENT, ent->movetype);
 	}
 
 	if (ent->think && cl.time >= ent->nextthink )
