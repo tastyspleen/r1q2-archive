@@ -1301,7 +1301,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				sys_msg_time = msg.time;
 
 	#ifndef NO_SERVER
-				if (!IsDialogMessage(hwnd_Server, &msg))
+				if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
 				{
 	#endif
 					TranslateMessage (&msg);

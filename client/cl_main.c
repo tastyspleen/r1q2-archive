@@ -1233,6 +1233,8 @@ void CL_ConnectionlessPacket (void)
 		MSG_WriteString ("new");
 		MSG_EndWriting (&cls.netchan.message);
 
+		cls.key_dest = key_game;
+
 		send_packet_now = true;
 		cls.state = ca_connected;
 		return;
@@ -1530,7 +1532,7 @@ void CL_FreeLocs (void)
 	cl_locations.next = NULL;
 }
 
-void CL_LoadLoc (char *filename)
+qboolean CL_LoadLoc (const char *filename)
 {
 	cl_location_t	*loc = &cl_locations;
 	char *x, *y, *z, *name, *line;
@@ -1544,9 +1546,12 @@ void CL_LoadLoc (char *filename)
 	FS_FOpenFile (filename, &fLoc, true);
 
 	if (!fLoc)
+		fLoc = fopen (filename, "rb");
+
+	if (!fLoc)
 	{
 		Com_DPrintf ("CL_LoadLoc: %s not found\n", filename);
-		return;
+		return false;
 	}
 
 	linenum = 0;
@@ -1616,6 +1621,7 @@ void CL_LoadLoc (char *filename)
 	}
 
 	FS_FCloseFile (fLoc);
+	return true;
 }
 
 char *CL_Loc_Get (vec3_t org)
@@ -2278,7 +2284,15 @@ fixed:
 		COM_StripExtension (cl.configstrings[CS_MODELS+1], locbuff);
 		strcat (locbuff, ".loc");
 
-		CL_LoadLoc (locbuff);
+		//try basedir/moddir/maps/mapname.loc and basedir/locs/mapname.loc
+		if (!CL_LoadLoc (locbuff))
+		{
+			locbuff[0] = 'l';
+			locbuff[1] = 'o';
+			locbuff[2] = 'c';
+			locbuff[3] = 's';
+			CL_LoadLoc (locbuff);
+		}
 
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 
@@ -2812,7 +2826,7 @@ void CL_FixCvarCheats (void)
 	int			i;
 	cheatvar_t	*var;
 
-	if (Com_ServerState() == ss_demo || (!strcmp(cl.configstrings[CS_MAXCLIENTS], "1")))
+	if (cls.state == ca_disconnected || cl.attractloop || Com_ServerState() == ss_demo || (!strcmp(cl.configstrings[CS_MAXCLIENTS], "1")))
 		return;		// single player can cheat
 
 	// find all the cvars if we haven't done it yet
@@ -3027,9 +3041,7 @@ void CL_Frame (int msec)
 	if (packet_frame)
 	{
 		packet_delta = 0;
-		//inputCount = 0;
 		CL_SendCommand ();
-
 		CL_LoadDeferredModels();
 	}
 

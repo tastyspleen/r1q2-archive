@@ -344,7 +344,7 @@ static void FS_Stats_f (void)
 }
 
 #if BTREE_SEARCH
-static void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename)
+static void FS_AddToCache (const char *path, unsigned int filelen, unsigned int fileseek, const char *filename)
 {
 	void		**newitem;
 	fscache_t	*cache;
@@ -442,7 +442,7 @@ a seperate file.
 ===========
 */
 
-int FS_FOpenFile (char *filename, FILE **file, qboolean openHandle)
+int FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 {
 	fscache_t		*cache;
 	searchpath_t	*search;

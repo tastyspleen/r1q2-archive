@@ -1075,6 +1075,10 @@ void S_AddLoopSounds (void)
 
 			model = cl.model_clip[ent->modelindex];
 
+			//not loaded (deferred?)
+			if (!model)
+				continue;
+
 			origin[0] = ent->origin[0]+0.5*(model->mins[0]+model->maxs[0]);
 			origin[1] = ent->origin[1]+0.5*(model->mins[1]+model->maxs[1]);
 			origin[2] = ent->origin[2]+0.5*(model->mins[2]+model->maxs[2]);

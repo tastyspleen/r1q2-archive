@@ -870,7 +870,7 @@ char	*EXPORT FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
 void	FS_ExecAutoexec (void);
 
-int		FS_FOpenFile (char *filename, FILE /*@out@*/**file, qboolean openHandle);
+int		FS_FOpenFile (const char *filename, FILE /*@out@*/**file, qboolean openHandle);
 void	FS_FCloseFile (FILE *f);
 // note: this can't be called from another DLL, due to MS libc issues
 

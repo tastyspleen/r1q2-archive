@@ -560,11 +560,11 @@ void CL_ParseServerData (void)
 	i = MSG_ReadLong (&net_message);
 	cls.serverProtocol = i;
 
-	if (i != ORIGINAL_PROTOCOL_VERSION && i != ENHANCED_PROTOCOL_VERSION && i != 26)
-		Com_Error (ERR_DROP,"You are running protocol version %i, server is running %i. These are incompatible, please update your client to protocol version %d", ENHANCED_PROTOCOL_VERSION, i, i);
-
 	cl.servercount = MSG_ReadLong (&net_message);
 	cl.attractloop = MSG_ReadByte (&net_message);
+
+	if (i != ORIGINAL_PROTOCOL_VERSION && i != ENHANCED_PROTOCOL_VERSION && !cl.attractloop)
+		Com_Error (ERR_DROP, "Server is using unknown protocol %d.", i);
 
 	// game directory
 	str = MSG_ReadString (&net_message);
@@ -573,16 +573,19 @@ void CL_ParseServerData (void)
 	// set gamedir, fucking christ this is messy!
 	if ((*str && (!fs_gamedirvar->string || !*fs_gamedirvar->string || strcmp(fs_gamedirvar->string, str))) || (!*str && (fs_gamedirvar->string || *fs_gamedirvar->string)))
 	{
-		if (cl.attractloop)
+		if (strcmp(fs_gamedirvar->string, str))
 		{
-			Cvar_ForceSet ("game", str);
-			FS_SetGamedir (str);
+			if (cl.attractloop)
+			{
+				Cvar_ForceSet ("game", str);
+				FS_SetGamedir (str);
+			}
+			else
+			{
+				Cvar_Set("game", str);
+			}
+			Cvar_ForceSet ("$game", str);
 		}
-		else
-		{
-			Cvar_Set("game", str);
-		}
-		Cvar_ForceSet ("$game", str);
 	}
 
 	// parse player entity number

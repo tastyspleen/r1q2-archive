@@ -1733,7 +1733,9 @@ void SV_ReadPackets (void)
 				if (cl->state != cs_zombie)
 				{
 					cl->lastmessage = svs.realtime;	// don't timeout
-					SV_ExecuteClientMessage (cl);
+
+					if (!(sv.demofile && sv.state == ss_demo))
+						SV_ExecuteClientMessage (cl);
 					cl->packetCount++;
 
 					//r1: send a reply immediately if the client is connecting

@@ -915,8 +915,9 @@ void CL_ParseFrame (void)
 			if (cls.disable_servercount != cl.servercount
 				&& cl.refresh_prepped)
 				SCR_EndLoadingPlaque ();	// get rid of loading plaque
+
+			cl.sound_prepped = true;	// can start mixing ambient sounds
 		}
-		cl.sound_prepped = true;	// can start mixing ambient sounds
 	
 		// fire entity events
 		CL_FireEntityEvents (&cl.frame);
