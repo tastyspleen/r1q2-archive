@@ -1057,12 +1057,13 @@ void FS_SetGamedir (char *dir)
 
 	FS_FlushCache();
 
+#ifndef DEDICATED_ONLY
 #ifndef NO_SERVER
 	if (!dedicated->intvalue)
 #endif
 		Cbuf_AddText ("vid_restart\nsnd_restart\n");
 		//Cbuf_ExecuteText (EXEC_NOW, "vid_restart\nsnd_restart\ncl_restart\n");
-
+#endif
 
 	Com_sprintf (fs_gamedir, sizeof(fs_gamedir), "%s/%s", fs_basedir->string, dir);
 

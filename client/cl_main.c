@@ -690,7 +690,6 @@ void CL_Connect_f (void)
 
 	server = Cmd_Argv (1);
 
-
 	NET_Config (NET_CLIENT);		// allow remote
 
 	CL_Disconnect (false);

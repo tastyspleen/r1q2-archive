@@ -55,6 +55,7 @@ cvar_t	*fixedtime;
 cvar_t	*logfile_active;	// 1 = buffer log, 2 = flush after each print
 cvar_t	*logfile_timestamp;
 cvar_t	*logfile_timestamp_format;
+cvar_t	*logfile_name;
 
 #ifndef DEDICATED_ONLY
 cvar_t	*showtrace;
@@ -196,7 +197,7 @@ void Com_Printf (char *fmt, ...)
 
 		if (!logfile)
 		{
-			Com_sprintf (name, sizeof(name), "%s/qconsole.log", FS_Gamedir ());
+			Com_sprintf (name, sizeof(name), "%s/%s", FS_Gamedir (), logfile_name->string);
 			if (logfile_active->intvalue > 2)
 				logfile = fopen (name, "a");
 			else
@@ -1733,6 +1734,8 @@ void Qcommon_Init (int argc, char **argv)
 	logfile_active = Cvar_Get ("logfile", "0", 0);
 	logfile_timestamp = Cvar_Get ("logfile_timestamp", "1", 0);
 	logfile_timestamp_format = Cvar_Get ("logfile_timestamp_format", "[%Y-%m-%d %H:%M]", 0);
+	logfile_name = Cvar_Get ("logfile_name", "qconsole.log", 0);
+
 #ifndef DEDICATED_ONLY
 	showtrace = Cvar_Get ("showtrace", "0", 0);
 #endif
@@ -2005,7 +2008,7 @@ char *StripHighBits (const char *string, int highbits)
 		c = *string++;
 		if (highbits) {
 			//c &= 127;		// strip high bits
-			if (c >= 32 && c < 127)
+			if (c >= 32 && c <= 127)
 				*p++ = c;
 		} else {
 			if (c >= 32)
