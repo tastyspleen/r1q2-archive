@@ -527,7 +527,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 		SV_SpawnServer (level, spawnpoint, ss_game, attractloop, loadgame);
 
 		//r1: do we really need this?
-		Cbuf_CopyToDefer ();
+		//Cbuf_CopyToDefer ();
 	}
 
 	SV_BroadcastCommand ("reconnect\n");

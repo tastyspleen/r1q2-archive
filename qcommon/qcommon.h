@@ -419,8 +419,8 @@ void Cbuf_Execute (void);
 // Normally called once per frame, but may be explicitly invoked.
 // Do not call inside a command function!
 
-void Cbuf_CopyToDefer (void);
-void Cbuf_InsertFromDefer (void);
+//void Cbuf_CopyToDefer (void);
+//void Cbuf_InsertFromDefer (void);
 // These two functions are used to defer any pending commands while a map
 // is being loaded
 

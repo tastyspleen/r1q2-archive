@@ -580,12 +580,21 @@ pack_t *FS_LoadPackFile (char *packfile)
 	numpackfiles = header.dirlen / sizeof(dpackfile_t);
 
 	if (numpackfiles > MAX_FILES_IN_PACK)
-		Com_Error (ERR_FATAL, "%s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
+
+	if (!numpackfiles)
+	{
+		Com_Printf ("Ignoring empty packfile %s\n", packfile);
+		return NULL;
+	}
 
 	newfiles = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
 
-	fseek (packhandle, header.dirofs, SEEK_SET);
-	fread (info, 1, header.dirlen, packhandle);
+	if (fseek (packhandle, header.dirofs, SEEK_SET))
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %d in %s failed (corrupt packfile?)", header.dirofs, packfile);
+
+	if (fread (info, 1, header.dirlen, packhandle) != header.dirlen)
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory");
 
 	for (i=0 ; i<numpackfiles ; i++)
 	{

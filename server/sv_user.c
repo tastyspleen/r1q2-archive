@@ -581,7 +581,7 @@ void SV_Begin_f (void)
 	sv_client->commandMsecOverflowCount = 0;
 
 	//r1: this is in bad place
-	Cbuf_InsertFromDefer ();
+	//Cbuf_InsertFromDefer ();
 }
 
 //=============================================================================
@@ -645,7 +645,6 @@ SV_BeginDownload_f
 //char * ZLibCompressChunk(char *Chunk, int *len, int method);
 void SV_BeginDownload_f(void)
 {
-	char	*p;
 	char	*name;
 	extern	cvar_t *allow_download;
 	extern	cvar_t *allow_download_players;
@@ -668,23 +667,35 @@ void SV_BeginDownload_f(void)
 	// first off, no .. or global allow check
 
 	//r1: rewrite '\' to prevent 'download \/server.cfg from game root
-	while ((p = strstr(name, "\\")))
-		*p = '/';
+	//no good, client doesn't accept
+	//while ((p = strstr(name, "\\")))
+	//	*p = '/';
 
-	if (strstr (name, "..")
-		// leading dot is no good
-		|| *name == '.' 
+	//block the really nasty ones
+	if (*name == '\\' || name[strlen(name)-1] == '/' || strstr (name, ".."))
+	{
+		Com_Printf ("Refusing illegal download path %s to %s\n", name, sv_client->name);
+		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
+		MSG_WriteShort (&sv_client->netchan.message, -1);
+		MSG_WriteByte (&sv_client->netchan.message, 0);
+		SV_DropClient (sv_client);
+		Blackhole (sv_client->netchan.remote_address, "download exploit (%s)", name);
+		return;
+	}
+	else if (*name == '.' 
 		// leading slash bad as well, must be in subdir
 		|| *name == '/'
+		// r1: \ is bad
+		|| strstr (name, "\\")
 		// MUST be in a subdirectory	
-		|| !strstr (name, "/") )
+		|| !strstr (name, "/"))
 	{
-		Com_Printf ("Refusing illegal download %s to %s\n", name, sv_client->name);
+		Com_Printf ("Refusing bad download path %s to %s\n", name, sv_client->name);
 		MSG_BeginWriteByte (&sv_client->netchan.message, svc_download);
 		MSG_WriteShort (&sv_client->netchan.message, -1);
 		MSG_WriteByte (&sv_client->netchan.message, 0);
 		return;
-	} 
+	}
 	else if	(!allow_download->value
 			|| (strncmp(name, "players/", 8) == 0 && !((!enhanced && (int)allow_download_players->value & DL_UDP)||(enhanced && (int)allow_download_players->value & DL_TCP)))
 			|| (strncmp(name, "models/", 7) == 0 && !((!enhanced && (int)allow_download_models->value & DL_UDP)||(enhanced && (int)allow_download_models->value & DL_TCP)))

@@ -249,7 +249,7 @@ void Com_Error (int code, char *fmt, ...)
 	vsnprintf (msg, sizeof(msg)-1, fmt,argptr);
 	va_end (argptr);
 
-	if (err_fatal->value)
+	if (err_fatal && err_fatal->value)
 		code = ERR_FATAL;
 	
 	if (code == ERR_DISCONNECT)
@@ -649,14 +649,14 @@ void MSG_WriteDeltaEntity (entity_state_t *storeas, entity_state_t *from, entity
 		bits |= U_SOLID;
 
 	//take a baseline
-	if (cl_protocol == ENHANCED_PROTOCOL_VERSION) {
+	/*if (cl_protocol == ENHANCED_PROTOCOL_VERSION) {
 		if (mask == 1)
 			to->event |= 32;
 
 		//nuke the baseline
 		else if (mask == 2)
 			to->event |= 64;
-	}
+	}*/
 
 	// event is not delta compressed, just 0 compressed
 	if ( to->event  )
@@ -965,6 +965,7 @@ float MSG_ReadAngle16 (sizebuf_t *msg_read)
 void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t *move)
 {
 	int bits;
+	int msec;
 
 	memcpy (move, from, sizeof(*move));
 
@@ -994,7 +995,13 @@ void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t *move
 		move->impulse = MSG_ReadByte (msg_read);
 
 // read time to run command
-	move->msec = MSG_ReadByte (msg_read);
+	msec = MSG_ReadByte (msg_read);
+	if (msec == -1)
+		Com_Error (ERR_FATAL, "MSG_ReadDeltaUsercmd: Attempted to read past end of message");
+	else if (msec > 250)
+		Com_Printf ("MSG_ReadDeltaUsercmd: funky msec (%d)!\n", msec);
+
+	move->msec = msec;
 
 // read the light level
 	move->lightlevel = MSG_ReadByte (msg_read);

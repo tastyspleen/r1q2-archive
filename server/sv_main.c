@@ -275,36 +275,86 @@ char	*SV_StatusString (void)
 
 		if (years)
 		{
-			sprintf (tmpStr, "%d year%s", years, years == 1 ? "" : "s");
-			strcat (uptimeString, tmpStr);
+			if (sv_uptime->value == 1)
+			{
+				sprintf (tmpStr, "%d year%s", years, years == 1 ? "" : "s");
+				strcat (uptimeString, tmpStr);
+			}
+			else
+			{
+				days += 365.25;
+			}
 		}
 
 		if (days)
 		{
-			sprintf (tmpStr, "%dday%s", days, days == 1 ? "" : "s");
-			if (uptimeString[0])
-				strcat (uptimeString, ", ");
+			if (sv_uptime->value == 1)
+			{
+				sprintf (tmpStr, "%dday%s", days, days == 1 ? "" : "s");
+				if (uptimeString[0])
+					strcat (uptimeString, ", ");
+			}
+			else
+			{
+				sprintf (tmpStr, "%d+", days);
+			}
 			strcat (uptimeString, tmpStr);
 		}
 
-		if (hours)
+		if (sv_uptime->value == 1)
 		{
-			sprintf (tmpStr, "%dhr%s", hours, hours == 1 ? "" : "s");
-			if (uptimeString[0])
-				strcat (uptimeString, ", ");
-			strcat (uptimeString, tmpStr);
+			if (hours)
+			{
+				sprintf (tmpStr, "%dhr%s", hours, hours == 1 ? "" : "s");
+				if (uptimeString[0])
+					strcat (uptimeString, ", ");
+				strcat (uptimeString, tmpStr);
+			}
+		}
+		else
+		{
+			if (days || hours)
+			{
+				if (days)
+					sprintf (tmpStr, "%.2d:", hours);
+				else
+					sprintf (tmpStr, "%d:", hours);
+				strcat (uptimeString, tmpStr);
+			}
 		}
 
-		if (mins)
+		if (sv_uptime->value == 1)
 		{
-			sprintf (tmpStr, "%dmin%s", mins, mins == 1 ? "" : "s");
-			if (uptimeString[0])
-				strcat (uptimeString, ", ");
-			strcat (uptimeString, tmpStr);
+			if (mins)
+			{
+				sprintf (tmpStr, "%dmin%s", mins, mins == 1 ? "" : "s");
+				if (uptimeString[0])
+					strcat (uptimeString, ", ");
+				strcat (uptimeString, tmpStr);
+			}
+			else if (!uptimeString[0])
+			{
+				sprintf (uptimeString, "%dsec%s", secs, secs == 1 ? "" : "s");
+			}
 		}
-		else if (!uptimeString[0])
+		else
 		{
-			sprintf (uptimeString, "%dsec%s", secs, secs == 1 ? "" : "s");
+			if (days || hours || mins)
+			{
+				if (hours)
+					sprintf (tmpStr, "%.2d.", mins);
+				else
+					sprintf (tmpStr, "%d.", mins);
+				strcat (uptimeString, tmpStr);
+			}
+			if (days || hours || mins || secs)
+			{
+				if (mins)
+					sprintf (tmpStr, "%.2d", secs);
+				else
+					sprintf (tmpStr, "%d", secs);
+				strcat (uptimeString, tmpStr);
+			}
 		}
 
 		Info_SetValueForKey (serverinfo, "uptime", uptimeString);

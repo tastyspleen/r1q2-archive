@@ -139,7 +139,7 @@ void Cbuf_InsertText (char *text)
 Cbuf_CopyToDefer
 ============
 */
-void Cbuf_CopyToDefer (void)
+/*void Cbuf_CopyToDefer (void)
 {
 	if (!cmd_text.cursize)
 		return;
@@ -150,18 +150,18 @@ void Cbuf_CopyToDefer (void)
 	Com_Printf ("CopyToDefer: %d bytes: %s\n", cmd_text.cursize, defer_text_buf);
 
 	cmd_text.cursize = 0;
-}
+}*/
 
 /*
 ============
 Cbuf_InsertFromDefer
 ============
 */
-void Cbuf_InsertFromDefer (void)
+/*void Cbuf_InsertFromDefer (void)
 {
 	Cbuf_InsertText ((char *)defer_text_buf);
 	defer_text_buf[0] = 0;
-}
+}*/
 
 
 /*
