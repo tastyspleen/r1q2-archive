@@ -25,8 +25,6 @@ key up events are sent even if in console mode
 
 */
 
-
-#define		MAXCMDLINE	512
 char	key_lines[32][MAXCMDLINE];
 int		key_linepos;
 int		shift_down=false;
@@ -93,17 +91,17 @@ keyname_t keynames[] =
 	{"MOUSE4", K_MOUSE4},
 	{"MOUSE5", K_MOUSE5},
 	{"MOUSE6", K_MOUSE6},
-	{"MOUSE6", K_MOUSE7},
-	{"MOUSE6", K_MOUSE8},
-	{"MOUSE6", K_MOUSE9},
+	{"MOUSE7", K_MOUSE7},
+	{"MOUSE8", K_MOUSE8},
+	{"MOUSE9", K_MOUSE9},
 
 /*	{"JOY1", K_JOY1},
 	{"JOY2", K_JOY2},
 	{"JOY3", K_JOY3},
 	{"JOY4", K_JOY4},*/
 
-	{"AUX1", K_AUX1},
-	{"AUX2", K_AUX2},
+	//{"AUX1", K_AUX1},
+	//{"AUX2", K_AUX2},
 	{"AUX3", K_AUX3},
 	{"AUX4", K_AUX4},
 	{"AUX5", K_AUX5},
@@ -171,7 +169,8 @@ keyname_t keynames[] =
 
 void Key_CompleteCommandOld (void)
 {
-	char	*cmd, *s;
+	const char	*cmd;
+	char		*s;
 
 	s = key_lines[edit_line]+1;
 	if (*s == '\\' || *s == '/')
@@ -205,7 +204,8 @@ static void Key_CompleteCommand (void) {
 	cmd_function_t	*cmd, *cmdFound;
 	cmdalias_t		*alias, *aliasFound;
 	cvar_t			*cvar, *cvarFound;
-	char			*cmdName, *partial;
+	const char		*cmdName;
+	char			*partial;
 	int				aliasCnt, cmdCnt, cvarCnt, len, offset;
 	qboolean		checkCmds = true;
 
@@ -352,7 +352,7 @@ static void Key_CompleteCommand (void) {
 			cmdName = NULL;
 	} else {
 		if (aliasCnt + cmdCnt + cvarCnt)
-			Com_Printf ("\nPossible matches:\n");
+			Com_Printf ("\nPossible matches:\n", LOG_CLIENT);
 		if (aliasCnt > 0) {
 			//Cbuf_AddText ("echo ----\n echo Matching aliases:\n echo ----\n");
 			Cbuf_AddText (va ("aliaslist %s\n", partial));
@@ -490,7 +490,7 @@ void Key_Console (int key)
 			Cbuf_AddText (key_lines[edit_line]+1);	// valid command
 
 		Cbuf_AddText ("\n");
-		Com_Printf ("%s\n",key_lines[edit_line]);
+		Com_Printf ("%s\n", LOG_CLIENT,key_lines[edit_line]);
 		edit_line = (edit_line + 1) & 31;
 		history_line = edit_line;
 		key_lines[edit_line][0] = ']';
@@ -506,12 +506,12 @@ void Key_Console (int key)
 	{	// command completion
 		if (cl_cmdcomplete->intvalue == 1)
 		{
-			char *cmd;
+			const char *cmd;
 			int len, i;
 			char *fragment;
 			cvar_t *var;
-			char *best = "~";
-			char *least = "~";
+			const char *best = "~";
+			const char *least = "~";
 
 			len = strlen(key_lines[edit_line]);
 			for (i = 0 ; i < len - 1 ; i++)
@@ -555,11 +555,34 @@ void Key_Console (int key)
 		}
 		return;
 	}
-	
-	if ( ( key == K_BACKSPACE ) || ( key == K_LEFTARROW ) || ( key == K_KP_LEFTARROW ) || ( ( key == 'h' ) && ( keydown[K_CTRL] ) ) )
+
+	if ( key == K_LEFTARROW )
 	{
 		if (key_linepos > 1)
 			key_linepos--;
+		return;
+	}
+
+	if (key == K_RIGHTARROW)
+	{
+		if (key_lines[edit_line][key_linepos])
+			key_linepos++;
+		return;
+	}
+	
+	if ( ( key == K_BACKSPACE ) || ( ( key == 'h' ) && ( keydown[K_CTRL] ) ) )
+	{
+		if (key_linepos > 1)
+		{
+			memmove (key_lines[edit_line] + key_linepos-1, key_lines[edit_line] + key_linepos, sizeof(key_lines[edit_line])-key_linepos);
+			key_linepos--;
+		}
+		return;
+	}
+
+	if ( key == K_DEL )
+	{
+		memmove (key_lines[edit_line] + key_linepos, key_lines[edit_line] + key_linepos + 1, sizeof(key_lines[edit_line])-key_linepos-1);
 		return;
 	}
 
@@ -617,13 +640,19 @@ void Key_Console (int key)
 
 	if (key == K_HOME || key == K_KP_HOME )
 	{
-		con.display = con.current - con.totallines + 10;
+		if (keydown[K_CTRL])
+			con.display = con.current - con.totallines + 10;
+		else
+			key_linepos = 1;
 		return;
 	}
 
 	if (key == K_END || key == K_KP_END )
 	{
-		con.display = con.current;
+		if (keydown[K_CTRL])
+			con.display = con.current;
+		else
+			key_linepos = strlen(key_lines[edit_line]);
 		return;
 	}
 	
@@ -632,11 +661,24 @@ void Key_Console (int key)
 		
 	if (key_linepos < MAXCMDLINE-1)
 	{
+		int		last;
+		int		length;
+
+		length = strlen(key_lines[edit_line]);
+
+		if (length >= MAXCMDLINE-1)
+			return;
+
+		last = key_lines[edit_line][key_linepos];
+
+		memmove (key_lines[edit_line] + key_linepos+1, key_lines[edit_line] + key_linepos, length - key_linepos);
+
 		key_lines[edit_line][key_linepos] = key;
 		key_linepos++;
-		key_lines[edit_line][key_linepos] = 0;
-	}
 
+		if (!last)
+			key_lines[edit_line][key_linepos] = 0;
+	}
 }
 
 //============================================================================
@@ -644,9 +686,11 @@ void Key_Console (int key)
 qboolean	chat_team;
 char		chat_buffer[MAXCMDLINE];
 int			chat_bufferlen = 0;
+int			chat_cursorpos = 0;
 
 void Key_Message (int key)
 {
+	char	last;
 
 	if ( key == K_ENTER || key == K_KP_ENTER )
 	{
@@ -660,35 +704,87 @@ void Key_Message (int key)
 		cls.key_dest = key_game;
 		chat_bufferlen = 0;
 		chat_buffer[0] = 0;
+		chat_cursorpos = 0;
 		return;
 	}
 
 	if (key == K_ESCAPE)
 	{
 		cls.key_dest = key_game;
+		chat_cursorpos = 0;
 		chat_bufferlen = 0;
 		chat_buffer[0] = 0;
+		return;
+	}
+
+	if (key == K_BACKSPACE)
+	{
+		if (chat_cursorpos)
+		{
+			//chat_bufferlen--;
+			//chat_buffer[chat_bufferlen] = 0;
+			memmove (chat_buffer + chat_cursorpos - 1, chat_buffer + chat_cursorpos, chat_bufferlen - chat_cursorpos + 1);
+			chat_cursorpos--;
+			chat_bufferlen--;
+		}
+		return;
+	}
+
+	if (key == K_DEL)
+	{
+		if (chat_bufferlen && chat_cursorpos != chat_bufferlen)
+		{
+			memmove (chat_buffer + chat_cursorpos, chat_buffer + chat_cursorpos + 1, chat_bufferlen - chat_cursorpos + 1);
+			chat_bufferlen--;
+		}
+		return;
+	}
+
+	if (key == K_LEFTARROW)
+	{
+		if (chat_cursorpos > 0)
+			chat_cursorpos--;
+		return;
+	}
+
+	if (key == K_HOME)
+	{
+		chat_cursorpos = 0;
+		return;
+	}
+
+	if (key == K_END)
+	{
+		chat_cursorpos = chat_bufferlen;
+		return;
+	}
+
+	if (key == K_RIGHTARROW)
+	{
+		if (chat_buffer[chat_cursorpos])
+			chat_cursorpos++;
 		return;
 	}
 
 	if (key < 32 || key > 127)
 		return;	// non printable
 
-	if (key == K_BACKSPACE)
-	{
-		if (chat_bufferlen)
-		{
-			chat_bufferlen--;
-			chat_buffer[chat_bufferlen] = 0;
-		}
-		return;
-	}
-
 	if (chat_bufferlen == sizeof(chat_buffer)-1)
 		return; // all full
 
-	chat_buffer[chat_bufferlen++] = key;
-	chat_buffer[chat_bufferlen] = 0;
+	memmove (chat_buffer + chat_cursorpos + 1, chat_buffer + chat_cursorpos, chat_bufferlen - chat_cursorpos + 1);
+
+	last = chat_buffer[chat_cursorpos];
+
+	chat_buffer[chat_cursorpos] = key;
+
+	chat_bufferlen++;
+	chat_cursorpos++;
+
+	if (!last)
+	{
+		chat_buffer[chat_cursorpos] = 0;
+	}
 }
 
 //============================================================================
@@ -758,8 +854,7 @@ Key_SetBinding
 */
 void Key_SetBinding (int keynum, char *binding)
 {
-	char	*new;
-	int		l;
+	char	*newKey;
 			
 	if (keynum == -1)
 		return;
@@ -772,11 +867,12 @@ void Key_SetBinding (int keynum, char *binding)
 	}
 			
 // allocate memory for new binding
-	l = strlen (binding);	
-	new = Z_TagMalloc (l+1, TAGMALLOC_CLIENT_KEYBIND);
-	strcpy (new, binding);
-	new[l] = 0;
-	keybindings[keynum] = new;	
+	//l = strlen (binding);	
+	//newKey = Z_TagMalloc (l+1, TAGMALLOC_CLIENT_KEYBIND);
+	//strcpy (newKey, binding);
+	//newKey[l] = 0;
+	newKey = CopyString (binding, TAGMALLOC_CLIENT_KEYBIND);
+	keybindings[keynum] = newKey;	
 }
 
 /*
@@ -790,14 +886,14 @@ void Key_Unbind_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("unbind <key> : remove commands from a key\n");
+		Com_Printf ("unbind <key> : remove commands from a key\n", LOG_CLIENT);
 		return;
 	}
 	
 	b = Key_StringToKeynum (Cmd_Argv(1));
 	if (b==-1)
 	{
-		Com_Printf ("\"%s\" isn't a valid key\n", Cmd_Argv(1));
+		Com_Printf ("\"%s\" isn't a valid key\n", LOG_CLIENT, Cmd_Argv(1));
 		return;
 	}
 
@@ -828,22 +924,22 @@ void Key_Bind_f (void)
 
 	if (c < 2)
 	{
-		Com_Printf ("bind <key> [command] : attach a command to a key\n");
+		Com_Printf ("bind <key> [command] : attach a command to a key\n", LOG_CLIENT);
 		return;
 	}
 	b = Key_StringToKeynum (Cmd_Argv(1));
 	if (b==-1)
 	{
-		Com_Printf ("\"%s\" isn't a valid key\n", Cmd_Argv(1));
+		Com_Printf ("\"%s\" isn't a valid key\n", LOG_CLIENT, Cmd_Argv(1));
 		return;
 	}
 
 	if (c == 2)
 	{
 		if (keybindings[b])
-			Com_Printf ("\"%s\" = \"%s\"\n", Cmd_Argv(1), keybindings[b] );
+			Com_Printf ("\"%s\" = \"%s\"\n", LOG_CLIENT, Cmd_Argv(1), keybindings[b] );
 		else
-			Com_Printf ("\"%s\" is not bound\n", Cmd_Argv(1) );
+			Com_Printf ("\"%s\" is not bound\n", LOG_CLIENT, Cmd_Argv(1) );
 		return;
 	}
 	
@@ -888,7 +984,7 @@ void Key_Bindlist_f (void)
 
 	for (i=0 ; i<256 ; i++)
 		if (keybindings[i] && keybindings[i][0])
-			Com_Printf ("%s \"%s\"\n", Key_KeynumToString(i), keybindings[i]);
+			Com_Printf ("%s \"%s\"\n", LOG_CLIENT, Key_KeynumToString(i), keybindings[i]);
 }
 
 
@@ -942,8 +1038,9 @@ void Key_Init (void)
 	consolekeys[K_KP_MINUS] = true;
 	consolekeys[K_KP_5] = true;
 
-	consolekeys['`'] = false;
-	consolekeys['~'] = false;
+	consolekeys['`'] = true;
+	consolekeys['~'] = true;
+	consolekeys[K_DEL] = true;
 
 	for (i=0 ; i<256 ; i++)
 		keyshift[i] = i;
@@ -1011,7 +1108,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 	if (down)
 	{
 		key_repeats[key]++;
-		if (cls.key_dest != key_console && key != K_BACKSPACE 
+		if (cls.key_dest != key_console && key != K_BACKSPACE && key != K_DEL && key != K_LEFTARROW && key != K_RIGHTARROW
 			&& key != K_PAUSE 
 			&& key != K_PGUP 
 			&& key != K_KP_PGUP 
@@ -1021,7 +1118,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 			return;	// ignore most autorepeats
 			
 		if (key >= 200 && !keybindings[key])
-			Com_Printf ("%s is unbound, hit F4 to set.\n", Key_KeynumToString (key) );
+			Com_Printf ("%s is unbound, hit F4 to set.\n", LOG_CLIENT, Key_KeynumToString (key) );
 	}
 	else
 	{
@@ -1032,7 +1129,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 		shift_down = down;
 
 	// console key is hardcoded, so the user can never unbind it
-	if ((key == '`' || key == '~') && !keydown[K_SHIFT])
+	if ((key == '`' || key == '~') && !shift_down)
 	{
 		if (!down)
 			return;
@@ -1127,7 +1224,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 	|| (cls.key_dest == key_game && ( cls.state == ca_active || !consolekeys[key] ) ) )
 	{
 		kb = keybindings[key];
-		if (kb && *kb)
+		if (kb && kb[0])
 		{
 			if (kb[0] == '+')
 			{	// button commands add keynum and time as a parm

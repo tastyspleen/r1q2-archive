@@ -17,16 +17,17 @@
 #include <libc.h>
 #endif
 
-unsigned int net_inittime;
-unsigned long long net_total_in;
-unsigned long long net_total_out;
-unsigned long long net_packets_in;
-unsigned long long net_packets_out;
+static unsigned int net_inittime;
+
+static unsigned long long net_total_in;
+static unsigned long long net_total_out;
+static unsigned long long net_packets_in;
+static unsigned long long net_packets_out;
 
 int			server_port;
 //netadr_t	net_local_adr;
 
-int			ip_sockets[2];
+static int			ip_sockets[2];
 
 char *NET_ErrorString (void);
 
@@ -132,7 +133,7 @@ void Net_Stats_f (void)
 
 	Com_Printf ("Network up for %i seconds.\n"
 				"%llu bytes in %llu packets received (av: %i kbps)\n"
-				"%llu bytes in %llu packets sent (av: %i kbps)\n",
+				"%llu bytes in %llu packets sent (av: %i kbps)\n", LOG_NET,
 				
 				diff,
 				net_total_in, net_packets_in, (int)(((net_total_in * 8) / 1024) / diff),
@@ -178,12 +179,13 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 		if (err == EWOULDBLOCK)
 			return 0;
-		if (err == ECONNREFUSED) {
+		if (err == ECONNREFUSED)
+		{
 			SockadrToNetadr (&from, net_from);
-			Com_Printf ("NET_GetPacket: %s from %s", NET_ErrorString(), NET_AdrToString (net_from));
+			Com_Printf ("NET_GetPacket: %s from %s\n", LOG_NET, NET_ErrorString(), NET_AdrToString (net_from));
 			return -1;
 		}
-		Com_Printf ("NET_GetPacket: %s", NET_ErrorString());
+		Com_Printf ("NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
@@ -194,7 +196,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 	if (ret == net_message->maxsize)
 	{
-		Com_Printf ("Oversize packet from %s\n", NET_AdrToString (net_from));
+		Com_Printf ("Oversize packet from %s\n", LOG_NET, NET_AdrToString (net_from));
 		return 0;
 	}
 
@@ -205,7 +207,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 //=============================================================================
 
-int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
+int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)
 {
 	int		ret;
 	struct sockaddr_in	addr;
@@ -241,7 +243,7 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 	ret = sendto (net_socket, data, length, 0, (struct sockaddr *)&addr, sizeof(addr) );
 	if (ret == -1)
 	{
-		Com_Printf ("NET_SendPacket to %s: ERROR: %s\n", NET_AdrToString(to), NET_ErrorString());
+		Com_Printf ("NET_SendPacket to %s: ERROR: %s\n", LOG_NET, NET_AdrToString(to), NET_ErrorString());
 		return 0;
 	}
 
@@ -277,21 +279,21 @@ int NET_IPSocket (char *net_interface, int port)
 
 	if ((newsocket = socket (PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
 	{
-		Com_Printf ("UDP_OpenSocket: Couldn't make socket: %s\n", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't make socket: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
 	// make it non-blocking
 	if (ioctl (newsocket, FIONBIO, &_true) == -1)
 	{
-		Com_Printf ("UDP_OpenSocket: Couldn't make non-blocking: %s\n", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't make non-blocking: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
 	// make it broadcast capable
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
-		Com_Printf ("UDP_OpenSocket: Couldn't set SO_BROADCAST: %s\n", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't set SO_BROADCAST: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
@@ -310,7 +312,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
 		close (newsocket);
-		Com_Printf ("UDP_OpenSocket: Couldn't bind to port %d: %s\n", port, NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't bind to UDP port %d: %s\n", LOG_NET, port, NET_ErrorString());
 		return 0;
 	}
 

@@ -89,7 +89,7 @@ void OpenAL_CheckForError (void)
 {
 	int error;
 	if ((error = alGetError()) != AL_NO_ERROR)
-		Com_Printf ("OpenAL: ERROR: %s\n", GetALErrorString(error));
+		Com_Printf ("OpenAL: ERROR: %s\n", LOG_CLIENT|LOG_ERROR, GetALErrorString(error));
 }
 
 /*
@@ -100,7 +100,7 @@ Show and clear OpenAL Library error message, if any.
 */
 void DisplayALError (char *msg, int code)
 {
-	Com_Printf ("OpenAL: Error: %s(%.2x)\n", msg, code);
+	Com_Printf ("OpenAL: Error: %s(%.2x)\n", LOG_CLIENT|LOG_ERROR, msg, code);
 }
 
 void OpenAL_DestroyBuffers (void)
@@ -146,7 +146,7 @@ qboolean AL_Attenuated (int i)
 
 	dist = VectorNormalize (source_vec) - SOUND_FULLVOLUME;
 
-	if (dist < 0)
+	if (FLOAT_LT_ZERO(dist))
 		dist = 0;	// close enough to be at full volume
 
 	dist *= dist_mult;		// different attenuation levels
@@ -281,7 +281,7 @@ void OpenAL_Shutdown (void)
 	alcCloseDevice(Device);
 
 	openal_active = 0;
-	Com_Printf ("OpenAL: Shutdown complete.\n");
+	Com_Printf ("OpenAL: Shutdown complete.\n", LOG_CLIENT);
 }
 
 ALint OpenAL_GetFreeBuffer (void)
@@ -318,7 +318,7 @@ qboolean OpenAL_Init (void)
 	ALCdevice *Device;
 
 	if (openal_active) {
-		Com_Printf ("Error: OpenAL_Init when openal_active = 1\n");
+		Com_Printf ("Error: OpenAL_Init when openal_active = 1\n", LOG_CLIENT|LOG_ERROR);
 		return 1;
 	}
 
@@ -326,7 +326,7 @@ qboolean OpenAL_Init (void)
 
 	if (Device == NULL)
 	{
-		Com_Printf ("OpenAL: DirectSound3D unavailable; cannot continue\n");
+		Com_Printf ("OpenAL: DirectSound3D unavailable; cannot continue\n", LOG_CLIENT|LOG_ERROR);
 		return 1;
 	}
 
@@ -335,7 +335,7 @@ qboolean OpenAL_Init (void)
 
 	if (Context == NULL)
 	{
-		Com_Printf ("OpenAL: unable to create rendering context; cannot continue\n");
+		Com_Printf ("OpenAL: unable to create rendering context; cannot continue\n", LOG_CLIENT|LOG_ERROR);
 		return 1;
 	}
 
@@ -344,7 +344,7 @@ qboolean OpenAL_Init (void)
 
 	if (alcGetError(Device) != ALC_NO_ERROR)
 	{
-		Com_Printf ("OpenAL: unable to activate rendering context; cannot continue\n");
+		Com_Printf ("OpenAL: unable to activate rendering context; cannot continue\n", LOG_CLIENT|LOG_ERROR);
 		return 1;
 	}
 
@@ -377,7 +377,7 @@ qboolean OpenAL_Init (void)
 		int major, minor;
 		alcGetIntegerv (Device, ALC_MAJOR_VERSION, sizeof(major), &major);
 		alcGetIntegerv (Device, ALC_MINOR_VERSION, sizeof(minor), &minor);
-		Com_Printf ("...OpenAL %d.%d on %s (%s %s)\n", major, minor, alcGetString (Device, ALC_DEFAULT_DEVICE_SPECIFIER),
+		Com_Printf ("...OpenAL %d.%d on %s (%s %s)\n", LOG_CLIENT, major, minor, alcGetString (Device, ALC_DEFAULT_DEVICE_SPECIFIER),
 			alGetString (AL_VENDOR), alGetString (AL_RENDERER));
 	}
 
@@ -394,7 +394,7 @@ qboolean OpenAL_Init (void)
 
 	openAlMaxBuffers = i;
 
-	Com_Printf ("...Generated %d buffers.\n", openAlMaxBuffers);
+	Com_Printf ("...Generated %d buffers.\n", LOG_CLIENT, openAlMaxBuffers);
 
 	// Generate as many sources as possible (up to 64)
 	for (i = 0; i < MAX_OPENAL_SOURCES ; i++)
@@ -406,10 +406,10 @@ qboolean OpenAL_Init (void)
 
 	openAlMaxSources = i;
 
-	Com_Printf ("...Generated %d sources.\n", openAlMaxSources);
+	Com_Printf ("...Generated %d sources.\n", LOG_CLIENT, openAlMaxSources);
 
 	if (openAlMaxSources <= 32)
-		Com_Printf ("WARNING: Only %d sources available. This probably isn't enough, it is recommended you go back to DirectSound.\n", openAlMaxSources);
+		Com_Printf ("WARNING: Only %d sources available. This probably isn't enough, it is recommended you go back to DirectSound.\n", LOG_CLIENT, openAlMaxSources);
 
 	// Load in samples to be used by Test functions
 

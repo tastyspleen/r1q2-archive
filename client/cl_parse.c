@@ -24,34 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 int			serverPacketCount;
 qboolean	gotFrameFromServerPacket;
 
-char *svc_strings[256] =
-{
-	"svc_bad",
-
-	"svc_muzzleflash",
-	"svc_muzzlflash2",
-	"svc_temp_entity",
-	"svc_layout",
-	"svc_inventory",
-
-	"svc_nop",
-	"svc_disconnect",
-	"svc_reconnect",
-	"svc_sound",
-	"svc_print",
-	"svc_stufftext",
-	"svc_serverdata",
-	"svc_configstring",
-	"svc_spawnbaseline",	
-	"svc_centerprint",
-	"svc_download",
-	"svc_playerinfo",
-	"svc_packetentities",
-	"svc_deltapacketentities",
-	"svc_frame",
-	"svc_zpacket",
-	"svc_zdownload"
-};
+void CL_Reconnect_f (void);
 
 #ifdef _DEBUG
 typedef struct dlqueue_s
@@ -85,7 +58,7 @@ void CL_AddToDownloadQueue (char *path)
 	dlq->next = NULL;
 	strncpy (dlq->filename, path, sizeof(dlq->filename)-1);
 
-	Com_Printf ("DLQ: Added %s\n", dlq->filename);
+	Com_Printf ("DLQ: Added %s\n", LOG_CLIENT, dlq->filename);
 }
 
 void CL_RemoveFromDownloadQueue (char *path)
@@ -136,7 +109,7 @@ void CL_RunDownloadQueue (void)
 		dlq  = dlq->next;
 
 		if (CL_CheckOrDownloadFile (dlq->filename)) {
-			Com_Printf ("DLQ: Removed %s\n", dlq->filename);
+			Com_Printf ("DLQ: Removed %s\n", LOG_CLIENT, dlq->filename);
 			dlq->prev->next = dlq->next;
 			if (dlq->next)
 				dlq->next->prev = dlq->prev;
@@ -145,7 +118,7 @@ void CL_RunDownloadQueue (void)
 			dlq = dlq->prev;
 			Z_Free (old);
 		} else {
-			Com_Printf ("DLQ: Started %s\n", dlq->filename);
+			Com_Printf ("DLQ: Started %s\n", LOG_CLIENT, dlq->filename);
 			return;
 		}
 	}
@@ -182,7 +155,7 @@ void CL_FinishDownload (void)
 
 	r = rename (oldn, newn);
 	if (r)
-		Com_Printf ("failed to rename.\n");
+		Com_Printf ("failed to rename.\n", LOG_CLIENT);
 
 #ifdef _DEBUG
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && (strstr(newn, "players"))) {
@@ -209,41 +182,39 @@ to start a download from the server.
 */
 qboolean	CL_CheckOrDownloadFile (char *filename)
 {
-	FILE *fp;
+	FILE	*fp;
+	int		length;
 	char	*p;
 	char	name[MAX_OSPATH];
-	static char lastfilename[MAX_QPATH] = {0};
+	static char lastfilename[MAX_OSPATH] = {0};
 
 	//r1: don't attempt same file many times
-	if (!Q_stricmp (filename, lastfilename))
-	{
-		Com_DPrintf ("Duplicate path check (%s)\n", filename);
+	if (!strcmp (filename, lastfilename))
 		return true;
-	}
 
-	Q_strncpy (lastfilename, filename, sizeof(lastfilename)-1);
+	strcpy (lastfilename, filename);
 
 	if (strstr (filename, ".."))
 	{
-		Com_Printf ("Refusing to check a path with .. (%s)\n", filename);
+		Com_Printf ("Refusing to check a path with .. (%s)\n", LOG_CLIENT, filename);
 		return true;
 	}
 
 	if (strchr (filename, ' '))
 	{
-		Com_Printf ("Refusing to check a path containing spaces (%s)\n", filename);
+		Com_Printf ("Refusing to check a path containing spaces (%s)\n", LOG_CLIENT, filename);
 		return true;
 	}
 
 	if (strchr (filename, ':'))
 	{
-		Com_Printf ("Refusing to check a path containing a colon (%s)\n", filename);
+		Com_Printf ("Refusing to check a path containing a colon (%s)\n", LOG_CLIENT, filename);
 		return true;
 	}
 
-	if (*filename == '/')
+	if (filename[0] == '/')
 	{
-		Com_Printf ("Refusing to check a path starting with / (%s)\n", filename);
+		Com_Printf ("Refusing to check a path starting with / (%s)\n", LOG_CLIENT, filename);
 		return true;
 	}
 
@@ -253,16 +224,25 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 		return true;
 	}
 
-	Q_strncpy (cls.downloadname, filename, sizeof(cls.downloadname)-1);
+	strcpy (cls.downloadname, filename);
 
 	//r1: fix \ to /
-	while ((p = strstr(cls.downloadname, "\\")))
+	while ((p = strchr(cls.downloadname, '\\')))
 		*p = '/';
 
-	//r1: verify we are giving the server a legal path
-	if (cls.downloadname[strlen(cls.downloadname)-1] == '/' || !strstr (cls.downloadname, "/"))
+	length = strlen(cls.downloadname);
+
+	//normalize path
+	if (cls.downloadname[0] == '.' && cls.downloadname[1] == '/')
 	{
-		Com_Printf ("Refusing to download bad path (%s)\n", filename);
+		memmove (cls.downloadname, cls.downloadname +2, length-1);
+		length -=2;
+	}
+
+	//r1: verify we are giving the server a legal path
+	if (cls.downloadname[length-1] == '/')
+	{
+		Com_Printf ("Refusing to download bad path (%s)\n", LOG_CLIENT, filename);
 		return true;
 	}
 
@@ -280,7 +260,9 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 //	FS_CreatePath (name);
 
 	fp = fopen (name, "r+b");
-	if (fp) { // it exists
+	if (fp)
+	{
+		// it exists
 		int len;
 		
 		fseek(fp, 0, SEEK_END);
@@ -289,22 +271,26 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 		cls.download = fp;
 
 		// give the server an offset to start the download
-		Com_Printf ("Resuming %s\n", cls.downloadname);
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i udp-zlib", cls.downloadname, len));
-		} else {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i", cls.downloadname, len));
-		}
-	} else {
-		Com_Printf ("Downloading %s\n", cls.downloadname);
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0 udp-zlib", cls.downloadname));
-		} else {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\"", cls.downloadname));
-		}
+		Com_Printf ("Resuming %s\n", LOG_CLIENT, cls.downloadname);
+
+		MSG_WriteByte (clc_stringcmd);
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+			MSG_WriteString (va("download \"%s\" %i udp-zlib", cls.downloadname, len));
+		else
+			MSG_WriteString (va("download \"%s\" %i", cls.downloadname, len));
 	}
+	else
+	{
+		Com_Printf ("Downloading %s\n", LOG_CLIENT, cls.downloadname);
+
+		MSG_WriteByte (clc_stringcmd);
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+			MSG_WriteString (va("download \"%s\" 0 udp-zlib", cls.downloadname));
+		else
+			MSG_WriteString (va("download \"%s\"", cls.downloadname));
+	}
+
+	MSG_EndWriting (&cls.netchan.message);
 
 	send_packet_now = true;
 	cls.downloadpending = true;
@@ -327,7 +313,7 @@ void CL_Download_f (void)
 	char	*filename;
 
 	if (Cmd_Argc() != 2) {
-		Com_Printf("Usage: download <filename>\n");
+		Com_Printf("Usage: download <filename>\n", LOG_CLIENT);
 		return;
 	}
 
@@ -336,26 +322,26 @@ void CL_Download_f (void)
 
 	if (strstr (filename, ".."))
 	{
-		Com_Printf ("Refusing to download a path with .. (%s)\n", filename);
+		Com_Printf ("Refusing to download a path with .. (%s)\n", LOG_CLIENT, filename);
 		return;
 	}
 
 	if (cls.state < ca_connected)
 	{
-		Com_Printf ("Not connected.\n");
+		Com_Printf ("Not connected.\n", LOG_CLIENT);
 		return;
 	}
 
 	if (FS_LoadFile (filename, NULL) != -1)
 	{	// it exists, no need to download
-		Com_Printf("File already exists.\n");
+		Com_Printf("File already exists.\n", LOG_CLIENT);
 		return;
 	}
 
 	strncpy (cls.downloadname, filename, sizeof(cls.downloadname)-1);
 
 	//r1: fix \ to /
-	while ((p = strstr(cls.downloadname, "\\")))
+	while ((p = strchr(cls.downloadname, '\\')))
 		*p = '/';
 
 	// download to a temp name, and only rename
@@ -379,23 +365,24 @@ void CL_Download_f (void)
 		cls.download = fp;
 
 		// give the server an offset to start the download
-		Com_Printf ("Resuming %s\n", cls.downloadname);
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+		Com_Printf ("Resuming %s\n", LOG_CLIENT, cls.downloadname);
+		MSG_WriteByte (clc_stringcmd);
 		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i udp-zlib", cls.downloadname, len));
+			MSG_WriteString (va("download \"%s\" %i udp-zlib", cls.downloadname, len));
 		} else {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i", cls.downloadname, len));
+			MSG_WriteString (va("download \"%s\" %i", cls.downloadname, len));
 		}
 	} else {
-		Com_Printf ("Downloading %s\n", cls.downloadname);
+		Com_Printf ("Downloading %s\n", LOG_CLIENT, cls.downloadname);
 	
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+		MSG_WriteByte (clc_stringcmd);
 		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0 udp-zlib", cls.downloadname));
+			MSG_WriteString (va("download \"%s\" 0 udp-zlib", cls.downloadname));
 		} else {
-			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0", cls.downloadname));
+			MSG_WriteString (va("download \"%s\" 0", cls.downloadname));
 		}
 	}
+	MSG_EndWriting (&cls.netchan.message);
 
 	send_packet_now = true;
 }
@@ -403,15 +390,15 @@ void CL_Download_f (void)
 void CL_Passive_f (void)
 {
 	if (cls.state != ca_disconnected) {
-		Com_Printf ("Passive mode can only be modified when you are disconnected.\n");
+		Com_Printf ("Passive mode can only be modified when you are disconnected.\n", LOG_CLIENT);
 	} else {
 		cls.passivemode = !cls.passivemode;
 
 		if (cls.passivemode) {
 			NET_Config (NET_CLIENT);
-			Com_Printf ("Listening for passive connections on port %d\n", (int)Cvar_VariableValue ("ip_clientport"));
+			Com_Printf ("Listening for passive connections on port %d\n", LOG_CLIENT, (int)Cvar_VariableValue ("ip_clientport"));
 		} else {
-			Com_Printf ("No longer listening for passive connections.\n");
+			Com_Printf ("No longer listening for passive connections.\n", LOG_CLIENT);
 		}
 	}
 }
@@ -454,9 +441,12 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	size = MSG_ReadShort (&net_message);
 	percent = MSG_ReadByte (&net_message);
 
-	if (size == -1)
+	if (size < 0)
 	{
-		Com_Printf ("Server does not have this file.\n");
+		if (size == -1)
+			Com_Printf ("Server does not have this file.\n", LOG_CLIENT);
+		else
+			Com_Printf ("Bad download data from server.\n", LOG_CLIENT);
 
 		//r1: nuke the temp filename
 		*cls.downloadtempname = 0;
@@ -480,7 +470,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	{
 		if (!*cls.downloadtempname)
 		{
-			Com_Printf ("Received download packet without request. Ignored.\n");
+			Com_Printf ("Received download packet without request. Ignored.\n", LOG_CLIENT);
 			return;
 		}
 		CL_DownloadFileName(name, sizeof(name), cls.downloadtempname);
@@ -490,9 +480,8 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		cls.download = fopen (name, "wb");
 		if (!cls.download)
 		{
-			if (!cls.dlserverport)
-				net_message.readcount += size;
-			Com_Printf ("Failed to open %s\n", cls.downloadtempname);
+			net_message.readcount += size;
+			Com_Printf ("Failed to open %s\n", LOG_CLIENT, cls.downloadtempname);
 			cls.downloadpending = false;
 			CL_RequestNextDownload ();
 			return;
@@ -510,13 +499,13 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		if (!uncompressedLen)
 			Com_Error (ERR_DROP, "uncompressedLen == 0");
 
-		ZLibDecompress (net_message.data + net_message.readcount, size, uncompressed, uncompressedLen, -15);
+		ZLibDecompress (net_message_buffer + net_message.readcount, size, uncompressed, uncompressedLen, -15);
 		fwrite (uncompressed, 1, uncompressedLen, cls.download);
 		Com_DPrintf ("svc_zdownload(%s): %d -> %d\n", cls.downloadname, size, uncompressedLen);
 	}
 	else
 	{
-		fwrite (net_message.data + net_message.readcount, 1, size, cls.download);
+		fwrite (net_message_buffer + net_message.readcount, 1, size, cls.download);
 	}
 
 	net_message.readcount += size;
@@ -525,8 +514,9 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	{
 		cls.downloadpercent = percent;
 
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		SZ_Print (&cls.netchan.message, "nextdl");
+		MSG_WriteByte (clc_stringcmd);
+		MSG_Print ("nextdl");
+		MSG_EndWriting (&cls.netchan.message);
 		send_packet_now = true;
 	}
 	else
@@ -577,10 +567,18 @@ void CL_ParseServerData (void)
 	str = MSG_ReadString (&net_message);
 	strncpy (cl.gamedir, str, sizeof(cl.gamedir)-1);
 
-	// set gamedir
+	// set gamedir, fucking christ this is messy!
 	if ((*str && (!fs_gamedirvar->string || !*fs_gamedirvar->string || strcmp(fs_gamedirvar->string, str))) || (!*str && (fs_gamedirvar->string || *fs_gamedirvar->string)))
 	{
-		Cvar_Set("game", str);
+		if (cl.attractloop)
+		{
+			Cvar_ForceSet ("game", str);
+			FS_SetGamedir (str);
+		}
+		else
+		{
+			Cvar_Set("game", str);
+		}
 		Cvar_ForceSet ("$game", str);
 	}
 
@@ -590,7 +588,6 @@ void CL_ParseServerData (void)
 	// get the full level name
 	str = MSG_ReadString (&net_message);
 
-	// read in download server port (if any)
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && !cl.attractloop)
 		cl.enhancedServer = MSG_ReadByte (&net_message);
 	else
@@ -602,14 +599,15 @@ void CL_ParseServerData (void)
 	{	// playing a cinematic or showing a pic, not a level
 		//SCR_PlayCinematic (str);
 		// tell the server to advance to the next map / cinematic
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		SZ_Print (&cls.netchan.message, va("nextserver %i\n", cl.servercount));
+		MSG_WriteByte (clc_stringcmd);
+		MSG_Print (va("nextserver %i\n", cl.servercount));
+		MSG_EndWriting (&cls.netchan.message);
 	}
 	else
 	{
 		// seperate the printfs so the server message can have a color
-		Com_Printf("\n\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
-		Com_Printf ("\2%s\n", str);
+		Com_Printf("\n\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n", LOG_CLIENT);
+		Com_Printf ("\2%s\n", LOG_CLIENT, str);
 
 		// need to prep refresh at next oportunity
 		cl.refresh_prepped = false;
@@ -715,11 +713,20 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	// isolate the player's name
 	Q_strncpy(ci->name, s, sizeof(ci->name)-1);
 
+	i = 0;
+
 	t = strchr (s, '\\');
 	if (t)
 	{
-		ci->name[t-s] = 0;
-		s = t+1;
+		if (t - s >= sizeof(ci->name)-1)
+		{
+			i = -1;
+		}
+		else
+		{
+			ci->name[t-s] = 0;
+			s = t+1;
+		}
 	}
 
 	//r1ch: check sanity of paths: only allow printable data
@@ -728,13 +735,13 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	{
 		if (!isprint (*t))
 		{
-			*s = 0;
+			i = -1;
 			break;
 		}
 		t++;
 	}
 
-	if (*s == 0)
+	if (s[0] == 0 || i == -1)
 	{
 		//strcpy (model_filename, "players/male/tris.md2");
 		//strcpy (weapon_filename, "players/male/weapon.md2");
@@ -749,7 +756,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	}
 	else
 	{
-		strcpy (model_name, s);
+		Q_strncpy (model_name, s, sizeof(model_name)-1);
 
 		t = strchr(model_name, '/');
 		if (!t)
@@ -757,7 +764,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 
 		if (!t)
 		{
-			memcpy (model_name, "male\0grunt\0", 11);
+			memcpy (model_name, "male\0grunt\0\0\0\0\0\0", 16);
 			s = "male\0grunt";
 		}
 		else
@@ -768,7 +775,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		//strcpy (original_model_name, model_name);
 
 		// isolate the skin name
-		strcpy (skin_name, s + strlen(model_name) + 1);
+		Q_strncpy (skin_name, s + strlen(model_name) + 1, sizeof(skin_name)-1);
 		//strcpy (original_skin_name, s + strlen(model_name) + 1);
 
 		// model file
@@ -897,26 +904,52 @@ CL_ParseConfigString
 void CL_ParseConfigString (void)
 {
 	int		i;
+	int		length;
 	char	*s;
 	char	olds[MAX_QPATH];
 
 	i = MSG_ReadShort (&net_message);
 	if (i < 0 || i >= MAX_CONFIGSTRINGS)
-		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring >= MAX_CONFIGSTRINGS");
+		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring %d >= MAX_CONFIGSTRINGS", i);
 	s = MSG_ReadString(&net_message);
 
 	Q_strncpy (olds, cl.configstrings[i], sizeof(olds)-1);
 
+	//Com_Printf ("cs: %i=%s\n", LOG_GENERAL, i, MakePrintable (s));
+
 	//r1ch: only allow statusbar to overflow
-	if (i >= CS_STATUSBAR && i < CS_AIRACCEL)
+	/*if (i >= CS_STATUSBAR && i < CS_AIRACCEL)
 		strncpy (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (CS_AIRACCEL - i))-1);
 	else
+		Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);*/
+
+	//r1: overflow may be desired by some mods in stats programs for example. who knows.
+	length = strlen(s);
+
+	if (length >= (sizeof(cl.configstrings[0]) * (MAX_CONFIGSTRINGS-i)) - 1)
+		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring %d exceeds available space", i);
+
+	//r1: don't allow basic things to overflow
+	if ((i < CS_STATUSBAR && i >= CS_AIRACCEL) && (i < CS_GENERAL))
+	{
+		if (length >= MAX_QPATH)
+			Com_Printf ("WARNING: Configstring %d of length %d exceeds MAX_QPATH.\n", LOG_CLIENT|LOG_WARNING, i, length);
 		Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
+	}
+	else
+	{
+		strcpy (cl.configstrings[i], s);
+	}
 
 	// do something apropriate
-
-	if (i >= CS_LIGHTS && i < CS_LIGHTS+MAX_LIGHTSTYLES)
+	if (i == CS_AIRACCEL)
+	{
+		pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
+	}
+	else if (i >= CS_LIGHTS && i < CS_LIGHTS+MAX_LIGHTSTYLES)
+	{
 		CL_SetLightstyle (i - CS_LIGHTS);
+	}
 #ifdef CD_AUDIO
 	else if (i == CS_CDTRACK)
 	{
@@ -959,14 +992,14 @@ void CL_ParseConfigString (void)
 		//r1: hack to avoid parsing non-skins from mods that overload CS_PLAYERSKINS
 		//FIXME: how reliable is CS_MAXCLIENTS?
 		i -= CS_PLAYERSKINS;
-		if (cl.configstrings[CS_MAXCLIENTS][0] && i < atoi(cl.configstrings[CS_MAXCLIENTS]))
+		if ((cl.configstrings[CS_MAXCLIENTS][0] && i < atoi(cl.configstrings[CS_MAXCLIENTS])) || Com_ServerState() == ss_demo)
 		{
 			if (cl.refresh_prepped && strcmp(olds, s))
 				CL_ParseClientinfo (i);
 		}
 		else
 		{
-			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin '%s'\n", s);
+			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin '%s'\n", MakePrintable(s));
 		}
 	}
 }
@@ -1047,7 +1080,7 @@ void CL_ParseStartSoundPacket(void)
 void SHOWNET(char *s)
 {
 	if (cl_shownet->intvalue>=2)
-		Com_Printf ("%3i:%s\n", net_message.readcount-1, s);
+		Com_Printf ("%3i:%s\n", LOG_CLIENT, net_message.readcount-1, s);
 }
 
 /*
@@ -1065,9 +1098,9 @@ void CL_ParseServerMessage (void)
 // if recording demos, copy the message out
 //
 	if (cl_shownet->intvalue == 1)
-		Com_Printf ("%i ",net_message.cursize);
+		Com_Printf ("%i ", LOG_CLIENT, net_message.cursize);
 	else if (cl_shownet->intvalue >= 2)
-		Com_Printf ("------------------\n");
+		Com_Printf ("------------------\n", LOG_CLIENT);
 
 	serverPacketCount++;
 	gotFrameFromServerPacket = false;
@@ -1094,7 +1127,7 @@ void CL_ParseServerMessage (void)
 		if (cl_shownet->intvalue>=2)
 		{
 			if (cmd >= svc_max_enttypes)
-				Com_Printf ("%3i:BAD CMD %i\n", net_message.readcount-1,cmd);
+				Com_Printf ("%3i:BAD CMD %i\n", LOG_CLIENT, net_message.readcount-1,cmd);
 			else
 				SHOWNET(svc_strings[cmd]);
 		}
@@ -1127,11 +1160,23 @@ void CL_ParseServerMessage (void)
 			break;
 			
 		case svc_disconnect:
-			Com_Error (ERR_DISCONNECT,"Server disconnected\n");
+			//uuuuugly...
+			if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
+			{
+				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\n", LOG_CLIENT, cmd);
+				CL_Disconnect(false);
+				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+				CL_Reconnect_f ();
+				return;
+			}
+			else
+			{
+				Com_Error (ERR_DISCONNECT, "Server disconnected\n");
+			}
 			break;
 
 		case svc_reconnect:
-			Com_Printf ("Server disconnected, reconnecting\n");
+			Com_Printf ("Server disconnected, reconnecting\n", LOG_CLIENT);
 			if (cls.download) {
 				//ZOID, close download
 				fclose (cls.download);
@@ -1164,7 +1209,7 @@ void CL_ParseServerMessage (void)
 					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
 					cls.spamTime = cls.realtime + random() * 1500; 
 			}
-			Com_Printf ("%s", s);
+			Com_Printf ("%s", LOG_CLIENT|LOG_CHAT, s);
 			con.ormask = 0;
 			break;
 
@@ -1182,7 +1227,6 @@ void CL_ParseServerMessage (void)
 		case svc_configstring:
 			CL_ParseConfigString ();
 			break;
-		
 			
 		case svc_spawnbaseline:
 			CL_ParseBaseline ();
@@ -1219,9 +1263,21 @@ void CL_ParseServerMessage (void)
 
 		default:
 			if (developer->intvalue)
-				Com_Printf ("Unknown command char %d, ignoring!!\n", cmd);
+			{
+				Com_Printf ("Unknown command char %d, ignoring!!\n", LOG_CLIENT, cmd);
+			}
 			else
+			{
+				if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
+				{
+					Com_Printf ("Unknown command byte %d, assuming protocol mismatch. Reconnecting with protocol 34.\n", LOG_CLIENT, cmd);
+					CL_Disconnect(false);
+					cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+					CL_Reconnect_f ();
+					return;
+				}
 				Com_Error (ERR_DROP,"CL_ParseServerMessage: Unknown command byte %d (0x%.2x)", cmd, cmd);
+			}
 			break;
 
 		}

@@ -57,7 +57,6 @@ void *Hunk_Begin (int maxsize)
 	}
 #else
 	membase = malloc (maxsize);
-	memset (membase, 0, maxsize);
 #endif
 	if (!membase)
 		Sys_Error ("VirtualAlloc reserve failed");
@@ -146,7 +145,7 @@ Sys_Milliseconds
 */
 int	curtime;
 //int oldcurtime;
-#ifndef BUILDING_REF_GL
+#ifndef REF_GL
 int Sys_Milliseconds (void)
 {
 	static int		base;
@@ -255,6 +254,171 @@ void Sys_FindClose (void)
 	findhandle = 0;
 }
 
+#ifdef WIN32
+#ifdef _DEBUG
+#include <windows.h>
+LARGE_INTEGER start;
+double totalTime = 0;
+void _START_PERFORMANCE_TIMER (void)
+{
+	QueryPerformanceCounter (&start);
+}
+void _STOP_PERFORMANCE_TIMER (void)
+{
+	LARGE_INTEGER stop;
+	__int64 diff;
+	LARGE_INTEGER freq;
+	QueryPerformanceCounter (&stop);
+	QueryPerformanceFrequency (&freq);
+	diff = stop.QuadPart - start.QuadPart;
+	Com_Printf ("Function executed in %.5f secs.\n", LOG_GENERAL, ((double)((double)diff / (double)freq.QuadPart)));
+	totalTime += (double)((double)diff / (double)freq.QuadPart);
+}
+#endif
+#endif
 
+/*
+::/ \::::::.
+:/___\:::::::.
+/|    \::::::::.
+:|   _/\:::::::::.
+:| _|\  \::::::::::.                                               Feb/March 98
+:::\_____\::::::::::.                                              Issue      3
+::::::::::::::::::::::.........................................................
+
+            A S S E M B L Y   P R O G R A M M I N G   J O U R N A L
+                      http://asmjournal.freeservers.com
+                           asmjournal@mailcity.com
+
+____________________________________________________________________________
+  ::::::::::.___    .                                                       ```
+  ::::::::::| _/__. |__   ____    .      __.  ____  ____   __.               \\
+  ::::::    |____ | __/_ _\_ (.___|  .___) |__\_ (._)  /___) |                ,
+  ::::::::::/   / | \   |  -  |   \  |  -  |   -  |  \/|  -  |
+.=:::::::::/______|_____|_____|  (___|_____|______|____|_____|===============.
+'=::::::::::==================|   . ____ | (____====[ The C Standard lib ]==='
+  ::::::::::                  |   |------|  -   |                       
+  ::::::::::                  |   |______|______|CE                     
+                              .   :
+                                      C string functions: introduction, _strlen
+                                      by Xbios2						   
+*/
+
+//r1: using this as for some reason with MSVC, using -O2 inlines a shitty byte-scanning strlen!
+//this is 2x faster on strings of ~ 10+ bytes. its still a little faster than the strlen.asm too.
+
+//XXX: this breaks on strings that contain high ascii chars! not safe to use for measuring string
+//length to strcpy() into.
+size_t __cdecl fast_strlen(const char *s)
+{
+    __asm
+	{
+		; ------------ version 8 ------------
+		; My fast version
+		; 92 bytes
+		; c=17+1*n
+
+			mov	eax, [s]			;grab string to eax
+			xor	ecx, ecx				;ecx = 0 FIXME? why is this needed?
+			test	al, 3				;ive no idea how this works. something to do with alignment?
+			jz	loop1
+			cmp	byte ptr [eax], cl		;empty string
+			jz	short ret0
+			cmp	byte ptr [eax+1], cl	;string of length 1
+			jz	short ret1
+			cmp	byte ptr [eax+2], cl	;if 3rd char isn't zero, adjust?
+			jnz	short adjust
+			inc	eax						;3rd char is zero, so inc counter
+
+		ret1:
+			inc	eax						;inc counter
+
+		ret0:
+			sub	eax, [s]			;subtract pointer so eax stores number of chars
+			jmp short gotlength
+
+		adjust:
+			add	eax, 3					;eax now points to 3rd char
+			and	eax, 0FFFFFFFCh			;what the hell does this do? eax AND 11111111111111111111111111111100? alignment related?
+
+		loop1:
+			mov	edx, [eax]				;load up edx
+			mov	ecx, 81010100h			;ecx = 10000001 00000001 00000001 00000000
+			sub	ecx, edx				;ecx = ecx - edx
+			add	eax, 4					;increment string pointer
+			xor	ecx, edx				;test what bits got set???
+			and	ecx, 81010100h			;flip them back???
+			jz	loop1					;not end of string?
+			sub	eax, [s]			;end of string - subtract address
+			shr	ecx, 9					;bit shift for extra confusion
+			jc	minus4					;jump if char fell off, all 4 bytes set?
+			shr	ecx, 8					;more shifting
+			jc	minus3					;jump if something fell off, 3 bytes?
+			shr	ecx, 8					;shifty shift
+			jc	minus2					;2nd byte fell off
+			dec	eax						;obviously not, so 1 byte
+			//ret							;return result
+			jmp short gotlength
+
+		minus4:
+			sub	eax, 4
+			jmp short gotlength
+			//ret	
+
+		minus3:
+			sub	eax, 3
+			jmp short gotlength
+			//ret	
+
+		minus2:
+			sub	eax, 2
+			//ret	
+		gotlength:
+	}
+}
+
+//fast_strlwr, adapted from http://www.assembly-journal.com/viewarticle.php?id=131&layout=html
+//since it only writes to edi if modified, this is faster for strings that are mostly lower.
+void __cdecl fast_strlwr(char *s)
+{
+	__asm
+	{
+			mov esi, [s]					;get string
+			mov edi, esi					;destination
+		loop1:
+			lodsb							;load byte
+			cmp    al, 5Ah					;greater than 'Z'
+			ja     short store2
+			cmp    al, 41h					;less than 'A'
+			jb     short store1
+			or     al, 00100000b			;to lower (+32)
+			stosb							;store
+			jmp    short loop1				;loop
+		store1:
+			cmp    al, 0h					;end of string
+			je     short finish1
+		store2:
+			inc		edi						;no change, increment pointer
+			jmp    short loop1					;loop
+		finish1:
+	}
+}
+
+//i made this one all by myself !
+int __cdecl fast_tolower(int c)
+{
+	__asm
+	{
+			mov eax, [esp+4]		;get character
+			cmp	eax, 5Ah
+			ja  short finish1
+
+			cmp	eax, 41h
+			jb  short finish1
+
+			or  eax, 00100000b		;to lower (+32)
+		finish1:
+	}
+}
 //============================================
 

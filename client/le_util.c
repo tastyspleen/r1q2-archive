@@ -26,14 +26,14 @@ localent_t *Le_Alloc (void)
 			return &cl_localents[i];
 		}
 	}
-	Com_Printf ("Le_Alloc: no free local entities!\n");
+	Com_Printf ("Le_Alloc: no free local entities!\n", LOG_CLIENT);
 	return NULL;
 }
 
 void Le_Free (localent_t *lent)
 {
 	if (!lent->inuse) {
-		Com_Printf ("Le_Free: freeing an unused entity.\n");
+		Com_Printf ("Le_Free: freeing an unused entity.\n", LOG_CLIENT);
 		return;
 	}
 
@@ -69,5 +69,5 @@ void CL_AddLocalEnts (void)
 
 void LE_Init (void)
 {
-	cl_lents = Cvar_Get ("cl_lents", "0", CVAR_ARCHIVE);
+	cl_lents = Cvar_Get ("cl_lents", "0", 0);
 }

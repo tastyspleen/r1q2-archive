@@ -36,7 +36,7 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	float	zrot[3][3];
 	float	tmpmat[3][3];
 	float	rot[3][3];
-	int	i;
+
 	vec3_t vr, vup, vf;
 
 	vf[0] = dir[0];
@@ -58,30 +58,49 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	m[1][2] = vf[1];
 	m[2][2] = vf[2];
 
-	memcpy( im, m, sizeof( im ) );
+	//r1: copies a bunch of stuff we overwrite, better to do individually
+	//memcpy( im, m, sizeof( im ) );
 
+	im[0][0] = m[0][0]; //r1
 	im[0][1] = m[1][0];
 	im[0][2] = m[2][0];
+
 	im[1][0] = m[0][1];
+	im[1][1] = m[1][1]; //r1
 	im[1][2] = m[2][1];
+
 	im[2][0] = m[0][2];
 	im[2][1] = m[1][2];
+	im[2][2] = m[2][2]; //r1
 
-	memset( zrot, 0, sizeof( zrot ) );
-	zrot[0][0] = zrot[1][1] = zrot[2][2] = 1.0F;
+	//wtf?
+	//memset( zrot, 0, sizeof( zrot ) );
+	//zrot[0][0] = zrot[1][1] = zrot[2][2] = 1.0F;
 
 	zrot[0][0] = cos( DEG2RAD( degrees ) );
 	zrot[0][1] = sin( DEG2RAD( degrees ) );
+	zrot[0][2] = 0;
+
 	zrot[1][0] = -sin( DEG2RAD( degrees ) );
 	zrot[1][1] = cos( DEG2RAD( degrees ) );
+	zrot[1][2] = 0;
+
+	zrot[2][0] = 0.0f;
+	zrot[2][1] = 0.0f;
+	zrot[2][2] = 1.0f;
 
 	R_ConcatRotations( m, zrot, tmpmat );
 	R_ConcatRotations( tmpmat, im, rot );
 
-	for ( i = 0; i < 3; i++ )
-	{
-		dst[i] = rot[i][0] * point[0] + rot[i][1] * point[1] + rot[i][2] * point[2];
-	}
+	dst[0] = rot[0][0] * point[0] + rot[0][1] * point[1] + rot[0][2] * point[2];
+	dst[1] = rot[1][0] * point[0] + rot[1][1] * point[1] + rot[1][2] * point[2];
+	dst[2] = rot[2][0] * point[0] + rot[2][1] * point[1] + rot[2][2] * point[2];
+}
+
+void _Q_assert (char *expression, char *function, unsigned line)
+{
+	Com_Printf ("Q_assert: Assertion '%s' failed on %s:%u\n", LOG_GENERAL, expression, function, line);
+	DEBUGBREAKPOINT;
 }
 
 //#ifdef _WIN32
@@ -94,15 +113,20 @@ void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@
 	static float		sr, sp, sy, cr, cp, cy;
 	// static to help MS compiler fp bugs
 
-	angle = angles[YAW] * (M_PI*2 / 360);
+	angle = angles[YAW] * M_PI2_DIV_360;
 	sy = sin(angle);
 	cy = cos(angle);
-	angle = angles[PITCH] * (M_PI*2 / 360);
+
+	angle = angles[PITCH] * M_PI2_DIV_360;
 	sp = sin(angle);
 	cp = cos(angle);
-	angle = angles[ROLL] * (M_PI*2 / 360);
-	sr = sin(angle);
-	cr = cos(angle);
+
+	if (right || up)
+	{
+		angle = angles[ROLL] * M_PI2_DIV_360;
+		sr = sin(angle);
+		cr = cos(angle);
+	}
 
 	if (forward)
 	{
@@ -110,12 +134,14 @@ void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@
 		forward[1] = cp*sy;
 		forward[2] = -sp;
 	}
+
 	if (right)
 	{
 		right[0] = (-1*sr*sp*cy+-1*cr*-sy);
 		right[1] = (-1*sr*sp*sy+-1*cr*cy);
 		right[2] = -1*sr*cp;
 	}
+
 	if (up)
 	{
 		up[0] = (cr*sp*cy+-sr*-sy);
@@ -263,7 +289,7 @@ float Q_fabs (float f)
 #pragma warning (disable:4035)
 __declspec( naked ) long __cdecl Q_ftol( float f )
 {
-	static int tmp;
+	static volatile int tmp;
 	__asm fld dword ptr [esp+4]
 	__asm fistp tmp
 	__asm mov eax, tmp
@@ -316,7 +342,7 @@ int BoxOnPlaneSide2 (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 
 	for (i=0 ; i<3 ; i++)
 	{
-		if (p->normal[i] < 0)
+		if (FLOAT_LT_ZERO(p->normal[i]))
 		{
 			corners[0][i] = emins[i];
 			corners[1][i] = emaxs[i];
@@ -330,9 +356,9 @@ int BoxOnPlaneSide2 (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 	dist1 = DotProduct (p->normal, corners[0]) - p->dist;
 	dist2 = DotProduct (p->normal, corners[1]) - p->dist;
 	sides = 0;
-	if (dist1 >= 0)
+	if (FLOAT_GE_ZERO(dist1))
 		sides = 1;
-	if (dist2 < 0)
+	if (FLOAT_LT_ZERO(dist2))
 		sides |= 2;
 
 	return sides;
@@ -414,8 +440,8 @@ dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
 
 __declspec( naked ) int __cdecl BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
-	static int bops_initialized;
-	static int Ljmptab[8];
+	static volatile int bops_initialized;
+	static volatile int Ljmptab[8];
 
 	__asm {
 
@@ -689,7 +715,7 @@ vec_t VectorNormalize (vec3_t v)
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
 	length = sqrt (length);		// FIXME
 
-	if (length)
+	if (FLOAT_NE_ZERO(length))
 	{
 		ilength = 1/length;
 		v[0] *= ilength;
@@ -708,7 +734,7 @@ vec_t VectorNormalize2 (vec3_t v, vec3_t out)
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
 	length = sqrt (length);		// FIXME
 
-	if (length)
+	if (FLOAT_NE_ZERO(length))
 	{
 		ilength = 1/length;
 		out[0] = v[0]*ilength;
@@ -764,12 +790,14 @@ double EXPORT sqrt(double x);
 
 vec_t VectorLength(vec3_t v)
 {
-	int		i;
 	float	length;
 	
 	length = 0;
-	for (i=0 ; i< 3 ; i++)
-		length += v[i]*v[i];
+
+	length += v[0]*v[0];
+	length += v[1]*v[1];
+	length += v[2]*v[2];
+
 	length = sqrt (length);		// FIXME
 
 	return length;
@@ -1112,9 +1140,8 @@ skipwhite:
 			c = *data++;
 			if (c=='\"' || !c)
 			{
-				com_token[len] = 0;
-				*data_p = data;
-				return com_token;
+				//bugfix from skuller
+				goto finish;
 			}
 			if (len < MAX_TOKEN_CHARS)
 			{
@@ -1136,9 +1163,10 @@ skipwhite:
 		c = *data;
 	} while (c>32);
 
+finish:
+
 	if (len == MAX_TOKEN_CHARS)
 	{
-//		Com_Printf ("Token exceeded %i chars, discarded.\n", MAX_TOKEN_CHARS);
 		len = 0;
 	}
 	com_token[len] = 0;
@@ -1221,7 +1249,7 @@ int Com_sprintf (char /*@out@*/*dest, int size, char *fmt, ...)
 
 	if (len == -1 || len == size)
 	{
-		Com_Printf ("Com_sprintf: overflow\n");
+		Com_Printf ("Com_sprintf: overflow\n", LOG_GENERAL);
 		len = size-1;
 	}
 
@@ -1296,6 +1324,7 @@ qboolean Info_KeyExists (char *s, char *key)
 	
 	if (*s == '\\')
 		s++;
+
 	for (;;)
 	{
 		o = pkey;
@@ -1329,7 +1358,7 @@ void Info_RemoveKey (char *s, char *key)
 
 	if (strchr (key, '\\'))
 	{
-//		Com_Printf ("Can't use a key with a \\\n");
+		Com_Printf ("Info_RemoveKey: Tried to remove illegal key '%s'\n", LOG_WARNING|LOG_GENERAL);
 		return;
 	}
 
@@ -1388,6 +1417,7 @@ qboolean Info_Validate (char *s)
 {
 	if (strchr (s, '"'))
 		return false;
+
 	if (strchr (s, ';'))
 		return false;
 	return true;
@@ -1412,36 +1442,37 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 
 	if (strchr (key, '\\') || strchr (value, '\\') )
 	{
-		Com_Printf ("Can't use keys or values with a \\\n");
+		Com_Printf ("Can't use keys or values with a \\\n", LOG_GENERAL);
 		return;
 	}
 
 	if (strchr (key, ';') )
 	{
-		Com_Printf ("Can't use keys or values with a semicolon\n");
+		Com_Printf ("Can't use keys or values with a semicolon\n", LOG_GENERAL);
 		return;
 	}
 
 	if (strchr (key, '"') || strchr (value, '"') )
 	{
-		Com_Printf ("Can't use keys or values with a \"\n");
+		Com_Printf ("Can't use keys or values with a \"\n", LOG_GENERAL);
 		return;
 	}
 
 	if (strlen(key) > MAX_INFO_KEY-1 || strlen(value) > MAX_INFO_KEY-1)
 	{
-		Com_Printf ("Keys and values must be < 64 characters.\n");
+		Com_Printf ("Keys and values must be < 64 characters.\n", LOG_GENERAL);
 		return;
 	}
 	Info_RemoveKey (s, key);
-	if (!value || !strlen(value))
+
+	if (!value || !value[0])
 		return;
 
 	Com_sprintf (newi, sizeof(newi), "\\%s\\%s", key, value);
 
 	if (strlen(newi) + strlen(s) > MAX_INFO_STRING)
 	{
-		Com_Printf ("Info string length exceeded while trying to set '%s'\n", newi);
+		Com_Printf ("Info string length exceeded while trying to set '%s'\n", LOG_GENERAL, newi);
 		return;
 	}
 

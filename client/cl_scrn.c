@@ -200,7 +200,7 @@ void SCR_DrawDebugGraph (void)
 		color = values[i].color;
 		v = v*scr_graphscale->value + scr_graphshift->value;
 		
-		if (v < 0)
+		if (FLOAT_LT_ZERO(v))
 			v += scr_graphheight->value * (1+(int)(-v/scr_graphheight->value));
 		h = (int)v % scr_graphheight->intvalue;
 		re.DrawFill (x+w-1-a, y - h, 1,	h, color);
@@ -264,7 +264,7 @@ void SCR_CenterPrint (char *str)
 				*s = ' ';
 			s++;
 		}*/
-		Com_Printf ("%s\n", str);
+		Com_Printf ("%s\n", LOG_CLIENT, str);
 	}
 
 	/*s = str;
@@ -369,12 +369,6 @@ static void SCR_CalcVrect (void)
 {
 	int		size;
 
-	// bound viewsize
-	if (scr_viewsize->intvalue < 40)
-		Cvar_Set ("viewsize","40");
-	if (scr_viewsize->intvalue > 100)
-		Cvar_Set ("viewsize","100");
-
 	size = scr_viewsize->intvalue;
 
 	scr_vrect.width = viddef.width*size/100;
@@ -397,7 +391,7 @@ Keybinding command
 */
 void SCR_SizeUp_f (void)
 {
-	Cvar_SetValue ("viewsize",scr_viewsize->value+10);
+	Cvar_SetValue ("viewsize",scr_viewsize->intvalue+10);
 }
 
 
@@ -410,7 +404,7 @@ Keybinding command
 */
 void SCR_SizeDown_f (void)
 {
-	Cvar_SetValue ("viewsize",scr_viewsize->value-10);
+	Cvar_SetValue ("viewsize",scr_viewsize->intvalue-10);
 }
 
 /*
@@ -427,13 +421,15 @@ void SCR_Sky_f (void)
 
 	if (Cmd_Argc() < 2)
 	{
-		Com_Printf ("Usage: sky <basename> <rotate> <axis x y z>\n");
+		Com_Printf ("Usage: sky <basename> <rotate> <axis x y z>\n", LOG_CLIENT);
 		return;
 	}
+
 	if (Cmd_Argc() > 2)
 		rotate = atof(Cmd_Argv(2));
 	else
 		rotate = 0;
+
 	if (Cmd_Argc() == 6)
 	{
 		axis[0] = atof(Cmd_Argv(3));
@@ -456,14 +452,23 @@ void SCR_Conheight_Changed (cvar_t *self, char *old, char *newValue)
 {
 	if (self->value > 1.0)
 	{
-		Com_Printf ("scr_conheight ranges from 0 to 1\n");
+		Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
 		Cvar_ForceSet ("scr_conheight", "1");
 	}
-	else if (self->value < 0)
+	else if (FLOAT_LT_ZERO(self->value))
 	{
-		Com_Printf ("scr_conheight ranges from 0 to 1\n");
+		Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
 		Cvar_ForceSet ("scr_conheight", "0");
 	}
+}
+
+static void _viewsize_changed (cvar_t *self, char *oldValue, char *newValue)
+{
+	// bound viewsize
+	if (self->intvalue < 40)
+		Cvar_Set (self->name, "40");
+	else if (self->intvalue > 100)
+		Cvar_Set (self->name, "100");
 }
 
 /*
@@ -490,6 +495,7 @@ void SCR_Init (void)
 	scr_drawall = Cvar_Get ("scr_drawall", "0", 0);
 
 	scr_conheight->changed = SCR_Conheight_Changed;
+	scr_viewsize->changed = _viewsize_changed;
 
 //
 // register our commands
@@ -549,7 +555,7 @@ void SCR_DrawLoading (void)
 	if (!scr_draw_loading)
 		return;
 
-	scr_draw_loading = false;
+	scr_draw_loading = 0;
 	re.DrawGetPicSize (&w, &h, "loading");
 	re.DrawPic ((viddef.width-w)/2, (viddef.height-h)/2, "loading");
 }
@@ -610,7 +616,7 @@ void SCR_DrawConsole (void)
 		return;
 	}
 
-	if (scr_con_current)
+	if (FLOAT_NE_ZERO(scr_con_current))
 	{
 		Con_DrawConsole (scr_con_current);
 	}
@@ -732,9 +738,9 @@ void SCR_TimeRefresh_f (void)
 	time = (stop-start)/1000.0;
 
 	if (Cmd_Argc() == 2)
-		Com_Printf ("%f seconds (%f fps)\n", time, 128000/time);
+		Com_Printf ("%f seconds (%f fps)\n", LOG_CLIENT, time, 128000/time);
 	else
-		Com_Printf ("%f seconds (%f fps)\n", time, 128/time);
+		Com_Printf ("%f seconds (%f fps)\n", LOG_CLIENT, time, 128/time);
 }
 
 /*
@@ -773,14 +779,14 @@ void SCR_TileClear (void)
 	int		top, bottom, left, right;
 	dirty_t	clear;
 
+	if (scr_viewsize->intvalue == 100)
+		return;		// full screen rendering
+
 	if (scr_drawall->intvalue)
 		SCR_DirtyScreen ();	// for power vr or broken page flippers...
 
 	if (scr_con_current == 1.0)
 		return;		// full screen console
-
-	if (scr_viewsize->intvalue == 100)
-		return;		// full screen rendering
 
 #ifdef CINEMATICS
 	if (cl.cinematictime > 0)
@@ -862,12 +868,16 @@ void SCR_TileClear (void)
 
 
 #define STAT_MINUS		10	// num frame for '-' stats digit
-char		*sb_nums[2][11] = 
+static char		*sb_nums[2][11] = 
 {
-	{"num_0", "num_1", "num_2", "num_3", "num_4", "num_5",
-	"num_6", "num_7", "num_8", "num_9", "num_minus"},
-	{"anum_0", "anum_1", "anum_2", "anum_3", "anum_4", "anum_5",
-	"anum_6", "anum_7", "anum_8", "anum_9", "anum_minus"}
+	{
+			"num_0", "num_1", "num_2", "num_3",	"num_4", "num_5",
+			"num_6", "num_7", "num_8", "num_9", "num_minus"
+	},
+	{
+		"anum_0", "anum_1", "anum_2", "anum_3", "anum_4", "anum_5",
+		"anum_6", "anum_7", "anum_8", "anum_9", "anum_minus"
+	}
 };
 
 #define	ICON_WIDTH	24
@@ -1008,8 +1018,8 @@ void SCR_TouchPics (void)
 
 	if (crosshair->intvalue)
 	{
-		if (crosshair->intvalue > 9 || crosshair->intvalue < 0)
-			Cvar_Set ("crosshair", "3");
+		if (crosshair->intvalue < 0)
+			Cvar_Set ("crosshair", "0");
 
 		Com_sprintf (crosshair_pic, sizeof(crosshair_pic), "ch%i", crosshair->intvalue);
 		re.DrawGetPicSize (&crosshair_width, &crosshair_height, crosshair_pic);
@@ -1256,10 +1266,14 @@ void SCR_ExecuteLayoutString (char *s)
 					value = cl.frame.playerstate.stats[index];
 					if (!value)
 					{	// skip to endif
-						while (s && strcmp(token, "endif") )
+						/*while (s && strcmp(token, "endif") )
 						{
 							token = COM_Parse (&s);
-						}
+						}*/
+						//hack for speed
+						s = strstr (s, " endif");
+						if (s)
+							s += 6;
 					}
 
 					continue;
@@ -1401,7 +1415,7 @@ void SCR_UpdateScreen (void)
 		if (Sys_Milliseconds() - cls.disable_screen > 120000)
 		{
 			cls.disable_screen = 0;
-			Com_Printf ("Loading plaque timed out.\n");
+			Com_Printf ("Loading plaque timed out.\n", LOG_CLIENT);
 		}
 		return;
 	}
@@ -1416,7 +1430,7 @@ void SCR_UpdateScreen (void)
 #ifdef CL_STEREO_SUPPORT
 	if ( cl_stereo_separation->value > 1.0 )
 		Cvar_SetValue( "cl_stereo_separation", 1.0 );
-	else if ( cl_stereo_separation->value < 0 )
+	else if (FLOAT_LT_ZERO(cl_stereo_separation->value))
 		Cvar_SetValue( "cl_stereo_separation", 0.0 );
 
 	if ( cl_stereo->intvalue )
@@ -1441,12 +1455,22 @@ void SCR_UpdateScreen (void)
 		re.BeginFrame( 0 );
 #endif
 
+		//r1: only update console during load
+		if (!cl.refresh_prepped)
+		{
+			if (cls.key_dest != key_menu)
+				SCR_DrawConsole ();
+			M_Draw ();
+			re.EndFrame();
+			return;
+		}
+
 		if (scr_draw_loading == 2)
 		{	//  loading plaque over black screen
 			int		w, h;
 
 			re.CinematicSetPalette(NULL);
-			scr_draw_loading = false;
+			scr_draw_loading = 0;
 			re.DrawGetPicSize (&w, &h, "loading");
 			re.DrawPic ((viddef.width-w)/2, (viddef.height-h)/2, "loading");
 //			re.EndFrame();

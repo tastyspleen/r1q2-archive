@@ -28,10 +28,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
-#include <assert.h>
 
 #ifndef NO_ZLIB
 #include <zlib.h>
+#endif
+
+//for broken Makefiles?
+#ifdef __linux__
+#ifndef LINUX
+#define LINUX 1
+#endif
 #endif
 
 //#define ENHANCED_SERVER 1
@@ -107,6 +113,13 @@ int Q_snprintf (char *buff, size_t len, char *fmt, ...);
 #define idaxp	0
 #endif
 
+#ifdef  NDEBUG
+#define Q_assert(exp)     ((void)0)
+#else
+void _Q_assert (char *expression, char *function, unsigned line);
+#define Q_assert(exp) (void)( (exp) || (_Q_assert(#exp, __FILE__, __LINE__), 0) )
+#endif
+
 typedef unsigned char 		byte;
 typedef enum {false, true}	qboolean;
 
@@ -114,13 +127,32 @@ typedef enum {false, true}	qboolean;
 #define YOU_HAVE_A_BROKEN_COMPUTER 0
 
 //#define random()	(randomMT() / ((float)0xFFFFFFFFU))
-#define	random()	(randomMT() * 0.00000000023283064365386962890625f)
+#define	random()	((randomMT() * 0.00000000023283064365386962890625f))
 
 #define	frand()		(random())
 #define	crand()		(((int)randomMT() - 0x7FFFFFFF) * 0.000000000465661287307739257812f)
 
 #ifndef NULL
 #define NULL ((void *)0)
+#endif
+
+#ifdef WIN32
+#define FLOAT2INTCAST(f)(*((int *)(&f)))
+#define FLOAT2UINTCAST(f)(*((unsigned int *)(&f)))
+#define FLOAT_LT_ZERO(f) (FLOAT2UINTCAST(f) > 0x80000000U)
+#define FLOAT_LE_ZERO(f) (FLOAT2INTCAST(f) <= 0)
+#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
+#define FLOAT_GE_ZERO(f) (FLOAT2UINTCAST(f) <= 0x80000000U)
+#define	FLOAT_EQ_ZERO(f) (FLOAT2INTCAST(f) == 0)
+#define	FLOAT_NE_ZERO(f) (FLOAT2INTCAST(f) != 0)
+#else
+//gcc breaks ieee compatibility with -ffast-math? i guess since these break horribly on linux
+#define	FLOAT_LT_ZERO(f) ((f) < 0)
+#define FLOAT_LE_ZERO(f) ((f) <= 0)
+#define FLOAT_GT_ZERO(f) ((f) > 0)
+#define FLOAT_GE_ZERO(f) ((f) >= 0)
+#define	FLOAT_EQ_ZERO(f) ((f) == 0)
+#define	FLOAT_NE_ZERO(f) ((f) != 0)
 #endif
 
 //terminating strncpy
@@ -161,11 +193,12 @@ typedef enum {false, true}	qboolean;
 #define	PRINT_HIGH			2		// critical messages
 #define	PRINT_CHAT			3		// chat messages
 
-
-
-#define	ERR_FATAL			0		// exit the entire game with a popup window
-#define	ERR_DROP			1		// print to console and disconnect from game
-#define	ERR_DISCONNECT		2		// don't kill server
+#define	ERR_FATAL		0		// exit the entire game with a popup window
+#define	ERR_DROP		1		// print to console and disconnect from game
+#define	ERR_DISCONNECT	2		// not an error, just a normal exit
+#define	ERR_GAME		3		// r1ch: game dll error, allow special handling
+#define	ERR_NET			4		// r1ch: network error, don't use net functions after seeing
+#define	ERR_DIE			5
 
 #define	PRINT_ALL			0
 #define PRINT_DEVELOPER		1		// only print when "developer 1"
@@ -207,8 +240,11 @@ typedef	int	fixed8_t;
 typedef	int	fixed16_t;
 
 #ifndef M_PI
-#define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
+#define M_PI			3.14159265358979323846F		// matches value in gcc v2 math.h
 #endif
+
+#define	M_PI_DIV_2		1.570796326794896619230F
+#define	M_PI2_DIV_360	0.01745329251994329576922F
 
 struct cplane_s;
 
@@ -391,9 +427,27 @@ void	Sys_FindClose (void);
 
 void Sys_Sleep (int msec);
 
+#define	LOG_GENERAL		0x0
+#define LOG_CLIENT		0x1
+#define	LOG_SERVER		0x2
+#define LOG_DEBUG		0x4
+#define	LOG_WARNING		0x8
+#define	LOG_ERROR		0x10
+#define	LOG_GAME		0x20
+#define	LOG_CONNECT		0x40
+#define	LOG_NAME		0x80
+#define	LOG_DROP		0x100
+#define	LOG_KICK		0x200
+#define	LOG_EXPLOIT		0x400
+#define	LOG_DOWNLOAD	0x800
+#define	LOG_NOTICE		0x1000
+#define	LOG_CHAT		0x2000
+#define	LOG_NET			0x4000
+#define	LOG_GAMEDEBUG	0x8000
+
 // this is only here so the functions in q_shared.c and q_shwin.c can link
 void Sys_Error (char *error, ...);
-void Com_Printf (char *msg, ...);
+void Com_Printf (char *fmt, int level, ...);
 
 
 /*
@@ -426,7 +480,7 @@ typedef struct cvar_s
 	struct cvar_s *next;
 
 	//r1ch: added this to avoid all the if (x->modified) bloat
-	void		(*changed) (struct cvar_s *self, char *old, char *new);
+	void		(*changed) (struct cvar_s *self, char *oldValue, char *newValue);
 	int			intvalue;
 } cvar_t;
 
@@ -444,7 +498,7 @@ typedef void (*xcommand_t) (void);
 typedef struct cmd_function_s
 {
 	struct cmd_function_s	*next;
-	char					*name;
+	const char				*name;
 	xcommand_t				function;
 } cmd_function_t;
 
@@ -1256,13 +1310,13 @@ ROGUE - VERSIONS
 #define	CS_MAPCHECKSUM		31		// for catching cheater maps
 
 #define	CS_MODELS			32
-#define	CS_SOUNDS			(CS_MODELS+MAX_MODELS)
-#define	CS_IMAGES			(CS_SOUNDS+MAX_SOUNDS)
-#define	CS_LIGHTS			(CS_IMAGES+MAX_IMAGES)
-#define	CS_ITEMS			(CS_LIGHTS+MAX_LIGHTSTYLES)
-#define	CS_PLAYERSKINS		(CS_ITEMS+MAX_ITEMS)
-#define CS_GENERAL			(CS_PLAYERSKINS+MAX_CLIENTS)
-#define	MAX_CONFIGSTRINGS	(CS_GENERAL+MAX_GENERAL)
+#define	CS_SOUNDS			(CS_MODELS+MAX_MODELS)			//288
+#define	CS_IMAGES			(CS_SOUNDS+MAX_SOUNDS)			//544
+#define	CS_LIGHTS			(CS_IMAGES+MAX_IMAGES)			//800
+#define	CS_ITEMS			(CS_LIGHTS+MAX_LIGHTSTYLES)		//1056
+#define	CS_PLAYERSKINS		(CS_ITEMS+MAX_ITEMS)			//1312
+#define CS_GENERAL			(CS_PLAYERSKINS+MAX_CLIENTS)	//1568
+#define	MAX_CONFIGSTRINGS	(CS_GENERAL+MAX_GENERAL)		//2080
 
 
 //==============================================
@@ -1308,9 +1362,6 @@ typedef struct entity_state_s
 	int		event;			// impulse events -- muzzle flashes, footsteps, etc
 							// events only go out for a single frame, they
 							// are automatically cleared each frame
-#if ENHANCED_SERVER || BUILDING_CLIENT
-	vec3_t	velocity;
-#endif
 } entity_state_t;
 
 //==============================================

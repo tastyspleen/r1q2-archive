@@ -37,25 +37,31 @@ entity_state_t	null_entity_state = {0};
 usercmd_t		null_usercmd = {0};
 cvar_t			uninitialized_cvar = {0};
 
-int		com_argc;
-char	*com_argv[MAX_NUM_ARGVS+1];
+cvar_t			*z_debug;
+
+static int		com_argc;
+static char	*com_argv[MAX_NUM_ARGVS+1];
 
 char	*binary_name;
 
-int		realtime;
+//int		realtime;
 jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
 
-FILE	*log_stats_file;
+static FILE	*log_stats_file;
 
 cvar_t	*host_speeds;
 cvar_t	*log_stats;
 cvar_t	*developer = &uninitialized_cvar;
-cvar_t	*timescale;
-cvar_t	*fixedtime;
-cvar_t	*logfile_active;	// 1 = buffer log, 2 = flush after each print
-cvar_t	*logfile_timestamp;
-cvar_t	*logfile_timestamp_format;
-cvar_t	*logfile_name;
+
+static cvar_t	*timescale;
+static cvar_t	*fixedtime;
+
+static cvar_t	*logfile_active;	// 1 = buffer log, 2 = flush after each print
+static cvar_t	*logfile_timestamp;
+static cvar_t	*logfile_timestamp_format;
+static cvar_t	*logfile_name;
+static cvar_t	*logfile_filterlevel = &uninitialized_cvar;
+static cvar_t	*con_filterlevel = &uninitialized_cvar;
 
 #ifndef DEDICATED_ONLY
 cvar_t	*showtrace;
@@ -69,12 +75,12 @@ cvar_t	*dedicated = &uninitialized_cvar;
 cvar_t	*dbg_unload = &uninitialized_cvar;
 
 //r1: throw int3 on ERR_FATAL?
-cvar_t	*dbg_crash_on_fatal_error = &uninitialized_cvar;
+static cvar_t	*dbg_crash_on_fatal_error = &uninitialized_cvar;
 
 //r1: throw all err as fatal?
-cvar_t	*err_fatal = &uninitialized_cvar;
+static cvar_t	*err_fatal = &uninitialized_cvar;
 
-FILE	*logfile;
+static FILE	*logfile;
 
 int			server_state;
 
@@ -83,6 +89,38 @@ int		time_before_game;
 int		time_after_game;
 int		time_before_ref;
 int		time_after_ref;
+
+static int msg_local_hits;
+static int msg_malloc_hits;
+
+char *svc_strings[256] =
+{
+	"svc_bad",
+
+	"svc_muzzleflash",
+	"svc_muzzlflash2",
+	"svc_temp_entity",
+	"svc_layout",
+	"svc_inventory",
+
+	"svc_nop",
+	"svc_disconnect",
+	"svc_reconnect",
+	"svc_sound",
+	"svc_print",
+	"svc_stufftext",
+	"svc_serverdata",
+	"svc_configstring",
+	"svc_spawnbaseline",	
+	"svc_centerprint",
+	"svc_download",
+	"svc_playerinfo",
+	"svc_packetentities",
+	"svc_deltapacketentities",
+	"svc_frame",
+	"svc_zpacket",
+	"svc_zdownload"
+};
 
 tagmalloc_tag_t tagmalloc_tags[] =
 {
@@ -101,6 +139,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CLIENTS, "CLIENTS", 0},
 	{TAGMALLOC_CL_ENTS, "CL_ENTS", 0},
 	{TAGMALLOC_CL_BASELINES, "CL_BASELINES", 0},
+	{TAGMALLOC_CL_MESSAGES, "CL_MESSAGES", 0},
 
 	{TAGMALLOC_CLIENT_DOWNLOAD, "CLIENT_DOWNLOAD", 0},
 	{TAGMALLOC_CLIENT_KEYBIND, "CLIENT_KEYBIND", 0},
@@ -113,8 +152,12 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE", 0},
 	{TAGMALLOC_CMDBANS, "CMDBANS", 0},
 	{TAGMALLOC_REDBLACK, "REDBLACK", 0},
+	{TAGMALLOC_LRCON, "LRCON", 0},
 	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
 };
+
+void (*Z_Free)(void *buf);
+void *(*Z_TagMalloc)(int size, int tag);
 
 /*
 ============================================================================
@@ -159,14 +202,17 @@ Both client and server can use this, and it will output
 to the apropriate place.
 =============
 */
-void Com_Printf (char *fmt, ...)
+void Com_Printf (char *fmt, int level, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
 
-	va_start (argptr,fmt);
+	if ((level & con_filterlevel->intvalue) && (level & logfile_filterlevel->intvalue))
+		return;
+
+	va_start (argptr,level);
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
-		Com_Printf ("WARNING: Com_Printf: message overflow.\n");
+		Com_Printf ("WARNING: Com_Printf: message overflow.\n", LOG_GENERAL);
 	va_end (argptr);
 
 	if (rd_target)
@@ -180,23 +226,33 @@ void Com_Printf (char *fmt, ...)
 		return;
 	}
 
+	if (!(level & con_filterlevel->intvalue))
+	{
 #ifndef DEDICATED_ONLY
-	Con_Print (msg);
+		Con_Print (msg);
 #endif
 
 	// also echo to debugging console
 #ifndef NO_SERVER
 	Sys_ConsoleOutput (msg);
 #endif
+	}
 
 	// logfile
-	if (logfile_active && logfile_active->intvalue)
+	if (logfile_active && logfile_active->intvalue && !(level & logfile_filterlevel->intvalue))
 	{
 		char	name[MAX_QPATH];
 		char	timestamp[64];
 
 		if (!logfile)
 		{
+			//ensure someone malicious with rcon can't overwrite arbitrary files...
+			if (strstr (logfile_name->string, "..") || strchr (logfile_name->string, '/') || strchr (logfile_name->string, '\\'))
+			{
+				Cvar_ForceSet ("logfile", "0");
+				Com_Printf ("ALERT: Refusing to open logfile %s, illegal filename.\n", LOG_GENERAL|LOG_WARNING, logfile_name->string);
+				return;
+			}
 			Com_sprintf (name, sizeof(name), "%s/%s", FS_Gamedir (), logfile_name->string);
 			if (logfile_active->intvalue > 2)
 				logfile = fopen (name, "a");
@@ -204,12 +260,9 @@ void Com_Printf (char *fmt, ...)
 				logfile = fopen (name, "w");
 			if (!logfile)
 			{
-#ifndef DEDICATED_ONLY
-				Con_Print ("ALERT: Couldn't open logfile!!\n");
-#endif
-#ifndef NO_SERVER
-				Sys_ConsoleOutput ("ALERT: Couldn't open logfile!!\n");
-#endif
+				Cvar_ForceSet ("logfile", "0");
+				Com_Printf ("ALERT: Couldn't open logfile %s for writing, logfile disabled.\n", LOG_GENERAL|LOG_WARNING, logfile_name->string);
+				return;
 			}
 		}
 
@@ -223,13 +276,11 @@ void Com_Printf (char *fmt, ...)
 				static qboolean	insert_timestamp = true;
 
 				time_t	tm;
-
 				time(&tm);
-
 				strftime(timestamp, sizeof(timestamp)-1, logfile_timestamp_format->string, localtime(&tm));
 
 				msgptr = msg;
-				line = strstr (msgptr, "\n");
+				line = strchr (msgptr, '\n');
 				while (line)
 				{
 					if (insert_timestamp)
@@ -238,7 +289,16 @@ void Com_Printf (char *fmt, ...)
 						insert_timestamp = false;
 					}
 					*line = 0;
-					fprintf (logfile, "%s\n", msgptr);
+
+					if (fprintf (logfile, "%s\n", msgptr) < 0)
+					{
+						Cvar_ForceSet ("logfile", "0");
+						fclose (logfile);
+						logfile = NULL;
+						Com_Printf ("ALERT: Error writing to logfile %s, file closed.\n", LOG_GENERAL|LOG_WARNING, logfile_name->string);
+						return;
+					}
+						
 					insert_timestamp = true;
 					line++;
 					msgptr = line;
@@ -246,7 +306,7 @@ void Com_Printf (char *fmt, ...)
 					if (!*line)
 						break;
 
-					line = strstr (msgptr, "\n");
+					line = strchr (msgptr, '\n');
 				}
 
 				if (insert_timestamp)
@@ -290,10 +350,10 @@ void Com_DPrintf (char *fmt, ...)
 
 		va_start (argptr,fmt);
 		if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
-			Com_Printf ("WARNING: Com_DPrintf: message overflow.\n");
+			Com_Printf ("WARNING: Com_DPrintf: message overflow.\n", LOG_WARNING);
 		va_end (argptr);
-		
-		Com_Printf ("%s", msg);
+	
+		Com_Printf ("%s", LOG_DEBUG, msg);
 	}
 }
 
@@ -325,6 +385,7 @@ void Com_Error (int code, char *fmt, ...)
 	
 	if (code == ERR_DISCONNECT)
 	{
+		Com_Printf ("Disconnected by server!\n", LOG_CLIENT);
 #ifndef DEDICATED_ONLY
 		CL_Drop (false);
 #endif
@@ -333,7 +394,7 @@ void Com_Error (int code, char *fmt, ...)
 	}
 	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET)
 	{
-		Com_Printf ("********************\nERROR: %s\n********************\n", msg);
+		Com_Printf ("********************\nERROR: %s\n********************\n", LOG_GENERAL, msg);
 #ifndef NO_SERVER
 		SV_Shutdown (va("Server exited: %s\n", msg), false, false);
 #endif
@@ -343,28 +404,38 @@ void Com_Error (int code, char *fmt, ...)
 		recursive = false;
 
 		//r1: auto-restart server code on game crash
-		if (code == ERR_GAME) {
+		if (code == ERR_GAME)
+		{
 			char *resmap = Cvar_VariableString ("sv_restartmap");
-			if (*resmap)
-				Cmd_ExecuteString (va ("map %s\n", resmap));
+			if (resmap[0])
+				Cmd_ExecuteString (va ("map %s", resmap));
 		}
 		longjmp (abortframe, -1);
 	}
 	else
 	{
+		printf ("%s\n", msg);
 		if (dbg_crash_on_fatal_error->intvalue)
 			DEBUGBREAKPOINT;
+
+		//an err_die means the whole game is about to explode, avoid running any extra code if possible
+		if (code != ERR_DIE)
+		{
 #ifndef NO_SERVER
-		SV_Shutdown (va("Server fatal crashed: %s\n", msg), false, true);
+			SV_Shutdown (va("Server fatal crashed: %s\n", msg), false, true);
 #endif
 #ifndef DEDICATED_ONLY
-		if (dbg_unload->intvalue)
-			CL_Shutdown ();
+			if (dbg_unload->intvalue)
+				CL_Shutdown ();
 #endif
+		}
 	}
 
 	if (logfile)
 	{
+		fprintf (logfile, "*****************************\n"
+						  "Server fatal crashed: %s\n"
+						  "*****************************\n", msg);
 		fclose (logfile);
 		logfile = NULL;
 	}
@@ -444,7 +515,10 @@ vec3_t	bytedirs[NUMVERTEXNORMALS] =
 // writing functions
 //
 
-void MSG_WriteChar (sizebuf_t *sb, int c)
+byte		message_buff[0x10000];
+sizebuf_t	msgbuff;
+
+void MSG_WriteChar (int c)
 {
 	byte	*buf;
 	
@@ -452,13 +526,13 @@ void MSG_WriteChar (sizebuf_t *sb, int c)
 	if (c < -128 || c > 127)
 		Com_Error (ERR_FATAL, "MSG_WriteChar: range error");
 #endif*/
-	assert (!(c < -128 || c > 127));
+	Q_assert (!(c < -128 || c > 127));
 
-	buf = SZ_GetSpace (sb, 1);
+	buf = SZ_GetSpace (&msgbuff, 1);
 	buf[0] = c;
 }
 
-void MSG_BeginWriteByte (sizebuf_t *sb, int c)
+void MSG_BeginWriting (int c)
 {
 	byte	*buf;
 
@@ -466,13 +540,14 @@ void MSG_BeginWriteByte (sizebuf_t *sb, int c)
 	if (c < 0 || c > 255)
 		Com_Error (ERR_FATAL, "MSG_WriteByte: range error");
 #endif*/
-	assert (!(c < 0 || c > 255));
+	Q_assert (!(c < 0 || c > 255));
+	Q_assert (!msgbuff.cursize);
 
-	buf = SZ_GetSpace (sb, 1);
+	buf = SZ_GetSpace (&msgbuff, 1);
 	buf[0] = c;
 }
 
-void MSG_WriteByte (sizebuf_t *sb, int c)
+void MSG_WriteByte (int c)
 {
 	byte	*buf;
 
@@ -480,13 +555,13 @@ void MSG_WriteByte (sizebuf_t *sb, int c)
 	if (c < 0 || c > 255)
 		Com_Error (ERR_FATAL, "MSG_WriteByte: range error");
 #endif*/
-	assert (!(c < 0 || c > 255));
+	Q_assert (!(c < 0 || c > 255));
 
-	buf = SZ_GetSpace (sb, 1);
+	buf = SZ_GetSpace (&msgbuff, 1);
 	buf[0] = c;
 }
 
-void MSG_WriteShort (sizebuf_t *sb, int c)
+void MSG_WriteShort (int c)
 {
 	byte	*buf;
 	
@@ -495,25 +570,55 @@ void MSG_WriteShort (sizebuf_t *sb, int c)
 		Com_Error (ERR_FATAL, "MSG_WriteShort: range error");
 #endif*/
 	//XXX: unsigned shorts are written here too...
-	//assert (!(c < ((short)0x8000) || c > (short)0x7fff));
+	//Q_assert (!(c < ((short)0x8000) || c > (short)0x7fff));
 
-	buf = SZ_GetSpace (sb, 2);
+	buf = SZ_GetSpace (&msgbuff, 2);
 	buf[0] = c&0xff;
 	buf[1] = (c>>8) &0xff;
 }
 
-void MSG_WriteLong (sizebuf_t *sb, int c)
+void SZ_WriteShort (sizebuf_t *sbuf, int c)
+{
+	byte	*buf;
+
+	buf = SZ_GetSpace (sbuf, 2);
+	buf[0] = c&0xff;
+	buf[1] = (c>>8) &0xff;
+}
+
+void SZ_WriteLong (sizebuf_t *sbuf, int c)
 {
 	byte	*buf;
 	
-	buf = SZ_GetSpace (sb, 4);
+	buf = SZ_GetSpace (sbuf, 4);
 	buf[0] = c&0xff;
 	buf[1] = (c>>8)&0xff;
 	buf[2] = (c>>16)&0xff;
 	buf[3] = c>>24;
 }
 
-void MSG_WriteFloat (sizebuf_t *sb, float f)
+void SZ_WriteByte (sizebuf_t *sbuf, int c)
+{
+	byte	*buf;
+
+	Q_assert (!(c < 0 || c > 255));
+
+	buf = SZ_GetSpace (sbuf, 1);
+	buf[0] = c;
+}
+
+void MSG_WriteLong (int c)
+{
+	byte	*buf;
+	
+	buf = SZ_GetSpace (&msgbuff, 4);
+	buf[0] = c&0xff;
+	buf[1] = (c>>8)&0xff;
+	buf[2] = (c>>16)&0xff;
+	buf[3] = c>>24;
+}
+
+void MSG_WriteFloat (float f)
 {
 	union
 	{
@@ -525,41 +630,132 @@ void MSG_WriteFloat (sizebuf_t *sb, float f)
 	dat.f = f;
 	dat.l = LittleLong (dat.l);
 	
-	SZ_Write (sb, &dat.l, 4);
+	SZ_Write (&msgbuff, &dat.l, 4);
 }
 
-void MSG_WriteString (sizebuf_t *sb, char *s)
+void MSG_WriteString (const char *s)
 {
 	if (!s)
-		SZ_Write (sb, "", 1);
+		SZ_Write (&msgbuff, "", 1);
 	else
-		SZ_Write (sb, s, strlen(s)+1);
+		SZ_Write (&msgbuff, s, strlen(s)+1);
 }
 
-void MSG_WriteCoord (sizebuf_t *sb, float f)
+void MSG_Write (const void *data, int length)
 {
-	MSG_WriteShort (sb, (int)(f*8));
+	memcpy (SZ_GetSpace(&msgbuff,length),data,length);		
 }
 
-void MSG_WritePos (sizebuf_t *sb, vec3_t pos)
+void MSG_Print (const char *data)
 {
-	MSG_WriteShort (sb, (int)(pos[0]*8));
-	MSG_WriteShort (sb, (int)(pos[1]*8));
-	MSG_WriteShort (sb, (int)(pos[2]*8));
+	int		len;
+	
+	len = strlen(data)+1;
+
+	Q_assert (len > 1);
+
+	if (msgbuff.cursize)
+	{
+		if (message_buff[msgbuff.cursize-1])
+			memcpy ((byte *)SZ_GetSpace(&msgbuff, len),data,len); // no trailing 0
+		else
+			memcpy ((byte *)SZ_GetSpace(&msgbuff, len-1)-1,data,len); // write over trailing 0
+	}
+	else
+		memcpy ((byte *)SZ_GetSpace(&msgbuff, len),data,len);
 }
 
-void MSG_WriteAngle (sizebuf_t *sb, float f)
+int	MSG_GetLength (void)
 {
-	MSG_WriteByte (sb, (int)(f*256/360) & 255);
+	return msgbuff.cursize;
 }
 
-void MSG_WriteAngle16 (sizebuf_t *sb, float f)
+byte *MSG_GetData (void)
 {
-	MSG_WriteShort (sb, ANGLE2SHORT(f));
+	return message_buff;
+}
+
+byte MSG_GetType (void)
+{
+	Q_assert (msgbuff.cursize > 0);
+
+	return message_buff[0];
+}
+
+void MSG_FreeData (void)
+{
+	Q_assert (msgbuff.cursize > 0);
+	SZ_Clear (&msgbuff);
+}
+
+void MSG_Clear (void)
+{
+	SZ_Clear (&msgbuff);
+}
+
+void MSG_EndWriting (sizebuf_t *out)
+{
+	Q_assert (msgbuff.cursize > 0);
+
+	//Q_assert (msgbuff.cursize < MAX_USABLEMSG);
+
+	if (out->cursize + msgbuff.cursize > out->maxsize)
+	{
+		Com_DPrintf ("MSG_EndWriting: overflow\n");
+		SZ_Clear (out);
+		out->overflowed = true;
+	}
+	else
+	{
+		SZ_Write (out, message_buff, msgbuff.cursize);
+	}
+	SZ_Clear (&msgbuff);
+}
+
+void MSG_EndWrite (messagelist_t *out)
+{
+	Q_assert (msgbuff.cursize > 0);
+
+	//r1: use small local buffer if possible to avoid thousands of mallocs with tiny amounts
+	if (msgbuff.cursize > MSG_MAX_SIZE_BEFORE_MALLOC)
+	{
+		msg_malloc_hits++;
+		out->data = malloc (msgbuff.cursize);
+	}
+	else
+	{
+		msg_local_hits++;
+		out->data = out->localbuff;
+	}
+
+	memcpy (out->data, message_buff, msgbuff.cursize);
+	out->cursize = msgbuff.cursize;
+}
+
+void MSG_WriteCoord (float f)
+{
+	MSG_WriteShort ((int)(f*8));
+}
+
+void MSG_WritePos (vec3_t pos)
+{
+	MSG_WriteShort ((int)(pos[0]*8));
+	MSG_WriteShort ((int)(pos[1]*8));
+	MSG_WriteShort ((int)(pos[2]*8));
+}
+
+void MSG_WriteAngle (float f)
+{
+	MSG_WriteByte ((int)(f*256/360) & 255);
+}
+
+void MSG_WriteAngle16 (float f)
+{
+	MSG_WriteShort (ANGLE2SHORT(f));
 }
 
 
-void MSG_WriteDeltaUsercmd (sizebuf_t *buf, usercmd_t *from, usercmd_t *cmd)
+void MSG_WriteDeltaUsercmd (usercmd_t *from, usercmd_t *cmd)
 {
 	int		bits;
 
@@ -584,40 +780,42 @@ void MSG_WriteDeltaUsercmd (sizebuf_t *buf, usercmd_t *from, usercmd_t *cmd)
 	if (cmd->impulse != from->impulse)
 		bits |= CM_IMPULSE;
 
-    MSG_WriteByte (buf, bits);
+    MSG_WriteByte (bits);
 
 	if (bits & CM_ANGLE1)
-		MSG_WriteShort (buf, cmd->angles[0]);
+		MSG_WriteShort (cmd->angles[0]);
+
 	if (bits & CM_ANGLE2)
-		MSG_WriteShort (buf, cmd->angles[1]);
+		MSG_WriteShort (cmd->angles[1]);
+
 	if (bits & CM_ANGLE3)
-		MSG_WriteShort (buf, cmd->angles[2]);
+		MSG_WriteShort (cmd->angles[2]);
 	
 	if (bits & CM_FORWARD)
-		MSG_WriteShort (buf, cmd->forwardmove);
+		MSG_WriteShort (cmd->forwardmove);
 	if (bits & CM_SIDE)
-	  	MSG_WriteShort (buf, cmd->sidemove);
+	  	MSG_WriteShort (cmd->sidemove);
 	if (bits & CM_UP)
-		MSG_WriteShort (buf, cmd->upmove);
+		MSG_WriteShort (cmd->upmove);
 
  	if (bits & CM_BUTTONS)
-	  	MSG_WriteByte (buf, cmd->buttons);
+	  	MSG_WriteByte (cmd->buttons);
  	if (bits & CM_IMPULSE)
-	    MSG_WriteByte (buf, cmd->impulse);
+	    MSG_WriteByte (cmd->impulse);
 
-    MSG_WriteByte (buf, cmd->msec);
-	MSG_WriteByte (buf, cmd->lightlevel);
+    MSG_WriteByte (cmd->msec);
+	MSG_WriteByte (cmd->lightlevel);
 }
 
 
-void MSG_WriteDir (sizebuf_t *sb, vec3_t dir)
+void MSG_WriteDir (vec3_t dir)
 {
 	int		i, best;
 	float	d, bestd;
 	
 	if (!dir)
 	{
-		MSG_WriteByte (sb, 0);
+		MSG_WriteByte (0);
 		return;
 	}
 
@@ -632,7 +830,7 @@ void MSG_WriteDir (sizebuf_t *sb, vec3_t dir)
 			best = i;
 		}
 	}
-	MSG_WriteByte (sb, best);
+	MSG_WriteByte (best);
 }
 
 
@@ -655,15 +853,15 @@ Writes part of a packetentities message.
 Can delta from either a baseline or a previous packet_entity
 ==================
 */
-void MSG_WriteDeltaEntity (entity_state_t *storeas, entity_state_t *from, entity_state_t *to, sizebuf_t *msg, qboolean force, qboolean newentity, int mask, int cl_protocol)
+void MSG_WriteDeltaEntity (entity_state_t *from, entity_state_t *to, qboolean force, qboolean newentity, int cl_protocol)
 {
 	int		bits;
 
-	if (!to->number)
-		Com_Error (ERR_FATAL, "Unset entity number");
+	if (from->number >= MAX_EDICTS || from->number < 0)
+		Com_Error (ERR_FATAL, "MSG_WriteDeltaEntity: Bad 'from' entity number %d", from->number);
 
-	if (to->number >= MAX_EDICTS)
-		Com_Error (ERR_FATAL, "Entity number >= MAX_EDICTS");
+	if (to->number >= MAX_EDICTS || to->number < 1)
+		Com_Error (ERR_FATAL, "MSG_WriteDeltaEntity: Bad 'to' entity number %d", to->number);
 
 // send an update
 	bits = 0;
@@ -694,7 +892,7 @@ void MSG_WriteDeltaEntity (entity_state_t *storeas, entity_state_t *from, entity
 		else
 			bits |= (U_SKIN8|U_SKIN16);
 	}
-		
+
 	if ( to->frame != from->frame )
 	{
 		if (to->frame < 256)
@@ -752,8 +950,32 @@ void MSG_WriteDeltaEntity (entity_state_t *storeas, entity_state_t *from, entity
 	if ( to->sound != from->sound )
 		bits |= U_SOUND;
 
-	if ((newentity || to->renderfx & RF_FRAMELERP || ((to->renderfx & RF_BEAM) && cl_protocol == ORIGINAL_PROTOCOL_VERSION)) || (to->renderfx & RF_BEAM && cl_protocol == ENHANCED_PROTOCOL_VERSION && !VectorCompare (to->old_origin, from->old_origin))) {
+	if (
+		(
+			to->renderfx & RF_FRAMELERP ||
+			(
+				(
+					(to->renderfx & RF_BEAM) &&
+					cl_protocol == ORIGINAL_PROTOCOL_VERSION
+				)
+			)
+			||
+			(
+				(to->renderfx & RF_BEAM) &&
+				cl_protocol == ENHANCED_PROTOCOL_VERSION &&
+				!VectorCompare (to->old_origin, from->old_origin)
+			)
+		)
+	   )
+	{
 		bits |= U_OLDORIGIN;
+	}
+
+	//r1: pointless sending this if it matches baseline/old!!
+	if (newentity)
+	{
+		if (!VectorCompare (to->old_origin, from->old_origin))
+			bits |= U_OLDORIGIN;
 	}
 
 #ifdef ENHANCED_SERVER
@@ -776,108 +998,104 @@ void MSG_WriteDeltaEntity (entity_state_t *storeas, entity_state_t *from, entity
 	else if (bits & 0x0000ff00)
 		bits |= U_MOREBITS1;
 
-	MSG_WriteByte (msg,	bits&255 );
+	MSG_WriteByte (bits&255 );
 
 	if (bits & 0xff000000)
 	{
-		MSG_WriteByte (msg,	(bits>>8)&255 );
-		MSG_WriteByte (msg,	(bits>>16)&255 );
-		MSG_WriteByte (msg,	(bits>>24)&255 );
+		MSG_WriteByte ((bits>>8)&255 );
+		MSG_WriteByte ((bits>>16)&255 );
+		MSG_WriteByte ((bits>>24)&255 );
 	}
 	else if (bits & 0x00ff0000)
 	{
-		MSG_WriteByte (msg,	(bits>>8)&255 );
-		MSG_WriteByte (msg,	(bits>>16)&255 );
+		MSG_WriteByte ((bits>>8)&255 );
+		MSG_WriteByte ((bits>>16)&255 );
 	}
 	else if (bits & 0x0000ff00)
 	{
-		MSG_WriteByte (msg,	(bits>>8)&255 );
+		MSG_WriteByte ((bits>>8)&255 );
 	}
 
 	//----------
 
 	if (bits & U_NUMBER16)
-		MSG_WriteShort (msg, to->number);
+		MSG_WriteShort (to->number);
 	else
-		MSG_WriteByte (msg,	to->number);
+		MSG_WriteByte (to->number);
 
 	if (bits & U_MODEL)
-		MSG_WriteByte (msg,	to->modelindex);
+		MSG_WriteByte (to->modelindex);
 	if (bits & U_MODEL2)
-		MSG_WriteByte (msg,	to->modelindex2);
+		MSG_WriteByte (to->modelindex2);
 	if (bits & U_MODEL3)
-		MSG_WriteByte (msg,	to->modelindex3);
+		MSG_WriteByte (to->modelindex3);
 	if (bits & U_MODEL4)
-		MSG_WriteByte (msg,	to->modelindex4);
+		MSG_WriteByte (to->modelindex4);
 
 	if (bits & U_FRAME8)
-		MSG_WriteByte (msg, to->frame);
+		MSG_WriteByte (to->frame);
 	if (bits & U_FRAME16)
-		MSG_WriteShort (msg, to->frame);
+		MSG_WriteShort (to->frame);
 
 	if ((bits & U_SKIN8) && (bits & U_SKIN16))		//used for laser colors
-		MSG_WriteLong (msg, to->skinnum);
+		MSG_WriteLong (to->skinnum);
 	else if (bits & U_SKIN8)
-		MSG_WriteByte (msg, to->skinnum);
+		MSG_WriteByte (to->skinnum);
 	else if (bits & U_SKIN16)
-		MSG_WriteShort (msg, to->skinnum);
+		MSG_WriteShort (to->skinnum);
 
 
 	if ( (bits & (U_EFFECTS8|U_EFFECTS16)) == (U_EFFECTS8|U_EFFECTS16) )
-		MSG_WriteLong (msg, to->effects);
+		MSG_WriteLong (to->effects);
 	else if (bits & U_EFFECTS8)
-		MSG_WriteByte (msg, to->effects);
+		MSG_WriteByte (to->effects);
 	else if (bits & U_EFFECTS16)
-		MSG_WriteShort (msg, to->effects);
+		MSG_WriteShort (to->effects);
 
 	if ( (bits & (U_RENDERFX8|U_RENDERFX16)) == (U_RENDERFX8|U_RENDERFX16) )
-		MSG_WriteLong (msg, to->renderfx);
+		MSG_WriteLong (to->renderfx);
 	else if (bits & U_RENDERFX8)
-		MSG_WriteByte (msg, to->renderfx);
+		MSG_WriteByte (to->renderfx);
 	else if (bits & U_RENDERFX16)
-		MSG_WriteShort (msg, to->renderfx);
+		MSG_WriteShort (to->renderfx);
 
 	if (bits & U_ORIGIN1)
-		MSG_WriteCoord (msg, to->origin[0]);		
+		MSG_WriteCoord (to->origin[0]);		
 	if (bits & U_ORIGIN2)
-		MSG_WriteCoord (msg, to->origin[1]);
+		MSG_WriteCoord (to->origin[1]);
 	if (bits & U_ORIGIN3)
-		MSG_WriteCoord (msg, to->origin[2]);
+		MSG_WriteCoord (to->origin[2]);
 
 	if (bits & U_ANGLE1)
-		MSG_WriteAngle(msg, to->angles[0]);
+		MSG_WriteAngle(to->angles[0]);
 	if (bits & U_ANGLE2)
-		MSG_WriteAngle(msg, to->angles[1]);
+		MSG_WriteAngle(to->angles[1]);
 	if (bits & U_ANGLE3)
-		MSG_WriteAngle(msg, to->angles[2]);
+		MSG_WriteAngle(to->angles[2]);
 
 	if (bits & U_OLDORIGIN)
 	{
-		MSG_WriteCoord (msg, to->old_origin[0]);
-		MSG_WriteCoord (msg, to->old_origin[1]);
-		MSG_WriteCoord (msg, to->old_origin[2]);
+		MSG_WriteCoord (to->old_origin[0]);
+		MSG_WriteCoord (to->old_origin[1]);
+		MSG_WriteCoord (to->old_origin[2]);
 	}
 
 	if (bits & U_SOUND)
-		MSG_WriteByte (msg, to->sound);
+		MSG_WriteByte (to->sound);
 
 	if (bits & U_EVENT)
-		MSG_WriteByte (msg, to->event);
+		MSG_WriteByte (to->event);
 
 	if (bits & U_SOLID)
-		MSG_WriteShort (msg, to->solid);
+		MSG_WriteShort (to->solid);
 
 #ifdef ENHANCED_SERVER
 	if (bits & U_VELOCITY) {
-		MSG_WriteCoord (msg, to->velocity[0]);
-		MSG_WriteCoord (msg, to->velocity[1]);
-		MSG_WriteCoord (msg, to->velocity[2]);
+		MSG_WriteCoord (to->velocity[0]);
+		MSG_WriteCoord (to->velocity[1]);
+		MSG_WriteCoord (to->velocity[2]);
 	}
 #endif
-
-	//r1: keep a delta
-	if (storeas)
-		memcpy (storeas, to, sizeof(entity_state_t));
 }
 
 
@@ -1073,7 +1291,7 @@ void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t /*@ou
 	msec = MSG_ReadByte (msg_read);
 
 	if (msec > 250)
-		Com_Printf ("MSG_ReadDeltaUsercmd: funky msec (%d)!\n", msec);
+		Com_Printf ("MSG_ReadDeltaUsercmd: funky msec (%d)!\n", LOG_GENERAL, msec);
 
 	move->msec = msec;
 
@@ -1111,10 +1329,13 @@ void *SZ_GetSpace (sizebuf_t /*@out@*/*buf, int length)
 {
 	void	*data;
 
-	assert (length > 0);
+	Q_assert (length > 0);
 	
 	if (buf->cursize + length > buf->maxsize)
 	{
+		if (!buf->data)
+			Com_Error (ERR_FATAL, "SZ_GetSpace: attempted to write %d bytes to an uninitialized buffer!", length);
+
 		if (!buf->allowoverflow)
 			Com_Error (ERR_FATAL, "SZ_GetSpace: overflow without allowoverflow set (%d+%d > %d)", buf->cursize, length, buf->maxsize);
 		
@@ -1141,18 +1362,18 @@ void *SZ_GetSpace (sizebuf_t /*@out@*/*buf, int length)
 	return data;
 }
 
-void SZ_Write (sizebuf_t /*@out@*/*buf, void *data, int length)
+void SZ_Write (sizebuf_t /*@out@*/*buf, const void *data, int length)
 {
 	memcpy (SZ_GetSpace(buf,length),data,length);		
 }
 
-void SZ_Print (sizebuf_t /*@out@*/*buf, char *data)
+void SZ_Print (sizebuf_t /*@out@*/*buf, const char *data)
 {
 	int		len;
 	
 	len = strlen(data)+1;
 
-	assert (len > 1);
+	Q_assert (len > 1);
 
 	if (buf->cursize)
 	{
@@ -1177,7 +1398,7 @@ Returns the position (1 to argc-1) in the program's argument list
 where the given parameter apears, or 0 if not present
 ================
 */
-int COM_CheckParm (char *parm)
+/*int COM_CheckParm (const char *parm)
 {
 	int		i;
 	
@@ -1188,7 +1409,7 @@ int COM_CheckParm (char *parm)
 	}
 		
 	return 0;
-}
+}*/
 
 int COM_Argc (void)
 {
@@ -1249,7 +1470,7 @@ void COM_AddParm (char *parm)
 
 
 /// just for debugging
-int	memsearch (byte *start, int count, int search)
+/*int	memsearch (byte *start, int count, int search)
 {
 	int		i;
 	
@@ -1257,10 +1478,10 @@ int	memsearch (byte *start, int count, int search)
 		if (start[i] == search)
 			return i;
 	return -1;
-}
+}*/
 
 
-char *CopyString (const char *in, short tag)
+char *CopyString (const char *in, int tag)
 {
 	char	*out;
 	
@@ -1269,9 +1490,7 @@ char *CopyString (const char *in, short tag)
 	return out;
 }
 
-
-
-void Info_Print (char *s)
+void Info_Print (const char *s)
 {
 	char	key[512];
 	char	value[512];
@@ -1294,11 +1513,11 @@ void Info_Print (char *s)
 		}
 		else
 			*o = 0;
-		Com_Printf ("%s", key);
+		Com_Printf ("%s", LOG_GENERAL, key);
 
 		if (!*s)
 		{
-			Com_Printf ("MISSING VALUE\n");
+			Com_Printf ("Info_Print: MISSING VALUE\n", LOG_GENERAL);
 			return;
 		}
 
@@ -1310,10 +1529,9 @@ void Info_Print (char *s)
 
 		if (*s)
 			s++;
-		Com_Printf ("%s\n", value);
+		Com_Printf ("%s\n", LOG_GENERAL, value);
 	}
 }
-
 
 /*
 ==============================================================================
@@ -1325,7 +1543,8 @@ just cleared malloc with counters now...
 ==============================================================================
 */
 
-#define	Z_MAGIC		0x1d1d
+#define	Z_MAGIC			0x1d1d
+#define	Z_MAGIC_DEBUG	0x2d2d
 
 typedef struct zhead_s
 {
@@ -1335,45 +1554,83 @@ typedef struct zhead_s
 	int		size;
 } zhead_t;
 
-static zhead_t	z_chain = {0};
-static int		z_count = 0;
-static int		z_bytes = 0;
+typedef struct z_memloc_s
+{
+	void				*address;
+	struct	z_memloc_s	*next;
+} z_memloc_t;
 
-unsigned long	z_allocs = 0;
-unsigned long	z_level_allocs = 0;
-unsigned long	z_game_allocs = 0;
+static z_memloc_t	z_game_locations;
+
+static zhead_t	z_chain = {0};
+
+static long		z_count = 0;
+static long		z_bytes = 0;
+
+static unsigned long	z_allocs = 0;
+static unsigned long	z_level_allocs = 0;
+static unsigned long	z_game_allocs = 0;
+
+qboolean	free_from_game = false;
 
 /*
 ========================
 Z_Free
 ========================
 */
-void EXPORT Z_Free (void *ptr)
+void EXPORT Z_FreeRelease (void *ptr)
 {
 	zhead_t	*z;
 
-	if (!ptr)
-		Com_Error (ERR_FATAL, "Z_Free: null pointer");
-
 	z = ((zhead_t *)ptr) - 1;
 
-	if (z->magic != Z_MAGIC)
-		Com_Error (ERR_FATAL, "Z_Free: bad magic");
-
-	if (z->size <= 0)
-		Com_Error (ERR_FATAL, "Z_Free: invalid size %d (tagged as %s)", z->size, tagmalloc_tags[z->tag].name);
+	if (z->magic != Z_MAGIC && z->magic != Z_MAGIC_DEBUG)
+		Com_Error (ERR_DIE, "Z_Free: bad magic");
 
 	z->prev->next = z->next;
 	z->next->prev = z->prev;
-
-	if (z->next->magic != Z_MAGIC)
-		Com_Error (ERR_FATAL, "Z_Free: memory corruption detected");
 
 	z_count--;
 	z_bytes -= z->size;
 	free (z);
 }
 
+void EXPORT Z_FreeDebug (void *ptr)
+{
+	zhead_t	*z;
+
+	if (!ptr)
+		Com_Error (ERR_DIE, "Z_Free: null pointer given from %s", free_from_game ? "GAME" : "EXECUTABLE");
+
+	z = ((zhead_t *)ptr) - 1;
+
+	Z_Verify (va ("Z_FreeDebug: START FREE FROM %s OF 0x%.8p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", ptr));
+
+	if (z->magic != Z_MAGIC && z->magic != Z_MAGIC_DEBUG)
+		Com_Error (ERR_DIE, "Z_Free: bad magic freeing 0x%.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
+
+	if (z->magic == Z_MAGIC_DEBUG && (*(byte **)&z)[z->size-1] != 0xCC)
+		Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %s) from %s at 0x%.8p", z->size, tagmalloc_tags[z->tag].name, free_from_game ? "GAME" : "EXECUTABLE", z);
+
+	if (z->size <= 0 || z->size > 0x40000000)
+		Com_Error (ERR_DIE, "Z_Free: invalid block size %d (tagged as %s) from %s at 0x%.8p", z->size, tagmalloc_tags[z->tag].name, free_from_game ? "GAME" : "EXECUTABLE", z);
+
+	z->prev->next = z->next;
+	z->next->prev = z->prev;
+
+	if (z->next->magic != Z_MAGIC && z->next->magic != Z_MAGIC_DEBUG)
+		Com_Error (ERR_DIE, "Z_Free: memory corruption detected after free of block at 0x%.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
+
+	z_count--;
+	z_bytes -= z->size;
+
+	if (z_count < 0 || z_bytes < 0)
+		Com_Error (ERR_DIE, "Z_Free: counters are screwed after free of %d bytes at 0x%.8p tagged %d (%s) from %s", z->size, z, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE");
+
+	free (z);
+
+	Z_Verify (va ("Z_FreeDebug: END FREE OF 0x%.8p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE"));
+}
 
 /*
 ========================
@@ -1413,7 +1670,7 @@ void Z_Stats_f (void)
 		}
 		bigtotal += total;
 		bignum += num;
-		Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", tagmalloc_tags[i].name, total, num, tagmalloc_tags[i].allocs);
+		Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", LOG_GENERAL, tagmalloc_tags[i].name, total, num, tagmalloc_tags[i].allocs);
 	}
 
 	bigtotal += game_size;
@@ -1422,13 +1679,13 @@ void Z_Stats_f (void)
 	bignum += game_count;
 	bignum += level_count;
 
-	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", "DLL_LEVEL", level_size, level_count, z_level_allocs);
-	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n\n", "DLL_GAME", game_size, game_count, z_game_allocs);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", LOG_GENERAL, "DLL_LEVEL", level_size, level_count, z_level_allocs);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n\n", LOG_GENERAL, "DLL_GAME", game_size, game_count, z_game_allocs);
 	
-	Com_Printf ("%i unaccounted allocations\n", z_allocs);
+	Com_Printf ("%i unaccounted allocations\n", LOG_GENERAL, z_allocs);
 
-	Com_Printf ("  CALCED_TOTAL: %i bytes in %i blocks\n", bigtotal, bignum);
-	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", z_bytes, z_count);
+	Com_Printf ("  CALCED_TOTAL: %i bytes in %i blocks\n", LOG_GENERAL, bigtotal, bignum);
+	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", LOG_GENERAL, z_bytes, z_count);
 }
 
 /*
@@ -1436,9 +1693,11 @@ void Z_Stats_f (void)
 Z_FreeTags
 ========================
 */
-void EXPORT Z_FreeTags (int tag)
+void Z_FreeTags (int tag)
 {
 	zhead_t	*z, *next;
+
+	Z_Verify ("Z_FreeTags: START");
 
 	for (z=z_chain.next ; z != &z_chain ; z=next)
 	{
@@ -1446,6 +1705,8 @@ void EXPORT Z_FreeTags (int tag)
 		if (z->tag == tag)
 			Z_Free ((void *)(z+1));
 	}
+
+	Z_Verify ("Z_FreeTags: END");
 }
 
 /*
@@ -1453,16 +1714,78 @@ void EXPORT Z_FreeTags (int tag)
 Z_FreeTags
 ========================
 */
-void EXPORT Z_Verify (const char *entry)
+void Z_Verify (const char *entry)
 {
+	int		i;
 	zhead_t	*z, *next;
+
+	i = 0;
 
 	for (z=z_chain.next ; z != &z_chain ; z=next)
 	{
 		next = z->next;
 		if (z->magic != Z_MAGIC)
-			Com_Error (ERR_FATAL, "Z_Verify: memory corruption detected at '%s' (tag %d)", entry);
+		{
+			if (z->magic == Z_MAGIC_DEBUG)
+			{
+				if ((*(byte **)&z)[z->size-1] != 0xCC)
+					Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %s) at 0x%.8p", z->size, tagmalloc_tags[z->tag].name, z);
+			}
+			else
+			{
+				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected at '%s' in block %.8p", entry, z);
+			}
+		}
+
+		if (i++ > z_count * 2)
+			Com_Error (ERR_DIE, "Z_Verify: memory chain state corrupted at '%s'", entry);
 	}
+}
+
+void *Z_TagMallocDebug (int size, int tag)
+{
+	zhead_t	*z;
+
+	Z_Verify (va ("Z_TagMallocDebug: START ALLOCATION OF %d BYTES FOR TAG %d (%s)", size, tag, tag < TAGMALLOC_MAX_TAGS ?  tagmalloc_tags[tag].name : "UNKNOWN TAG"));
+
+	if (size <= 0 && tag < TAGMALLOC_MAX_TAGS)
+		Com_Error (ERR_DIE, "Z_TagMalloc: trying to allocate %d bytes!", size);
+
+	size = size + sizeof(zhead_t);
+
+	if (size > 0x40000000)
+		Com_Error (ERR_DIE, "Z_TagMalloc: trying to allocate %d bytes!", size);
+
+	size++;
+
+	z = malloc(size);
+
+	if (!z)
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %i bytes in %i blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
+
+	//memset (z, 0xCC, size);
+
+	(*(byte **)&z)[size-1] = 0xCC;
+
+	z_count++;
+
+	if (tag < TAGMALLOC_MAX_TAGS)
+		tagmalloc_tags[tag].allocs++;
+
+	z_bytes += size;
+
+	z->magic = Z_MAGIC_DEBUG;
+	z->tag = tag;
+	z->size = size;
+
+	z->next = z_chain.next;
+	z->prev = &z_chain;
+	z_chain.next->prev = z;
+	z_chain.next = z;
+
+	Z_Verify (va ("Z_TagMallocDebug: END ALLOCATION OF %d BYTES FOR TAG %d (%s)", size, tag, tag < TAGMALLOC_MAX_TAGS ?  tagmalloc_tags[tag].name : "UNKNOWN TAG"));
+
+	return (void *)(z+1);
 }
 
 /*
@@ -1470,34 +1793,20 @@ void EXPORT Z_Verify (const char *entry)
 Z_TagMalloc
 ========================
 */
-void * EXPORT Z_TagMalloc (int size, int tag)
+void *Z_TagMallocRelease (int size, int tag)
 {
 	zhead_t	*z;
-
-	if (size <= 0)
-		Com_Error (ERR_FATAL, "Z_Malloc: trying to allocate %d bytes!", size);
-
-	if (tag < 0 || tag > 0xFFFF)
-		Com_Error (ERR_FATAL, "Z_Malloc: bad tag %d", tag);
 
 	size = size + sizeof(zhead_t);
 	z = malloc(size);
 
 	if (!z)
-		Com_Error (ERR_FATAL, "Z_Malloc: failed on allocation of %i bytes for %s (already %i bytes in %i blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
-
-	memset (z, 0, size);
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %i bytes in %i blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
 
 	z_count++;
 
 	if (tag < TAGMALLOC_MAX_TAGS)
 		tagmalloc_tags[tag].allocs++;
-	else if (tag == TAG_LEVEL)
-		z_level_allocs++;
-	else if (tag == TAG_GAME)
-		z_game_allocs++;
-	else
-		z_allocs++;
 
 	z_bytes += size;
 
@@ -1512,6 +1821,70 @@ void * EXPORT Z_TagMalloc (int size, int tag)
 
 	return (void *)(z+1);
 }
+
+void * EXPORT Z_TagMallocGame (int size, int tag)
+{
+	z_memloc_t	*loc, *last, *newentry;
+	void		*b;
+
+	b = Z_TagMalloc (size, tag);
+
+	memset (b, 0, size);
+
+	if (tag == TAG_LEVEL)
+		z_level_allocs++;
+	else if (tag == TAG_GAME)
+		z_game_allocs++;
+
+	loc = &z_game_locations;
+	last = loc->next;
+	newentry = malloc (sizeof(*loc));
+	newentry->address = b;
+	newentry->next = last;
+	loc->next = newentry;
+
+	return b;
+}
+
+void EXPORT Z_FreeGame (void *buf)
+{
+	z_memloc_t	*loc, *last;
+
+	loc = last = &z_game_locations;
+
+	while (loc->next)
+	{
+		loc = loc->next;
+		if (buf == loc->address)
+		{
+			free_from_game = true;
+			Z_Free (buf);
+			free_from_game = false;
+
+			last->next = loc->next;
+			free (loc);
+			return;
+		}
+		last = loc;
+	}
+
+	Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at 0x%.8p", buf);
+}
+
+void EXPORT Z_FreeTagsGame (int tag)
+{
+	zhead_t	*z, *next;
+
+	for (z=z_chain.next ; z != &z_chain ; z=next)
+	{
+		next = z->next;
+		if (z->tag == tag)
+			Z_FreeGame ((void *)(z+1));
+	}
+
+	Z_Verify (va("Z_FreeTags %d (GAME): END", tag));
+}
+
 
 /*
 ========================
@@ -1693,11 +2066,36 @@ Qcommon_Init
 =================
 */
 
-#ifdef DEDICATED_ONLY
-void Q_NullCmd(void)
+void Q_NullFunc(void)
 {
 }
-#endif
+
+void Msg_Stats_f (void)
+{
+	int		total;
+
+	total = msg_malloc_hits + msg_local_hits;
+
+	Com_Printf ("malloc: %d (%.2f%%), local: %d (%.2f%%)\n", LOG_GENERAL,
+		msg_malloc_hits, ((float)msg_malloc_hits / (float)total) * 100.0f,
+		msg_local_hits, ((float)msg_local_hits / (float)total) * 100.0f);
+}
+
+void _z_debug_changed (cvar_t *cvar, char *o, char *n)
+{
+	if (cvar->intvalue)
+	{
+		Z_TagMalloc = Z_TagMallocDebug;
+		Z_Free = Z_FreeDebug;
+	}
+	else
+	{
+		Z_TagMalloc = Z_TagMallocRelease;
+		Z_Free = Z_FreeRelease;
+	}
+
+	Com_Printf ("Z_Debug: Intensive memory checking %s.\n", LOG_GENERAL, cvar->intvalue ? "enabled" : "disabled");
+}
 
 void Qcommon_Init (int argc, char **argv)
 {
@@ -1707,6 +2105,11 @@ void Qcommon_Init (int argc, char **argv)
 		Sys_Error ("Error during initialization");
 
 	seedMT((unsigned long)time(0));
+
+	SZ_Init (&msgbuff, message_buff, sizeof(message_buff));
+
+	Z_Free = Z_FreeRelease;
+	Z_TagMalloc = Z_TagMallocRelease;
 
 	z_chain.next = z_chain.prev = &z_chain;
 
@@ -1720,15 +2123,25 @@ void Qcommon_Init (int argc, char **argv)
 	Cmd_Init ();
 	Cvar_Init ();
 
+	z_debug = Cvar_Get ("z_debug", "0", 0);
+	z_debug->changed = _z_debug_changed;
+	if (z_debug->intvalue)
+	{
+		Z_TagMalloc = Z_TagMallocDebug;
+		Z_Free = Z_FreeDebug;
+	}
+
 #ifndef DEDICATED_ONLY
 	Key_Init ();
 #else
 	//r1: stub out these so configs don't spam unknown cmd
-	Cmd_AddCommand ("bind",Q_NullCmd);
-	Cmd_AddCommand ("unbind",Q_NullCmd);
-	Cmd_AddCommand ("unbindall",Q_NullCmd);
-	Cmd_AddCommand ("bindlist",Q_NullCmd);
+	Cmd_AddCommand ("bind",Q_NullFunc);
+	Cmd_AddCommand ("unbind",Q_NullFunc);
+	Cmd_AddCommand ("unbindall",Q_NullFunc);
+	Cmd_AddCommand ("bindlist",Q_NullFunc);
 #endif
+
+	Cmd_AddCommand ("msg_stats", Msg_Stats_f);
 
 	// we need to add the early commands twice, because
 	// a basedir or cddir needs to be set before execing
@@ -1759,6 +2172,8 @@ void Qcommon_Init (int argc, char **argv)
 	logfile_timestamp = Cvar_Get ("logfile_timestamp", "1", 0);
 	logfile_timestamp_format = Cvar_Get ("logfile_timestamp_format", "[%Y-%m-%d %H:%M]", 0);
 	logfile_name = Cvar_Get ("logfile_name", "qconsole.log", 0);
+	logfile_filterlevel = Cvar_Get ("logfile_filterlevel", "0", 0);
+	con_filterlevel = Cvar_Get ("con_filterlevel", "0", 0);
 
 #ifndef DEDICATED_ONLY
 	showtrace = Cvar_Get ("showtrace", "0", 0);
@@ -1792,9 +2207,9 @@ void Qcommon_Init (int argc, char **argv)
 	SV_Init ();
 #endif
 
-	Com_Printf ("====== Quake2 Initialized ======\n");	
+	Com_Printf ("====== Quake2 Initialized ======\n", LOG_GENERAL);	
 	Com_Printf ("R1Q2 build " BUILD ", compiled " __DATE__ ".\n"
-				"http://www.r1ch.net/stuff/r1q2/\n"
+				"http://www.r1ch.net/stuff/r1q2/\n", LOG_GENERAL,
 				BUILDSTRING " " CPUSTRING " (%s)\n\n", binary_name);
 
 #ifndef DEDICATED_ONLY
@@ -1821,6 +2236,8 @@ void Qcommon_Init (int argc, char **argv)
 		SCR_EndLoadingPlaque ();
 	}
 #endif
+
+	Cbuf_Execute ();
 }
 
 /*
@@ -1883,7 +2300,7 @@ void Qcommon_Frame (int msec)
 		extern	int c_traces, c_brush_traces;
 		extern	int	c_pointcontents;
 
-		Com_Printf ("%4i traces  %4i points\n", c_traces, c_pointcontents);
+		Com_Printf ("%4i traces  %4i points\n", LOG_GENERAL, c_traces, c_pointcontents);
 		c_traces = 0;
 		c_brush_traces = 0;
 		c_pointcontents = 0;
@@ -1900,13 +2317,14 @@ void Qcommon_Frame (int msec)
 			s = Sys_ConsoleInput ();
 			if (s)
 				Cbuf_AddText (va("%s\n",s));
+			Cbuf_Execute();
 		} while (s);
 #ifndef DEDICATED_ONLY
 	}
 #endif
 #endif
 
-	Cbuf_Execute ();
+	//Cbuf_Execute ();
 
 #ifndef DEDICATED_ONLY
 	if (host_speeds->intvalue)
@@ -1935,7 +2353,7 @@ void Qcommon_Frame (int msec)
 		rf = time_after_ref - time_before_ref;
 		sv -= gm;
 		cl -= rf;
-		Com_Printf ("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n",
+		Com_Printf ("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n", LOG_GENERAL,
 			all, sv, gm, cl, rf);
 	}
 #endif
@@ -2003,19 +2421,16 @@ int ZLibCompressChunk(byte *in, int len_in, byte *out, int len_out, int method, 
 	zs.reserved = 0;
 
 	result = deflateInit2 (&zs, method, Z_DEFLATED, wbits, 9, Z_DEFAULT_STRATEGY);
-	if (result != Z_OK) {
-		return 0;
-	}
+	if (result != Z_OK)
+		return -1;
 
 	result = deflate(&zs, Z_FINISH);
-	if (result != Z_STREAM_END) {
-		return 0;
-	}
+	if (result != Z_STREAM_END)
+		return -1;
 
 	result = deflateEnd(&zs);
-	if (result != Z_OK) {
-		return 0;
-	}
+	if (result != Z_OK)
+		return -1;
 
 	return zs.total_out;
 }
@@ -2029,7 +2444,7 @@ char *StripHighBits (const char *string, int highbits)
 
 	while (*string)
 	{
-		c = *string++;
+		c = *(string++);
 		if (highbits) {
 			//c &= 127;		// strip high bits
 			if (c >= 32 && c <= 127)
@@ -2040,7 +2455,7 @@ char *StripHighBits (const char *string, int highbits)
 		}
 
 		if (p - stripped == sizeof(stripped)-2) {
-			Com_Printf ("StripHighBits: overflow\n");
+			Com_Printf ("StripHighBits: overflow\n", LOG_GENERAL);
 			stripped[sizeof(stripped)-1] = '\0';
 			break;
 		}
@@ -2070,6 +2485,24 @@ void ExpandNewLines (char *string)
 	}
 	*s++ = *q;
 	*s = '\0';
+}
+
+char *StripQuotes (char *string)
+{
+	int		i;
+
+	i = strlen(string);
+
+	if (!i)
+		return string;
+
+	if (string[0] == '"' && string[i-1] == '"')
+	{
+		string[i-1] = 0;
+		return string + 1;
+	}
+
+	return string;
 }
 
 char *MakePrintable (const byte *s)

@@ -54,13 +54,14 @@ typedef struct ratelimit_s
 	unsigned	time;
 } ratelimit_t;
 
-typedef struct nullcmd_s
+typedef struct linkednamelist_s
 {
-	struct nullcmd_s	*next;
-	char				*name;
-} nullcmd_t;
+	struct linkednamelist_s	*next;
+	char					*name;
+} linkednamelist_t;
 
-extern nullcmd_t nullcmds;
+extern linkednamelist_t nullcmds;
+extern linkednamelist_t lrconcmds;
 
 extern	char svConnectStuffString[1100];
 extern	char svBeginStuffString[1100];
@@ -89,8 +90,8 @@ typedef struct
 
 	// the multicast buffer is used to send a message to a set of clients
 	// it is only used to marshall data until SV_Multicast is called
-	sizebuf_t	multicast;
-	byte		multicast_buf[MAX_MSGLEN];
+	//sizebuf_t	multicast;
+	//byte		multicast_buf[MAX_MSGLEN];
 
 	// demo server information
 	FILE		*demofile;
@@ -112,7 +113,7 @@ typedef enum
 					// connection for a couple seconds
 	cs_connected,	// has been assigned to a client_t, but not in game yet
 	cs_spawned		// client is fully in game
-} client_state_t;
+} serverclient_state_t;
 
 typedef struct
 {
@@ -176,7 +177,7 @@ typedef struct download_state_s
 
 typedef struct client_s
 {
-	client_state_t	state;
+	serverclient_state_t	state;
 
 	char			userinfo[MAX_INFO_STRING];		// name, etc
 
@@ -199,25 +200,31 @@ typedef struct client_s
 
 	// The datagram is written to by sound calls, prints, temp ents, etc.
 	// It can be harmlessly overflowed.
-	sizebuf_t		datagram;
-	byte			datagram_buf[MAX_MSGLEN];
+	//sizebuf_t		datagram;
+	//byte			datagram_buf[MAX_MSGLEN];
 
 	client_frame_t	frames[UPDATE_BACKUP];	// updates can be delta'd from here
 
 	byte			*download;			// file being downloaded
-	unsigned int	downloadsize;		// total bytes (can't use EOF because of paks)
-	unsigned int	downloadcount;		// bytes sent
-	unsigned short	downloadport;
+	int				downloadsize;		// total bytes (can't use EOF because of paks)
+	int		 		downloadcount;		// bytes sent
+	
+	//r1: compress downloads?
+	qboolean		downloadCompressed;
+
+	char			*downloadFileName;
+
+	//unsigned short	downloadport;
 
 	int				lastmessage;		// sv.framenum when packet was last received
 	//int				lastconnect;
 
-	unsigned int				challenge;			// challenge of this user, randomly generated
+	unsigned 		challenge;			// challenge of this user, randomly generated
 
 	netchan_t		netchan;
 	
 	//r1: client protocol
-	unsigned int				protocol;
+	unsigned 		protocol;
 
 	//r1: number of times they've commandMsec underflowed (if this gets excessive then
 	//they can be dropped)
@@ -248,14 +255,21 @@ typedef struct client_s
 	char						*versionString;
 
 	//r1: message queuing framework
-	message_queue_t				messageQueue;
+	//message_queue_t				messageQueue;
 
 	//r1: tcp download queue
 	download_queue_t			downloadQueue;
 	download_state_t			downloadState;
 
-	//r1: compress downloads?
-	qboolean					downloadCompressed;
+	char						reconnect_var[32];
+	char						reconnect_value[32];
+	qboolean					reconnect_done;
+
+	messagelist_t				*messageListData;
+	messagelist_t				*msgListStart;
+	messagelist_t				*msgListEnd;
+
+	qboolean					moved;
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -357,6 +371,17 @@ extern	cvar_t		*sv_validate_playerskins;
 
 extern	cvar_t		*sv_idlekick;
 
+extern	cvar_t		*sv_entity_inuse_hack;
+extern	cvar_t		*sv_force_reconnect;
+
+extern	cvar_t		*timeout;
+extern	cvar_t		*sv_download_refuselimit;
+
+extern	cvar_t		*sv_download_drop_file;
+extern	cvar_t		*sv_download_drop_message;
+
+extern	cvar_t		*sv_msecs;
+
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
 
@@ -368,13 +393,18 @@ extern	cvar_t	*allow_download_maps;
 
 //===========================================================
 
-#define CLIENT_NOCHEAT 0x1
+//client->notes
+
+#define NOTE_CLIENT_NOCHEAT 0x1
+#define	NOTE_OVERFLOWED		0x2
+#define	NOTE_OVERFLOW_DONE	0x4
+
 
 //
 // sv_main.c
 //
-void SV_FinalMessage (char *message, qboolean reconnect);
-void SV_DropClient (client_t *drop);
+void SV_FinalMessage (const char *message, qboolean reconnect);
+void SV_DropClient (client_t *drop, qboolean notify);
 void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@null@*/*cprintf);
 
 int EXPORT SV_ModelIndex (const char *name);
@@ -388,6 +418,7 @@ void SV_InitOperatorCommands (void);
 
 void SV_SendServerinfo (client_t *client);
 void SV_UserinfoChanged (client_t *cl);
+void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame);
 
 extern cvar_t	*sv_filter_q3names;
 extern cvar_t	*sv_filter_userinfo;
@@ -454,6 +485,15 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 void SV_ClientPrintf (client_t *cl, int level, char *fmt, ...);
 void SV_BroadcastPrintf (int level, char *fmt, ...);
 void SV_BroadcastCommand (char *fmt, ...);
+
+sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type);
+//void SV_AddMessageQueue (client_t *client, int extrabytes);
+void SV_AddMessage (client_t *cl, qboolean reliable);
+void SV_AddMessageSingle (client_t *cl, qboolean reliable);
+
+void SV_WriteReliableMessages (client_t *client, int buffSize);
+
+void SV_ClearMessageList (client_t *client);
 
 //
 // sv_user.c
@@ -571,16 +611,20 @@ struct banmatch_s
 	int			blockmethod;
 };
 
-typedef struct cvarban_s cvarban_t;
+typedef struct varban_s varban_t;
 
-struct cvarban_s
+struct varban_s
 {
-	cvarban_t	*next;
-	char		*cvarname;
+	varban_t	*next;
+	char		*varname;
 	banmatch_t	match;
 };
 
-extern cvarban_t cvarbans;
+extern	varban_t	cvarbans;
+extern	varban_t	userinfobans;
+
+
+banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result);
 
 extern	cvar_t	*sv_max_traces_per_frame;
 extern	int		sv_tracecount;

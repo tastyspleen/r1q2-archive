@@ -42,19 +42,26 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 	p = NUM_FOR_EDICT(ent);
 	if (p < 1 || p > maxclients->intvalue)
 	{
-		if (sv_gamedebug->intvalue >= 2)
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: Unicast to illegal entity index %d.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, p);
+
+		if (sv_gamedebug->intvalue >= 3)
 			DEBUGBREAKPOINT;
 		return;
 	}
 
 	client = svs.clients + (p-1);
 
-	if (reliable)
-		SZ_Write (&client->netchan.message, sv.multicast.data, sv.multicast.cursize);
-	else
-		SZ_Write (&client->datagram, sv.multicast.data, sv.multicast.cursize);
+	//r1: trap bad writes from game dll
+	if (client->state <= cs_connected)
+	{
+		Com_Printf ("GAME ERROR: Attempted to write %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, svc_strings[MSG_GetType()], p-1);
+		
+		MSG_FreeData();
+		return;
+	}
 
-	SZ_Clear (&sv.multicast);
+	SV_AddMessage (client, reliable);
 }
 
 
@@ -73,13 +80,15 @@ void EXPORT PF_dprintf (char *fmt, ...)
 	va_start (argptr,fmt);
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 	{
-		Com_Printf ("WARNING: PF_dprintf: message overflow.\n");
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: PF_dprintf: message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+
 		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 	}
 	va_end (argptr);
 
-	Com_Printf ("%s", msg);
+	Com_Printf ("%s", LOG_GAME|LOG_DEBUG, msg);
 }
 
 
@@ -95,13 +104,26 @@ void EXPORT PF_cprintf (edict_t *ent, int level, char *fmt, ...)
 	char		msg[1024];
 	va_list		argptr;
 	int			n, len;
+	client_t	*client;
 
 	if (ent)
 	{
 		n = NUM_FOR_EDICT(ent);
 		if (n < 1 || n > maxclients->intvalue)
 		{
-			Com_Printf ("WARNING: cprintf to a non-client (%d)\n", n);
+			if (sv_gamedebug->intvalue)
+				Com_Printf ("GAME WARNING: cprintf to a non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
+
+			if (sv_gamedebug->intvalue >= 3)
+				DEBUGBREAKPOINT;
+			return;
+		}
+
+		client = svs.clients + (n-1);
+		if (client->state != cs_spawned)
+		{
+			Com_Printf ("GAME ERROR: PF_cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+
 			if (sv_gamedebug->intvalue >= 2)
 				DEBUGBREAKPOINT;
 			return;
@@ -114,16 +136,24 @@ void EXPORT PF_cprintf (edict_t *ent, int level, char *fmt, ...)
 
 	if (len < 0)
 	{
-		Com_Printf ("ERROR: PF_cprintf: overflow.\n");
-		if (sv_gamedebug->intvalue)
+		Com_Printf ("GAME ERROR: PF_cprintf: overflow.\n", LOG_SERVER|LOG_ERROR);
+
+		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
 	}
 
 	if (ent)
+	{
 		SV_ClientPrintf (svs.clients+(n-1), level, "%s", msg);
+	}
 	else
-		Com_Printf ("%s", msg);
+	{
+		if (level == PRINT_CHAT)
+			Com_Printf ("%s", LOG_GAME|LOG_CHAT, msg);
+		else
+			Com_Printf ("%s", LOG_GAME, msg);
+	}
 }
 
 
@@ -139,20 +169,36 @@ void EXPORT PF_centerprintf (edict_t *ent, char *fmt, ...)
 	char		msg[1024];
 	va_list		argptr;
 	int			n;
+	client_t	*client;
 	
 	if (!ent)
 	{
-		Com_Printf ("WARNING: PF_centerprintf to NULL ent, ignored\n");
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: PF_centerprintf to NULL ent, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+
+		if (sv_gamedebug->intvalue >= 3)
+			DEBUGBREAKPOINT;
+		return;
+	}
+
+	n = NUM_FOR_EDICT(ent);
+
+	client = svs.clients + (n-1);
+	if (client->state != cs_spawned)
+	{
+		Com_Printf ("GAME ERROR: PF_centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+
 		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
 	}
 		
-	n = NUM_FOR_EDICT(ent);
 	if (n < 1 || n > maxclients->intvalue)
 	{
-		Com_Printf ("WARNING: PF_centerprintf to non-client (ent=%d), ignored\n", n);
-		if (sv_gamedebug->intvalue >= 2)
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: PF_centerprintf to non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
+
+		if (sv_gamedebug->intvalue >= 3)
 			DEBUGBREAKPOINT;
 		return;
 	}
@@ -160,14 +206,16 @@ void EXPORT PF_centerprintf (edict_t *ent, char *fmt, ...)
 	va_start (argptr,fmt);
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 	{
-		Com_Printf ("WARNING: PF_centerprintf: message overflow.\n");
-		if (sv_gamedebug->intvalue >= 2)
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: PF_centerprintf message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+
+		if (sv_gamedebug->intvalue >= 3)
 			DEBUGBREAKPOINT;
 	}
 	va_end (argptr);
 
-	MSG_BeginWriteByte (&sv.multicast,svc_centerprint);
-	MSG_WriteString (&sv.multicast,msg);
+	MSG_BeginWriting (svc_centerprint);
+	MSG_WriteString (msg);
 	PF_Unicast (ent, true);
 }
 
@@ -230,9 +278,9 @@ __inline char *SV_FixPlayerSkin (char *val, char *player_name)
 {
 	static char	fixed_skin[MAX_QPATH];
 
-	Com_Printf ("PF_Configstring: Overriding malformed playerskin '%s' with '%s\\male/grunt'\n", val, player_name);
+	Com_DPrintf ("PF_Configstring: Overriding malformed playerskin '%s' with '%s\\male/grunt'\n", LOG_SERVER|LOG_WARNING, val, player_name);
 
-	strcpy (fixed_skin, player_name);
+	Q_strncpy (fixed_skin, player_name, MAX_QPATH - 12);
 	strcat (fixed_skin, "\\male/grunt");
 
 	return fixed_skin;
@@ -256,7 +304,7 @@ void EXPORT PF_Configstring (int index, char *val)
 
 	//r1: note, only checking up to maxclients. some mod authors are unaware of CS_GENERAL
 	//and override playerskins with custom info, ugh :(
-	if (*val && sv_validate_playerskins->intvalue && index >= CS_PLAYERSKINS && index < CS_PLAYERSKINS + maxclients->intvalue)
+	if (val[0] && sv_validate_playerskins->intvalue && index >= CS_PLAYERSKINS && index < CS_PLAYERSKINS + maxclients->intvalue)
 	{
 		char	*p;
 		char	*player_name;
@@ -273,7 +321,7 @@ void EXPORT PF_Configstring (int index, char *val)
 
 		if (!p)
 		{
-			SV_FixPlayerSkin (val, pname);
+			val = SV_FixPlayerSkin (val, pname);
 			goto fixed;
 		}
 
@@ -282,7 +330,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		model_name = p;
 		if (!*model_name)
 		{
-			SV_FixPlayerSkin (val, player_name);
+			val = SV_FixPlayerSkin (val, player_name);
 			goto fixed;
 		}
 
@@ -292,7 +340,7 @@ void EXPORT PF_Configstring (int index, char *val)
 
 		if (!p)
 		{
-			SV_FixPlayerSkin (val, player_name);
+			val = SV_FixPlayerSkin (val, player_name);
 			goto fixed;
 		}
 
@@ -311,7 +359,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		{
 			if (!isalnum(model_name[i]) && model_name[i] != '_')
 			{
-				Com_Printf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", model_name[i], val);
+				Com_DPrintf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", LOG_SERVER|LOG_WARNING, model_name[i], val);
 				val = SV_FixPlayerSkin (val, player_name);
 				goto fixed;
 			}
@@ -322,7 +370,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		{
 			if (!isalnum(skin_name[i]) && skin_name[i] != '_')
 			{
-				Com_Printf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", skin_name[i], val);
+				Com_DPrintf ("PF_Configstring: Illegal character '%c' in playerskin '%s'\n", LOG_SERVER|LOG_WARNING, skin_name[i], val);
 				val = SV_FixPlayerSkin (val, player_name);
 				break;
 			}
@@ -336,7 +384,18 @@ fixed:
 	if (length > (sizeof(sv.configstrings[index])*(MAX_CONFIGSTRINGS-index))-1)
 		Com_Error (ERR_DROP, "configstring: index %d, '%s': too long", index, val);
 	else if (index != CS_STATUSBAR && length > sizeof(sv.configstrings[index])-1)
-		Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", index, MakePrintable(val));
+		Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val));
+
+	if (!strcmp (sv.configstrings[index], val))
+	{
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: Redundant update of configstring index %d (%s).\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val));
+
+		if (sv_gamedebug->intvalue >= 3)
+			DEBUGBREAKPOINT;
+
+		return;
+	}
 
 	strcpy (sv.configstrings[index], val);
 
@@ -345,49 +404,70 @@ fixed:
 	{
 		//r1: why clear?
 		//SZ_Clear (&sv.multicast);
-		MSG_BeginWriteByte (&sv.multicast, svc_configstring);
-		MSG_WriteShort (&sv.multicast, index);
-		MSG_WriteString (&sv.multicast, val);
-		SV_Multicast (vec3_origin, MULTICAST_ALL_R);
+		MSG_BeginWriting (svc_configstring);
+		MSG_WriteShort (index);
+		MSG_WriteString (val);
+		SV_Multicast (NULL, MULTICAST_ALL_R);
 	}
 }
 
 
 
-void EXPORT PF_WriteChar (int c) {
-	MSG_WriteChar (&sv.multicast, c);
+void EXPORT PF_WriteChar (int c)
+{
+	if (sv_gamedebug->intvalue)
+	{
+		if (c > 127 || c < -128)
+		{
+			Com_Printf ("GAME WARNING: Called gi.WriteChar (%d) which exceeds range for char.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG);
+			if (sv_gamedebug->intvalue > 1)
+				DEBUGBREAKPOINT;
+		}
+	}
+	MSG_WriteChar (c);
 }
 
-void EXPORT PF_WriteByte (int c) {
-	MSG_WriteByte (&sv.multicast, c);
+void EXPORT PF_WriteByte (int c)
+{
+	if (sv_gamedebug->intvalue)
+	{
+		if (c > 255 || c < 0)
+		{
+			Com_Printf ("GAME WARNING: Called gi.WriteByte (%d) which exceeds range for byte.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG);
+			if (sv_gamedebug->intvalue > 1)
+				DEBUGBREAKPOINT;
+		}
+	}
+	MSG_WriteByte (c & 0xFF);
 }
 
 void EXPORT PF_WriteShort (int c) {
-	MSG_WriteShort (&sv.multicast, c);
+	MSG_WriteShort (c);
 }
 
 void EXPORT PF_WriteLong (int c) {
-	MSG_WriteLong (&sv.multicast, c);
+	MSG_WriteLong (c);
 }
 
 void EXPORT PF_WriteFloat (float f) {
-	MSG_WriteFloat (&sv.multicast, f);
+	MSG_WriteFloat (f);
 }
 
 void EXPORT PF_WriteString (char *s) {
-	MSG_WriteString (&sv.multicast, s);
+	MSG_WriteString (s);
 }
 
 void EXPORT PF_WritePos (vec3_t pos) {
-	MSG_WritePos (&sv.multicast, pos);
+	MSG_WritePos (pos);
 }
 
 void EXPORT PF_WriteDir (vec3_t dir) {
-	MSG_WriteDir (&sv.multicast, dir);
+	MSG_WriteDir (dir);
 }
 
-void EXPORT PF_WriteAngle (float f) {
-	MSG_WriteAngle (&sv.multicast, f);
+void EXPORT PF_WriteAngle (float f)
+{
+	MSG_WriteAngle (f);
 }
 
 
@@ -443,6 +523,7 @@ qboolean EXPORT PF_inPHS (vec3_t p1, vec3_t p2)
 	leafnum = CM_PointLeafnum (p2);
 	cluster = CM_LeafCluster (leafnum);
 	area2 = CM_LeafArea (leafnum);
+
 	if ( mask && (!(mask[cluster>>3] & (1<<(cluster&7)) ) ) )
 		return false;		// more than one bounce away
 	if (!CM_AreasConnected (area1, area2))
@@ -456,7 +537,9 @@ void EXPORT PF_StartSound (edict_t *entity, int channel, int sound_num, float vo
 {
 	if (!entity)
 	{
-		Com_DPrintf ("PF_StartSound: NULL entity, ignored\n");
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: PF_StartSound: NULL entity, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+
 		if (sv_gamedebug->intvalue >= 2)
 			DEBUGBREAKPOINT;
 		return;
@@ -578,9 +661,9 @@ void SV_InitGameProgs (void)
 	import.WriteDir = PF_WriteDir;
 	import.WriteAngle = PF_WriteAngle;
 
-	import.TagMalloc = Z_TagMalloc;
-	import.TagFree = Z_Free;
-	import.FreeTags = Z_FreeTags;
+	import.TagMalloc = Z_TagMallocGame;
+	import.TagFree = Z_FreeGame;
+	import.FreeTags = Z_FreeTagsGame;
 
 	import.cvar = Cvar_GameGet;
 	import.cvar_set = Cvar_Set;
@@ -595,7 +678,7 @@ void SV_InitGameProgs (void)
 	import.SetAreaPortalState = CM_SetAreaPortalState;
 	import.AreasConnected = CM_AreasConnected;
 
-	ge = (game_export_t *)Sys_GetGameAPI (&import);
+	ge = (game_export_t *)Sys_GetGameAPI (&import, sv.attractloop);
 
 	if (!ge)
 		Com_Error (ERR_DROP, "failed to load game DLL");
@@ -611,7 +694,7 @@ void SV_InitGameProgs (void)
 		return;
 	}
 
-	Com_Printf ("Loaded Game DLL, version %d\n", ge->apiversion);
+	Com_Printf ("Loaded Game DLL, version %d\n", LOG_SERVER, ge->apiversion);
 
 	//r1: verify we got essential exports
 	if (!ge->ClientCommand || !ge->ClientBegin || !ge->ClientConnect || !ge->ClientDisconnect || !ge->ClientUserinfoChanged ||

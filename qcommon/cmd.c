@@ -27,17 +27,19 @@ void Cmd_ForwardToServer (void);
 
 cmdalias_t	*cmd_alias;
 
-qboolean	cmd_wait;
+static qboolean	cmd_wait;
 
 #define	ALIAS_LOOP_COUNT	16
-int		alias_count;		// for detecting runaway loops
+#define	COMMAND_BUFFER_SIZE	0x10000
+
+static int		alias_count;		// for detecting runaway loops
 
 #ifndef DEDICATED_ONLY
 extern qboolean send_packet_now;
 #endif
 
-struct rbtree	*cmdtree;
-struct rbtree	*aliastree;
+static struct rbtree	*cmdtree;
+static struct rbtree	*aliastree;
 
 //=============================================================================
 
@@ -55,7 +57,6 @@ void Cmd_Wait_f (void)
 	cmd_wait = true;
 }
 
-
 /*
 =============================================================================
 
@@ -65,9 +66,9 @@ void Cmd_Wait_f (void)
 */
 
 sizebuf_t	cmd_text;
-byte		cmd_text_buf[65536];
+byte		cmd_text_buf[COMMAND_BUFFER_SIZE];
 
-byte		defer_text_buf[65536];
+byte		defer_text_buf[COMMAND_BUFFER_SIZE];
 
 /*
 ============
@@ -86,7 +87,7 @@ Cbuf_AddText
 Adds command text at the end of the buffer
 ============
 */
-void EXPORT Cbuf_AddText (char *text)
+void EXPORT Cbuf_AddText (const char *text)
 {
 	int		l;
 
@@ -97,7 +98,7 @@ void EXPORT Cbuf_AddText (char *text)
 
 	if (cmd_text.cursize + l >= cmd_text.maxsize)
 	{
-		Com_Printf ("Cbuf_AddText: overflow\n");
+		Com_Printf ("Cbuf_AddText: overflow\n", LOG_GENERAL);
 		return;
 	}
 	SZ_Write (&cmd_text, text, l);
@@ -114,7 +115,7 @@ Adds a \n to the text
 FIXME: actually change the command buffer to do less copying
 ============
 */
-void Cbuf_InsertText (char *text)
+void Cbuf_InsertText (const char *text)
 {
 	char	*temp;
 	int		templen;
@@ -124,11 +125,11 @@ void Cbuf_InsertText (char *text)
 	if (templen)
 	{
 		temp = Z_TagMalloc (templen, TAGMALLOC_CMDBUFF);
-		memcpy (temp, cmd_text.data, templen);
+		memcpy (temp, cmd_text_buf, templen);
 		SZ_Clear (&cmd_text);
 	}
-	else
-		temp = NULL;	// shut up compiler
+	//else
+	//	temp = NULL;	// shut up compiler
 		
 // add the entire text of the file
 	Cbuf_AddText (text);
@@ -212,8 +213,8 @@ void Cbuf_Execute (void)
 
 	while (cmd_text.cursize)
 	{
-// find a \n or ; line break
-		text = (char *)cmd_text.data;
+		// find a \n or ; line break
+		text = (char *)cmd_text_buf;
 
 		quotes = 0;
 		for (i=0 ; i< cmd_text.cursize ; i++)
@@ -241,7 +242,7 @@ void Cbuf_Execute (void)
 		//Com_DPrintf ("Cbuf_Execute: found %d bytes\n", i);
 
 		if (i >= sizeof(line)-1) {
-			Com_Printf ("Cbuf_Execute: overflow of %d truncated\n", i);
+			Com_Printf ("Cbuf_Execute: overflow of %d truncated\n", LOG_GENERAL, i);
 			memcpy (line, text, sizeof(line)-1);
 		} else {
 			memcpy (line, text, i);
@@ -412,19 +413,27 @@ void Cmd_Exec_f (void)
 
 	if (Cmd_Argc () != 2)
 	{
-		Com_Printf ("exec <filename> : execute a script file\n");
+		Com_Printf ("exec <filename> : execute a script file\n", LOG_GENERAL);
 		return;
 	}
 
-	len = FS_LoadFile (Cmd_Argv(1), (void **)&f);
+	//r1: sanity check length first so people don't exec pak0.pak and eat 300MB ram
+	len = FS_LoadFile (Cmd_Argv(1), NULL);
+	if (len >= COMMAND_BUFFER_SIZE - 2)
+	{
+		Com_Printf ("couldn't exec %s, exceeds maximum config file length\n", LOG_GENERAL, Cmd_Argv(1));
+		return;
+	}
+
+	FS_LoadFile (Cmd_Argv(1), (void **)&f);
 	if (!f || !len)
 	{
-		Com_Printf ("couldn't exec %s\n",Cmd_Argv(1));
+		Com_Printf ("couldn't exec %s\n", LOG_GENERAL, Cmd_Argv(1));
 		return;
 	}
 
 	if (Com_ServerState())
-		Com_Printf ("execing %s\n",Cmd_Argv(1));
+		Com_Printf ("execing %s\n", LOG_GENERAL, Cmd_Argv(1));
 	else
 		Com_DPrintf ("execing %s\n",Cmd_Argv(1));
 	
@@ -437,7 +446,7 @@ void Cmd_Exec_f (void)
 	f2[len+1] = 0;
 
 	if ((p = strchr(f2, '\r')) && *(p+1) != '\n')
-		Com_Printf ("WARNING: Raw \\r found in config file %s\n", Cmd_Argv(1));
+		Com_Printf ("WARNING: Raw \\r found in config file %s\n", LOG_GENERAL|LOG_WARNING, Cmd_Argv(1));
 
 	Cbuf_InsertText (f2);
 
@@ -455,11 +464,7 @@ Just prints the rest of the line to the console
 */
 void Cmd_Echo_f (void)
 {
-	int		i;
-	
-	for (i=1 ; i<Cmd_Argc() ; i++)
-		Com_Printf ("%s ",Cmd_Argv(i));
-	Com_Printf ("\n");
+	Com_Printf ("%s\n", LOG_GENERAL, StripQuotes(Cmd_Args()));
 }
 
 static int EXPORT aliassort( const void *_a, const void *_b )
@@ -502,9 +507,9 @@ void Cmd_Aliaslist_f (void)
 			continue;
 
 		if (argLen)
-			Com_Printf ("a %s\n", a->name);
+			Com_Printf ("a %s\n", LOG_GENERAL, a->name);
 		else
-			Com_Printf ("%s : %s\n", a->name, a->value);
+			Com_Printf ("%s : %s\n", LOG_GENERAL, a->name, a->value);
 	}
 
 	Z_Free (sortedList);
@@ -526,7 +531,7 @@ void Cmd_Alias_f (void)
 
 	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("Current alias commands:\n");
+		Com_Printf ("Current alias commands:\n", LOG_GENERAL);
 		Cmd_Aliaslist_f ();
 		return;
 	}
@@ -534,7 +539,7 @@ void Cmd_Alias_f (void)
 	s = Cmd_Argv(1);
 	if (strlen(s) >= MAX_ALIAS_NAME)
 	{
-		Com_Printf ("Alias name is too long\n");
+		Com_Printf ("Alias name is too long\n", LOG_GENERAL);
 		return;
 	}
 
@@ -630,6 +635,7 @@ char	* EXPORT Cmd_Argv (int arg)
 Cmd_Args
 
 Returns a single string containing argv(1) to argv(argc()-1)
+NOTE: Includes quotes.
 ============
 */
 char		* EXPORT Cmd_Args (void)
@@ -649,7 +655,7 @@ char *Cmd_Args2 (int arg)
 	{
 		if (strlen(args) + (strlen(cmd_argv[i])+2) >= sizeof(args))
 		{
-			Com_Printf ("Cmd_Args2: overflow\n");
+			Com_Printf ("Cmd_Args2: overflow\n", LOG_GENERAL);
 			break;
 		}
 		strcat (args, cmd_argv[i]);
@@ -668,12 +674,12 @@ Cmd_MacroExpandString
 */
 char *Cmd_MacroExpandString (char *text)
 {
-	int		i, j, count, len;
+	int		i, j, k, count, len;
 	qboolean	inquote;
 	char	*scan;
 	static	char	expanded[MAX_STRING_CHARS];
 	char	temporary[MAX_STRING_CHARS];
-	char	*token, *start;
+	char	*token, *start, *cvarname, *extra;
 
 	inquote = false;
 	scan = text;
@@ -681,7 +687,7 @@ char *Cmd_MacroExpandString (char *text)
 	len = strlen (scan);
 	if (len >= MAX_STRING_CHARS)
 	{
-		Com_Printf ("Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+		Com_Printf ("Line exceeded %i chars, discarded.\n", LOG_GENERAL, MAX_STRING_CHARS);
 		return NULL;
 	}
 
@@ -702,23 +708,55 @@ char *Cmd_MacroExpandString (char *text)
 		}
 		// scan out the complete macro
 		start = scan+i+1;
+
 		token = COM_Parse (&start);
+
 		if (!start)
 			continue;
+
+		extra = NULL;
+		k = 0;
+
+		if (token[0] == '{')
+		{
+			char	*endp;
+			
+			endp = strchr (token, '}');
+			if (!endp)
+				continue;
+
+			*endp = 0;
+			extra = endp+1;
+
+			cvarname = token + 1;
+		}
+		else
+		{
+			cvarname = token;
+		}
 	
-		token = Cvar_VariableString (token);
+		token = Cvar_VariableString (cvarname);
 
 		j = strlen(token);
-		len += j;
-		if (len >= MAX_STRING_CHARS)
+
+		if (extra)
+			k = strlen(extra);
+
+		len += j + k;
+
+		if (len >= (MAX_STRING_CHARS-1))
 		{
-			Com_Printf ("Expanded line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+			Com_Printf ("Expanded line exceeded %i chars, discarded.\n", LOG_GENERAL, MAX_STRING_CHARS);
 			return NULL;
 		}
 
 		strncpy (temporary, scan, i);
 		strcpy (temporary+i, token);
-		strcpy (temporary+i+j, start);
+
+		if (extra)
+			strcpy (temporary+i+j, extra);
+
+		strcpy (temporary+i+j+k, start);
 
 		strcpy (expanded, temporary);
 		scan = expanded;
@@ -726,14 +764,14 @@ char *Cmd_MacroExpandString (char *text)
 
 		if (++count == 100)
 		{
-			Com_Printf ("Macro expansion loop, discarded.\n");
+			Com_Printf ("Macro expansion loop, discarded.\n", LOG_GENERAL);
 			return NULL;
 		}
 	}
 
 	if (inquote)
 	{
-		Com_Printf ("Line '%s' has unmatched quote, discarded.\n", text);
+		Com_Printf ("Line '%s' has unmatched quote, discarded.\n", LOG_GENERAL, text);
 		return NULL;
 	}
 
@@ -801,8 +839,8 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 
 			// strip off any trailing whitespace
 			l = strlen(cmd_args) - 1;
-			if (l == 1022) {
-				Com_Printf ("Cmd_TokenizeString: overflowed, possible attack detected.\nargv[0] = %s, remote = %s, len = %d\n",
+			if (l == MAX_STRING_CHARS - 1) {
+				Com_Printf ("Cmd_TokenizeString: overflowed, possible attack detected.\nargv[0] = %s, remote = %s, len = %d\n", LOG_GENERAL|LOG_EXPLOIT,
 					cmd_argv[0], NET_AdrToString(&net_from), net_message.cursize);
 				return;
 			}
@@ -825,7 +863,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 			len = strlen(com_token);
 			if (len+1 + cmd_pointer >= MAX_STRING_CHARS*2)
 			{
-				Com_Printf ("Cmd_TokenizeString: overflow\n");
+				Com_Printf ("Cmd_TokenizeString: overflow\n", LOG_GENERAL);
 				return;
 			}
 			strcpy (cmd_buffer + cmd_pointer, com_token);
@@ -843,7 +881,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 Cmd_AddCommand
 ============
 */
-void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function)
+void	EXPORT Cmd_AddCommand (const char *cmd_name, xcommand_t function)
 {
 	void			**data;
 	cmd_function_t	*cmd;
@@ -851,23 +889,14 @@ void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function)
 // fail if the command is a variable name
 	if (Cvar_VariableString(cmd_name)[0])
 	{
-		Com_Printf ("Cmd_AddCommand: %s already defined as a var\n", cmd_name);
+		Com_Printf ("Cmd_AddCommand: %s already defined as a var\n", LOG_GENERAL, cmd_name);
 		return;
 	}
 	
 // fail if the command already exists
-	/*for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-	{
-		if (!strcmp (cmd_name, cmd->name))
-		{
-			Com_Printf ("Cmd_AddCommand: %s already defined\n", cmd_name);
-			return;
-		}
-	}*/
-
 	if (rbfind (cmd_name, cmdtree))
 	{
-		Com_Printf ("Cmd_AddCommand: %s already defined\n", cmd_name);
+		Com_Printf ("Cmd_AddCommand: %s already defined\n", LOG_GENERAL, cmd_name);
 		return;
 	}
 
@@ -886,7 +915,7 @@ void	EXPORT Cmd_AddCommand (char *cmd_name, xcommand_t function)
 Cmd_RemoveCommand
 ============
 */
-void	EXPORT Cmd_RemoveCommand (char *cmd_name)
+void	EXPORT Cmd_RemoveCommand (const char *cmd_name)
 {
 	cmd_function_t	*cmd, **back;
 
@@ -896,7 +925,7 @@ void	EXPORT Cmd_RemoveCommand (char *cmd_name)
 		cmd = *back;
 		if (!cmd)
 		{
-			Com_Printf ("Cmd_RemoveCommand: %s not added\n", cmd_name);
+			Com_Printf ("Cmd_RemoveCommand: %s not added\n", LOG_GENERAL, cmd_name);
 			return;
 		}
 
@@ -937,7 +966,7 @@ Cmd_Exists
 Cmd_CompleteCommand
 ============
 */
-char *Cmd_CompleteCommandOld (char *partial)
+const char *Cmd_CompleteCommandOld (const char *partial)
 {
 	cmd_function_t	*cmd;
 	int				len;
@@ -969,11 +998,11 @@ char *Cmd_CompleteCommandOld (char *partial)
 }
 
 // JPG 1.05 - completely rewrote this; includes aliases
-char *Cmd_CompleteCommand (char *partial)
+const char *Cmd_CompleteCommand (const char *partial)
 {
 	cmd_function_t	*cmd;
-	char *best = "~";
-	char *least = "~";
+	const char *best = "~";
+	const char *least = "~";
 	cmdalias_t *alias;
 
 	for (cmd = cmd_functions ; cmd ; cmd = cmd->next)
@@ -1038,6 +1067,7 @@ void	Cmd_ExecuteString (char *text)
 		}
 	}*/
 
+
 	data = rbfind (cmd_argv[0], cmdtree);
 	if (data)
 	{
@@ -1057,27 +1087,13 @@ void	Cmd_ExecuteString (char *text)
 
 
 	// check alias
-	/*for (a=cmd_alias ; a ; a=a->next)
-	{
-		if (!Q_stricmp (cmd_argv[0], a->name))
-		{
-			if (++alias_count == ALIAS_LOOP_COUNT)
-			{
-				Com_Printf ("ALIAS_LOOP_COUNT\n");
-				return;
-			}
-			Cbuf_InsertText (a->value);
-			return;
-		}
-	}*/
-	
 	data = rbfind (cmd_argv[0], aliastree);
 	if (data)
 	{
 		a = *(cmdalias_t **)data;
 		if (++alias_count == ALIAS_LOOP_COUNT)
 		{
-			Com_Printf ("ALIAS_LOOP_COUNT\n");
+			Com_Printf ("ALIAS_LOOP_COUNT\n", LOG_GENERAL);
 			return;
 		}
 		Cbuf_InsertText (a->value);
@@ -1095,7 +1111,7 @@ void	Cmd_ExecuteString (char *text)
 #ifndef DEDICATED_ONLY
 	Cmd_ForwardToServer ();
 #else
-	Com_Printf ("Unknown command \"%s\"\n", text);
+	Com_Printf ("Unknown command \"%s\"\n", LOG_GENERAL, text);
 #endif
 }
 
@@ -1142,11 +1158,11 @@ void Cmd_List_f (void)
 
 		if (argLen && Q_strncasecmp (cmd->name, Cmd_Argv(1), argLen))
 			continue;
-		Com_Printf ("c %s\n", cmd->name);
+		Com_Printf ("c %s\n", LOG_GENERAL, cmd->name);
 	}
 
 	if (!argLen)
-		Com_Printf ("%i commands\n", i);
+		Com_Printf ("%i commands\n", LOG_GENERAL, i);
 
 	Z_Free (sortedList);
 }

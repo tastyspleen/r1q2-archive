@@ -26,8 +26,8 @@ void CL_ItemRespawnParticles (vec3_t org);
 
 static vec3_t avelocities [NUMVERTEXNORMALS];
 
-extern	struct model_s	*cl_mod_smoke;
-extern	struct model_s	*cl_mod_flash;
+//extern	struct model_s	*cl_mod_smoke;
+//extern	struct model_s	*cl_mod_flash;
 
 /*
 ==============================================================
@@ -48,6 +48,9 @@ clightstyle_t	cl_lightstyle[MAX_LIGHTSTYLES];
 int				lastofs;
 int				numLightStyles;
 
+
+extern lightstyle_t	r_lightstyles[MAX_LIGHTSTYLES];
+
 /*
 ================
 CL_ClearLightStyles
@@ -55,9 +58,21 @@ CL_ClearLightStyles
 */
 void CL_ClearLightStyles (void)
 {
+	int		i;
+
 	numLightStyles = 0;
 	memset (cl_lightstyle, 0, sizeof(cl_lightstyle));
 	lastofs = -1;
+
+	//r1: fill default styles in
+	for (i=0 ; i<MAX_LIGHTSTYLES ; i++)
+	{
+		r_lightstyles[i].rgb[0] = 1.0f;
+		r_lightstyles[i].rgb[1] = 1.0f;
+		r_lightstyles[i].rgb[2] = 1.0f;
+		r_lightstyles[i].white = 3.0f;
+	}	
+
 }
 
 /*
@@ -190,23 +205,6 @@ cdlight_t *CL_AllocDlight (int key)
 	return dl;
 }
 
-/*
-===============
-CL_NewDlight
-===============
-*/
-void CL_NewDlight (int key, float x, float y, float z, float radius, float time)
-{
-	cdlight_t	*dl;
-
-	dl = CL_AllocDlight (key);
-	dl->origin[0] = x;
-	dl->origin[1] = y;
-	dl->origin[2] = z;
-	dl->radius = radius;
-	dl->die = cl.time + time;
-}
-
 
 /*
 ===============
@@ -222,16 +220,16 @@ void CL_RunDLights (void)
 	dl = cl_dlights;
 	for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 	{
-		if (!dl->radius)
+		if (FLOAT_EQ_ZERO(dl->radius))
 			continue;
-		
+	
 		if (dl->die < cl.time)
 		{
 			dl->radius = 0;
 			return;
 		}
-		dl->radius -= cls.frametime*dl->decay;
-		if (dl->radius < 0)
+
+		if (FLOAT_LT_ZERO (dl->radius))
 			dl->radius = 0;
 	}
 }
@@ -270,7 +268,7 @@ void CL_ParseMuzzleFlash (void)
 		dl->radius = 100 + (randomMT()&31);
 	else
 		dl->radius = 200 + (randomMT()&31);
-	dl->minlight = 32;
+	//dl->minlight = 32;
 	dl->die = cl.time; // + 0.1;
 
 	if (silenced)
@@ -315,7 +313,7 @@ void CL_ParseMuzzleFlash (void)
 	case MZ_CHAINGUN2:
 		dl->radius = 225 + (randomMT()&31);
 		dl->color[0] = 1;dl->color[1] = 0.5;dl->color[2] = 0;
-		dl->die = cl.time  + 0.1;	// long delay
+		dl->die = cl.time;//  + 0.1;	// long delay
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (randomMT() % 5) + 1);
@@ -324,7 +322,7 @@ void CL_ParseMuzzleFlash (void)
 	case MZ_CHAINGUN3:
 		dl->radius = 250 + (randomMT()&31);
 		dl->color[0] = 1;dl->color[1] = 1;dl->color[2] = 0;
-		dl->die = cl.time  + 0.1;	// long delay
+		dl->die = cl.time;//  + 0.1;	// long delay
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (randomMT() % 5) + 1);
@@ -456,7 +454,7 @@ void CL_ParseMuzzleFlash2 (void)
 	dl = CL_AllocDlight (ent);
 	VectorCopy (origin,  dl->origin);
 	dl->radius = 200 + (randomMT()&31);
-	dl->minlight = 32;
+	//dl->minlight = 32;
 	dl->die = cl.time;	// + 0.1;
 
 	switch (flash_number)
@@ -828,7 +826,7 @@ void CL_AddDLights (void)
 	{
 		for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 		{
-			if (!dl->radius)
+			if (FLOAT_EQ_ZERO(dl->radius))
 				continue;
 			V_AddLight (dl->origin, dl->radius,
 				dl->color[0], dl->color[1], dl->color[2]);
@@ -838,11 +836,11 @@ void CL_AddDLights (void)
 	{
 		for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 		{
-			if (!dl->radius)
+			if (FLOAT_EQ_ZERO(dl->radius))
 				continue;
 
 			// negative light in software. only black allowed
-			if ((dl->color[0] < 0) || (dl->color[1] < 0) || (dl->color[2] < 0))
+			if (FLOAT_LT_ZERO(dl->color[0]) || FLOAT_LT_ZERO(dl->color[1]) || FLOAT_LT_ZERO(dl->color[2]))
 			{
 				dl->radius = -(dl->radius);
 				dl->color[0] = 1;
@@ -890,7 +888,7 @@ typedef struct particle_s
 cparticle_t	*active_particles, *free_particles;
 
 cparticle_t	particles[MAX_PARTICLES];
-int			cl_numparticles = MAX_PARTICLES;
+//int			cl_numparticles = MAX_PARTICLES;
 
 
 /*
@@ -905,9 +903,10 @@ void CL_ClearParticles (void)
 	free_particles = &particles[0];
 	active_particles = NULL;
 
-	for (i=0 ;i<cl_numparticles ; i++)
+	for (i=0 ;i < MAX_PARTICLES; i++)
 		particles[i].next = &particles[i+1];
-	particles[cl_numparticles-1].next = NULL;
+
+	particles[MAX_PARTICLES-1].next = NULL;
 }
 
 
@@ -1290,7 +1289,7 @@ void CL_BlasterTrail (vec3_t start, vec3_t end)
 {
 	vec3_t		move;
 	vec3_t		vec;
-	float		len;
+	int			len;
 	int			j;
 	cparticle_t	*p;
 	int			dec;
@@ -1341,7 +1340,7 @@ void CL_QuadTrail (vec3_t start, vec3_t end)
 {
 	vec3_t		move;
 	vec3_t		vec;
-	float		len;
+	int			len;
 	int			j;
 	cparticle_t	*p;
 	int			dec;
@@ -1391,7 +1390,7 @@ void CL_FlagTrail (vec3_t start, vec3_t end, float color)
 {
 	vec3_t		move;
 	vec3_t		vec;
-	float		len;
+	int			len;
 	int			j;
 	cparticle_t	*p;
 	int			dec;
@@ -1471,7 +1470,7 @@ void CL_DiminishingTrail (vec3_t start, vec3_t end, centity_t *old, int flags)
 		velscale = 5;
 	}
 
-	while (len > 0)
+	while (FLOAT_GT_ZERO(len))
 	{
 		len -= dec;
 
@@ -1562,10 +1561,10 @@ void CL_RocketTrail (vec3_t start, vec3_t end, centity_t *old)
 {
 	vec3_t		move;
 	vec3_t		vec;
-	float		len;
+	int			len;
 	int			j;
 	cparticle_t	*p;
-	float		dec;
+	int			dec;
 
 	// smoke
 	CL_DiminishingTrail (start, end, old, EF_ROCKET);
@@ -1615,7 +1614,7 @@ CL_RailTrail
 
 ===============
 */
-void CL_RailTrail (vec3_t start, vec3_t end)
+void CL_RailTrail (vec3_t start, vec3_t end, byte clr)
 {
 	vec3_t		move;
 	vec3_t		vec;
@@ -1627,7 +1626,6 @@ void CL_RailTrail (vec3_t start, vec3_t end)
 	int			i;
 	float		d, c, s;
 	vec3_t		dir;
-	byte		clr = 179;
 
 	VectorCopy (start, move);
 	VectorSubtract (end, start, vec);
@@ -1671,7 +1669,7 @@ void CL_RailTrail (vec3_t start, vec3_t end)
 	VectorScale (vec, dec, vec);
 	VectorCopy (start, move);
 
-	while (len > 0)
+	while (FLOAT_GT_ZERO(len))
 	{
 		len -= dec;
 
@@ -1710,7 +1708,7 @@ void CL_IonripperTrail (vec3_t start, vec3_t ent)
 {
 	vec3_t	move;
 	vec3_t	vec;
-	float	len;
+	int		len;
 	int		j;
 	cparticle_t *p;
 	int		dec;
@@ -1877,10 +1875,10 @@ void CL_FlyParticles (vec3_t origin, int count)
 		VectorClear (p->accel);
 
 		p->color = 0;
-		p->colorvel = 0;
+		//p->colorvel = 0;
 
-		p->alpha = 1;
-		p->alphavel = -100;
+		p->alpha = 1.0f;
+		p->alphavel = -100.0f;
 	}
 }
 
@@ -1978,7 +1976,7 @@ void CL_BfgParticles (entity_t *ent)
 		VectorSubtract (p->org, ent->origin, v);
 		dist = VectorLength(v) / 90.0;
 		p->color = floor (0xd0 + dist * 7);
-		p->colorvel = 0;
+		//p->colorvel = 0;
 
 		p->alpha = 1.0 - dist;
 		p->alphavel = -100;
@@ -1997,7 +1995,7 @@ void CL_TrapParticles (entity_t *ent)
 	vec3_t		move;
 	vec3_t		vec;
 	vec3_t		start, end;
-	float		len;
+	int			len;
 	int			j;
 	cparticle_t	*p;
 	int			dec;
@@ -2188,13 +2186,15 @@ void CL_AddParticles (void)
 {
 	cparticle_t		*p, *next;
 	float			alpha;
+	float			cltime;
 	float			time = 0, time2 = 0;
 	vec3_t			org;
-	int				color;
 	cparticle_t		*active, *tail;
 
 	active = NULL;
 	tail = NULL;
+
+	cltime = (float)cl.time;
 
 	for (p=active_particles ; p ; p=next)
 	{
@@ -2203,9 +2203,9 @@ void CL_AddParticles (void)
 		// PMM - added INSTANT_PARTICLE handling for heat beam
 		if (p->type != PT_INSTANT)
 		{
-			time = (cl.time - p->time)*0.001;
+			time = (cltime - p->time)*0.001f;
 			alpha = p->alpha + time*p->alphavel;
-			if (alpha <= 0)
+			if (FLOAT_LE_ZERO(alpha))
 			{	// faded out
 				p->next = free_particles;
 				free_particles = p;
@@ -2226,10 +2226,8 @@ void CL_AddParticles (void)
 			tail = p;
 		}
 
-		if (alpha > 1.0)
-			alpha = 1;
-
-		color = p->color;
+		if (alpha > 1.0f)
+			alpha = 1.0f;
 
 		time2 = time*time;
 
@@ -2237,7 +2235,7 @@ void CL_AddParticles (void)
 		org[1] = p->org[1] + p->vel[1]*time + p->accel[1]*time2;
 		org[2] = p->org[2] + p->vel[2]*time + p->accel[2]*time2;
 
-		V_AddParticle (org, color, alpha);
+		V_AddParticle (org, p->color, alpha);
 		// PMM
 		if (p->type == PT_INSTANT)
 		{

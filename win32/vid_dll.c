@@ -23,9 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define WIN32_LEAN_AND_MEAN
 
-//#include <assert.h>
-//#include <float.h>
-
 #include "resource.h"
 #include "..\client\client.h"
 #include "winquake.h"
@@ -37,7 +34,7 @@ qboolean	reload_video = false;
 refexport_t	re;
 
 cvar_t *win_noalttab;
-cvar_t *win_nopriority;
+//cvar_t *win_nopriority;
 
 #ifndef WM_MOUSEWHEEL
 #define WM_MOUSEWHEEL (WM_MOUSELAST+1)  // message that will be supported by the OS 
@@ -134,7 +131,7 @@ void EXPORT VID_Printf (int print_level, char *fmt, ...)
 
 	if (print_level == PRINT_ALL)
 	{
-		Com_Printf ("%s", msg);
+		Com_Printf ("%s", LOG_CLIENT, msg);
 	}
 	else if ( print_level == PRINT_DEVELOPER )
 	{
@@ -324,7 +321,7 @@ LONG WINAPI MainWndProc (
 	{
 		if ( ( ( int ) wParam ) > 0 )
 		{
-			if (cls.key_dest == key_console) {
+			if (cls.key_dest == key_console || cls.state <= ca_connected) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGUP, true, sys_msg_time );
@@ -337,7 +334,7 @@ LONG WINAPI MainWndProc (
 		}
 		else
 		{
-			if (cls.key_dest == key_console) {
+			if (cls.key_dest == key_console || cls.state <= ca_connected) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGDN, true, sys_msg_time );
@@ -360,7 +357,7 @@ LONG WINAPI MainWndProc (
 		*/
 		if ( ( short ) HIWORD( wParam ) > 0 )
 		{
-			if (cls.key_dest == key_console) {
+			if (cls.key_dest == key_console || cls.state <= ca_connected) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGUP, true, sys_msg_time );
@@ -373,7 +370,7 @@ LONG WINAPI MainWndProc (
 		}
 		else
 		{
-			if (cls.key_dest == key_console) {
+			if (cls.key_dest == key_console || cls.state <= ca_connected) {
 				int i;
 				for (i = 0; i < 4; i++) {
 					Key_Event( K_PGDN, true, sys_msg_time );
@@ -452,7 +449,7 @@ LONG WINAPI MainWndProc (
 		{
 			if ( vid_fullscreen )
 			{
-				Com_Printf ("WM_SIZE: Going fullscreen!\n");
+				Com_Printf ("WM_SIZE: Going fullscreen!\n", LOG_CLIENT);
 				Cvar_Set( "vid_fullscreen", "1" );
 			}
 		}
@@ -510,13 +507,13 @@ LONG WINAPI MainWndProc (
 			if (wParam & MK_MBUTTON)
 				temp |= 4;
 
-			if (wParam & 0x0020)
+//#define MK_XBUTTON1         0x0020
+//#define MK_XBUTTON2         0x0040
+
+			if (wParam & 0x0020)	//X_BUTTON1
 				temp |= 8;
 
 			if (wParam & 0x0040)
-				temp |= 16;
-
-			if (wParam & 0x0080)
 				temp |= 16;
 
 			IN_MouseEvent (temp);
@@ -532,7 +529,7 @@ LONG WINAPI MainWndProc (
 		{
 			if ( vid_fullscreen )
 			{
-				Com_Printf ("ALT+Enter, setting fullscreen %d.\n", !vid_fullscreen->intvalue);
+				Com_Printf ("ALT+Enter, setting fullscreen %d.\n", LOG_CLIENT, !vid_fullscreen->intvalue);
 				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
 			}
 			return 0;
@@ -689,12 +686,12 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 		closing_reflib = false;
 	}
 
-	Com_Printf( "------- Loading %s -------\n", name );
+	Com_Printf( "------- Loading %s -------\n", LOG_CLIENT, name );
 
 	if ( ( reflib_library = LoadLibrary( name ) ) == 0 )
 	{
 		int lastError = GetLastError();
-		Com_Printf( "LoadLibrary(\"%s\") failed (GetLastError() = %d)\n", name, lastError);
+		Com_Printf( "LoadLibrary(\"%s\") failed (GetLastError() = %d)\n", LOG_CLIENT, name, lastError);
 
 		if (lastError == 126)
 			strcpy (errstr, "file not found");
@@ -784,7 +781,7 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 
 	Com_DPrintf ("renderer initialized.\n");
 
-	Com_Printf( "------------------------------------\n");
+	Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	reflib_active = true;
 
 //======
@@ -928,7 +925,7 @@ void VID_Init (void)
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
 	vid_gamma = Cvar_Get( "vid_gamma", "1", CVAR_ARCHIVE );
 	win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
-	win_nopriority = Cvar_Get ("win_nopriority", "0", CVAR_ARCHIVE);
+	//win_nopriority = Cvar_Get ("win_nopriority", "0", CVAR_ARCHIVE);
 
 	/* Add some console commands that we want to handle */
 	Cmd_AddCommand ("vid_restart", VID_Restart_f);

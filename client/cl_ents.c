@@ -251,7 +251,7 @@ void CL_ParseDelta (entity_state_t *from, entity_state_t *to, int number, int bi
 
 	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
 		VectorCopy (from->origin, to->old_origin);
-	else if (!(bits & U_OLDORIGIN) && !(from->renderfx & RF_BEAM) && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	else if (!(bits & U_OLDORIGIN) && !(from->renderfx & RF_BEAM))
 		VectorCopy (from->origin, to->old_origin);
 
 	to->number = number;
@@ -308,6 +308,9 @@ void CL_ParseDelta (entity_state_t *from, entity_state_t *to, int number, int bi
 	if (bits & U_OLDORIGIN)
 		MSG_ReadPos (&net_message, to->old_origin);
 
+	//if (bits & U_COPYOLD)
+	//	VectorCopy (to->origin, to->old_origin);
+
 	if (bits & U_SOUND)
 		to->sound = MSG_ReadByte (&net_message);
 
@@ -319,8 +322,8 @@ void CL_ParseDelta (entity_state_t *from, entity_state_t *to, int number, int bi
 	if (bits & U_SOLID)
 		to->solid = MSG_ReadShort (&net_message);
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && bits & U_VELOCITY)
-		MSG_ReadPos (&net_message, to->velocity);
+	//if (cl.enhancedServer && bits & U_VELOCITY)
+	//	MSG_ReadPos (&net_message, to->velocity);
 }
 
 /*
@@ -390,90 +393,97 @@ void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
 
 void ShowBits (unsigned int bits)
 {
-	if (cl_shownet->intvalue < 4)
+	if (cl_shownet->intvalue < 4 && cl_shownet->intvalue != -2)
 		return;
 
 	if (bits &	U_ORIGIN1)
-		Com_Printf ("   ...U_ORIGIN1\n");
+		Com_Printf ("   ...U_ORIGIN1\n", LOG_CLIENT);
 
 	if (bits & U_ORIGIN2)
-		Com_Printf ("   ...U_ORIGIN2\n");
+		Com_Printf ("   ...U_ORIGIN2\n", LOG_CLIENT);
 
 	if (bits & U_ANGLE2)
-		Com_Printf ("   ...U_ANGLE2\n");
+		Com_Printf ("   ...U_ANGLE2\n", LOG_CLIENT);
 
 	if (bits & U_ANGLE3)
-		Com_Printf ("   ...U_ANGLE3\n");
+		Com_Printf ("   ...U_ANGLE3\n", LOG_CLIENT);
 
 	if (bits & U_FRAME8)
-		Com_Printf ("   ...U_FRAME8\n");
+		Com_Printf ("   ...U_FRAME8\n", LOG_CLIENT);
 
 	if (bits & U_EVENT)
-		Com_Printf ("   ...U_EVENT\n");
+		Com_Printf ("   ...U_EVENT\n", LOG_CLIENT);
 
 	if (bits & U_REMOVE)
-		Com_Printf ("   ...U_REMOVE\n");
+		Com_Printf ("   ...U_REMOVE\n", LOG_CLIENT);
 
 	if (bits & U_MOREBITS1)
-		Com_Printf ("   ...U_MOREBITS1\n");
+		Com_Printf ("   ...U_MOREBITS1\n", LOG_CLIENT);
 
 	if (bits & U_NUMBER16)
-		Com_Printf ("   ...U_NUMBER16\n");
+		Com_Printf ("   ...U_NUMBER16\n", LOG_CLIENT);
 
 	if (bits & U_ORIGIN3)
-		Com_Printf ("   ...U_ORIGIN3\n");
+		Com_Printf ("   ...U_ORIGIN3\n", LOG_CLIENT);
 
 	if (bits & U_ANGLE1)
-		Com_Printf ("   ...U_ANGLE1\n");
+		Com_Printf ("   ...U_ANGLE1\n", LOG_CLIENT);
 
 	if (bits & U_MODEL)
-		Com_Printf ("   ...U_MODEL\n");
+		Com_Printf ("   ...U_MODEL\n", LOG_CLIENT);
 
 	if (bits & U_RENDERFX8)
-		Com_Printf ("   ...U_RENDERFX8\n");
+		Com_Printf ("   ...U_RENDERFX8\n", LOG_CLIENT);
 
 	if (bits & U_EFFECTS8)
-		Com_Printf ("   ...U_EFFECTS8\n");
+		Com_Printf ("   ...U_EFFECTS8\n", LOG_CLIENT);
 
 	if (bits & U_MOREBITS2)
-		Com_Printf ("   ...U_MOREBITS2\n");
+		Com_Printf ("   ...U_MOREBITS2\n", LOG_CLIENT);
 
 	if (bits & U_SKIN8)
-		Com_Printf ("   ...U_SKIN8\n");
+		Com_Printf ("   ...U_SKIN8\n", LOG_CLIENT);
 
 	if (bits & U_FRAME16)
-		Com_Printf ("   ...U_FRAME16\n");
+		Com_Printf ("   ...U_FRAME16\n", LOG_CLIENT);
 
 	if (bits & U_RENDERFX16)
-		Com_Printf ("   ...U_RENDERFX16\n");
+		Com_Printf ("   ...U_RENDERFX16\n", LOG_CLIENT);
 
 	if (bits & U_EFFECTS16)
-		Com_Printf ("   ...U_EFFECTS16\n");
+		Com_Printf ("   ...U_EFFECTS16\n", LOG_CLIENT);
 
 	if (bits & U_MODEL2)
-		Com_Printf ("   ...U_MODEL2\n");
+		Com_Printf ("   ...U_MODEL2\n", LOG_CLIENT);
 
 	if (bits & U_MODEL3)
-		Com_Printf ("   ...U_MODEL3\n");
+		Com_Printf ("   ...U_MODEL3\n", LOG_CLIENT);
 
 	if (bits & U_MODEL4)
-		Com_Printf ("   ...U_MODEL4\n");
+		Com_Printf ("   ...U_MODEL4\n", LOG_CLIENT);
 
 	if (bits & U_MOREBITS3)
-		Com_Printf ("   ...U_MOREBITS3\n");
+		Com_Printf ("   ...U_MOREBITS3\n", LOG_CLIENT);
 
 	if (bits & U_OLDORIGIN)
-		Com_Printf ("   ...U_OLDORIGIN\n");
+		Com_Printf ("   ...U_OLDORIGIN\n", LOG_CLIENT);
 
 	if (bits & U_SKIN16)
-		Com_Printf ("   ...U_SKIN16\n");
+		Com_Printf ("   ...U_SKIN16\n", LOG_CLIENT);
 
 	if (bits & U_SOUND)
-		Com_Printf ("   ...U_SOUND\n");
+		Com_Printf ("   ...U_SOUND\n", LOG_CLIENT);
 
 	if (bits & U_SOLID)
-		Com_Printf ("   ...U_SOLID\n");
+		Com_Printf ("   ...U_SOLID\n", LOG_CLIENT);
 
+	//if (bits & U_VELOCITY)
+	//	Com_Printf ("   ...U_VELOCITY\n", LOG_CLIENT);
+
+	/*
+	if (bits & U_COPYOLD)
+		Com_Printf ("   ...U_COPYOLD\n", LOG_CLIENT);
+	*/
 }
 
 /*
@@ -522,12 +532,12 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 			break;
 
 		if (cl_shownet->intvalue >= 4)
-			Com_Printf ("%i bytes.\n", net_message.readcount-1);
+			Com_Printf ("%i bytes.\n", LOG_CLIENT, net_message.readcount-1);
 
 		while (oldnum < newnum)
 		{	// one or more entities from the old packet are unchanged
 			if (cl_shownet->intvalue >= 3)
-				Com_Printf ("   unchanged: %i\n", oldnum);
+				Com_Printf ("   unchanged: %i\n", LOG_CLIENT, oldnum);
 			CL_DeltaEntity (newframe, oldnum, oldstate, 0);
 			
 			oldindex++;
@@ -547,7 +557,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 				Com_Error (ERR_DROP, "CL_ParsePacketEntities: U_REMOVE with no oldframe");
 
 			if (cl_shownet->intvalue >= 3)
-				Com_Printf ("   remove: %i\n", newnum);
+				Com_Printf ("   remove: %i\n", LOG_CLIENT, newnum);
 			if (oldnum != newnum)
 				Com_DPrintf ("U_REMOVE: oldnum != newnum\n");
 
@@ -572,7 +582,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 				Com_Error (ERR_DROP, "CL_ParsePacketEntities: delta with no oldframe");
 
 			if (cl_shownet->intvalue >= 3)
-				Com_Printf ("   delta: %i\n", newnum);
+				Com_Printf ("   delta: %i\n", LOG_CLIENT, newnum);
 			CL_DeltaEntity (newframe, newnum, oldstate, bits);
 
 			oldindex++;
@@ -590,9 +600,9 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 		if (oldnum > newnum)
 		{	// delta from baseline
 			if (cl_shownet->intvalue >= 3)
-				Com_Printf ("   baseline: %i\n", newnum);
+				Com_Printf ("   baseline: %i\n", LOG_CLIENT, newnum);
 			ShowBits (bits);
-			//Com_Printf ("using baseline for entity %d\n", newnum);
+
 			CL_DeltaEntity (newframe, newnum, &cl_entities[newnum].baseline, bits);
 
 			continue;
@@ -604,7 +614,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 	while (oldnum != 99999)
 	{	// one or more entities from the old packet are unchanged
 		if (cl_shownet->intvalue >= 3)
-			Com_Printf ("   unchanged: %i\n", oldnum);
+			Com_Printf ("   unchanged: %i\n", LOG_CLIENT, oldnum);
 		CL_DeltaEntity (newframe, oldnum, oldstate, 0);
 		
 		oldindex++;
@@ -754,7 +764,7 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 			state->maxs[0] = state->maxs[1] = x;
 			state->mins[2] = -zd;
 			state->maxs[2] = zu;
-			Com_Printf ("received bbox from server: (%f, %f, %f), (%f, %f, %f)\n", state->mins[0], state->mins[1], state->mins[2], state->maxs[0], state->maxs[1], state->maxs[2]);
+			Com_Printf ("received bbox from server: (%f, %f, %f), (%f, %f, %f)\n", LOG_CLIENT, state->mins[0], state->mins[1], state->mins[2], state->maxs[0], state->maxs[1], state->maxs[2]);
 		}
 	}
 
@@ -821,7 +831,7 @@ void CL_ParseFrame (void)
 		cl.surpressCount = MSG_ReadByte (&net_message);
 
 	if (cl_shownet->intvalue >= 3)
-		Com_Printf ("   frame:%i  delta:%i\n", cl.frame.serverframe,
+		Com_Printf ("   frame:%i  delta:%i\n", LOG_CLIENT, cl.frame.serverframe,
 		cl.frame.deltaframe);
 
 	// If the frame is delta compressed from data that we
@@ -839,7 +849,7 @@ void CL_ParseFrame (void)
 		old = &cl.frames[cl.frame.deltaframe & UPDATE_MASK];
 		if (!old->valid)
 		{	// should never happen
-			Com_Printf ("Delta from invalid frame (not supposed to happen!).\n");
+			Com_Printf ("Delta from invalid frame (not supposed to happen!).\n", LOG_CLIENT);
 		}
 		if (old->serverframe != cl.frame.deltaframe)
 		{	// The frame that the server did the delta from
@@ -1629,7 +1639,7 @@ void CL_CalcViewValues (void)
 		}
 		else
 		{
-			VectorCopy (cl.refdef.viewangles, cl.predicted_angles);
+			VectorCopy (cl.predicted_angles, cl.refdef.viewangles);
 		}
 	}
 	else if ( cl.frame.playerstate.pmove.pm_type < PM_DEAD)
@@ -1684,14 +1694,14 @@ void CL_AddEntities (void)
 	if (cl.time > cl.frame.servertime)
 	{
 		if (cl_showclamp->intvalue)
-			Com_Printf ("high clamp %i\n", cl.time - cl.frame.servertime);
+			Com_Printf ("high clamp %i\n", LOG_CLIENT, cl.time - cl.frame.servertime);
 		cl.time = cl.frame.servertime;
 		cl.lerpfrac = 1.0;
 	}
 	else if (cl.time < cl.frame.servertime - 100)
 	{
 		if (cl_showclamp->intvalue)
-			Com_Printf ("low clamp %i\n", cl.frame.servertime-100 - cl.time);
+			Com_Printf ("low clamp %i\n", LOG_CLIENT, cl.frame.servertime-100 - cl.time);
 		cl.time = cl.frame.servertime - 100;
 		cl.lerpfrac = 0;
 	}
@@ -1736,9 +1746,13 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t org)
 
 	if (ent < 0 || ent >= MAX_EDICTS)
 		Com_Error (ERR_DROP, "CL_GetEntitySoundOrigin: bad ent");
-	if (ent == (cl.playernum+1)) {
+
+	if (ent == (cl.playernum+1))
+	{
 		VectorCopy (cl.refdef.vieworg, org);
-	} else {
+	}
+	else
+	{
 		old = &cl_entities[ent];
 		VectorCopy (old->lerp_origin, org);
 	}

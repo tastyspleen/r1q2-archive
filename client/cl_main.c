@@ -27,6 +27,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 int deffered_model_index;
 
+extern cvar_t	*qport;
+
 cvar_t	*freelook;
 
 cvar_t	*adr0;
@@ -113,6 +115,11 @@ cvar_t	*dbg_framesleep;
 cvar_t	*cl_strafejump_hack;
 cvar_t	*cl_nolerp;
 
+cvar_t	*cl_instantack;
+cvar_t	*cl_autorecord;
+
+cvar_t	*cl_railtrail;
+
 #ifdef NO_SERVER
 cvar_t	*allow_download;
 cvar_t *allow_download_players;
@@ -152,106 +159,27 @@ void CL_WriteDemoMessage (void)
 	int		len, swlen;
 
 	// the first eight bytes are just packet sequencing stuff
-	/*len = net_message.cursize-8;
-	swlen = LittleLong(len);
-	fwrite (&swlen, 4, 1, cls.demofile);
-	fwrite (net_message.data+8,	len, 1, cls.demofile);*/
-
 	len = net_message.cursize-8;
 	swlen = LittleLong(len);
 	if (swlen > 0)
 	{
 		fwrite (&swlen, 4, 1, cls.demofile);
-		fwrite (net_message.data+8, len, 1, cls.demofile);
+		fwrite (net_message_buffer+8, len, 1, cls.demofile);
 	}
 }
 
-
-/*
-====================
-CL_Stop_f
-
-stop recording a demo
-====================
-*/
-void CL_Stop_f (void)
+qboolean CL_BeginRecording (char *name)
 {
-	int		len;
-
-	if (!cls.demorecording)
-	{
-		Com_Printf ("Not recording a demo.\n");
-		return;
-	}
-
-// finish up
-	len = -1;
-	fwrite (&len, 4, 1, cls.demofile);
-	fclose (cls.demofile);
-	cls.demofile = NULL;
-	cls.demorecording = false;
-	Com_Printf ("Stopped demo.\n");
-}
-
-/*
-====================
-CL_Record_f
-
-record <demoname>
-
-Begins recording a demo from the current position
-====================
-*/
-void CL_Record_f (void)
-{
-	char	name[MAX_OSPATH];
 	byte	buf_data[MAX_MSGLEN];
 	sizebuf_t	buf;
 	int		i;
 	int		len;
 	entity_state_t	*ent;
 
-	if (Cmd_Argc() != 2)
-	{
-		Com_Printf ("record <demoname>\n");
-		return;
-	}
-
-	if (cls.demorecording)
-	{
-		Com_Printf ("Already recording.\n");
-		return;
-	}
-
-	if (cls.state != ca_active)
-	{
-		Com_Printf ("You must be in a level to record.\n");
-		return;
-	}
-
-	if (strstr (Cmd_Argv(1), "..") || strstr (Cmd_Argv(1), "/") || strstr (Cmd_Argv(1), "\\") )
-	{
-		Com_Printf ("Illegal filename.\n");
-		return;
-	}
-
-	//
-	// open the demo file
-	//
-	Com_sprintf (name, sizeof(name), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv(1));
-
-	FS_CreatePath (name);
 	cls.demofile = fopen (name, "wb");
+
 	if (!cls.demofile)
-	{
-		Com_Printf ("ERROR: couldn't open.\n");
-		return;
-	}
-
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-		Com_Printf ("WARNING: demos recorded at cl_protocol %d may not be compatible with non-R1Q2 clients!\n", ENHANCED_PROTOCOL_VERSION);
-
-	Com_Printf ("recording to %s.\n", name);
+		return false;
 
 	cls.demorecording = true;
 
@@ -264,21 +192,21 @@ void CL_Record_f (void)
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
 
 	// send the serverdata
-	MSG_BeginWriteByte (&buf, svc_serverdata);
-	MSG_WriteLong (&buf, ORIGINAL_PROTOCOL_VERSION);
-	MSG_WriteLong (&buf, 0x10000 + cl.servercount);
-	MSG_WriteByte (&buf, 1);	// demos are always attract loops
-	MSG_WriteString (&buf, cl.gamedir);
-	MSG_WriteShort (&buf, cl.playernum);
-
-	MSG_WriteString (&buf, cl.configstrings[CS_NAME]);
+	MSG_BeginWriting (svc_serverdata);
+	MSG_WriteLong (ORIGINAL_PROTOCOL_VERSION);
+	MSG_WriteLong (0x10000 + cl.servercount);
+	MSG_WriteByte (1);	// demos are always attract loops
+	MSG_WriteString (cl.gamedir);
+	MSG_WriteShort (cl.playernum);
+	MSG_WriteString (cl.configstrings[CS_NAME]);
+	MSG_EndWriting (&buf);
 
 	// configstrings
 	for (i=0 ; i<MAX_CONFIGSTRINGS ; i++)
 	{
 		if (cl.configstrings[i][0])
 		{
-			if (buf.cursize + strlen (cl.configstrings[i]) + 32 > buf.maxsize)
+			if (buf.cursize + strlen (cl.configstrings[i]) + 64 > buf.maxsize)
 			{	// write it out
 				len = LittleLong (buf.cursize);
 				fwrite (&len, 4, 1, cls.demofile);
@@ -286,11 +214,11 @@ void CL_Record_f (void)
 				buf.cursize = 0;
 			}
 
-			MSG_BeginWriteByte (&buf, svc_configstring);
-			MSG_WriteShort (&buf, i);
-			MSG_WriteString (&buf, cl.configstrings[i]);
+			MSG_BeginWriting (svc_configstring);
+			MSG_WriteShort (i);
+			MSG_WriteString (cl.configstrings[i]);
+			MSG_EndWriting (&buf);
 		}
-
 	}
 
 	// baselines
@@ -309,12 +237,14 @@ void CL_Record_f (void)
 			buf.cursize = 0;
 		}
 
-		MSG_BeginWriteByte (&buf, svc_spawnbaseline);		
-		MSG_WriteDeltaEntity (NULL, &null_entity_state, &cl_entities[i].baseline, &buf, true, true, 0, ENHANCED_PROTOCOL_VERSION);
+		MSG_BeginWriting (svc_spawnbaseline);		
+		MSG_WriteDeltaEntity (&null_entity_state, &cl_entities[i].baseline, true, true, ORIGINAL_PROTOCOL_VERSION);
+		MSG_EndWriting (&buf);
 	}
 
-	MSG_BeginWriteByte (&buf, svc_stufftext);
-	MSG_WriteString (&buf, "precache\n");
+	MSG_BeginWriting (svc_stufftext);
+	MSG_WriteString ("precache\n");
+	MSG_EndWriting (&buf);
 
 	// write it to the demo file
 
@@ -323,6 +253,100 @@ void CL_Record_f (void)
 	fwrite (buf.data, buf.cursize, 1, cls.demofile);
 
 	// the rest of the demo file will be individual frames
+	return true;
+}
+
+void CL_EndRecording(void)
+{
+	int len;
+
+	// finish up
+	len = -1;
+	fwrite (&len, 4, 1, cls.demofile);
+	fclose (cls.demofile);
+
+	cls.demofile = NULL;
+	cls.demorecording = false;
+}
+
+/*
+====================
+CL_Stop_f
+
+stop recording a demo
+====================
+*/
+void CL_Stop_f (void)
+{
+	int		len;
+
+	if (!cls.demorecording)
+	{
+		Com_Printf ("Not recording a demo.\n", LOG_CLIENT);
+		return;
+	}
+
+	len = ftell (cls.demofile);
+	
+	CL_EndRecording();
+
+	Com_Printf ("Stopped demo, recorded %d bytes.\n", LOG_CLIENT, len);
+}
+
+/*
+====================
+CL_Record_f
+
+record <demoname>
+
+Begins recording a demo from the current position
+====================
+*/
+void CL_Record_f (void)
+{
+	char	name[MAX_OSPATH];
+
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf ("record <demoname>\n", LOG_CLIENT);
+		return;
+	}
+
+	if (cls.demorecording)
+	{
+		Com_Printf ("Already recording.\n", LOG_CLIENT);
+		return;
+	}
+
+	if (cls.state != ca_active)
+	{
+		Com_Printf ("You must be in a level to record.\n", LOG_CLIENT);
+		return;
+	}
+
+	if (strstr (Cmd_Argv(1), "..") || strstr (Cmd_Argv(1), "/") || strstr (Cmd_Argv(1), "\\") )
+	{
+		Com_Printf ("Illegal filename.\n", LOG_CLIENT);
+		return;
+	}
+
+	//
+	// open the demo file
+	//
+	Com_sprintf (name, sizeof(name), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv(1));
+
+	FS_CreatePath (name);
+
+	if (!CL_BeginRecording (name))
+	{
+		Com_Printf ("ERROR: Couldn't open %s for writing.\n", LOG_CLIENT, name);
+	}
+	else
+	{
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+			Com_Printf ("WARNING: Demos recorded at cl_protocol %d may not be compatible with non-R1Q2 clients!\n", LOG_CLIENT, ENHANCED_PROTOCOL_VERSION);
+		Com_Printf ("recording to %s.\n", LOG_CLIENT, name);
+	}
 }
 
 //======================================================================
@@ -343,7 +367,7 @@ void Cmd_ForwardToServer (void)
 	cmd = Cmd_Argv(0);
 	if (cls.state <= ca_connected || *cmd == '-' || *cmd == '+')
 	{
-		Com_Printf ("Unknown command \"%s\"\n", cmd);
+		Com_Printf ("Unknown command \"%s\"\n", LOG_CLIENT, cmd);
 		return;
 	}
 
@@ -351,13 +375,14 @@ void Cmd_ForwardToServer (void)
 
 	//Com_Printf ("fwd: %s %s\n", cmd, Cmd_Args());
 
-	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-	SZ_Print (&cls.netchan.message, cmd);
+	MSG_BeginWriting (clc_stringcmd);
+	MSG_Print (cmd);
 	if (Cmd_Argc() > 1)
 	{
-		SZ_Print (&cls.netchan.message, " ");
-		SZ_Print (&cls.netchan.message, Cmd_Args());
+		MSG_Print (" ");
+		MSG_Print (Cmd_Args());
 	}
+	MSG_EndWriting (&cls.netchan.message);
 	send_packet_now = true;
 }
 
@@ -396,17 +421,6 @@ void Cmd_ForwardToServer (void)
 	}
 }*/
 
-#ifdef WIN32
-void Sys_AutoUpdate (void);
-void CL_Update_f (void)
-{
-	if (cls.state != ca_disconnected)
-		Com_Printf ("Can't update when connected.\n");
-	else
-		Sys_AutoUpdate ();
-}
-#endif
-
 /*
 ==================
 CL_ForwardToServer_f
@@ -417,7 +431,7 @@ void CL_ForwardToServer_f (void)
 	//if (cls.state != ca_connected && cls.state != ca_active)
 	if (cls.state < ca_connected)
 	{
-		Com_Printf ("Can't \"%s\", not connected\n", Cmd_Argv(0));
+		Com_Printf ("Can't \"%s\", not connected\n", LOG_CLIENT, Cmd_Argv(0));
 		return;
 	}
 
@@ -425,7 +439,7 @@ void CL_ForwardToServer_f (void)
 #ifdef _DEBUG
 	{
 		char *rew = Cmd_Args();
-		char args[1024];
+		char args[MAX_STRING_CHARS];
 		char tmp[4];
 		memset (args, 0, sizeof(args));
 		strcpy (args, rew);
@@ -449,8 +463,11 @@ void CL_ForwardToServer_f (void)
 	if (Cmd_Argc() > 1)
 	{
 		Com_DPrintf ("CL_ForwardToServer_f: Wrote '%s'\n", Cmd_Args());
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		SZ_Print (&cls.netchan.message, Cmd_Args());
+
+		MSG_WriteByte (clc_stringcmd);
+		MSG_Print (Cmd_Args());
+		MSG_EndWriting (&cls.netchan.message);
+
 		send_packet_now = true;
 	}
 }
@@ -517,7 +534,7 @@ connect.
 void CL_SendConnectPacket (void)
 {
 	netadr_t	adr;
-	int		port;
+	int			port;
 
 #ifdef CLIENT_DLL
 	if (!cllib_active) {
@@ -530,7 +547,7 @@ void CL_SendConnectPacket (void)
 
 	if (!NET_StringToAdr (cls.servername, &adr))
 	{
-		Com_Printf ("Bad server address: %s\n", cls.servername);
+		Com_Printf ("Bad server address: %s\n", LOG_CLIENT, cls.servername);
 		cls.connect_time = 0;
 		return;
 	}
@@ -538,7 +555,8 @@ void CL_SendConnectPacket (void)
 	if (adr.port == 0)
 		adr.port = ShortSwap (PORT_SERVER);
 
-	port = Cvar_VariableValue ("qport");
+	port = qport->intvalue;
+
 	userinfo_modified = false;
 
 	if (Com_ServerState() == ss_demo)
@@ -549,6 +567,11 @@ void CL_SendConnectPacket (void)
 
 	if (!cls.serverProtocol)
 		cls.serverProtocol = ENHANCED_PROTOCOL_VERSION;
+
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		port &= 0xFF;
+
+	cls.quakePort = port;
 
 	Com_DPrintf ("Cl_SendConnectPacket: protocol=%d, port=%d, challenge=%u\n", cls.serverProtocol, port, cls.challenge);
 
@@ -580,18 +603,22 @@ void CL_Reconnect_f (void)
 		return;
 
 	S_StopAllSounds ();
-	if (cls.state == ca_connected) {
-		Com_Printf ("reconnecting (soft)...\n");
-		cls.state = ca_connected;
-		MSG_WriteChar (&cls.netchan.message, clc_stringcmd);
-		MSG_WriteString (&cls.netchan.message, "new");		
+
+	if (cls.state == ca_connected)
+	{
+		Com_Printf ("reconnecting (soft)...\n", LOG_CLIENT);
+		//cls.state = ca_connected;
+		MSG_WriteByte (clc_stringcmd);
+		MSG_WriteString ("new");		
+		MSG_EndWriting (&cls.netchan.message);
 		send_packet_now = true;
 		return;
 	}
 
-	if (*cls.servername) {
+	if (cls.servername[0])
+	{
 		if (cls.state >= ca_connected) {
-			Com_Printf ("disconnecting\n");
+			Com_Printf ("disconnecting\n", LOG_CLIENT);
 			strcpy (cls.lastservername, cls.servername);
 			CL_Disconnect(false);
 			cls.connect_time = cls.realtime - 1500;
@@ -602,13 +629,16 @@ void CL_Reconnect_f (void)
 		//Com_Printf ("reconnecting (hard)...\n");
 	}
 	
-	if (*cls.lastservername) {
+	if (cls.lastservername[0])
+	{
 		cls.connect_time = -99999;
 		cls.state = ca_connecting;
-		Com_Printf ("reconnecting (hard)...\n");
+		Com_Printf ("reconnecting (hard)...\n", LOG_CLIENT);
 		strcpy (cls.servername, cls.lastservername);
-	} else {
-		Com_Printf ("No server to reconnect to.\n");
+	}
+	else
+	{
+		Com_Printf ("No server to reconnect to.\n", LOG_CLIENT);
 	}
 }
 
@@ -644,7 +674,7 @@ void CL_CheckForResend (void)
 
 	if (!NET_StringToAdr (cls.servername, &adr))
 	{
-		Com_Printf ("Bad server address\n");
+		Com_Printf ("Bad server address: %s\n", LOG_CLIENT, cls.servername);
 		cls.state = ca_disconnected;
 		return;
 	}
@@ -655,7 +685,7 @@ void CL_CheckForResend (void)
 	cls.connect_time = cls.realtime;	// for retransmit requests
 
 	//_asm int 3;
-	Com_Printf ("Connecting to %s...\n", cls.servername);
+	Com_Printf ("Connecting to %s...\n", LOG_CLIENT, cls.servername);
 
 	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "getchallenge\n");
 }
@@ -669,11 +699,12 @@ CL_Connect_f
 */
 void CL_Connect_f (void)
 {
-	char	*server;
+	char		*server;
+	netadr_t	adr;
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("usage: connect <server>\n");
+		Com_Printf ("usage: connect <server>\n", LOG_GENERAL);
 		return;	
 	}
 	
@@ -685,16 +716,32 @@ void CL_Connect_f (void)
 	}
 	else
 	{
-		CL_Disconnect (false);
+		//CL_Disconnect (false);
 	}
 
 	server = Cmd_Argv (1);
 
 	NET_Config (NET_CLIENT);		// allow remote
 
+	if (!NET_StringToAdr (server, &adr))
+	{
+		Com_Printf ("Bad server address: %s\n", LOG_CLIENT, server);
+		return;
+	}
+
+	if (adr.port == 0)
+		adr.port = ShortSwap (PORT_SERVER);
+
 	CL_Disconnect (false);
 
-	//attempt new protocol
+	//reset protocol attempt if we're connecting to a different server
+	if (!NET_CompareAdr (&adr, &cls.netchan.remote_address))
+	{
+		Com_DPrintf ("Resetting protocol attempt since %s is not ", LOG_GENERAL, NET_AdrToString (&adr));
+		Com_DPrintf ("%s.\n", LOG_GENERAL, NET_AdrToString (&cls.netchan.remote_address));
+		cls.serverProtocol = 0;
+	}
+
 	cls.state = ca_connecting;
 	Q_strncpy (cls.servername, server, sizeof(cls.servername)-1);
 	strcpy (cls.lastservername, cls.servername);
@@ -717,21 +764,18 @@ void CL_Rcon_f (void)
 
 	//r1: buffer check ffs!
 	if ((strlen(Cmd_Args()) + strlen(rcon_client_password->string) + 16) >= sizeof(message)) {
-		Com_Printf ("Length of password + command exceeds maximum allowed length.\n");
+		Com_Printf ("Length of password + command exceeds maximum allowed length.\n", LOG_CLIENT);
 		return;
 	}
 
-	message[0] = (char)255;
-	message[1] = (char)255;
-	message[2] = (char)255;
-	message[3] = (char)255;
+	*(int *)message = -1;
 	message[4] = 0;
 
 	NET_Config (NET_CLIENT);		// allow remote
 
 	strcat (message, "rcon ");
 
-	if (*rcon_client_password->string)
+	if (rcon_client_password->string[0])
 	{
 		strcat (message, rcon_client_password->string);
 		strcat (message, " ");
@@ -754,7 +798,7 @@ void CL_Rcon_f (void)
 		{
 			Com_Printf ("You must either be connected,\n"
 						"or set the 'rcon_address' cvar\n"
-						"to issue rcon commands\n");
+						"to issue rcon commands\n", LOG_CLIENT);
 
 			return;
 		}
@@ -813,7 +857,7 @@ void CL_Disconnect (qboolean skipdisconnect)
 		
 		time = Sys_Milliseconds () - cl.timedemo_start;
 		if (time > 0)
-			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", cl.timedemo_frames,
+			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", LOG_CLIENT, cl.timedemo_frames,
 			time/1000.0, cl.timedemo_frames*1000.0 / time);
 	}
 
@@ -830,10 +874,12 @@ void CL_Disconnect (qboolean skipdisconnect)
 #endif
 
 	if (cls.demorecording)
-		CL_Stop_f ();
+		CL_EndRecording();
+		//CL_Stop_f ();
 
 	// send a disconnect message to the server
-	if (!skipdisconnect) {
+	if (!skipdisconnect)
+	{
 		final[0] = clc_stringcmd;
 		strcpy ((char *)final+1, "disconnect");
 
@@ -851,26 +897,65 @@ void CL_Disconnect (qboolean skipdisconnect)
 	}
 
 	cls.state = ca_disconnected;
-	cls.key_dest = key_console;
-
 	cls.servername[0] = '\0';
-
-	//reset protocol attempt
-	cls.serverProtocol = 0;
 
 	Cvar_ForceSet ("$mapname", "");
 	Cvar_ForceSet ("$game", "");
 
 	//r1: swap games if needed
 	Cvar_GetLatchedVars();
+
+	MSG_Clear();
 }
 
 void CL_Disconnect_f (void)
 {
 	if (cls.state != ca_disconnected)
+	{
+		cls.serverProtocol = 0;
+		cls.key_dest = key_console;
 		Com_Error (ERR_DROP, "Disconnected from server");
+	}
 }
 
+//Spam repeated cmd for overflow checkings
+#ifdef _DEBUG
+void CL_Spam_f (void)
+{
+	char	cmdBuff[1380] = {0};
+	int		count;
+	int		i;
+	char	*what;
+
+	count = atoi (Cmd_Argv(2));
+
+	if (!count)
+		return;
+
+	what = Cmd_Argv(1);
+
+	Q_strncpy (cmdBuff, Cmd_Argv(3), sizeof(cmdBuff)-1);
+	if (cmdBuff[0])
+		strcat (cmdBuff, " ");
+
+	if (count * strlen(what) >= sizeof(cmdBuff)-strlen(cmdBuff)-2)
+	{
+		Com_Printf ("Too long an expanded string.\n", LOG_CLIENT);
+		return;
+	}
+
+	for (i = 0; i < count; i++)
+		strcat (cmdBuff, what);
+
+	strcat (cmdBuff, "\n");
+
+	MSG_WriteByte (clc_stringcmd);
+	MSG_WriteString (cmdBuff);
+	MSG_EndWriting (&cls.netchan.message);
+
+	Com_Printf ("Wrote %d bytes stringcmd.\n", LOG_CLIENT, count * strlen(what));
+}
+#endif
 
 /*
 ====================
@@ -891,7 +976,7 @@ void CL_Packet_f (void)
 
 	if (Cmd_Argc() < 3)
 	{
-		Com_Printf ("packet <destination> <contents>\n");
+		Com_Printf ("packet <destination> <contents>\n", LOG_CLIENT);
 		return;
 	}
 
@@ -899,7 +984,7 @@ void CL_Packet_f (void)
 
 	if (!NET_StringToAdr (Cmd_Argv(1), &adr))
 	{
-		Com_Printf ("Bad address\n");
+		Com_Printf ("Bad address\n", LOG_CLIENT);
 		return;
 	}
 
@@ -946,13 +1031,24 @@ void CL_Changing_f (void)
 	if (cls.download)
 		return;
 
+	if (cls.demofile)
+		CL_EndRecording();
+
+	Cmd_ExecuteString (Cmd_MacroExpandString("$endmapcmd"));
+
 	//r1: prevent manual issuing crashing game
 	if (cls.state < ca_connected)
 		return;
 
+	//r1: stop loading models right now
+	deffered_model_index = MAX_MODELS;
+
 	SCR_BeginLoadingPlaque ();
 	cls.state = ca_connected;	// not active anymore, but not disconnected
-	Com_Printf ("\nChanging map...\n");
+	Com_Printf ("\nChanging map...\n", LOG_CLIENT);
+
+	//shut up
+	gotFrameFromServerPacket = true;
 }
 
 
@@ -969,7 +1065,7 @@ void CL_ParseStatusMessage (void)
 
 	s = MSG_ReadString (&net_message);
 
-	Com_Printf ("%s\n", s);
+	Com_Printf ("%s\n", LOG_CLIENT, s);
 	M_AddToServerList (net_from, s);
 }
 
@@ -983,7 +1079,7 @@ void CL_PingServers_f (void)
 {
 	int			i;
 	netadr_t	adr;
-	char		name[32];
+	char		name[16];
 	char		*adrstring;
 	//cvar_t		*noudp;
 	//cvar_t		*noipx;
@@ -991,7 +1087,7 @@ void CL_PingServers_f (void)
 	NET_Config (NET_CLIENT);		// allow remote
 
 	// send a broadcast packet
-	Com_Printf ("pinging broadcast...\n");
+	Com_Printf ("pinging broadcast...\n", LOG_CLIENT|LOG_NOTICE);
 
 	adr.type = NA_BROADCAST;
 	adr.port = ShortSwap(PORT_SERVER);
@@ -1008,10 +1104,10 @@ void CL_PingServers_f (void)
 		if (!adrstring || !adrstring[0])
 			continue;
 
-		Com_Printf ("pinging %s...\n", adrstring);
+		Com_Printf ("pinging %s...\n", LOG_CLIENT|LOG_NOTICE, adrstring);
 		if (!NET_StringToAdr (adrstring, &adr))
 		{
-			Com_Printf ("Bad address: %s\n", adrstring);
+			Com_Printf ("Bad address: %s\n", LOG_CLIENT, adrstring);
 			continue;
 		}
 		if (!adr.port)
@@ -1029,6 +1125,7 @@ CL_Skins_f
 Load or download any custom player skins and models
 =================
 */
+
 void CL_Skins_f (void)
 {
 	int		i;
@@ -1037,14 +1134,15 @@ void CL_Skins_f (void)
 	{
 		if (!cl.configstrings[CS_PLAYERSKINS+i][0])
 			continue;
-		if (developer->intvalue)
-			Com_Printf ("client %i: %s\n", i, cl.configstrings[CS_PLAYERSKINS+i]); 
+		//if (developer->intvalue)
+		Com_Printf ("client %i: %s\n", LOG_CLIENT, i, cl.configstrings[CS_PLAYERSKINS+i]); 
 		SCR_UpdateScreen ();
 		Sys_SendKeyEvents ();	// pump message loop
 		CL_ParseClientinfo (i);
 	}
-	Com_Printf ("Precached all skins.\n");
+	//Com_Printf ("Precached all skins.\n", LOG_CLIENT);
 }
+
 
 /*
 =================
@@ -1090,7 +1188,7 @@ void CL_ConnectionlessPacket (void)
 		}
 		else
 		{
-			Com_Printf ("Received %s from %s -- beginning connection.\n", c, NET_AdrToString (&net_from));
+			Com_Printf ("Received %s from %s -- beginning connection.\n", LOG_CLIENT, c, NET_AdrToString (&net_from));
 			strcpy (cls.servername, NET_AdrToString (&net_from));
 			cls.state = ca_connecting;
 			cls.connect_time = -99999;
@@ -1106,7 +1204,7 @@ void CL_ConnectionlessPacket (void)
 		return;
 	}
 
-	Com_Printf ("%s: %s\n", NET_AdrToString (&net_from), c);
+	Com_Printf ("%s: %s\n", LOG_CLIENT, NET_AdrToString (&net_from), c);
 
 	// server connection
 	if (!strcmp(c, "client_connect"))
@@ -1130,8 +1228,11 @@ void CL_ConnectionlessPacket (void)
 		Com_DPrintf ("client_connect: new\n");
 
 		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort);
-		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		MSG_WriteString (&cls.netchan.message, "new");
+
+		MSG_WriteByte (clc_stringcmd);
+		MSG_WriteString ("new");
+		MSG_EndWriting (&cls.netchan.message);
+
 		send_packet_now = true;
 		cls.state = ca_connected;
 		return;
@@ -1169,13 +1270,13 @@ void CL_ConnectionlessPacket (void)
 		s = MSG_ReadString (&net_message);
 
 		//BIG HACK to allow new client on old server!
-		Com_Printf ("%s", s);
+		Com_Printf ("%s", LOG_CLIENT, s);
 		if (!strstr (s, "full") &&
 			!strstr (s, "locked") &&
 			!strncmp (s, "Server is ", 10) &&
 			cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
 		{
-			Com_Printf ("Retrying with protocol %d.\n", ORIGINAL_PROTOCOL_VERSION);
+			Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, ORIGINAL_PROTOCOL_VERSION);
 			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 			//force immediate retry
 			cls.connect_time = -99999;
@@ -1213,7 +1314,7 @@ void CL_ConnectionlessPacket (void)
 		return;
 	}
 
-	Com_Printf ("Unknown connectionless packet command %s\n", c);
+	Com_Printf ("Unknown connectionless packet command %s\n", LOG_CLIENT, c);
 }
 
 /*
@@ -1230,10 +1331,10 @@ void CL_ReadPackets (void)
 		//
 		// remote command packet
 		//
-		if (*(int *)net_message.data == -1)
+		if (*(int *)net_message_buffer == -1)
 		{
 			if (i == -1 && cls.key_dest != key_game)
-				Com_Printf ("Port unreachable from %s\n", NET_AdrToString (&net_from));
+				Com_Printf ("Port unreachable from %s\n", LOG_CLIENT|LOG_NOTICE, NET_AdrToString (&net_from));
 			else
 				CL_ConnectionlessPacket ();
 			continue;
@@ -1265,6 +1366,17 @@ void CL_ReadPackets (void)
 		if (!Netchan_Process(&cls.netchan, &net_message))
 			continue;		// wasn't accepted for some reason
 
+		if (cls.netchan.got_reliable)
+		{
+			if ( cls.state == ca_connected)
+				send_packet_now = true;
+			else if (cl_instantack->intvalue)
+				Netchan_Transmit (&cls.netchan, 0, NULL);
+
+			if (cl_shownet->intvalue == 1)
+				Com_Printf ("r", LOG_CLIENT);
+		}
+
 		CL_ParseServerMessage ();
 
 		CL_AddNetgraph ();
@@ -1288,7 +1400,7 @@ void CL_ReadPackets (void)
 	{
 		if (++cl.timeoutcount > 5)	// timeoutcount saves debugger
 		{
-			Com_Printf ("\nServer connection timed out.\n");
+			Com_Printf ("\nServer connection timed out.\n", LOG_CLIENT);
 			CL_Disconnect (false);
 			return;
 		}
@@ -1341,7 +1453,7 @@ CL_Userinfo_f
 */
 void CL_Userinfo_f (void)
 {
-	Com_Printf ("User info settings:\n");
+	Com_Printf ("User info settings:\n", LOG_CLIENT);
 	Info_Print (Cvar_Userinfo());
 }
 
@@ -1367,7 +1479,7 @@ int precache_tex;
 int precache_model_skin;
 unsigned int precache_start_time;
 
-byte *precache_model; // used for skin checking in alias models
+static byte *precache_model; // used for skin checking in alias models
 
 //#define PLAYER_MULT 23
 #define	PLAYER_MULT	5
@@ -1385,7 +1497,7 @@ typedef struct cl_location_s
 	vec3_t					location;
 } cl_location_t;
 
-cl_location_t	cl_locations;
+static cl_location_t	cl_locations;
 
 void CL_Loc_Init (void)
 {
@@ -1397,9 +1509,11 @@ void CL_FreeLocs (void)
 	cl_location_t	*loc = &cl_locations,
 					*old = NULL;
 
-	while (loc->next) {
+	while (loc->next)
+	{
 		loc = loc->next;
-		if (old) {
+		if (old)
+		{
 			Z_Free (old->name);
 			Z_Free (old);
 			old = NULL;
@@ -1407,7 +1521,8 @@ void CL_FreeLocs (void)
 		old = loc;
 	}
 
-	if (old) {
+	if (old)
+	{
 		Z_Free (old->name);
 		Z_Free (old);
 	}
@@ -1426,7 +1541,7 @@ void CL_LoadLoc (char *filename)
 
 	CL_FreeLocs ();
 
-	FS_FOpenFile (filename, &fLoc);
+	FS_FOpenFile (filename, &fLoc, true);
 
 	if (!fLoc)
 	{
@@ -1441,7 +1556,7 @@ void CL_LoadLoc (char *filename)
 		linenum++;
 		x = line;
 
-		if (*x == '\r' || *x == '\n' || *x == '\0')
+		if (x[0] == '\r' || x[0] == '\n' || x[0] == '\0')
 			continue;
 
 		name = y = z = NULL;
@@ -1464,11 +1579,20 @@ void CL_LoadLoc (char *filename)
 			line++;
 		}
 
-		while (*line) {
-			if (*line == ' ' || *line == '\t') {
-				*line = '\0';
-				name = line + 1;
-			} else if (*line == '\n' || *line == '\r') {
+		while (*line)
+		{
+			if (*line == ' ' || *line == '\t')
+			{
+				*line++ = '\0';
+				name = line;
+				break;
+			}
+			line++;
+		}
+
+		while (*line)
+		{
+			if (*line == '\n' || *line == '\r') {
 				*line = '\0';
 				break;
 			}
@@ -1477,13 +1601,14 @@ void CL_LoadLoc (char *filename)
 
 		if (!*x || !y || !*y || !z || !*z || !name || !*name)
 		{
-			Com_Printf ("CL_LoadLoc: Parse error on line %d of '%s'.\n", linenum, filename);
+			Com_Printf ("CL_LoadLoc: Parse error on line %d of '%s'.\n", LOG_CLIENT, linenum, filename);
 			break;
 		}
 
 		loc->next = Z_TagMalloc (sizeof(cl_location_t), TAGMALLOC_CLIENT_LOC);
 		loc = loc->next;
 
+		loc->next = NULL;
 		loc->name = CopyString (name, TAGMALLOC_CLIENT_LOC);
 		VectorSet (loc->location, (float)atoi(x)/8.0, (float)atoi(y)/8.0, (float)atoi(z)/8.0);
 
@@ -1493,7 +1618,7 @@ void CL_LoadLoc (char *filename)
 	FS_FCloseFile (fLoc);
 }
 
-char *CL_Loc_Get (void)
+char *CL_Loc_Get (vec3_t org)
 {
 	vec3_t			distance;
 	unsigned int	length, bestlength = 0xFFFFFFFF;
@@ -1503,7 +1628,7 @@ char *CL_Loc_Get (void)
 	{
 		loc = loc->next;
 
-		VectorSubtract (loc->location, cl.refdef.vieworg, distance);
+		VectorSubtract (loc->location, org, distance);
 		length = VectorLength (distance);
 
 		if (length < bestlength)
@@ -1524,7 +1649,7 @@ void CL_AddLoc_f (void)
 	{
 		Com_Printf ("Purpose: Add a new location.\n"
 					"Syntax : addloc <name>\n"
-					"Example: addloc red base\n");
+					"Example: addloc red base\n", LOG_CLIENT);
 		return;
 	}
 
@@ -1538,7 +1663,7 @@ void CL_AddLoc_f (void)
 	newentry->next = last;
 	loc->next = newentry;
 
-	Com_Printf ("Location '%s' added at (%d, %d, %d).\n", newentry->name, (int)cl.refdef.vieworg[0]*8, (int)cl.refdef.vieworg[1]*8, (int)cl.refdef.vieworg[2]*8);
+	Com_Printf ("Location '%s' added at (%d, %d, %d).\n", LOG_CLIENT, newentry->name, (int)cl.refdef.vieworg[0]*8, (int)cl.refdef.vieworg[1]*8, (int)cl.refdef.vieworg[2]*8);
 }
 
 void CL_SaveLoc_f (void)
@@ -1557,7 +1682,7 @@ void CL_SaveLoc_f (void)
 	out = fopen (locfile, "wb");
 	if (!out)
 	{
-		Com_Printf ("CL_SaveLoc_f: Unable to open '%s' for writing.\n", locfile);
+		Com_Printf ("CL_SaveLoc_f: Unable to open '%s' for writing.\n", LOG_CLIENT, locfile);
 		return;
 	}
 
@@ -1568,9 +1693,10 @@ void CL_SaveLoc_f (void)
 	}
 
 	fclose (out);
-	Com_Printf ("Locations saved to '%s'.\n", locbuff);
+	Com_Printf ("Locations saved to '%s'.\n", LOG_CLIENT, locbuff);
 }
 
+void vectoangles2 (vec3_t value1, vec3_t angles);
 void CL_Say_Preprocessor (void)
 {
 	char *location_name, *p;
@@ -1580,18 +1706,37 @@ void CL_Say_Preprocessor (void)
 
 	if (cl_locations.next)
 	{
-		while (*say_text && *(say_text + 1))
+		while (say_text[0] && say_text[1])
 		{
-			if (*say_text == '@' && *(say_text + 1) == 'l')
+			if ((say_text[0] == '%' && say_text[1] == 'l') || (say_text[0] == '@' && say_text[1] == 't'))
 			{
 				int location_len, cmd_len;
 
-				location_name = CL_Loc_Get ();
+				if (say_text[1] == 'l')
+				{
+					location_name = CL_Loc_Get (cl.refdef.vieworg);
+				}
+				else
+				{
+					trace_t		tr;
+					vec3_t		end;
+
+					end[0] = cl.refdef.vieworg[0] + cl.v_forward[0] * 65556 + cl.v_right[0];
+					end[1] = cl.refdef.vieworg[1] + cl.v_forward[1] * 65556 + cl.v_right[1];
+					end[2] = cl.refdef.vieworg[2] + cl.v_forward[2] * 65556 + cl.v_right[2];
+
+					tr = CM_BoxTrace (cl.refdef.vieworg, end, vec3_origin, vec3_origin, 0, MASK_SOLID);
+
+					if (tr.fraction != 1.0)
+						location_name = CL_Loc_Get (tr.endpos);
+					else
+						location_name = CL_Loc_Get (end);
+				}
 
 				cmd_len = strlen(Cmd_Args());
 				location_len = strlen(location_name);
 
-				if (cmd_len + location_len >= 1024)
+				if (cmd_len + location_len >= MAX_STRING_CHARS-1)
 				{
 					Com_DPrintf ("CL_Say_Preprocessor: location expansion aborted, not enough space\n");
 					break;
@@ -1627,8 +1772,10 @@ char *colortext(char *text){
 void CL_RequestNextDownload (void)
 {
 	unsigned	map_checksum;		// for detecting cheater maps
-	char fn[MAX_OSPATH];
-	dmdl_t *pheader;
+	char		fn[MAX_OSPATH];
+
+	dmdl_t		*pheader;
+	dsprite_t	*spriteheader;
 
 	if (cls.state != ca_connected)
 		return;
@@ -1637,87 +1784,181 @@ void CL_RequestNextDownload (void)
 		precache_check = ENV_CNT;
 
 //ZOID
-	if (precache_check == CS_MODELS) { // confirm map
+	if (precache_check == CS_MODELS)
+	{ // confirm map
 		precache_check = CS_MODELS+2; // 0 isn't used
 		if (allow_download_maps->intvalue)
+		{
+			if (strlen(cl.configstrings[CS_MODELS+1]) >= MAX_QPATH-1)
+				Com_Error (ERR_DROP, "Bad map configstring '%s'", cl.configstrings[CS_MODELS+1]);
+
 			if (!CL_CheckOrDownloadFile(cl.configstrings[CS_MODELS+1]))
 				return; // started a download
+		}
 	}
-	if (precache_check >= CS_MODELS && precache_check < CS_MODELS+MAX_MODELS) {
+
+	if (precache_check >= CS_MODELS && precache_check < CS_MODELS+MAX_MODELS)
+	{
 		if (allow_download_models->intvalue)
 		{
 			char *skinname;
 
 			while (precache_check < CS_MODELS+MAX_MODELS &&
-				cl.configstrings[precache_check][0]) {
-				if (cl.configstrings[precache_check][0] == '*' ||
-					cl.configstrings[precache_check][0] == '#') {
+				cl.configstrings[precache_check][0])
+			{
+				//its a brush/alias model, we don't do those
+				if (cl.configstrings[precache_check][0] == '*' || cl.configstrings[precache_check][0] == '#')
+				{
 					precache_check++;
 					continue;
 				}
-				if (precache_model_skin == 0) {
-					if (!CL_CheckOrDownloadFile(cl.configstrings[precache_check])) {
+
+				//new model, try downloading it
+				if (precache_model_skin == 0)
+				{
+					if (strlen(cl.configstrings[precache_check]) >= MAX_OSPATH-1)
+						Com_Error (ERR_DROP, "Bad model confistring '%s'", cl.configstrings[precache_check]);
+
+					if (!CL_CheckOrDownloadFile(cl.configstrings[precache_check]))
+					{
 						precache_model_skin = 1;
 						return; // started a download
 					}
 					precache_model_skin = 1;
 				}
 
-				// checking for skins in the model
-				if (!precache_model) {
-
-					FS_LoadFile (cl.configstrings[precache_check], (void **)&precache_model);
-					if (!precache_model) {
-						precache_model_skin = 0;
-						precache_check++;
-						continue; // couldn't load it
-					}
-					if (LittleLong(*(unsigned *)precache_model) != IDALIASHEADER) {
-						// not an alias model
-						FS_FreeFile(precache_model);
-						precache_model = 0;
-						precache_model_skin = 0;
-						precache_check++;
-						continue;
-					}
-					pheader = (dmdl_t *)precache_model;
-					if (LittleLong (pheader->version) != ALIAS_VERSION) {
-						precache_check++;
-						precache_model_skin = 0;
-						continue; // couldn't load it
-					}
-				}
-
-				pheader = (dmdl_t *)precache_model;
-
-				while (precache_model_skin - 1 < LittleLong(pheader->num_skins))
+				//model is ok, now we are checking for skins in the model
+				if (!precache_model)
 				{
-					skinname = (char *)precache_model +
-						LittleLong(pheader->ofs_skins) + 
-						(precache_model_skin - 1)*MAX_SKINNAME;
-
-					//r1: spam warning for models that are broken
-					if (strchr (skinname, '\\'))
+					//load model into buffer
+					FS_LoadFile (cl.configstrings[precache_check], (void **)&precache_model);
+					if (!precache_model)
 					{
-						Com_Printf ("Warning, model %s with incorrectly linked skin: %s\n", cl.configstrings[precache_check], skinname);
+						//shouldn't happen?
+						precache_model_skin = 0;
+						precache_check++;
+						continue; // couldn't load it
 					}
+					
+					//is it an alias model
+					if (LittleLong(*(unsigned *)precache_model) != IDALIASHEADER)
+					{
+						//is it a sprite
+						if (LittleLong(*(unsigned *)precache_model) != IDSPRITEHEADER)
+						{
+							//no, free and move onto next model
+							FS_FreeFile(precache_model);
+							precache_model = NULL;
+							precache_model_skin = 0;
+							precache_check++;
+							continue;
+						}
+						else
+						{
+							//get sprite header
+							spriteheader = (dsprite_t *)precache_model;
+							if (LittleLong (spriteheader->version != SPRITE_VERSION))
+							{
+								//this is unknown version! free and move onto next.
+								FS_FreeFile(precache_model);
+								precache_model = NULL;
+								precache_check++;
+								precache_model_skin = 0;
+								continue; // couldn't load it
+							}
+						}
+					}
+					else
+					{
+						//get model header
+						pheader = (dmdl_t *)precache_model;
+						if (LittleLong (pheader->version) != ALIAS_VERSION)
+						{
+							//unknown version! free and move onto next
+							FS_FreeFile(precache_model);
+							precache_model = NULL;
+							precache_check++;
+							precache_model_skin = 0;
+							continue; // couldn't load it
+						}
+					}
+				}
 
-					if (!CL_CheckOrDownloadFile(skinname)) {
+				//if its an alias model
+				if (LittleLong(*(unsigned *)precache_model) == IDALIASHEADER)
+				{
+					pheader = (dmdl_t *)precache_model;
+
+					//iterate through number of skins
+					while (precache_model_skin - 1 < LittleLong(pheader->num_skins))
+					{
+						skinname = (char *)precache_model +
+							LittleLong(pheader->ofs_skins) + 
+							(precache_model_skin - 1)*MAX_SKINNAME;
+
+						//r1: spam warning for models that are broken
+						if (strchr (skinname, '\\'))
+						{
+							Com_Printf ("Warning, model %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
+						}
+						else if (strlen(skinname) >= MAX_SKINNAME-1)
+						{
+							Com_Error (ERR_DROP, "Model %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
+						}
+
+						//check if this skin exists
+						if (!CL_CheckOrDownloadFile(skinname))
+						{
+							precache_model_skin++;
+							return; // started a download
+						}
 						precache_model_skin++;
-						return; // started a download
 					}
-					precache_model_skin++;
 				}
-				if (precache_model) { 
+				else
+				{
+					//its a sprite
+					spriteheader = (dsprite_t *)precache_model;
+
+					//iterate through skins
+					while (precache_model_skin - 1 < LittleLong(spriteheader->numframes))
+					{
+						skinname = spriteheader->frames[(precache_model_skin - 1)].name;
+
+						//r1: spam warning for models that are broken
+						if (strchr (skinname, '\\'))
+						{
+							Com_Printf ("Warning, sprite %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
+						}
+						else if (strlen(skinname) >= MAX_SKINNAME-1)
+						{
+							Com_Error (ERR_DROP, "Sprite %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
+						}
+
+						//check if this skin exists
+						if (!CL_CheckOrDownloadFile(skinname))
+						{
+							precache_model_skin++;
+							return; // started a download
+						}
+						precache_model_skin++;
+					}
+				}
+
+				//we're done checking the model and all skins, free
+				if (precache_model)
+				{ 
 					FS_FreeFile(precache_model);
-					precache_model = 0;
+					precache_model = NULL;
 				}
+
 				precache_model_skin = 0;
 				precache_check++;
 			}
 		}
 		precache_check = CS_SOUNDS;
 	}
+
 	if (precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS+MAX_SOUNDS) { 
 		if (allow_download_sounds->intvalue) {
 			if (precache_check == CS_SOUNDS)
@@ -1745,7 +1986,7 @@ void CL_RequestNextDownload (void)
 			Com_sprintf(fn, sizeof(fn), "pics/%s.pcx", cl.configstrings[precache_check]);
 			if (FS_LoadFile (fn, NULL) == -1)
 			{
-				Com_sprintf(fn, sizeof(fn), "pics/%s.pcx", cl.configstrings[precache_check]);
+				//Com_sprintf(fn, sizeof(fn), "pics/%s.pcx", cl.configstrings[precache_check]);
 				if (!CL_CheckOrDownloadFile(fn))
 				{
 					precache_check++;
@@ -1769,7 +2010,8 @@ void CL_RequestNextDownload (void)
 				i = (precache_check - CS_PLAYERSKINS)/PLAYER_MULT;
 				n = (precache_check - CS_PLAYERSKINS)%PLAYER_MULT;
 
-				if (!cl.configstrings[CS_PLAYERSKINS+i][0]) {
+				if (!cl.configstrings[CS_PLAYERSKINS+i][0])
+				{
 					precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
 					continue;
 				}
@@ -1778,11 +2020,16 @@ void CL_RequestNextDownload (void)
 					p++;
 				else
 					p = cl.configstrings[CS_PLAYERSKINS+i];
-				strcpy(model, p);
+
+				Q_strncpy(model, p, sizeof(model)-1);
+
 				p = strchr(model, '/');
+
 				if (!p)
 					p = strchr(model, '\\');
-				if (p) {
+
+				if (p)
+				{
 					*p++ = 0;
 					if (!*p)
 					{
@@ -1792,7 +2039,7 @@ void CL_RequestNextDownload (void)
 					}
 					else
 					{
-						strcpy(skin, p);
+						Q_strncpy (skin, p, sizeof(skin)-1);
 					}
 				} else {
 					strcpy (model, "male");
@@ -1806,7 +2053,7 @@ void CL_RequestNextDownload (void)
 				{
 					if (!isalnum(model[j]) && model[j] != '_')
 					{
-						Com_Printf ("Bad character '%c' in playerskin '%s'\n", skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
+						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
 						strcpy (model, "male");
 						strcpy (skin, "grunt");
 						goto fixed;
@@ -1818,7 +2065,7 @@ void CL_RequestNextDownload (void)
 				{
 					if (!isalnum(skin[j]) && skin[j] != '_')
 					{
-						Com_Printf ("Bad character '%c' in playerskin '%s'\n", skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
+						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
 						strcpy (model, "male");
 						strcpy (skin, "grunt");
 						break;
@@ -2077,9 +2324,9 @@ fixed:
 
 				//r1: spam warning about texture
 				if (strchr (map_surfaces[precache_tex].rname, '\\'))
-					Com_Printf ("Warning, incorrectly referenced texture '%s'\n", map_surfaces[precache_tex].rname);
+					Com_Printf ("Warning, incorrectly referenced texture '%s'\n", LOG_CLIENT|LOG_WARNING, map_surfaces[precache_tex].rname);
 				else if (!strchr (map_surfaces[precache_tex].rname, '/'))
-					Com_Printf ("Warning, texture '%s' not in a sub-directory\n", map_surfaces[precache_tex].rname);
+					Com_Printf ("Warning, texture '%s' not in a sub-directory\n", LOG_CLIENT|LOG_WARNING, map_surfaces[precache_tex].rname);
 
 				Com_sprintf(fn, sizeof(fn), "textures/%s.wal", map_surfaces[precache_tex++].rname);
 				if (!CL_CheckOrDownloadFile(fn))
@@ -2096,10 +2343,32 @@ fixed:
 	Com_DPrintf ("Precache completed in %u msec.\n", Sys_Milliseconds() - precache_start_time);
 
 	if (cl_maxfps->intvalue > 100)
-		Com_Printf ("\n%s\nR1Q2 separates network and rendering so a cl_maxfps value > 30\nis rarely needed. Use r_maxfps to control maximum rendered FPS\n\n", colortext ("WARNING: A cl_maxfps value of over 100 is strongly discouraged"));
+		Com_Printf ("\n%s\nR1Q2 separates network and rendering so a cl_maxfps value > 30\nis rarely needed. Use r_maxfps to control maximum rendered FPS\n\n", LOG_CLIENT, colortext ("WARNING: A cl_maxfps value of over 100 is strongly discouraged"));
 
-	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-	MSG_WriteString (&cls.netchan.message, va("begin %i\n", precache_spawncount) );
+	if (cl_autorecord->intvalue)
+	{
+		char	autorecord_name[MAX_QPATH];
+		char	mapname[MAX_QPATH];
+		char	time_buff[32];
+
+		time_t	tm;
+
+		time(&tm);
+		strftime(time_buff, sizeof(time_buff)-1, "%Y-%m-%d-%H%M", localtime(&tm));
+
+		COM_StripExtension (cl.configstrings[CS_MODELS+1], mapname);
+
+		Com_sprintf (autorecord_name, sizeof(autorecord_name), "%s/demos/%s-%s.dm2", FS_Gamedir(), time_buff, mapname + 5);
+		Com_Printf ("Auto-recording to %s.\n", LOG_CLIENT, autorecord_name);
+		CL_BeginRecording (autorecord_name);
+	}
+
+	MSG_WriteByte (clc_stringcmd);
+	MSG_WriteString (va("begin %i\n", precache_spawncount) );
+	MSG_EndWriting (&cls.netchan.message);
+
+	Cmd_ExecuteString (Cmd_MacroExpandString("$beginmapcmd"));
+
 	send_packet_now = true;
 }
 
@@ -2144,24 +2413,52 @@ void CL_SendStatusPacket_f (void)
 
 void CL_Toggle_f (void)
 {
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("Usage: toggle cvar [option1|option2|option3|optionx]\n");
+	cvar_t *tvar;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Usage: toggle cvar [option1|option2|option3|optionx]\n", LOG_CLIENT);
 		return;
 	}
 
-	if (Cmd_Argc() == 2) {
-		cvar_t *tvar = Cvar_FindVar (Cmd_Argv(1));
-		if (!tvar) {
-			Com_Printf ("no such variable %s\n", Cmd_Argv(1));
-			return;
-		}
-		if (tvar->value != 0 && tvar->value != 1) {
-			Com_Printf ("not a binary variable\n");
+	tvar = Cvar_FindVar (Cmd_Argv(1));
+
+	if (!tvar)
+	{
+		Com_Printf ("no such variable %s\n", LOG_CLIENT, Cmd_Argv(1));
+		return;
+	}
+
+	if (Cmd_Argc() == 2)
+	{
+		if (tvar->value != 0 && tvar->value != 1)
+		{
+			Com_Printf ("not a binary variable\n", LOG_CLIENT);
 			return;
 		}
 		Cvar_SetValue (Cmd_Argv(1), (int)tvar->value ^ 1);
-	} else {
-		Com_Printf ("XXX: fixme\n");
+	}
+	else
+	{
+		//Com_Printf ("XXX: fixme\n", LOG_CLIENT);
+		int i;
+
+		for (i = 2; i < Cmd_Argc(); i++)
+		{
+			if (!strcmp (tvar->string, Cmd_Argv(i)))
+			{
+				if (i == Cmd_Argc() -1)
+				{
+					Cvar_Set (Cmd_Argv(1), Cmd_Argv(2));
+					return;
+				}
+				else
+				{
+					Cvar_Set (Cmd_Argv(1), Cmd_Argv(i+1));
+					return;
+				}
+			}
+		}
 	}
 }
 
@@ -2172,15 +2469,46 @@ void version_update (cvar_t *self, char *old, char *newValue)
 
 void _name_changed (cvar_t *var, char *oldValue, char *newValue)
 {
-	if (strlen(newValue) > 16)
+	if (strlen(newValue) >= 16)
 	{
-		newValue[16] = 0;
-		Cvar_Set ("name", newValue);
+		newValue[15] = 0;
 	}
 	else if (!*newValue)
 	{
 		Cvar_Set ("name", "unnamed");
 	}
+}
+
+void _maxfps_changed (cvar_t *var, char *oldValue, char *newValue)
+{
+	if (var->intvalue < 10)
+	{
+		Cvar_Set (var->name, "10");
+	}
+
+	if (cl_async->intvalue == 0)
+	{
+		if (var == cl_maxfps)
+			Cvar_SetValue ("r_maxfps", var->value);
+		else if (var == r_maxfps)
+			Cvar_SetValue ("cl_maxfps", var->value);
+	}
+}
+
+void _async_changed (cvar_t *var, char *oldValue, char *newValue)
+{
+	if (var->intvalue == 0)
+	{
+		Cvar_SetValue ("r_maxfps", cl_maxfps->value);
+	}
+}
+
+void _railtrail_changed (cvar_t *var, char *oldValue, char *newValue)
+{
+	if (var->intvalue > 255)
+		Cvar_Set (var->name, "255");
+	else if (var->intvalue < 0)
+		Cvar_Set (var->name, "0");
 }
 
 /*
@@ -2226,9 +2554,15 @@ void CL_InitLocal (void)
 	cl_predict = Cvar_Get ("cl_predict", "1", 0);
 	cl_backlerp = Cvar_Get ("cl_backlerp", "1", 0);
 //	cl_minfps = Cvar_Get ("cl_minfps", "5", 0);
+
 	r_maxfps = Cvar_Get ("r_maxfps", "1000", 0);
-	cl_maxfps = Cvar_Get ("cl_maxfps", "30", CVAR_ARCHIVE);
+	r_maxfps->changed = _maxfps_changed;
+
+	cl_maxfps = Cvar_Get ("cl_maxfps", "33", CVAR_ARCHIVE);
+	cl_maxfps->changed = _maxfps_changed;
+
 	cl_async = Cvar_Get ("cl_async", "1", 0);
+	cl_async->changed = _async_changed;
 
 	cl_upspeed = Cvar_Get ("cl_upspeed", "200", 0);
 	cl_forwardspeed = Cvar_Get ("cl_forwardspeed", "200", 0);
@@ -2261,7 +2595,7 @@ void CL_InitLocal (void)
 	rcon_client_password = Cvar_Get ("rcon_password", "", 0);
 	rcon_address = Cvar_Get ("rcon_address", "", 0);
 
-	cl_lightlevel = Cvar_Get ("r_lightlevel", "0", 0);
+	cl_lightlevel = Cvar_Get ("r_lightlevel", "0", CVAR_NOSET);
 
 	//
 	// userinfo
@@ -2288,14 +2622,19 @@ void CL_InitLocal (void)
 #endif
 
 	cl_defertimer = Cvar_Get ("cl_defertimer", "1", 0);
-	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "1", 0);
+	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "3", 0);
 	cl_instantpacket = Cvar_Get ("cl_instantpacket", "1", 0);
 	cl_strafejump_hack = Cvar_Get ("cl_strafejump_hack", "0", 0);
 	cl_nolerp = Cvar_Get ("cl_nolerp", "0", 0);
+	cl_instantack = Cvar_Get ("cl_instantack", "0", 0);
+	cl_autorecord = Cvar_Get ("cl_autorecord", "0", 0);
+
+	cl_railtrail = Cvar_Get ("cl_railtrail", "0", 0);
+	cl_railtrail->changed = _railtrail_changed;
 
 #ifdef NO_SERVER
-	allow_download = Cvar_Get ("allow_download", "0", CVAR_ARCHIVE);
-	allow_download_players  = Cvar_Get ("allow_download_players", "0", CVAR_ARCHIVE);
+	allow_download = Cvar_Get ("allow_download", "1", CVAR_ARCHIVE);
+	allow_download_players  = Cvar_Get ("allow_download_players", "1", CVAR_ARCHIVE);
 	allow_download_models = Cvar_Get ("allow_download_models", "1", CVAR_ARCHIVE);
 	allow_download_sounds = Cvar_Get ("allow_download_sounds", "1", CVAR_ARCHIVE);
 	allow_download_maps	  = Cvar_Get ("allow_download_maps", "1", CVAR_ARCHIVE);
@@ -2318,6 +2657,30 @@ void CL_InitLocal (void)
 	//
 	// register our commands
 	//
+
+	//r1: r1q2 stuff goes here so it never overrides autocomplete order for base q2 cmds
+	//r1: allow passive connects
+	Cmd_AddCommand ("passive", CL_Passive_f);
+
+	//r1: toggle cvar
+	Cmd_AddCommand ("toggle", CL_Toggle_f);
+
+	//r1: server status (connectionless)
+	Cmd_AddCommand ("sstatus", CL_SendStatusPacket_f);
+
+	//r1: loc support
+	Cmd_AddCommand ("addloc", CL_AddLoc_f);
+	Cmd_AddCommand ("saveloc", CL_SaveLoc_f);
+
+#ifdef _DEBUG
+	Cmd_AddCommand ("packet", CL_Packet_f);
+	Cmd_AddCommand ("spam", CL_Spam_f);
+#endif
+
+#ifdef CLIENT_DLL
+	Cmd_AddCommand ("cl_restart", CL_ClDLL_Restart_f);
+#endif
+
 	Cmd_AddCommand ("cmd", CL_ForwardToServer_f);
 	Cmd_AddCommand ("pause", CL_Pause_f);
 	Cmd_AddCommand ("pingservers", CL_PingServers_f);
@@ -2325,10 +2688,6 @@ void CL_InitLocal (void)
 
 	Cmd_AddCommand ("userinfo", CL_Userinfo_f);
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
-
-#ifdef CLIENT_DLL
-	Cmd_AddCommand ("cl_restart", CL_ClDLL_Restart_f);
-#endif
 
 	Cmd_AddCommand ("changing", CL_Changing_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
@@ -2351,27 +2710,6 @@ void CL_InitLocal (void)
 
 	Cmd_AddCommand ("download", CL_Download_f);
 
-	//r1: allow passive connects
-	Cmd_AddCommand ("passive", CL_Passive_f);
-
-	//r1: toggler cvar
-	Cmd_AddCommand ("toggle", CL_Toggle_f);
-
-	//r1: server status (connectionless)
-	Cmd_AddCommand ("sstatus", CL_SendStatusPacket_f);
-
-#ifdef _DEBUG
-	Cmd_AddCommand ("packet", CL_Packet_f);
-#endif
-
-	//r1: deprecated
-#ifdef WIN32
-	Cmd_AddCommand ("update", CL_Update_f);
-#endif
-
-	Cmd_AddCommand ("addloc", CL_AddLoc_f);
-	Cmd_AddCommand ("saveloc", CL_SaveLoc_f);
-
 	//
 	// forward to server commands
 	//
@@ -2391,7 +2729,8 @@ void CL_InitLocal (void)
 	Cmd_AddCommand ("info", NULL);
 
 	//???
-	Cmd_AddCommand ("prog", NULL);
+	//Cmd_AddCommand ("prog", NULL);
+
 	Cmd_AddCommand ("give", NULL);
 	Cmd_AddCommand ("god", NULL);
 	Cmd_AddCommand ("notarget", NULL);
@@ -2425,7 +2764,7 @@ void CL_WriteConfiguration (void)
 	f = fopen (path, "w");
 	if (!f)
 	{
-		Com_Printf ("Couldn't write config.cfg.\n");
+		Com_Printf ("Couldn't write config.cfg.\n", LOG_CLIENT);
 		return;
 	}
 
@@ -2447,23 +2786,23 @@ CL_FixCvarCheats
 typedef struct
 {
 	char	*name;
-	char	*value;
+	int		value;
 	cvar_t	*var;
 } cheatvar_t;
 
 cheatvar_t	cheatvars[] = {
-	{"timescale", "1", NULL},
-	{"timedemo", "0", NULL},
-	{"r_drawworld", "1", NULL},
-	//{"cl_testlights", "0"},
-	{"r_fullbright", "0", NULL},
-	{"r_drawflat", "0", NULL},
-	{"paused", "0", NULL},
-	{"fixedtime", "0", NULL},
-	{"sw_draworder", "0", NULL},
-	{"gl_lightmap", "0", NULL},
-	{"gl_saturatelighting", "0", NULL},
-	{NULL, NULL, NULL}
+	{"timescale", 1, NULL},
+	{"timedemo", 0, NULL},
+	{"r_drawworld", 1, NULL},
+	{"cl_testlights", 0},
+	{"r_fullbright", 0, NULL},
+	{"r_drawflat", 0, NULL},
+	{"paused", 0, NULL},
+	{"fixedtime", 0, NULL},
+	{"sw_draworder", 0, NULL},
+	{"gl_lightmap", 0, NULL},
+	{"gl_saturatelighting", 0, NULL},
+	{NULL, 0, NULL}
 };
 
 int		numcheatvars;
@@ -2473,8 +2812,7 @@ void CL_FixCvarCheats (void)
 	int			i;
 	cheatvar_t	*var;
 
-	if (Com_ServerState() == ss_demo || (!strcmp(cl.configstrings[CS_MAXCLIENTS], "1") 
-		|| !cl.configstrings[CS_MAXCLIENTS][0] ))
+	if (Com_ServerState() == ss_demo || (!strcmp(cl.configstrings[CS_MAXCLIENTS], "1")))
 		return;		// single player can cheat
 
 	// find all the cvars if we haven't done it yet
@@ -2483,7 +2821,7 @@ void CL_FixCvarCheats (void)
 		while (cheatvars[numcheatvars].name)
 		{
 			cheatvars[numcheatvars].var = Cvar_Get (cheatvars[numcheatvars].name,
-					cheatvars[numcheatvars].value, 0);
+					va("%d", cheatvars[numcheatvars].value), 0);
 			numcheatvars++;
 		}
 	}
@@ -2491,9 +2829,9 @@ void CL_FixCvarCheats (void)
 	// make sure they are all set to the proper values
 	for (i=0, var = cheatvars ; i<numcheatvars ; i++, var++)
 	{
-		if ( strcmp (var->var->string, var->value) )
+		if (var->var->intvalue != var->value)
 		{
-			Cvar_Set (var->name, var->value);
+			Cvar_SetValue (var->name, var->value);
 		}
 	}
 }
@@ -2634,7 +2972,7 @@ void CL_Frame (int msec)
 	cls.realtime = curtime;
 
 	//if (cls.frametime > 0.05)
-	//	Com_Printf ("Hitch warning: %f (%d ms)\n", cls.frametime, msec);
+	//	Com_Printf ("Hitch warning: %f (%d ms)\n", LOG_CLIENT, cls.frametime, msec);
 
 	//if in the debugger last frame, don't timeout
 	if (msec > 5000)
@@ -2660,7 +2998,7 @@ void CL_Frame (int msec)
 			render_frame = false;
 	}
 
-	if (!cl_async->intvalue)
+	if (!cl_async->intvalue && render_frame)
 		packet_frame = true;
 
 	// don't flood packets out while connecting
@@ -2678,7 +3016,6 @@ void CL_Frame (int msec)
 		}
 		else
 		{
-			Com_DPrintf ("*** instantpacket\n");
 			packet_frame = true;
 		}
 	}
@@ -2806,8 +3143,6 @@ void CL_Init (void)
 #endif
 	
 	SZ_Init (&net_message, net_message_buffer, sizeof(net_message_buffer));
-	//net_message.data = net_message_buffer;
-	//net_message.maxsize = sizeof(net_message_buffer);
 
 	M_Init ();
 	

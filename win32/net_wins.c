@@ -24,12 +24,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#include "wsipx.h"
 #include "../qcommon/qcommon.h"
 
-int net_inittime;
+static int net_inittime;
 
-unsigned __int64 net_total_in;
-unsigned __int64 net_total_out;
-unsigned __int64 net_packets_in;
-unsigned __int64 net_packets_out;
+static unsigned __int64 net_total_in;
+static unsigned __int64 net_total_out;
+static unsigned __int64 net_packets_in;
+static unsigned __int64 net_packets_out;
 
 //cvar_t		*net_shownet;
 //static cvar_t	*noudp;
@@ -38,7 +38,7 @@ unsigned __int64 net_packets_out;
 static cvar_t	*net_rcvbuf;
 static cvar_t	*net_sndbuf;
 
-SOCKET		ip_sockets[2];
+static SOCKET		ip_sockets[2];
 int			server_port;
 //int			ipx_sockets[2];
 
@@ -111,7 +111,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 		}
 #ifndef NO_SERVER
 		if (dedicated->intvalue)	// let dedicated servers continue after errors
-			Com_Printf ("NET_GetPacket: %s\n", NET_ErrorString());
+			Com_Printf ("NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
 		else
 #endif
 
@@ -120,7 +120,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 			//       here and if any packets that didn't originate from the server
 			//       cause errors, silently ignore them.
 			if (err != WSAEMSGSIZE)
-				Com_Printf ("WARNING! NET_GetPacket: %s", NET_ErrorString());
+				Com_Printf ("WARNING! NET_GetPacket: %s", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
@@ -131,7 +131,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 	if (ret == net_message->maxsize)
 	{
-		Com_Printf ("Oversize packet from %s\n", NET_AdrToString (net_from));
+		Com_Printf ("Oversize packet from %s\n", LOG_NET, NET_AdrToString (net_from));
 		return 0;
 	}
 
@@ -141,7 +141,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 //=============================================================================
 
-int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
+int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)
 {
 //	char *z;
 	int		ret;
@@ -247,7 +247,7 @@ int NET_IPSocket (char *net_interface, int port)
 	{
 		err = WSAGetLastError();
 		if (err != WSAEAFNOSUPPORT)
-			Com_Printf ("WARNING: UDP_OpenSocket: socket: %s\n", NET_ErrorString());
+			Com_Printf ("WARNING: UDP_OpenSocket: socket: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
@@ -255,20 +255,20 @@ int NET_IPSocket (char *net_interface, int port)
 	setsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&i, sizeof(i));
 	getsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&j, &x);
 	if (i != j)
-		Com_Printf ("WARNING: Setting SO_RCVBUF: wanted %d, got %d\n", i, j);
+		Com_Printf ("WARNING: Setting SO_RCVBUF: wanted %d, got %d\n", LOG_NET, i, j);
 
 	i = net_sndbuf->intvalue * 1024.0f;
 	setsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&i, sizeof(i));
 	getsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&j, &x);
 	if (i != j)
-		Com_Printf ("WARNING: Setting SO_SNDBUF: wanted %d, got %d\n", i, j);
+		Com_Printf ("WARNING: Setting SO_SNDBUF: wanted %d, got %d\n", LOG_NET, i, j);
 
 	i = 1;
 
 	// make it non-blocking
 	if (ioctlsocket (newsocket, FIONBIO, (u_long *)&_true) == -1)
 	{
-		Com_Printf ("UDP_OpenSocket: Couldn't make non-blocking: %s\n", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't make non-blocking: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
@@ -277,14 +277,14 @@ int NET_IPSocket (char *net_interface, int port)
 	// make it broadcast capable
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
-		Com_Printf ("UDP_OpenSocket: setsockopt SO_BROADCAST: %s\n", NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: setsockopt SO_BROADCAST: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
 	//r1: set 'interactive' ToS
 	i = 0x10;
 	if (setsockopt(newsocket, IPPROTO_IP, IP_TOS, (char *)&i, sizeof(i)) == -1)
-		Com_Printf ("WARNING: UDP_OpenSocket: setsockopt IP_TOS: %s\n", NET_ErrorString());
+		Com_Printf ("WARNING: UDP_OpenSocket: setsockopt IP_TOS: %s\n", LOG_NET, NET_ErrorString());
 
 	if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost"))
 		address.sin_addr.s_addr = INADDR_ANY;
@@ -300,7 +300,7 @@ int NET_IPSocket (char *net_interface, int port)
 
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
-		Com_Printf ("UDP_OpenSocket: Couldn't bind to port %d: %s\n", port, NET_ErrorString());
+		Com_Printf ("UDP_OpenSocket: Couldn't bind to UDP port %d: %s\n", LOG_NET, port, NET_ErrorString());
 		closesocket (newsocket);
 		return 0;
 	}
@@ -315,7 +315,7 @@ void Net_Stats_f (void)
 
 	Com_Printf ("Network up for %i seconds.\n"
 				"%I64u bytes in %I64u packets received (av: %i kbps)\n"
-				"%I64u bytes in %I64u packets sent (av: %i kbps)\n",
+				"%I64u bytes in %I64u packets sent (av: %i kbps)\n", LOG_NET,
 				
 				diff,
 				net_total_in, net_packets_in, (int)(((net_total_in * 8) / 1024) / diff),
@@ -403,7 +403,7 @@ void NET_Init (void)
 		NET_Config (NET_SERVER);
 #endif
 
-	Com_Printf("Winsock Initialized\n");
+	Com_Printf("Winsock Initialized\n", LOG_NET);
 
 	Cmd_AddCommand ("net_restart", Net_Restart_f);
 	Cmd_AddCommand ("net_stats", Net_Stats_f);

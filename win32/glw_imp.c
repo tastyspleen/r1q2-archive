@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 ** GLimp_SwitchFullscreen
 **
 */
-#include <assert.h>
+#include <float.h>
 #include <windows.h>
 #include "../ref_gl/gl_local.h"
 #include "glw_win.h"
@@ -47,11 +47,16 @@ extern cvar_t *vid_ref;
 extern cvar_t *vid_forcedrefresh;
 extern cvar_t *vid_nowgl;
 
+DEVMODE		originalDesktopMode;
+DEVMODE		fullScreenMode;
+
+qboolean	usingDesktopSettings;
+
 static qboolean VerifyDriver( void )
 {
 	char buffer[1024];
 
-	strncpy( buffer, qglGetString( GL_RENDERER ), sizeof(buffer)-1);
+	Q_strncpy( buffer, qglGetString( GL_RENDERER ), sizeof(buffer)-1);
 	strlwr( buffer );
 	if ( strcmp( buffer, "gdi generic" ) == 0 )
 		if ( !glw_state.mcd_accelerated )
@@ -175,10 +180,10 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 		return rserr_invalid_mode;
 	}
 
-	if (gl_forcewidth->value)
+	if (FLOAT_NE_ZERO(gl_forcewidth->value))
 		width = (int)gl_forcewidth->value;
 
-	if (gl_forceheight->value)
+	if (FLOAT_NE_ZERO(gl_forceheight->value))
 		height = (int)gl_forceheight->value;
 
 	ri.Con_Printf( PRINT_ALL, " %d %d %s\n", width, height, win_fs[fullscreen] );
@@ -194,6 +199,8 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	{
 		DEVMODE dm;
 
+		EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &originalDesktopMode);
+
 		ri.Con_Printf( PRINT_ALL, "...attempting fullscreen\n" );
 
 		memset( &dm, 0, sizeof( dm ) );
@@ -205,13 +212,13 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 		dm.dmFields     = DM_PELSWIDTH | DM_PELSHEIGHT;
 
 		//r1: allow refresh overriding
-		if (vid_forcedrefresh->value != 0)
+		if (FLOAT_NE_ZERO(vid_forcedrefresh->value))
 		{
 			dm.dmFields |= DM_DISPLAYFREQUENCY;
 			dm.dmDisplayFrequency = vid_forcedrefresh->value;
 		}
 
-		if ( gl_bitdepth->value != 0 )
+		if ( FLOAT_NE_ZERO(gl_bitdepth->value) )
 		{
 			dm.dmBitsPerPel = gl_bitdepth->value;
 			dm.dmFields |= DM_BITSPERPEL;
@@ -219,12 +226,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 		}
 		else
 		{
-			HDC hdc = GetDC( NULL );
-			int bitspixel = GetDeviceCaps( hdc, BITSPIXEL );
-
-			ri.Con_Printf( PRINT_ALL, "...using desktop display depth of %d\n", bitspixel );
-
-			ReleaseDC( 0, hdc );
+			ri.Con_Printf( PRINT_ALL, "...using desktop display depth of %d\n", originalDesktopMode.dmBitsPerPel );
 		}
 
 		ri.Con_Printf( PRINT_ALL, "...calling CDS: " );
@@ -240,6 +242,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 			if ( !VID_CreateWindow (width, height, true) )
 				return rserr_invalid_mode;
 
+			EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &fullScreenMode);
 			return rserr_ok;
 		}
 		else
@@ -255,7 +258,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 			dm.dmPelsHeight = height;
 			dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
 
-			if ( FLOAT_GT_ZERO(gl_bitdepth->value) )
+			if ( FLOAT_NE_ZERO(gl_bitdepth->value) )
 			{
 				dm.dmBitsPerPel = gl_bitdepth->value;
 				dm.dmFields |= DM_BITSPERPEL;
@@ -286,6 +289,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 				if ( !VID_CreateWindow (width, height, true) )
 					return rserr_invalid_mode;
 
+				EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &fullScreenMode);
 				gl_state.fullscreen = true;
 				return rserr_ok;
 			}
@@ -338,6 +342,7 @@ void GLimp_Shutdown( void )
 			ri.Con_Printf( PRINT_ALL, "ref_gl::R_Shutdown() - ReleaseDC failed\n" );
 		glw_state.hDC   = NULL;
 	}
+
 	if (glw_state.hWnd)
 	{
 		ShowWindow (glw_state.hWnd, SW_HIDE);
@@ -375,6 +380,8 @@ qboolean GLimp_Init( void *hinstance, void *wndproc )
 
 	OSVERSIONINFO	vinfo;
 
+	_controlfp( _PC_24, _MCW_PC );
+
 	vinfo.dwOSVersionInfoSize = sizeof(vinfo);
 
 	glw_state.allowdisplaydepthchange = false;
@@ -410,83 +417,6 @@ qboolean GLimp_Init( void *hinstance, void *wndproc )
 	glw_state.wndproc = wndproc;
 
 	return true;
-}
-
-BOOL GetTextualSid(
-    PSID pSid,            // binary SID
-    LPTSTR TextualSid,    // buffer for Textual representation of SID
-    LPDWORD lpdwBufferLen // required/provided TextualSid buffersize
-    )
-{
-    PSID_IDENTIFIER_AUTHORITY psia;
-    DWORD dwSubAuthorities;
-    DWORD dwSidRev=SID_REVISION;
-    DWORD dwCounter;
-    DWORD dwSidSize;
-
-    // Validate the binary SID.
-
-    if(!IsValidSid(pSid)) return FALSE;
-
-    // Get the identifier authority value from the SID.
-
-    psia = GetSidIdentifierAuthority(pSid);
-
-    // Get the number of subauthorities in the SID.
-
-    dwSubAuthorities = *GetSidSubAuthorityCount(pSid);
-
-    // Compute the buffer length.
-    // S-SID_REVISION- + IdentifierAuthority- + subauthorities- + NULL
-
-    dwSidSize=(15 + 12 + (12 * dwSubAuthorities) + 1) * sizeof(TCHAR);
-
-    // Check input buffer length.
-    // If too small, indicate the proper size and set last error.
-
-    if (*lpdwBufferLen < dwSidSize)
-    {
-        *lpdwBufferLen = dwSidSize;
-        SetLastError(ERROR_INSUFFICIENT_BUFFER);
-        return FALSE;
-    }
-
-    // Add 'S' prefix and revision number to the string.
-
-    dwSidSize=wsprintf(TextualSid, TEXT("S-%lu-"), dwSidRev );
-
-    // Add SID identifier authority to the string.
-
-    if ( (psia->Value[0] != 0) || (psia->Value[1] != 0) )
-    {
-        dwSidSize+=wsprintf(TextualSid + lstrlen(TextualSid),
-                    TEXT("0x%02hx%02hx%02hx%02hx%02hx%02hx"),
-                    (USHORT)psia->Value[0],
-                    (USHORT)psia->Value[1],
-                    (USHORT)psia->Value[2],
-                    (USHORT)psia->Value[3],
-                    (USHORT)psia->Value[4],
-                    (USHORT)psia->Value[5]);
-    }
-    else
-    {
-        dwSidSize+=wsprintf(TextualSid + lstrlen(TextualSid),
-                    TEXT("%lu"),
-                    (ULONG)(psia->Value[5]      )   +
-                    (ULONG)(psia->Value[4] <<  8)   +
-                    (ULONG)(psia->Value[3] << 16)   +
-                    (ULONG)(psia->Value[2] << 24)   );
-    }
-
-    // Add SID subauthorities to the string.
-    //
-    for (dwCounter=0 ; dwCounter < dwSubAuthorities ; dwCounter++)
-    {
-        dwSidSize+=wsprintf(TextualSid + dwSidSize, TEXT("-%lu"),
-                    *GetSidSubAuthority(pSid, dwCounter) );
-    }
-
-    return TRUE;
 }
 
 // Define entry points
@@ -564,7 +494,7 @@ int _wglExtensionSupported(const char *extension)
             else
                 extensions = (const GLubyte *) wglGetExtensionsStringEXT();
             ReleaseDC(0, hdc);
-			ri.Con_Printf (PRINT_ALL, "wglExtensions: %s\n", extensions);
+			//ri.Con_Printf (PRINT_ALL, "wglExtensions: %s\n", extensions);
         }
 
         // It takes a bit of care to be fool-proof about parsing the
@@ -608,7 +538,7 @@ qboolean init_extensions()
     }
     else 
     {
-		if (FLOAT_GT_ZERO(gl_ext_multisample->value))
+		if (FLOAT_NE_ZERO(gl_ext_multisample->value))
 			ri.Con_Printf (PRINT_ALL, "WGL_ARB_multisample not found.\n");
 		ri.Cvar_Set ("gl_ext_multisample", "0");
         _is_multisample = false;
@@ -694,7 +624,7 @@ qboolean init_regular (void)
 	/*
 	** set PFD_STEREO if necessary
 	*/
-	if ( FLOAT_GT_ZERO(stereo->value))
+	if ( FLOAT_NE_ZERO(stereo->value))
 	{
 		ri.Con_Printf( PRINT_ALL, "...attempting to use stereo\n" );
 		pfd.dwFlags |= PFD_STEREO;
@@ -758,7 +688,7 @@ qboolean init_regular (void)
 		{
 			extern cvar_t *gl_allow_software;
 
-			if ( FLOAT_GT_ZERO(gl_allow_software->value) )
+			if ( FLOAT_NE_ZERO(gl_allow_software->value) )
 				glw_state.mcd_accelerated = true;
 			else
 				glw_state.mcd_accelerated = false;
@@ -773,7 +703,7 @@ qboolean init_regular (void)
 	/*
 	** report if stereo is desired but unavailable
 	*/
-	if ( !( pfd.dwFlags & PFD_STEREO ) && ( FLOAT_GT_ZERO(stereo->value)) ) 
+	if ( !( pfd.dwFlags & PFD_STEREO ) && ( FLOAT_NE_ZERO(stereo->value)) ) 
 	{
 		ri.Con_Printf( PRINT_ALL, "...failed to select stereo pixel format\n" );
 		ri.Cvar_SetValue( "cl_stereo", 0 );
@@ -964,7 +894,7 @@ qboolean GLimp_InitGL (void)
 	/*
 	** set PFD_STEREO if necessary
 	*/
-	if ( FLOAT_GT_ZERO(stereo->value))
+	if ( FLOAT_NE_ZERO(stereo->value))
 	{
 		ri.Con_Printf( PRINT_ALL, "...attempting to use stereo\n" );
 		pfd.dwFlags |= PFD_STEREO;
@@ -976,7 +906,7 @@ qboolean GLimp_InitGL (void)
 	}
 #endif
 
-	if (FLOAT_GT_ZERO(vid_nowgl->value))
+	if (FLOAT_NE_ZERO(vid_nowgl->value))
 		return init_regular ();
 
 	/*
@@ -1036,11 +966,11 @@ qboolean GLimp_InitGL (void)
 	}
 
 	if (gl_colorbits->value < 24) {
-		if (FLOAT_GT_ZERO(gl_alphabits->value)) {
+		if (FLOAT_NE_ZERO(gl_alphabits->value)) {
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - disabling gl_alphabits with colorbits %d\n", (int)gl_colorbits->value);
 			ri.Cvar_Set ("gl_alphabits", "0");
 		}
-		if (FLOAT_GT_ZERO(gl_stencilbits->value)) {
+		if (FLOAT_NE_ZERO(gl_stencilbits->value)) {
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - disabling gl_stencilbits with colorbits %d\n", (int)gl_colorbits->value);
 			ri.Cvar_Set ("gl_stencilbits", "0");
 		}
@@ -1381,7 +1311,7 @@ void GLimp_BeginFrame( void )
 #if 0
 	if ( gl_bitdepth->modified )
 	{
-		if ( FLOAT_GT_ZERO(gl_bitdepth->value) && !glw_state.allowdisplaydepthchange )
+		if ( FLOAT_NE_ZERO(gl_bitdepth->value) && !glw_state.allowdisplaydepthchange )
 		{
 			ri.Cvar_SetValue( "gl_bitdepth", 0 );
 			ri.Con_Printf( PRINT_ALL, "gl_bitdepth requires Win95 OSR2.x or WinNT 4.x\n" );
@@ -1395,7 +1325,7 @@ void GLimp_BeginFrame( void )
 	{
 		qglDrawBuffer( GL_BACK_LEFT );
 	}
-	else if ( camera_separation > 0 && gl_state.stereo_enabled )
+	else if (FLOAT_GT_ZERO (camera_separation) && gl_state.stereo_enabled )
 	{
 		qglDrawBuffer( GL_BACK_RIGHT );
 	}
@@ -1414,14 +1344,24 @@ void GLimp_BeginFrame( void )
 ** function and instead do a call to GLimp_SwapBuffers.
 */
 
+void Draw_AddText (void);
 void EXPORT GLimp_EndFrame (void)
 {
 	static int iDrawBuffer = 0;
 
+	if (defer_drawing)
+		Draw_AddText();
+
 	if (gl_drawbuffer->modified)
 	{
-		gl_drawbuffer->modified = 0;
+		gl_drawbuffer->modified = false;
 		iDrawBuffer = stricmp( gl_drawbuffer->string, "GL_BACK" );
+	}
+
+	if (gl_defertext->modified)
+	{
+		gl_defertext->modified = false;
+		defer_drawing = (int)gl_defertext->value;
 	}
 
 	if (iDrawBuffer == 0)
@@ -1431,21 +1371,49 @@ void EXPORT GLimp_EndFrame (void)
 	}
 }
 
+void RestoreDesktopSettings (void)
+{
+	if (ChangeDisplaySettings( &originalDesktopMode, 0 ) != DISP_CHANGE_SUCCESSFUL )
+	{
+		ri.Sys_Error (ERR_FATAL, "Couldn't restore desktop display settings");
+	}
+}
+
+void RestoreQ2Settings (void)
+{
+	if (ChangeDisplaySettings( &fullScreenMode, CDS_FULLSCREEN ) != DISP_CHANGE_SUCCESSFUL )
+	{
+		ri.Sys_Error (ERR_FATAL, "Couldn't restore Quake 2 display settings");
+	}
+}
+
 /*
 ** GLimp_AppActivate
 */
+qboolean R_SetMode (void);
 void EXPORT GLimp_AppActivate( qboolean active )
 {
 	if ( active )
 	{
 		if (IsIconic (glw_state.hWnd))
 			return;
+
+		if ( FLOAT_NE_ZERO(vid_fullscreen->value) && usingDesktopSettings )
+		{
+			RestoreQ2Settings ();
+			usingDesktopSettings = false;
+		}
+
 		SetForegroundWindow( glw_state.hWnd );
 		ShowWindow( glw_state.hWnd, SW_RESTORE );
 	}
 	else
 	{
-		if ( FLOAT_GT_ZERO(vid_fullscreen->value) )
+		if ( FLOAT_NE_ZERO(vid_fullscreen->value) )
+		{
 			ShowWindow( glw_state.hWnd, SW_MINIMIZE );
+			RestoreDesktopSettings();
+			usingDesktopSettings = true;
+		}
 	}
 }

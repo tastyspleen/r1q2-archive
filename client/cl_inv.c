@@ -94,6 +94,7 @@ void CL_DrawInventory (void)
 	top = selected_num - DISPLAY_ITEMS/2;
 	if (num - top < DISPLAY_ITEMS)
 		top = num - DISPLAY_ITEMS;
+
 	if (top < 0)
 		top = 0;
 

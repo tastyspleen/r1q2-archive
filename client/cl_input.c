@@ -83,7 +83,7 @@ void KeyDown (kbutton_t *b)
 		b->down[1] = k;
 	else
 	{
-		Com_Printf ("Three keys down for a button!\n");
+		Com_Printf ("Three keys down for a button!\n", LOG_CLIENT);
 		return;
 	}
 	
@@ -201,13 +201,15 @@ float CL_KeyState (kbutton_t *key)
 #if 0
 	if (msec)
 	{
-		Com_Printf ("%i ", msec);
+		Com_Printf ("%i ", LOG_CLIENT, msec);
 	}
 #endif
 
 	val = (float)msec / frame_msec;
-	if (val < 0)
+	
+	if (FLOAT_LT_ZERO(val))
 		val = 0;
+
 	if (val > 1)
 		val = 1;
 
@@ -382,8 +384,8 @@ void CL_RefreshCmd (void)
 	if (frame_msec < 1)
 		return;
 
-	if (frame_msec > 1000)
-		frame_msec = 500;
+	if (frame_msec > 200)
+		frame_msec = 200;
 
 	//cmd->forwardmove = cmd->sidemove = cmd->upmove = 0;
 
@@ -399,7 +401,6 @@ void CL_RefreshCmd (void)
 	cmd->angles[0] = ANGLE2SHORT(cl.viewangles[0]);
 	cmd->angles[1] = ANGLE2SHORT(cl.viewangles[1]);
 	cmd->angles[2] = ANGLE2SHORT(cl.viewangles[2]);
-
 
 	// update cmd->msec for CL_PredictMove
 	ms = cls.frametime * 1000;
@@ -446,8 +447,10 @@ void CL_FinalizeCmd (void)
 	cmd->impulse = in_impulse;
 	in_impulse = 0;
 
+	//Com_Printf ("up:%d, side:%d f:%d\n", LOG_CLIENT, cmd->upmove, cmd->sidemove, cmd->forwardmove);
+
 	// set the ambient light level at the player's current position
-	cmd->lightlevel = (byte)cl_lightlevel->intvalue;
+	cmd->lightlevel = (byte)cl_lightlevel->value;
 }
 
 
@@ -519,9 +522,9 @@ void CL_SendCmd (void)
 
 	if ( cls.state == ca_connected)
 	{
-		if (cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 ) {
+		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 ) {
 	 		//memset (&buf, 0, sizeof(buf));
-			Com_DPrintf ("connected: flushing netchan (len=%d, %s)\n", cls.netchan.message.cursize, MakePrintable(cls.netchan.message.data));
+			//Com_DPrintf ("connected: flushing netchan (len=%d, %s)\n", cls.netchan.message.cursize, MakePrintable(cls.netchan.message.data));
 			Netchan_Transmit (&cls.netchan, 0, NULL);	
 		}
 		return;
@@ -541,12 +544,9 @@ void CL_SendCmd (void)
 	{
 		CL_FixUpGender();
 		userinfo_modified = false;
-#ifdef _DEBUG
-		//Com_Printf ("userinfo update:\n");
-		//Cbuf_ExecuteText (EXEC_NOW, "userinfo\n");
-#endif
-		MSG_WriteByte (&cls.netchan.message, clc_userinfo);
-		MSG_WriteString (&cls.netchan.message, Cvar_Userinfo() );
+		MSG_WriteByte (clc_userinfo);
+		MSG_WriteString (Cvar_Userinfo());
+		MSG_EndWriting (&cls.netchan.message);
 	}
 
 	SZ_Init (&buf, data, sizeof(data));
@@ -559,13 +559,13 @@ void CL_SendCmd (void)
 	}
 #endif
 
-	MSG_WriteByte (&buf, clc_move);
+	MSG_WriteByte (clc_move);
 
 	// save the position for a checksum byte
 	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
 	{
-		checksumIndex = buf.cursize;
-		MSG_WriteByte (&buf, 0);
+		checksumIndex = MSG_GetLength();// buf.cursize;
+		MSG_WriteByte (0);
 	}
 
 	// let the server know what the last frame we
@@ -573,27 +573,28 @@ void CL_SendCmd (void)
 
 	//r1: after a vid_restart memory locations of models changes! all existing ents
 	//need to be re-sent so the client updates its model to the new memory location.
-	if (cl_nodelta->intvalue || !cl.frame.valid || cls.demowaiting)
-		MSG_WriteLong (&buf, -1);	// no compression
+	if (!cl.frame.valid || cls.demowaiting || cl_nodelta->intvalue)
+		MSG_WriteLong (-1);	// no compression
 	else
-		MSG_WriteLong (&buf, cl.frame.serverframe);
+		MSG_WriteLong (cl.frame.serverframe);
 
 	// send this and the previous cmds in the message, so
 	// if the last packet was dropped, it can be recovered
 	i = (cls.netchan.outgoing_sequence-2) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
 	//memset (&nullcmd, 0, sizeof(nullcmd));
-	MSG_WriteDeltaUsercmd (&buf, &null_usercmd, cmd);
+	MSG_WriteDeltaUsercmd (&null_usercmd, cmd);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence-1) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (&buf, oldcmd, cmd);
+	MSG_WriteDeltaUsercmd (oldcmd, cmd);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (&buf, oldcmd, cmd);
+	MSG_WriteDeltaUsercmd (oldcmd, cmd);
+	MSG_EndWriting (&buf);
 
 	// calculate a checksum over the move commands
 	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
@@ -606,11 +607,6 @@ void CL_SendCmd (void)
 	//
 	// deliver the message
 	//
-
-	/*if (cls.framecount % (int)cl_snaps->value == 0) {
-		Com_Printf ("dropped a packet.\n");
-		return;
-	}*/
 
 	Netchan_Transmit (&cls.netchan, buf.cursize, buf.data);	
 	CL_InitCmd(); //jec - init the next usercmd buffer.

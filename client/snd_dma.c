@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // snd_dma.c -- main control for any streaming sound output device
 
 #include "client.h"
+#include "../qcommon/redblack.h"
 #include "snd_loc.h"
 
 void S_Play(void);
@@ -39,12 +40,11 @@ this, but it changed recently. */
 // =======================================================================
 
 // only begin attenuating sound volumes when outside the FULLVOLUME range
-int			s_registration_sequence;
+static int			s_registration_sequence;
 
 channel_t   channels[MAX_CHANNELS];
 
-qboolean	snd_initialized = false;
-int			sound_started=0;
+static int			sound_started=0;
 
 dma_t		dma;
 
@@ -53,9 +53,9 @@ vec3_t		listener_forward;
 vec3_t		listener_right;
 vec3_t		listener_up;
 
-qboolean	s_registering;
+static qboolean	s_registering;
 
-int			soundtime;		// sample PAIRS
+static int	soundtime;		// sample PAIRS
 int   		paintedtime; 	// sample PAIRS
 
 // during registration it is possible to have more sounds
@@ -63,27 +63,31 @@ int   		paintedtime; 	// sample PAIRS
 // because we don't want to free anything until we are
 // sure we won't need it.
 #define		MAX_SFX		(MAX_SOUNDS*2)
-sfx_t		known_sfx[MAX_SFX];
-int			num_sfx;
+static sfx_t		known_sfx[MAX_SFX];
+static int			num_sfx;
+
+static struct rbtree *knownsounds;
 
 #define		MAX_PLAYSOUNDS	128
-playsound_t	s_playsounds[MAX_PLAYSOUNDS];
-playsound_t	s_freeplays;
+static playsound_t	s_playsounds[MAX_PLAYSOUNDS];
+static playsound_t	s_freeplays;
 playsound_t	s_pendingplays;
 
 #ifdef USE_OPENAL
 alindex_t alindex[MAX_OPENAL_SOURCES];
 #endif
 
-int			s_beginofs;
+static int			s_beginofs;
 
 cvar_t		*s_volume;
 cvar_t		*s_testsound;
 cvar_t		*s_loadas8bit;
 cvar_t		*s_khz;
-cvar_t		*s_show;
-cvar_t		*s_mixahead;
 cvar_t		*s_primary;
+
+static cvar_t		*s_show;
+static cvar_t		*s_mixahead;
+static cvar_t		*s_ambient;
 
 cvar_t		*s_focusfree = &uninitialized_cvar;
 //cvar_t		*s_dx8;
@@ -102,17 +106,17 @@ void S_SoundInfo_f(void)
 {
 	if (!sound_started)
 	{
-		Com_Printf ("sound system not started\n");
+		Com_Printf ("sound system not started\n", LOG_CLIENT);
 		return;
 	}
 	
-    Com_Printf("%5d stereo\n", dma.channels - 1);
-    Com_Printf("%5d samples\n", dma.samples);
-    Com_Printf("%5d samplepos\n", dma.samplepos);
-    Com_Printf("%5d samplebits\n", dma.samplebits);
-    Com_Printf("%5d submission_chunk\n", dma.submission_chunk);
-    Com_Printf("%5d speed\n", dma.speed);
-    Com_Printf("0x%x dma buffer\n", dma.buffer);
+    Com_Printf("%5d stereo\n", LOG_CLIENT, dma.channels - 1);
+    Com_Printf("%5d samples\n", LOG_CLIENT, dma.samples);
+    Com_Printf("%5d samplepos\n", LOG_CLIENT, dma.samplepos);
+    Com_Printf("%5d samplebits\n", LOG_CLIENT, dma.samplebits);
+    Com_Printf("%5d submission_chunk\n", LOG_CLIENT, dma.submission_chunk);
+    Com_Printf("%5d speed\n", LOG_CLIENT, dma.speed);
+    Com_Printf("0x%x dma buffer\n", LOG_CLIENT, dma.buffer);
 }
 
 
@@ -126,11 +130,13 @@ void S_Init (qboolean fullInit)
 {
 	cvar_t	*cv;
 
-	Com_Printf("\n------- sound initialization -------\n");
+	Com_Printf("\n------- sound initialization -------\n", LOG_CLIENT|LOG_NOTICE);
+
+	knownsounds = rbinit ((int (*)(const void *, const void *))strcmp, 0);
 
 	cv = Cvar_Get ("s_initsound", "1", 0);
 	if (!cv->intvalue)
-		Com_Printf ("not initializing.\n");
+		Com_Printf ("not initializing.\n", LOG_CLIENT|LOG_NOTICE);
 	else
 	{
 		if ((int)cv->intvalue == 2)
@@ -142,7 +148,7 @@ void S_Init (qboolean fullInit)
 			}
 			else
 			{
-				Com_Printf ("OpenAL failed to initialize; no sound available\n");
+				Com_Printf ("OpenAL failed to initialize; no sound available\n", LOG_CLIENT);
 			}
 		} else {
 			s_volume = Cvar_Get ("s_volume", "0.5", CVAR_ARCHIVE);
@@ -150,10 +156,11 @@ void S_Init (qboolean fullInit)
 			s_loadas8bit = Cvar_Get ("s_loadas8bit", "0", CVAR_ARCHIVE);
 			s_mixahead = Cvar_Get ("s_mixahead", "0.2", CVAR_ARCHIVE);
 			s_show = Cvar_Get ("s_show", "0", 0);
+			s_ambient = Cvar_Get ("s_ambient", "1", 0);
 			s_testsound = Cvar_Get ("s_testsound", "0", 0);
 			s_primary = Cvar_Get ("s_primary", "0", CVAR_ARCHIVE);	// win32 specific
 
-			s_focusfree = Cvar_Get ("s_focusfree", "0", CVAR_ARCHIVE);
+			s_focusfree = Cvar_Get ("s_focusfree", "0", 0);
 			//s_dx8 = Cvar_Get ("s_dx8", "0", CVAR_ARCHIVE);
 
 			Cmd_AddCommand("play", S_Play);
@@ -172,13 +179,13 @@ void S_Init (qboolean fullInit)
 			soundtime = 0;
 			paintedtime = 0;
 
-			Com_Printf ("sound sampling rate: %i\n", dma.speed);
+			Com_Printf ("sound sampling rate: %i\n", LOG_CLIENT|LOG_NOTICE, dma.speed);
 
 			S_StopAllSounds ();
 		}
 	}
 
-	Com_Printf("------------------------------------\n");
+	Com_Printf("------------------------------------\n", LOG_CLIENT|LOG_NOTICE);
 }
 
 
@@ -201,8 +208,12 @@ void S_Shutdown(void)
 			continue;
 		if (sfx->cache)
 			Z_Free (sfx->cache);
-		memset (sfx, 0, sizeof(*sfx));
+		rbdelete (sfx->name, knownsounds);
 	}
+
+	memset (known_sfx, 0, sizeof(known_sfx));
+
+	rbdestroy (knownsounds);
 
 	num_sfx = 0;
 	sound_started = 0;
@@ -238,21 +249,27 @@ sfx_t *S_FindName (char *name, qboolean create)
 {
 	int		i;
 	sfx_t	*sfx;
+	void	**data;
 
 	if (!name)
 		Com_Error (ERR_FATAL, "S_FindName: NULL\n");
-	if (!name[0])
-		Com_Error (ERR_FATAL, "S_FindName: empty name\n");
-
-	if (strlen(name) >= MAX_QPATH)
-		Com_Error (ERR_FATAL, "Sound name too long: %s", name);
 
 	// see if already loaded
-	for (i=0 ; i < num_sfx ; i++)
+	/*for (i=0 ; i < num_sfx ; i++)
 		if (!strcmp(known_sfx[i].name, name))
 		{
 			return &known_sfx[i];
-		}
+		}*/
+
+	data = rbfind (name, knownsounds);
+	if (data)
+	{
+		sfx = *(sfx_t **)data;
+		return sfx;
+	}
+
+	if (!name[0])
+		Com_Error (ERR_FATAL, "S_FindName: empty name\n");
 
 	if (!create)
 		return NULL;
@@ -269,11 +286,19 @@ sfx_t *S_FindName (char *name, qboolean create)
 			Com_Error (ERR_FATAL, "S_FindName: out of sfx_t");
 		num_sfx++;
 	}
-	
+
+	if (strlen(name) >= MAX_QPATH-1)
+		Com_Error (ERR_FATAL, "Sound name too long: %s", name);
+
 	sfx = &known_sfx[i];
-	memset (sfx, 0, sizeof(*sfx));
+
+	sfx->cache = NULL;
+	sfx->truename = NULL;
 	strcpy (sfx->name, name);
 	sfx->registration_sequence = s_registration_sequence;
+
+	data = rbsearch (sfx->name, knownsounds);
+	*data = sfx;
 	
 	return sfx;
 }
@@ -288,11 +313,11 @@ S_AliasName
 sfx_t *S_AliasName (char *aliasname, char *truename)
 {
 	sfx_t	*sfx;
-	char	*s;
+	void	**data;
 	int		i;
 
-	s = Z_TagMalloc (MAX_QPATH, TAGMALLOC_CLIENT_SFX);
-	strcpy (s, truename);
+	//s = Z_TagMalloc (MAX_QPATH, TAGMALLOC_CLIENT_SFX);
+	//strcpy (s, truename);
 
 	// find a free sfx
 	for (i=0 ; i < num_sfx ; i++)
@@ -307,10 +332,14 @@ sfx_t *S_AliasName (char *aliasname, char *truename)
 	}
 	
 	sfx = &known_sfx[i];
-	memset (sfx, 0, sizeof(*sfx));
+	//memset (sfx, 0, sizeof(*sfx));
+	sfx->cache = NULL;
 	strcpy (sfx->name, aliasname);
 	sfx->registration_sequence = s_registration_sequence;
-	sfx->truename = s;
+	sfx->truename = CopyString (truename, TAGMALLOC_CLIENT_SFX);
+
+	data = rbsearch (sfx->name, knownsounds);
+	*data = sfx;
 
 	return sfx;
 }
@@ -368,11 +397,14 @@ void S_EndRegistration (void)
 	{
 		if (!sfx->name[0])
 			continue;
+
 		if (sfx->registration_sequence != s_registration_sequence)
 		{	// don't need this sound
 			if (sfx->cache)				// it is possible to have a leftover
 				Z_Free (sfx->cache);	// from a server that didn't finish loading
-			memset (sfx, 0, sizeof(*sfx));
+			rbdelete (sfx->name, knownsounds);
+			sfx->name[0] = 0;
+			//memset (sfx, 0, sizeof(*sfx));
 		}
 		else
 		{	// make sure it is paged in
@@ -382,7 +414,6 @@ void S_EndRegistration (void)
 				Com_PageInMemory ((byte *)sfx->cache, size);
 			}
 		}
-
 	}
 
 	// load everything in
@@ -390,6 +421,7 @@ void S_EndRegistration (void)
 	{
 		if (!sfx->name[0])
 			continue;
+
 		S_LoadSound (sfx);
 	}
 
@@ -472,8 +504,9 @@ void S_SpatializeOrigin (vec3_t origin, float master_vol, float dist_mult, int *
 
 	dist = VectorNormalize(source_vec);
 	dist -= SOUND_FULLVOLUME;
-	if (dist < 0)
+	if (FLOAT_LT_ZERO(dist))
 		dist = 0;			// close enough to be at full volume
+
 	dist *= dist_mult;		// different attenuation levels
 
 	dot = DotProduct(listener_right, source_vec);
@@ -585,7 +618,7 @@ void S_IssuePlaysound (playsound_t *ps)
 	sfxcache_t	*sc;
 
 	if (s_show->intvalue)
-		Com_Printf ("Issue %i\n", ps->begin);
+		Com_Printf ("Issue %i\n", LOG_CLIENT, ps->begin);
 	// pick a channel to play on
 	ch = S_PickChannel(ps->entnum, ps->entchannel);
 	if (!ch)
@@ -619,9 +652,10 @@ void S_IssuePlaysound (playsound_t *ps)
 struct sfx_s *S_RegisterSexedSound (char *base, int entnum)
 {
 	int				n;
+	int				len;
 	char			*p;
 	struct sfx_s	*sfx;
-	FILE			*f;
+//	FILE			*f;
 	char			model[MAX_QPATH];
 	char			sexedFilename[MAX_QPATH];
 	char			maleFilename[MAX_QPATH];
@@ -636,7 +670,7 @@ struct sfx_s *S_RegisterSexedSound (char *base, int entnum)
 		if (p)
 		{
 			p += 1;
-			strcpy(model, p);
+			Q_strncpy(model, p, sizeof(model)-1);
 			p = strchr(model, '/');
 			if (p)
 				*p = 0;
@@ -654,17 +688,18 @@ struct sfx_s *S_RegisterSexedSound (char *base, int entnum)
 	if (!sfx)
 	{
 		// no, so see if it exists
-		FS_FOpenFile (&sexedFilename[1], &f);
-		if (f)
+		//FS_FOpenFile (&sexedFilename[1], &f, false);
+		len = FS_LoadFile (&sexedFilename[1], NULL);
+		if (len != -1)
 		{
 			// yes, close the file and register it
-			FS_FCloseFile (f);
+			//FS_FCloseFile (f);
 			sfx = S_RegisterSound (sexedFilename);
 		}
 		else
 		{
 			// no, revert to the male sound in the pak0.pak
-			Com_sprintf (maleFilename, sizeof(maleFilename), "player/%s/%s", "male", base+1);
+			Com_sprintf (maleFilename, sizeof(maleFilename), "player/male/%s", base+1);
 			sfx = S_AliasName (sexedFilename, maleFilename);
 		}
 	}
@@ -719,7 +754,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 		i = OpenAL_GetFreeAlIndex();
 		if (i == -1)
 		{
-			Com_Printf ("OpenAL: Warning: Out of alindexes!\n");
+			Com_Printf ("OpenAL: Warning: Out of alindexes!\n", LOG_CLIENT);
 			return;
 		}
 
@@ -728,7 +763,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 		sourceNum = OpenAL_GetFreeSource();
 		if (sourceNum == -1)
 		{
-			Com_DPrintf ("OpenAL: Warning: Out of sources!\n");
+			Com_DPrintf ("OpenAL: Warning: Out of sources!\n", LOG_CLIENT);
 		}
 		else
 		{
@@ -908,7 +943,7 @@ void S_StartLocalSound (char *sound)
 	sfx = S_RegisterSound (sound);
 	if (!sfx)
 	{
-		Com_Printf ("S_StartLocalSound: can't cache %s\n", sound);
+		Com_Printf ("S_StartLocalSound: can't cache %s\n", LOG_CLIENT, sound);
 		return;
 	}
 
@@ -1000,6 +1035,7 @@ void S_AddLoopSounds (void)
 	sfxcache_t	*sc;
 	int			num;
 	entity_state_t	*ent;
+	vec3_t		origin;
 
 	if (cl_paused->intvalue)
 		return;
@@ -1032,8 +1068,24 @@ void S_AddLoopSounds (void)
 		num = (cl.frame.parse_entities + i)&(MAX_PARSE_ENTITIES-1);
 		ent = &cl_parse_entities[num];
 
+		//cmodel sound fix
+		if (ent->solid == 31)
+		{
+			cmodel_t	*model;
+
+			model = cl.model_clip[ent->modelindex];
+
+			origin[0] = ent->origin[0]+0.5*(model->mins[0]+model->maxs[0]);
+			origin[1] = ent->origin[1]+0.5*(model->mins[1]+model->maxs[1]);
+			origin[2] = ent->origin[2]+0.5*(model->mins[2]+model->maxs[2]);
+		}
+		else
+		{
+			VectorCopy (ent->origin, origin);
+		}
+
 		// find the total contribution of all sounds of this type
-		S_SpatializeOrigin (ent->origin, 255.0, SOUND_LOOPATTENUATE,
+		S_SpatializeOrigin (origin, 255.0, SOUND_LOOPATTENUATE,
 			&left_total, &right_total);
 		if (!openal_active)
 		{
@@ -1076,7 +1128,7 @@ void S_AddLoopSounds (void)
 			k = OpenAL_GetFreeAlIndex();
 			if (k == -1)
 			{
-				Com_Printf ("OpenAL: Loopsound: Warning: Out of alindexes!\n");
+				Com_Printf ("OpenAL: Loopsound: Warning: Out of alindexes!\n", LOG_CLIENT);
 				return;
 			}
 
@@ -1086,7 +1138,7 @@ void S_AddLoopSounds (void)
 
 			if (sourceNum == -1)
 			{
-				Com_DPrintf ("OpenAL: Loopsound: Warning: Out of sources!\n");
+				Com_DPrintf ("OpenAL: Loopsound: Warning: Out of sources!\n", LOG_CLIENT);
 				continue;
 			}
 
@@ -1293,7 +1345,8 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 
 		alListenerfv (AL_POSITION, listener);
 
-		S_AddLoopSounds ();
+		if (s_ambient->intvalue)
+			S_AddLoopSounds ();
 
 		orientation[0] = listener_forward[0];// * 0.02;
 		orientation[1] = listener_forward[1];// * 0.02;
@@ -1314,7 +1367,7 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 				{
 					if (alindex[i].lastloopframe < cl.frame.serverframe)
 					{
-						Com_Printf ("Loopsound %d not in this frame, stopping.\n", i);
+						Com_Printf ("Loopsound %d not in this frame, stopping.\n", LOG_CLIENT, i);
 						alindex[i].inuse = false;
 						alSourceStop (g_Sources[alindex[i].sourceIndex]);
 						OpenAL_CheckForError();
@@ -1375,7 +1428,8 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 	}
 
 	// add loopsounds
-	S_AddLoopSounds ();
+	if (s_ambient->intvalue)
+		S_AddLoopSounds ();
 
 	//
 	// debugging output
@@ -1387,11 +1441,11 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 		for (i=0 ; i<MAX_CHANNELS; i++, ch++)
 			if (ch->sfx && (ch->leftvol || ch->rightvol) )
 			{
-				Com_Printf ("%3i %3i %s\n", ch->leftvol, ch->rightvol, ch->sfx->name);
+				Com_Printf ("%3i %3i %s\n", LOG_CLIENT, ch->leftvol, ch->rightvol, ch->sfx->name);
 				total++;
 			}
 		
-		Com_Printf ("----(%i)---- painted: %i\n", total, paintedtime);
+		Com_Printf ("----(%i)---- painted: %i\n", LOG_CLIENT, total, paintedtime);
 	}
 
 // mix some sound
@@ -1493,7 +1547,7 @@ void S_Play(void)
 			strncpy(name, Cmd_Argv(i), sizeof(name)-1);
 
 		if (strstr(name, "..") || name[0] == '/' || name[0] == '\\') {
-			Com_Printf ("Bad filename %s\n", name);
+			Com_Printf ("Bad filename %s\n", LOG_CLIENT, name);
 			return;
 		}
 
@@ -1524,19 +1578,19 @@ void S_SoundList(void)
 			size = sc->length*sc->width*(sc->stereo+1);
 			total += size;
 			if (sc->loopstart >= 0)
-				Com_Printf ("L");
+				Com_Printf ("L", LOG_CLIENT);
 			else
-				Com_Printf (" ");
-			Com_Printf("(%2db) %6i : %s\n",sc->width*8,  size, sfx->name);
+				Com_Printf (" ", LOG_CLIENT);
+			Com_Printf("(%2db) %6i : %s\n", LOG_CLIENT,sc->width*8,  size, sfx->name);
 		}
 		else
 		{
 			if (sfx->name[0] == '*')
-				Com_Printf("  placeholder : %s\n", sfx->name);
+				Com_Printf("  placeholder : %s\n", LOG_CLIENT, sfx->name);
 			else
-				Com_Printf("  not loaded  : %s\n", sfx->name);
+				Com_Printf("  not loaded  : %s\n", LOG_CLIENT, sfx->name);
 		}
 	}
-	Com_Printf ("Total resident: %i\n", total);
+	Com_Printf ("Total resident: %i\n", LOG_CLIENT, total);
 }
 

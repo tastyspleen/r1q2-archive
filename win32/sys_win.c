@@ -101,6 +101,32 @@ SYSTEM IO
 ===============================================================================
 */
 
+int Sys_FileLength (const char *path)
+{
+	WIN32_FILE_ATTRIBUTE_DATA	fileData;
+
+	/*HANDLE	hFile;
+	DWORD	length;
+
+	hFile = CreateFile (path, FILE_READ_ATTRIBUTES, GENERIC_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return -1;
+
+	if (GetFileSize (hFile, &length) == INVALID_FILE_SIZE)
+	{
+		CloseHandle (hFile);
+		return -1;
+	}
+
+	CloseHandle (hFile);
+	return length;*/
+
+	if (GetFileAttributesEx (path, GetFileExInfoStandard, &fileData))
+		return fileData.nFileSizeLow;
+	else
+		return -1;
+}
+
 void VID_Restart_f (void);
 void S_Init (qboolean fullInit);
 void Sys_Error (char *error, ...)
@@ -111,8 +137,6 @@ void Sys_Error (char *error, ...)
 
 #ifndef DEDICATED_ONLY
 	DestroyWindow (cl_hwnd);
-	if (dbg_unload->intvalue)
-		CL_Shutdown ();
 #endif
 
 	Qcommon_Shutdown ();
@@ -278,7 +302,7 @@ void Sys_InstallService(char *servername, char *cmdline)
 		SC_MANAGER_ALL_ACCESS);  // full access rights 
  
 	if (schSCManager == NULL) {
-		Com_Printf ("OpenSCManager FAILED. GetLastError = %d\n", GetLastError());
+		Com_Printf ("OpenSCManager FAILED. GetLastError = %d\n", LOG_GENERAL, GetLastError());
 		return;
 	}
 
@@ -297,10 +321,13 @@ void Sys_InstallService(char *servername, char *cmdline)
         NULL,                      // LocalSystem account 
         NULL);                     // no password 
  
-    if (schService == NULL) {
-        Com_Printf ("CreateService FAILED. GetLastError = %d\n", GetLastError());
-	} else {
-        Com_Printf ("CreateService SUCCESS.\n"); 
+    if (schService == NULL)
+	{
+        Com_Printf ("CreateService FAILED. GetLastError = %d\n", LOG_GENERAL, GetLastError());
+	}
+	else
+	{
+        Com_Printf ("CreateService SUCCESS.\n", LOG_GENERAL); 
 		CloseServiceHandle(schService); 
 	}
 
@@ -321,7 +348,7 @@ void Sys_DeleteService (char *servername)
 		SC_MANAGER_ALL_ACCESS);  // full access rights 
  
 	if (schSCManager == NULL) {
-		Com_Printf ("OpenSCManager FAILED. GetLastError = %d\n", GetLastError());
+		Com_Printf ("OpenSCManager FAILED. GetLastError = %d\n", LOG_GENERAL, GetLastError());
 		return;
 	}
 
@@ -331,11 +358,11 @@ void Sys_DeleteService (char *servername)
         DELETE);            // only need DELETE access 
 
     if (schService == NULL) {
-        Com_Printf ("OpenService FAILED. GetLastError = %d\n", GetLastError());
+        Com_Printf ("OpenService FAILED. GetLastError = %d\n", LOG_GENERAL, GetLastError());
 	} else {
 		DeleteService(schService);
 		CloseServiceHandle(schService); 
-		Com_Printf ("DeleteService SUCCESS.\n"); 
+		Com_Printf ("DeleteService SUCCESS.\n", LOG_GENERAL); 
 	}
 
 	CloseServiceHandle (schSCManager);
@@ -358,7 +385,7 @@ void Sys_EnableTray (void)
 
 	procShell_NotifyIcon (NIM_ADD, &pNdata);
 
-	Com_Printf ("Minimize to tray enabled.\n");
+	Com_Printf ("Minimize to tray enabled.\n", LOG_GENERAL);
 }
 
 void Sys_DisableTray (void)
@@ -371,7 +398,7 @@ void Sys_DisableTray (void)
 
 	procShell_NotifyIcon = NULL;
 
-	Com_Printf ("Minimize to tray disabled.\n");
+	Com_Printf ("Minimize to tray disabled.\n", LOG_GENERAL);
 }
 
 void Sys_Minimize (void)
@@ -515,7 +542,7 @@ LRESULT CALLBACK ServerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 void Sys_SetQ2Priority (void)
 {
 	if (Cmd_Argc() < 2) {
-		Com_Printf ("usage: win_priority -2|-1|0|1|2\n");
+		Com_Printf ("usage: win_priority -2|-1|0|1|2\n", LOG_GENERAL);
 		return;
 	}
 
@@ -567,6 +594,8 @@ void Sys_FreeConsoleMutex (void)
 }
 
 
+extern	qboolean os_winxp;
+
 /*
 ================
 Sys_Init
@@ -589,6 +618,11 @@ void Sys_Init (void)
 		Sys_Error ("Quake2 doesn't run on Win32s");
 	else if ( vinfo.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS )
 		s_win95 = true;
+
+#ifndef DEDICATED_ONLY
+	if (vinfo.dwMajorVersion >= 5)
+		os_winxp = true;
+#endif
 
 #ifndef NO_SERVER
 
@@ -671,7 +705,7 @@ void Sys_Init (void)
 }
 
 #ifndef NO_SERVER
-static char	console_text[256];
+static char	console_text[1024];
 static int	console_textlen;
 
 /*
@@ -721,6 +755,11 @@ char *Sys_ConsoleInput (void)
 
 							if (console_textlen)
 							{
+								if (console_textlen >= sizeof(console_text)-1)
+								{
+									Com_Printf ("Sys_ConsoleInput: Line too long, discarded.\n", LOG_SERVER);
+									return NULL;
+								}
 								console_text[console_textlen] = 0;
 								console_textlen = 0;
 								return console_text;
@@ -817,7 +856,8 @@ void Sys_ConsoleOutput (char *string)
 	p = string;
 	s = text;
 
-	while (*p) {
+	while (*p)
+	{
 		if (*p == '\n') {
 			*s++ = '\r';
 			//console_lines++;
@@ -949,7 +989,7 @@ Sys_GetGameAPI
 Loads the game dll
 =================
 */
-void *Sys_GetGameAPI (void *parms)
+void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 {
 	void	*(IMPORT *GetGameAPI) (void *);
 	char	newname[MAX_OSPATH];
@@ -957,6 +997,7 @@ void *Sys_GetGameAPI (void *parms)
 	char	*path;
 	char	cwd[MAX_OSPATH];
 	FILE	*newExists;
+
 #if defined _M_IX86
 	const char *gamename = "gamex86.dll";
 
@@ -985,6 +1026,8 @@ void *Sys_GetGameAPI (void *parms)
 	const char *debugdir = "debug";
 #endif
 
+#else
+#error Don't know what kind of dynamic objects to use for this architecture.
 #endif
 
 	if (game_library)
@@ -1030,31 +1073,42 @@ void *Sys_GetGameAPI (void *parms)
 #endif
 		{
 			// now run through the search paths
-			path = NULL;
-			for (;;)
+			if (baseq2DLL)
 			{
-				path = FS_NextPath (path);
-				if (!path)
-					return NULL;		// couldn't find one anywhere
-				Com_sprintf (name, sizeof(name), "%s/%s", path, gamename);
-				Com_sprintf (newname, sizeof(newname), "%s/%s.new", path, gamename);
-				newExists = fopen (newname, "rb");
-				if (newExists)
-				{
-					Com_DPrintf ("%s.new found, moving to %s...\n", gamename, gamename);
-					fclose (newExists);
-					unlink (name);
-					rename (newname, name);
-				}
+				Com_sprintf (name, sizeof(name), "./" BASEDIRNAME "/%s", gamename);
 				game_library = LoadLibrary (name);
-				if (game_library)
+			}
+			else
+			{
+				path = NULL;
+				for (;;)
 				{
-					Com_DPrintf ("LoadLibrary (%s)\n",name);
-					break;
+					path = FS_NextPath (path);
+					if (!path)
+						return NULL;		// couldn't find one anywhere
+					Com_sprintf (name, sizeof(name), "%s/%s", path, gamename);
+					Com_sprintf (newname, sizeof(newname), "%s/%s.new", path, gamename);
+					newExists = fopen (newname, "rb");
+					if (newExists)
+					{
+						Com_DPrintf ("%s.new found, moving to %s...\n", gamename, gamename);
+						fclose (newExists);
+						unlink (name);
+						rename (newname, name);
+					}
+					game_library = LoadLibrary (name);
+					if (game_library)
+					{
+						Com_DPrintf ("LoadLibrary (%s)\n",name);
+						break;
+					}
 				}
 			}
 		}
 	}
+
+	if (!game_library)
+		return NULL;
 
 	GetGameAPI = (void *(IMPORT *)(void *))GetProcAddress (game_library, "GetGameAPI");
 	if (!GetGameAPI)
@@ -1113,14 +1167,7 @@ void ParseCommandLine (LPSTR lpCmdLine)
 	}
 }
 
-#ifndef DEDICATED_ONLY
-void Sys_AutoUpdate (void)
-{
-	Com_Printf ("In-game updating is deprecated. Please use the separate R1Q2Updater.\n");
-}
-#endif
-
-#ifndef NO_SERVER
+/*#ifndef NO_SERVER
 void QuakeMain (void)
 {
 	int				time, oldtime, newtime;
@@ -1129,7 +1176,8 @@ void QuakeMain (void)
 
 	_controlfp( _PC_24, _MCW_PC );
 
-	for (;;) {
+	for (;;)
+	{
 		if (Minimized || dedicated->intvalue)
 			Sleep (1);
 
@@ -1144,7 +1192,7 @@ void QuakeMain (void)
 		oldtime = newtime;
 	}
 }
-#endif
+#endif*/
 
 void FixWorkingDirectory (void)
 {
@@ -1166,18 +1214,16 @@ WinMain
 */
 HINSTANCE	global_hInstance;
 
-#define FLOAT2INTCAST(f)(*((int *)(&f)))
-#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
+//#define FLOAT2INTCAST(f)(*((int *)(&f)))
+//#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
 
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 #ifndef NO_SERVER
-	unsigned int	handle;
+//	unsigned int	handle;
 #endif
     MSG				msg;
-#ifndef DEDICATED_ONLY
 	int				time, oldtime, newtime;
-#endif
 
     /* previous instances do not exist in Win32 */
     if (hPrevInstance)
@@ -1193,7 +1239,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	//r1ch: always change to our directory (ugh)
 	FixWorkingDirectory ();
 
-	//hInstace is empty when we are back here with service code
+	//hInstance is empty when we are back here with service code
 	if (hInstance && argc > 1)
 	{
 		if (!strcmp(argv[1], "-service"))
@@ -1207,10 +1253,12 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	_controlfp( _PC_24, _MCW_PC );
 
-#ifndef NO_SERVER
+/*#ifndef NO_SERVER
 
-	if (dedicated->intvalue) {
-		_beginthreadex (NULL, 0, (unsigned int (__stdcall *)(void *))QuakeMain, NULL, 0, &handle);
+	if (dedicated->intvalue)
+	{
+		//_beginthreadex (NULL, 0, (unsigned int (__stdcall *)(void *))QuakeMain, NULL, 0, &handle);
+		CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)QuakeMain, NULL, 0, &handle);
 
 		while (GetMessage (&msg, NULL, 0, 0))
 		{
@@ -1225,15 +1273,17 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		Com_Quit ();
 	} else {
 #endif
-#ifndef DEDICATED_ONLY
+#ifndef DEDICATED_ONLY*/
+
+		oldtime = Sys_Milliseconds ();
 		/* main window message loop */
 		for (;;)
 		{
 			// if at a full screen console, don't update unless needed
 			if (Minimized
-	#ifndef NO_SERVER			
+	/*#ifndef NO_SERVER			
 				|| (dedicated->intvalue)
-	#endif
+	#endif*/
 			)
 			{
 				Sleep (1);
@@ -1246,7 +1296,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				sys_msg_time = msg.time;
 
 	#ifndef NO_SERVER
-				if (!IsDialogMessage(hwnd_Server, &msg)) {
+				if (!IsDialogMessage(hwnd_Server, &msg))
+				{
 	#endif
 					TranslateMessage (&msg);
    					DispatchMessage (&msg);
@@ -1255,11 +1306,10 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	#endif
 			}
 
-			oldtime = Sys_Milliseconds ();
-
-			for (;;) {
-				if (Minimized)
-					Sleep (1);
+			//for (;;)
+			//{
+			//	if (Minimized)
+			//		Sleep (1);
 
 				do
 				{
@@ -1270,12 +1320,12 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				Qcommon_Frame (time);
 
 				oldtime = newtime;
-			}
+			//}
 		}
-#endif
+/*#endif
 #ifndef NO_SERVER
 	}
-#endif
+#endif*/
 
 	return 0;
 }

@@ -24,14 +24,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "redblack.h"
 
 cvar_t			*cvar_vars;
-struct rbtree	*cvartree;
+
+static struct rbtree	*cvartree;
 
 /*
 ============
 Cvar_InfoValidate
 ============
 */
-static qboolean Cvar_InfoValidate (char *s)
+static qboolean Cvar_InfoValidate (const char *s)
 {
 	if (strchr (s, '\\'))
 		return false;
@@ -47,7 +48,7 @@ static qboolean Cvar_InfoValidate (char *s)
 Cvar_FindVar
 ============
 */
-cvar_t *Cvar_FindVar (char *var_name)
+cvar_t *Cvar_FindVar (const char *var_name)
 {
 	cvar_t	*var;
 	void	**data;
@@ -75,11 +76,11 @@ cvar_t *Cvar_FindVar (char *var_name)
 Cvar_VariableValue
 ============
 */
-float Cvar_VariableValue (char *var_name)
+float Cvar_VariableValue (const char *var_name)
 {
 	cvar_t	*var;
 
-	assert (var_name != NULL);
+	Q_assert (var_name != NULL);
 	
 	var = Cvar_FindVar (var_name);
 	
@@ -96,46 +97,49 @@ char dateBuff[32];
 Cvar_VariableString
 ============
 */
-char *Cvar_VariableString (char *var_name)
+char *Cvar_VariableString (const char *var_name)
 {
 	cvar_t *var;
 
-	assert (var_name != NULL);
+	Q_assert (var_name != NULL);
 	
 	var = Cvar_FindVar (var_name);
 
 	if (var)
 		return var->string;
 
-	if (!strcmp (var_name, "$timestamp"))
+	if (var_name[0] == '$')
 	{
-		time_t now;
-		time (&now);
-		strftime(dateBuff, sizeof(dateBuff)-1, "%Y-%m-%d_%H%M", localtime((const time_t *)&now));
-		return dateBuff;
-	}
-	else if (!strcmp (var_name, "$date"))
-	{
-		time_t now;
-		time (&now);
-		strftime(dateBuff, sizeof(dateBuff)-1, "%Y-%m-%d", localtime((const time_t *)&now));
-		return dateBuff;
-	}
-	else if (!strcmp (var_name, "$time"))
-	{
-		time_t now;
-		time (&now);
-		strftime(dateBuff, sizeof(dateBuff)-1, "%H%M", localtime((const time_t *)&now));
-		return dateBuff;
-	}
-	else if (!strcmp (var_name, "$random"))
-	{
-		return va ("%u", randomMT());
-	}
-	else if (!strcmp (var_name, "$inc"))
-	{
-		static unsigned int incNum = 0;
-		return va ("%u", ++incNum);
+		if (!strcmp (var_name, "$timestamp"))
+		{
+			time_t now;
+			time (&now);
+			strftime(dateBuff, sizeof(dateBuff)-1, "%Y-%m-%d_%H%M", localtime((const time_t *)&now));
+			return dateBuff;
+		}
+		else if (!strcmp (var_name, "$date"))
+		{
+			time_t now;
+			time (&now);
+			strftime(dateBuff, sizeof(dateBuff)-1, "%Y-%m-%d", localtime((const time_t *)&now));
+			return dateBuff;
+		}
+		else if (!strcmp (var_name, "$time"))
+		{
+			time_t now;
+			time (&now);
+			strftime(dateBuff, sizeof(dateBuff)-1, "%H%M", localtime((const time_t *)&now));
+			return dateBuff;
+		}
+		else if (!strcmp (var_name, "$random"))
+		{
+			return va ("%u", randomMT());
+		}
+		else if (!strcmp (var_name, "$inc"))
+		{
+			static unsigned int incNum = 0;
+			return va ("%u", ++incNum);
+		}
 	}
 
 	return "";
@@ -147,12 +151,12 @@ char *Cvar_VariableString (char *var_name)
 Cvar_CompleteVariable
 ============
 */
-char *Cvar_CompleteVariable (char *partial)
+char *Cvar_CompleteVariable (const char *partial)
 {
 	cvar_t		*cvar;
 	int			len;
 
-	assert (partial != NULL);
+	Q_assert (partial != NULL);
 	
 	len = strlen(partial);
 	
@@ -172,16 +176,19 @@ char *Cvar_CompleteVariable (char *partial)
 	return NULL;
 }
 
-cvar_t *Cvar_Add (char *var_name, char *var_value, int flags)
+cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
 {
 	cvar_t	*var;
 	void	**data;
 
-	var = Z_TagMalloc (sizeof(*var), TAGMALLOC_CVAR);
+	var = Z_TagMalloc (sizeof(cvar_t), TAGMALLOC_CVAR);
+
 	var->name = CopyString (var_name, TAGMALLOC_CVAR);
 	var->string = CopyString (var_value, TAGMALLOC_CVAR);
 	var->modified = true;
+
 	var->changed = NULL;
+	var->latched_string = NULL;
 
 	var->value = atof (var->string);
 	var->intvalue = var->value;
@@ -211,18 +218,17 @@ If the variable already exists, the value will not be set
 The flags will be or'ed in if the variable exists.
 ============
 */
-cvar_t * EXPORT Cvar_Get (char *var_name, char *var_value, int flags)
+cvar_t * EXPORT Cvar_Get (const char *var_name, const char *var_value, int flags)
 {
 	cvar_t	*var;
 
-	assert (var_name != NULL);
-	assert (var_value != NULL);
+	Q_assert (var_name != NULL);
 	
 	if (flags & (CVAR_USERINFO | CVAR_SERVERINFO))
 	{
 		if (!Cvar_InfoValidate (var_name))
 		{
-			Com_Printf("invalid info cvar name\n");
+			Com_Printf("invalid info cvar name\n", LOG_GENERAL);
 			return NULL;
 		}
 	}
@@ -241,7 +247,7 @@ cvar_t * EXPORT Cvar_Get (char *var_name, char *var_value, int flags)
 	{
 		if (!Cvar_InfoValidate (var_value))
 		{
-			Com_Printf("invalid info cvar value\n");
+			Com_Printf("invalid info cvar value\n", LOG_GENERAL);
 			return NULL;
 		}
 	}
@@ -256,7 +262,7 @@ Cvar_GameGet
 R1CH: Use as a wrapper to cvars requested by the mod. Can then apply filtering
 to them such as disallowing serverinfo set by mod.
 */
-cvar_t * EXPORT Cvar_GameGet (char *var_name, char *var_value, int flags)
+cvar_t * EXPORT Cvar_GameGet (const char *var_name, const char *var_value, int flags)
 {
 	if (Cvar_VariableValue("sv_no_game_serverinfo"))
 		flags &= ~CVAR_SERVERINFO;
@@ -269,17 +275,17 @@ cvar_t * EXPORT Cvar_GameGet (char *var_name, char *var_value, int flags)
 Cvar_Set2
 ============
 */
-cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
+cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
 {
 	cvar_t	*var;
 	char *old_string;
 
-	assert (var_name != NULL);
-	assert (value != NULL);
+	Q_assert (var_name != NULL);
+	Q_assert (value != NULL);
 	
-	if (*var_name == '$' && !force)
+	if (var_name[0] == '$' && !force)
 	{
-		Com_Printf ("%s is write protected.\n", var_name);
+		Com_Printf ("%s is write protected.\n", LOG_GENERAL, var_name);
 		return NULL;
 	}
 
@@ -293,7 +299,7 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 	{
 		if (!Cvar_InfoValidate (value))
 		{
-			Com_Printf("invalid info cvar value\n");
+			Com_Printf("invalid info cvar value\n", LOG_GENERAL);
 			return var;
 		}
 	}
@@ -302,7 +308,7 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 	{
 		if (var->flags & CVAR_NOSET && !Cvar_VariableValue ("developer"))
 		{
-			Com_Printf ("%s is write protected.\n", var_name);
+			Com_Printf ("%s is write protected.\n", LOG_GENERAL, var_name);
 			return var;
 		}
 
@@ -322,7 +328,7 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 
 			if (Com_ServerState())
 			{
-				Com_Printf ("%s will be changed for next map.\n", var_name);
+				Com_Printf ("%s will be changed for next map.\n", LOG_GENERAL, var_name);
 				var->latched_string = CopyString(value, TAGMALLOC_CVAR);
 			}
 			else
@@ -369,7 +375,7 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 	var->modified = true;
 
 	if (var->changed)
-		var->changed (var, old_string, value);
+		var->changed (var, old_string, var->string);
 
 	if (var->flags & CVAR_USERINFO)
 		userinfo_modified = true;	// transmit at next oportunity
@@ -384,7 +390,7 @@ cvar_t *Cvar_Set2 (char *var_name, char *value, qboolean force)
 Cvar_ForceSet
 ============
 */
-cvar_t * EXPORT Cvar_ForceSet (char *var_name, char *value)
+cvar_t * EXPORT Cvar_ForceSet (const char *var_name, const char *value)
 {
 	return Cvar_Set2 (var_name, value, true);
 }
@@ -394,7 +400,7 @@ cvar_t * EXPORT Cvar_ForceSet (char *var_name, char *value)
 Cvar_Set
 ============
 */
-cvar_t * EXPORT Cvar_Set (char *var_name, char *value)
+cvar_t * EXPORT Cvar_Set (const char *var_name, const char *value)
 {
 	return Cvar_Set2 (var_name, value, false);
 }
@@ -404,7 +410,7 @@ cvar_t * EXPORT Cvar_Set (char *var_name, char *value)
 Cvar_FullSet
 ============
 */
-cvar_t *Cvar_FullSet (char *var_name, char *value, int flags)
+cvar_t *Cvar_FullSet (const char *var_name, const char *value, int flags)
 {
 	cvar_t	*var;
 	
@@ -439,7 +445,7 @@ cvar_t *Cvar_FullSet (char *var_name, char *value, int flags)
 Cvar_SetValue
 ============
 */
-void EXPORT Cvar_SetValue (char *var_name, float value)
+void EXPORT Cvar_SetValue (const char *var_name, float value)
 {
 	char	val[32];
 
@@ -520,7 +526,7 @@ qboolean Cvar_Command (void)
 // perform a variable print or set
 	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("\"%s\" is \"%s\"\n", v->name, v->string);
+		Com_Printf ("\"%s\" is \"%s\"\n", LOG_GENERAL, v->name, v->string);
 		return true;
 	}
 
@@ -544,7 +550,7 @@ void Cvar_Set_f (void)
 	c = Cmd_Argc();
 	if (c != 3 && c != 4)
 	{
-		Com_Printf ("usage: set <variable> <value> [u / s]\n");
+		Com_Printf ("usage: set <variable> <value> [u / s]\n", LOG_GENERAL);
 		return;
 	}
 
@@ -556,7 +562,7 @@ void Cvar_Set_f (void)
 			flags = CVAR_SERVERINFO;
 		else
 		{
-			Com_Printf ("flags can only be 'u' or 's' ('%s' given)\n", Cmd_Argv(3));
+			Com_Printf ("flags can only be 'u' or 's' ('%s' given)\n", LOG_GENERAL, Cmd_Argv(3));
 			return;
 		}
 		Cvar_FullSet (Cmd_Argv(1), Cmd_Argv(2), flags);
@@ -572,7 +578,7 @@ void Cvar_UnSet_f (void)
 
 	if (Cmd_Argc() < 2)
 	{
-		Com_Printf ("usage: unset <variable>\n");
+		Com_Printf ("usage: unset <variable>\n", LOG_GENERAL);
 		return;
 	}
 
@@ -586,13 +592,13 @@ void Cvar_UnSet_f (void)
 			if (v->latched_string)
 				Z_Free (v->latched_string);
 			Z_Free (v);
-			Com_Printf ("Variable '%s' removed.\n", Cmd_Argv(1));
+			Com_Printf ("Variable '%s' removed.\n", LOG_GENERAL, Cmd_Argv(1));
 			return;
 		}
 		last = v;
 	}
 
-	Com_Printf ("Variable '%s' not found.\n", Cmd_Argv(1));
+	Com_Printf ("Variable '%s' not found.\n", LOG_GENERAL, Cmd_Argv(1));
 }
 
 /*
@@ -603,7 +609,7 @@ Appends lines containing "set variable value" for all variables
 with the archive flag set to true.
 ============
 */
-void Cvar_WriteVariables (char *path)
+void Cvar_WriteVariables (const char *path)
 {
 	cvar_t	*var;
 	char	buffer[1024];
@@ -667,32 +673,32 @@ void Cvar_List_f (void)
 		if (!argLen)
 		{
 			if (var->flags & CVAR_ARCHIVE)
-				Com_Printf ("*");
+				Com_Printf ("*", LOG_GENERAL);
 			else
-				Com_Printf (" ");
+				Com_Printf (" ", LOG_GENERAL);
 			if (var->flags & CVAR_USERINFO)
-				Com_Printf ("U");
+				Com_Printf ("U", LOG_GENERAL);
 			else
-				Com_Printf (" ");
+				Com_Printf (" ", LOG_GENERAL);
 			if (var->flags & CVAR_SERVERINFO)
-				Com_Printf ("S");
+				Com_Printf ("S", LOG_GENERAL);
 			else
-				Com_Printf (" ");
+				Com_Printf (" ", LOG_GENERAL);
 			if (var->flags & CVAR_NOSET)
-				Com_Printf ("-");
+				Com_Printf ("-", LOG_GENERAL);
 			else if (var->flags & CVAR_LATCH)
-				Com_Printf ("L");
+				Com_Printf ("L", LOG_GENERAL);
 			else
-				Com_Printf (" ");
-			Com_Printf (" %s \"%s\"\n", var->name, var->string);
+				Com_Printf (" ", LOG_GENERAL);
+			Com_Printf (" %s \"%s\"\n", LOG_GENERAL, var->name, var->string);
 		}
 		else
 		{
-			Com_Printf ("v %s\n", var->name, var->string);
+			Com_Printf ("v %s\n", LOG_GENERAL, var->name, var->string);
 		}
 	}
 	if (!argLen)
-		Com_Printf ("%i cvars\n", i);
+		Com_Printf ("%i cvars\n", LOG_GENERAL, i);
 
 	Z_Free (sortedList);
 }
@@ -713,6 +719,7 @@ char	*Cvar_BitInfo (int bit)
 		if (var->flags & bit)
 			Info_SetValueForKey (info, var->name, var->string);
 	}
+
 	return info;
 }
 

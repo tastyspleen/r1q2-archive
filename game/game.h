@@ -189,9 +189,9 @@ typedef struct
 	void	(EXPORT *FreeTags) (int tag);
 
 	// console variable interaction
-	cvar_t	*(EXPORT *cvar) (char *var_name, char *value, int flags);
-	cvar_t	*(EXPORT *cvar_set) (char *var_name, char *value);
-	cvar_t	*(EXPORT *cvar_forceset) (char *var_name, char *value);
+	cvar_t	*(EXPORT *cvar) (const char *var_name, const char *value, int flags);
+	cvar_t	*(EXPORT *cvar_set) (const char *var_name, const char *value);
+	cvar_t	*(EXPORT *cvar_forceset) (const char *var_name, const char *value);
 
 	// ClientCommand and ServerCommand parameter access
 	int		(EXPORT *argc) (void);
@@ -200,7 +200,7 @@ typedef struct
 
 	// add commands to the server console as if they were typed in
 	// for map changing, etc
-	void	(EXPORT *AddCommandString) (char *text);
+	void	(EXPORT *AddCommandString) (const char *text);
 
 	void	(EXPORT *DebugGraph) (float value, int color);
 } game_import_t;

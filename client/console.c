@@ -26,8 +26,6 @@ console_t	con;
 
 cvar_t		*con_notifytime;
 
-
-#define		MAXCMDLINE	512
 extern	char	key_lines[32][MAXCMDLINE];
 extern	int		edit_line;
 extern	int		key_linepos;
@@ -35,6 +33,10 @@ extern	int		key_linepos;
 
 void DrawString (int x, int y, char *s)
 {
+	//r1: don't draw if obscured
+	if (viddef.height * scr_conlines > y)
+		return;
+
 	while (*s)
 	{
 		re.DrawChar (x, y, *s);
@@ -45,6 +47,10 @@ void DrawString (int x, int y, char *s)
 
 void DrawAltString (int x, int y, char *s)
 {
+	//r1: don't draw if obscured
+	if (viddef.height * scr_conlines > y)
+		return;
+
 	while (*s)
 	{
 		re.DrawChar (x, y, *s ^ 0x80);
@@ -92,6 +98,8 @@ void Con_ToggleConsole_f (void)
 	if (cls.key_dest == key_console)
 	{
 		M_ForceMenuOff ();
+		//if (chat_bufferlen)
+		//	cls.key_dest = key_message;
 		//Cvar_Set ("paused", "0");
 	}
 	else
@@ -156,7 +164,7 @@ void Con_Dump_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("usage: condump <filename>\n");
+		Com_Printf ("usage: condump <filename>\n", LOG_CLIENT);
 		return;
 	}
 
@@ -165,7 +173,7 @@ void Con_Dump_f (void)
 
 	if (strstr (Cmd_Argv(1), "..") || strchr (Cmd_Argv(1), '/') || strchr (Cmd_Argv(1), '\\') )
 	{
-		Com_Printf ("Illegal filename.\n");
+		Com_Printf ("Illegal filename.\n", LOG_CLIENT);
 		return;
 	}
 
@@ -173,7 +181,7 @@ void Con_Dump_f (void)
 	f = fopen (name, "w");
 	if (!f)
 	{
-		Com_Printf ("ERROR: couldn't open.\n");
+		Com_Printf ("ERROR: couldn't open.\n", LOG_CLIENT);
 		return;
 	}
 
@@ -214,7 +222,7 @@ void Con_Dump_f (void)
 		fprintf (f, "%s\n", buffer);
 	}
 
-	Com_Printf ("Dumped console text to %s.\n", name);
+	Com_Printf ("Dumped console text to %s.\n", LOG_CLIENT, name);
 
 	fclose (f);
 }
@@ -243,6 +251,18 @@ Con_MessageMode_f
 void Con_MessageMode_f (void)
 {
 	chat_team = false;
+
+	if (!chat_bufferlen && Cmd_Argc() > 1)
+	{
+		Q_strncpy (chat_buffer, Cmd_Args(), sizeof(chat_buffer)-2);
+		if (chat_buffer[0])
+		{
+			strcat (chat_buffer, " ");
+			chat_bufferlen = strlen(chat_buffer);
+			chat_cursorpos = chat_bufferlen;
+		}
+	}
+
 	cls.key_dest = key_message;
 }
 
@@ -254,6 +274,18 @@ Con_MessageMode2_f
 void Con_MessageMode2_f (void)
 {
 	chat_team = true;
+
+	if (!chat_bufferlen && Cmd_Argc() > 1)
+	{
+		Q_strncpy (chat_buffer, Cmd_Args(), sizeof(chat_buffer)-2);
+		if (chat_buffer[0])
+		{
+			strcat (chat_buffer, " ");
+			chat_bufferlen = strlen(chat_buffer);
+			chat_cursorpos = chat_bufferlen;
+		}
+	}
+
 	cls.key_dest = key_message;
 }
 
@@ -334,7 +366,9 @@ void Con_Init (void)
 
 	Con_CheckResize ();
 	
-	Com_Printf ("Console initialized.\n");
+	Com_Printf ("Console initialized.\n", LOG_CLIENT);
+
+	cls.key_dest = key_console;
 
 //
 // register our commands
@@ -484,6 +518,8 @@ The input line scrolls horizontally if typing goes beyond the right edge
 */
 void Con_DrawInput (void)
 {
+	int		linepos;
+	int		length;
 	int		i;
 	char	*text;
 
@@ -495,24 +531,36 @@ void Con_DrawInput (void)
 	text = key_lines[edit_line];
 	
 // add the cursor frame
-	text[key_linepos] = 10+((int)(cls.realtime>>8)&1);
+	//text[key_linepos] = 10+((int)(cls.realtime>>8)&1);
 	
 // fill out remainder with spaces
-	for (i=key_linepos+1 ; i< con.linewidth ; i++)
-		text[i] = ' ';
+	//for (i=key_linepos+1 ; i< con.linewidth ; i++)
+	//	text[i] = ' ';
 		
 //	prestep if horizontally scrolling
-	if (key_linepos >= con.linewidth)
+	if (key_linepos + 1  >= con.linewidth)
+	{
+		linepos = con.linewidth;
 		text += 1 + key_linepos - con.linewidth;
+	}
+	else
+	{
+		linepos = key_linepos + 1;
+	}
 		
 // draw it
 	//y = con.vislines-16;
 
-	for (i=0 ; i<con.linewidth ; i++)
+	length = strlen (text);
+
+	for (i=0 ; i<length; i++)
 		re.DrawChar ( (i+1)<<3, con.vislines - 22, text[i]);
 
+	if (((int)(cls.realtime>>8)&1))
+		re.DrawChar ( (linepos)<<3, con.vislines - 21, '_');
+
 // remove cursor
-	key_lines[edit_line][key_linepos] = 0;
+	//key_lines[edit_line][key_linepos] = 0;
 }
 
 
@@ -554,6 +602,9 @@ void Con_DrawNotify (void)
 
 	if (cls.key_dest == key_message)
 	{
+		int		cursorpos;
+		int		maxwidth;
+
 		if (chat_team)
 		{
 			DrawString (8, v, "say_team:");
@@ -566,15 +617,28 @@ void Con_DrawNotify (void)
 		}
 
 		s = chat_buffer;
-		if (chat_bufferlen > (viddef.width>>3)-(skip+1))
-			s += chat_bufferlen - ((viddef.width>>3)-(skip+1));
+
+		maxwidth =  (viddef.width>>3);
+
+		if (chat_cursorpos > maxwidth-(skip+1))
+		{
+			s += chat_cursorpos - (maxwidth-(skip+1));
+			cursorpos = maxwidth-1;
+		}
+		else
+		{
+			cursorpos = chat_cursorpos + skip;
+		}
+
 		x = 0;
 		while(s[x])
 		{
 			re.DrawChar ( (x+skip)<<3, v, s[x]);
 			x++;
 		}
-		re.DrawChar ( (x+skip)<<3, v, 10+((cls.realtime>>8)&1));
+
+		if (((cls.realtime>>8)&1))
+			re.DrawChar ( (cursorpos)<<3, v+1, '_');
 		v += 8;
 	}
 	
@@ -704,13 +768,14 @@ void Con_DrawConsole (float frac)
 			else
 				dlbar[i++] = '\x81';
 		dlbar[i++] = '\x82';
-		dlbar[i] = 0;
 
-		sprintf (dlbar + strlen(dlbar), " %02d%% (%.02f KB)", cls.downloadpercent, (float)ftell(cls.download)/1024.0);
+		sprintf (dlbar + i, " %02d%% (%.02f KB)", cls.downloadpercent, (float)ftell(cls.download)/1024.0);
+
+		j = strlen(dlbar);
 
 		// draw it
 		y = con.vislines-12;
-		for (i = 0; i < strlen(dlbar); i++)
+		for (i = 0; i < j; i++)
 			re.DrawChar ( (i+1)<<3, y, dlbar[i]);
 	}
 //ZOID

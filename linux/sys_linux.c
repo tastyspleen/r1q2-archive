@@ -46,6 +46,16 @@ void Sys_ConsoleOutput (char *string)
 }
 #endif
 
+int Sys_FileLength (const char *path)
+{
+	struct stat st;
+
+	if (stat (path, &st))
+		return -1;
+
+	return st.st_size;
+}
+
 void Sys_Sleep (int msec)
 {
 	usleep (msec*1000);
@@ -111,7 +121,7 @@ void Sys_KillServer (int sig)
 	signal (SIGTERM, SIG_DFL);
 	signal (SIGINT, SIG_DFL);
 
-	Com_Printf ("Got sig %d, shutting down.\n", sig);
+	Com_Printf ("Got sig %d, shutting down.\n", LOG_SERVER|LOG_NOTICE, sig);
 	Cmd_TokenizeString (va("Exiting on signal %d\n", sig), 0);
 	Com_Quit();
 }
@@ -183,7 +193,7 @@ void floating_point_exception_handler(int whatever)
 
 char *Sys_ConsoleInput(void)
 {
-    static char text[256];
+    static char text[1024];
     int     len;
 	fd_set	fdset;
     struct timeval timeout;
@@ -202,13 +212,20 @@ char *Sys_ConsoleInput(void)
 		return NULL;
 
 	len = read (0, text, sizeof(text));
-	if (len == 0) { // eof!
+	if (len == 0)
+	{ // eof!
 		//stdin_active = false;
+		return NULL;
+	}
+	else if (len == sizeof(text))
+	{
+		Com_Printf ("Sys_ConsoleInput: Line too long, discarded.\n", LOG_SERVER);
 		return NULL;
 	}
 
 	if (len < 1)
 		return NULL;
+
 	text[len-1] = 0;    // rip off the /n and terminate
 
 	return text;
@@ -237,7 +254,7 @@ Sys_GetGameAPI
 Loads the game dll
 =================
 */
-void *Sys_GetGameAPI (void *parms)
+void *Sys_GetGameAPI (void *parms, int baseq2)
 {
 	void	*(*GetGameAPI) (void *);
 
@@ -249,7 +266,7 @@ void *Sys_GetGameAPI (void *parms)
 #elif defined __alpha__
 	const char *gamename = "gameaxp.so";
 #else
-#error Unknown arch
+#error "Don't know what kind of dynamic objects to use for this architecture."
 #endif
 
 	//setreuid(getuid(), getuid());
@@ -258,45 +275,56 @@ void *Sys_GetGameAPI (void *parms)
 	if (game_library)
 		Com_Error (ERR_FATAL, "Sys_GetGameAPI without Sys_UnloadingGame");
 
-	getcwd(curpath, sizeof(curpath));
+	getcwd(curpath, sizeof(curpath)-1);
+	curpath[sizeof(curpath)-1] = 0;
 
-	Com_Printf("------- Loading %s -------\n", gamename);
+	Com_Printf("------- Loading %s -------\n", LOG_SERVER|LOG_NOTICE, gamename);
 
-	// now run through the search paths
-	path = NULL;
-	while (1)
+	if (baseq2)
 	{
-		path = FS_NextPath (path);
-		if (!path)
-			return NULL;		// couldn't find one anywhere
-		sprintf (name, "%s/%s/%s", curpath, path, gamename);
-		game_library = dlopen (name, RTLD_NOW );
-		if (game_library)
+		Com_sprintf (name, sizeof(name), "%s/%s/%s", curpath, BASEDIRNAME, gamename);
+	}
+	else
+	{
+		// now run through the search paths
+		path = NULL;
+		for (;;)
 		{
-			Com_DPrintf ("LoadLibrary (%s)\n",name);
-			break;
-		}
-		else
-		{
-			Com_Printf ("dlopen(): %s\n", dlerror());
-			Com_Printf ("Attempting to load with lazy symbols, may randomly crash during use...");
-			game_library = dlopen(name, RTLD_LAZY);
+			path = FS_NextPath (path);
+			if (!path)
+				return NULL;		// couldn't find one anywhere
+			Com_sprintf (name, sizeof(name), "%s/%s/%s", curpath, path, gamename);
+			game_library = dlopen (name, RTLD_NOW );
 			if (game_library)
 			{
-				Com_Printf ("ok\n");
-				return NULL;
+				Com_DPrintf ("LoadLibrary (%s)\n",name);
+				break;
 			}
 			else
 			{
-				Com_Printf ("dlopen(): %s\n", dlerror());
+				Com_Printf ("dlopen(): %s\n", LOG_SERVER, dlerror());
+				Com_Printf ("Attempting to load with lazy symbols...", LOG_SERVER);
+				game_library = dlopen(name, RTLD_LAZY);
+				if (game_library)
+				{
+					Com_Printf ("ok\n", LOG_SERVER);
+					return NULL;
+				}
+				else
+				{
+					Com_Printf ("dlopen(): %s\n", LOG_SERVER, dlerror());
+				}
 			}
 		}
 	}
 
+	if (!game_library)
+		return NULL;
+
 	GetGameAPI = (void *(*)(void *))dlsym (game_library, "GetGameAPI");
 	if (!GetGameAPI)
 	{
-		Com_Printf ("dlsym(): %s\n", dlerror());
+		Com_Printf ("dlsym(): %s\n", LOG_SERVER, dlerror());
 		Sys_UnloadGame ();		
 		return NULL;
 	}

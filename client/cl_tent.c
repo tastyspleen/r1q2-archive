@@ -80,48 +80,50 @@ void CL_BFGExplosionParticles (vec3_t org);
 // RAFAEL
 //void CL_BlueBlasterParticles (vec3_t org, vec3_t dir);
 
-struct sfx_s	*cl_sfx_ric1;
-struct sfx_s	*cl_sfx_ric2;
-struct sfx_s	*cl_sfx_ric3;
-struct sfx_s	*cl_sfx_lashit;
-struct sfx_s	*cl_sfx_spark5;
-struct sfx_s	*cl_sfx_spark6;
-struct sfx_s	*cl_sfx_spark7;
-struct sfx_s	*cl_sfx_railg;
-struct sfx_s	*cl_sfx_rockexp;
-struct sfx_s	*cl_sfx_grenexp;
-struct sfx_s	*cl_sfx_watrexp;
+static struct sfx_s	*cl_sfx_ric1;
+static struct sfx_s	*cl_sfx_ric2;
+static struct sfx_s	*cl_sfx_ric3;
+static struct sfx_s	*cl_sfx_lashit;
+static struct sfx_s	*cl_sfx_spark5;
+static struct sfx_s	*cl_sfx_spark6;
+static struct sfx_s	*cl_sfx_spark7;
+static struct sfx_s	*cl_sfx_railg;
+static struct sfx_s	*cl_sfx_rockexp;
+static struct sfx_s	*cl_sfx_grenexp;
+static struct sfx_s	*cl_sfx_watrexp;
 // RAFAEL
-struct sfx_s	*cl_sfx_plasexp;
+static struct sfx_s	*cl_sfx_plasexp;
+
 struct sfx_s	*cl_sfx_footsteps[4];
 
-struct sfx_s	*le_sfx_gibimp1;
-struct sfx_s	*le_sfx_gibimp2;
-struct sfx_s	*le_sfx_gibimp3;
+static struct sfx_s	*le_sfx_gibimp1;
+static struct sfx_s	*le_sfx_gibimp2;
+static struct sfx_s	*le_sfx_gibimp3;
 
-struct model_s	*cl_mod_explode;
-struct model_s	*cl_mod_smoke;
-struct model_s	*cl_mod_flash;
-struct model_s	*cl_mod_parasite_segment;
-struct model_s	*cl_mod_grapple_cable;
-struct model_s	*cl_mod_parasite_tip;
-struct model_s	*cl_mod_explo4;
-struct model_s	*cl_mod_bfg_explo;
+static struct model_s	*cl_mod_explode;
+static struct model_s	*cl_mod_smoke;
+static struct model_s	*cl_mod_flash;
+static struct model_s	*cl_mod_parasite_segment;
+static struct model_s	*cl_mod_grapple_cable;
+static struct model_s	*cl_mod_parasite_tip;
+static struct model_s	*cl_mod_explo4;
+static struct model_s	*cl_mod_bfg_explo;
+
 struct model_s	*cl_mod_powerscreen;
 // RAFAEL
-struct model_s	*cl_mod_plasmaexplo;
+static struct model_s	*cl_mod_plasmaexplo;
 
 //R1:
-struct model_s	*le_mod_debris1;
-struct model_s	*le_mod_gibs;
+static struct model_s	*le_mod_debris1;
+static struct model_s	*le_mod_gibs;
 
 //ROGUE
-struct sfx_s	*cl_sfx_lightning;
-struct sfx_s	*cl_sfx_disrexp;
-struct model_s	*cl_mod_lightning;
-struct model_s	*cl_mod_heatbeam;
-struct model_s	*cl_mod_monster_heatbeam;
-struct model_s	*cl_mod_explo4_big;
+static struct sfx_s	*cl_sfx_lightning;
+static struct sfx_s	*cl_sfx_disrexp;
+static struct model_s	*cl_mod_lightning;
+static struct model_s	*cl_mod_heatbeam;
+static struct model_s	*cl_mod_monster_heatbeam;
+static struct model_s	*cl_mod_explo4_big;
 
 //ROGUE
 /*
@@ -134,9 +136,6 @@ void CL_RegisterTEntSounds (void)
 	int		i;
 	char	name[MAX_QPATH];
 
-	// PMM - version stuff
-//	Com_Printf ("%s\n", ROGUE_VERSION_STRING);
-	// PMM
 	cl_sfx_ric1 = S_RegisterSound ("world/ric1.wav");
 	cl_sfx_ric2 = S_RegisterSound ("world/ric2.wav");
 	cl_sfx_ric3 = S_RegisterSound ("world/ric3.wav");
@@ -369,7 +368,7 @@ int CL_ParseBeam (struct model_s *model)
 			return ent;
 		}
 	}
-	Com_Printf ("beam list overflow!\n");	
+	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
 	return ent;
 }
 
@@ -390,8 +389,6 @@ int CL_ParseBeam2 (struct model_s *model)
 	MSG_ReadPos (&net_message, start);
 	MSG_ReadPos (&net_message, end);
 	MSG_ReadPos (&net_message, offset);
-
-//	Com_Printf ("end- %f %f %f\n", end[0], end[1], end[2]);
 
 // override any beam with the same entity
 
@@ -421,7 +418,7 @@ int CL_ParseBeam2 (struct model_s *model)
 			return ent;
 		}
 	}
-	Com_Printf ("beam list overflow!\n");	
+	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
 	return ent;
 }
 
@@ -454,8 +451,6 @@ int CL_ParsePlayerBeam (struct model_s *model)
 	else
 		MSG_ReadPos (&net_message, offset);
 
-//	Com_Printf ("end- %f %f %f\n", end[0], end[1], end[2]);
-
 // override any beam with the same entity
 // PMM - For player beams, we only want one per player (entity) so..
 	for (i=0, b=cl_playerbeams ; i< MAX_BEAMS ; i++, b++)
@@ -486,7 +481,7 @@ int CL_ParsePlayerBeam (struct model_s *model)
 			return ent;
 		}
 	}
-	Com_Printf ("beam list overflow!\n");	
+	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
 	return ent;
 }
 //rogue
@@ -513,7 +508,6 @@ int CL_ParseLightning (struct model_s *model)
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
 		if (b->entity == srcEnt && b->dest_entity == destEnt)
 		{
-//			Com_Printf("%d: OVERRIDE  %d -> %d\n", cl.time, srcEnt, destEnt);
 			b->entity = srcEnt;
 			b->dest_entity = destEnt;
 			b->model = model;
@@ -529,7 +523,6 @@ int CL_ParseLightning (struct model_s *model)
 	{
 		if (!b->model || b->endtime < cl.time)
 		{
-//			Com_Printf("%d: NORMAL  %d -> %d\n", cl.time, srcEnt, destEnt);
 			b->entity = srcEnt;
 			b->dest_entity = destEnt;
 			b->model = model;
@@ -540,7 +533,7 @@ int CL_ParseLightning (struct model_s *model)
 			return srcEnt;
 		}
 	}
-	Com_Printf ("beam list overflow!\n");	
+	Com_Printf ("beam list overflow!\n", LOG_CLIENT);	
 	return srcEnt;
 }
 
@@ -549,15 +542,10 @@ int CL_ParseLightning (struct model_s *model)
 CL_ParseLaser
 =================
 */
-void CL_ParseLaser (int colors)
+void CL_ParseLaser (int colors, vec3_t start, vec3_t end)
 {
-	vec3_t	start;
-	vec3_t	end;
 	laser_t	*l;
 	int		i;
-
-	MSG_ReadPos (&net_message, start);
-	MSG_ReadPos (&net_message, end);
 
 	for (i=0, l=cl_lasers ; i< MAX_LASERS ; i++, l++)
 	{
@@ -591,7 +579,6 @@ void CL_ParseSteam (void)
 	id = MSG_ReadShort (&net_message);		// an id of -1 is an instant effect
 	if (id != -1) // sustains
 	{
-//			Com_Printf ("Sustain effect id %d\n", id);
 		free_sustain = NULL;
 		for (i=0, s=cl_sustains; i<MAX_SUSTAINS; i++, s++)
 		{
@@ -617,7 +604,6 @@ void CL_ParseSteam (void)
 		}
 		else
 		{
-//				Com_Printf ("No free sustains!\n");
 			// FIXME - read the stuff anyway
 			cnt = MSG_ReadByte (&net_message);
 			MSG_ReadPos (&net_message, pos);
@@ -918,9 +904,9 @@ void CL_ParseTEnt (void)
 	// PMM - fixed to correct for pitch of 0
 		if (dir[0])
 			ex->ent.angles[1] = atan2(dir[1], dir[0])/M_PI*180;
-		else if (dir[1] > 0)
+		else if (FLOAT_GT_ZERO(dir[1]))
 			ex->ent.angles[1] = 90;
-		else if (dir[1] < 0)
+		else if (FLOAT_LT_ZERO(dir[1]))
 			ex->ent.angles[1] = 270;
 		else
 			ex->ent.angles[1] = 0;
@@ -937,9 +923,39 @@ void CL_ParseTEnt (void)
 		break;
 		
 	case TE_RAILTRAIL:			// railgun effect
+
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
-		CL_RailTrail (pos, pos2);
+
+		switch (cl_railtrail->intvalue)
+		{
+			case 0:
+				CL_RailTrail (pos, pos2, 179);
+				break;
+			case 1:
+				CL_ParseLaser (0xf2f2f0f0, pos, pos2);
+				break;
+
+			case 2:
+				CL_ParseLaser (0xd0d1d2d3, pos, pos2);
+				break;
+
+			case 3:
+				CL_ParseLaser (0xf3f3f1f1, pos, pos2);
+				break;
+
+			case 4:
+				CL_ParseLaser (0xdcdddedf, pos, pos2);
+				break;
+
+			case 5:
+				CL_ParseLaser (0xe0e1e2e3, pos, pos2);
+				break;
+			default:
+				CL_RailTrail (pos, pos2, cl_railtrail->intvalue - 6);
+				break;
+
+		}
 		S_StartSound (pos2, 0, 0, cl_sfx_railg, 1, ATTN_NORM, 0);
 		break;
 
@@ -1046,7 +1062,9 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_BFG_LASER:
-		CL_ParseLaser (0xd0d1d2d3);
+		MSG_ReadPos (&net_message, pos);
+		MSG_ReadPos (&net_message, pos2);
+		CL_ParseLaser (0xd0d1d2d3, pos, pos2);
 		break;
 
 	case TE_BUBBLETRAIL:
@@ -1128,9 +1146,9 @@ void CL_ParseTEnt (void)
 	// PMM - fixed to correct for pitch of 0
 		if (dir[0])
 			ex->ent.angles[1] = atan2(dir[1], dir[0])/M_PI*180;
-		else if (dir[1] > 0)
+		else if (FLOAT_GT_ZERO(dir[1]))
 			ex->ent.angles[1] = 90;
-		else if (dir[1] < 0)
+		else if (FLOAT_LT_ZERO(dir[1]))
 			ex->ent.angles[1] = 270;
 		else
 			ex->ent.angles[1] = 0;
@@ -1309,7 +1327,7 @@ void CL_ParseTEnt (void)
 
 	default:
 #ifdef _DEBUG
-		Com_Printf ("Tempent bytes: %d,%d,%d,%d,%d,%d,%d\n", MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message));
+		Com_Printf ("Tempent bytes: %d,%d,%d,%d,%d,%d,%d\n", LOG_CLIENT, MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message), MSG_ReadByte (&net_message));
 #endif
 		Com_Error (ERR_DROP, "CL_ParseTEnt: bad type (0x%x)", type);
 	}
@@ -1352,7 +1370,7 @@ void CL_AddBeams (void)
 		if (dist[1] == 0 && dist[0] == 0)
 		{
 			yaw = 0;
-			if (dist[2] > 0)
+			if (FLOAT_GT_ZERO(dist[2]))
 				pitch = 90;
 			else
 				pitch = 270;
@@ -1360,18 +1378,18 @@ void CL_AddBeams (void)
 		else
 		{
 	// PMM - fixed to correct for pitch of 0
-			if (dist[0])
+			if (FLOAT_NE_ZERO(dist[0]))
 				yaw = (atan2(dist[1], dist[0]) * 180 / M_PI);
-			else if (dist[1] > 0)
+			else if (FLOAT_GT_ZERO(dist[1]))
 				yaw = 90;
 			else
 				yaw = 270;
-			if (yaw < 0)
+			if (FLOAT_LT_ZERO(yaw))
 				yaw += 360;
 	
 			forward = sqrt (dist[0]*dist[0] + dist[1]*dist[1]);
 			pitch = (atan2(dist[2], forward) * -180.0 / M_PI);
-			if (pitch < 0)
+			if (FLOAT_LT_ZERO(pitch))
 				pitch += 360.0;
 		}
 
@@ -1396,7 +1414,6 @@ void CL_AddBeams (void)
 		// through the tesla mine (instead it goes through the target)
 		if ((b->model == cl_mod_lightning) && (d <= model_length))
 		{
-//			Com_Printf ("special case\n");
 			VectorCopy (b->end, ent.origin);
 			// offset to push beam outside of tesla model (negative because dist is from end to start
 			// for this beam)
@@ -1410,7 +1427,7 @@ void CL_AddBeams (void)
 			V_AddEntity (&ent);			
 			return;
 		}
-		while (d > 0)
+		while (FLOAT_GT_ZERO(d))
 		{
 			VectorCopy (org, ent.origin);
 			ent.model = b->model;
@@ -1428,7 +1445,6 @@ void CL_AddBeams (void)
 				ent.angles[2] = (float)(randomMT()%360);
 			}
 			
-//			Com_Printf("B: %d -> %d\n", b->entity, b->dest_entity);
 			V_AddEntity (&ent);
 
 			for (j=0 ; j<3 ; j++)
@@ -1437,20 +1453,6 @@ void CL_AddBeams (void)
 		}
 	}
 }
-
-
-/*
-//				Com_Printf ("Endpoint:  %f %f %f\n", b->end[0], b->end[1], b->end[2]);
-//				Com_Printf ("Pred View Angles:  %f %f %f\n", cl.predicted_angles[0], cl.predicted_angles[1], cl.predicted_angles[2]);
-//				Com_Printf ("Act View Angles: %f %f %f\n", cl.refdef.viewangles[0], cl.refdef.viewangles[1], cl.refdef.viewangles[2]);
-//				VectorCopy (cl.predicted_origin, b->start);
-//				b->start[2] += 22;	// adjust for view height
-//				if (fabs(cl.refdef.vieworg[2] - b->start[2]) >= 10) {
-//					b->start[2] = cl.refdef.vieworg[2];
-//				}
-
-//				Com_Printf ("Time:  %d %d %f\n", cl.time, cls.realtime, cls.frametime);
-*/
 
 extern cvar_t *hand;
 
@@ -1567,7 +1569,7 @@ void CL_AddPlayerBeams (void)
 		if (dist[1] == 0 && dist[0] == 0)
 		{
 			yaw = 0;
-			if (dist[2] > 0)
+			if (FLOAT_GT_ZERO(dist[2]))
 				pitch = 90;
 			else
 				pitch = 270;
@@ -1577,16 +1579,16 @@ void CL_AddPlayerBeams (void)
 	// PMM - fixed to correct for pitch of 0
 			if (dist[0])
 				yaw = (atan2(dist[1], dist[0]) * 180 / M_PI);
-			else if (dist[1] > 0)
+			else if (FLOAT_GT_ZERO(dist[1]))
 				yaw = 90;
 			else
 				yaw = 270;
-			if (yaw < 0)
+			if (FLOAT_LT_ZERO(yaw))
 				yaw += 360;
 	
 			forward = sqrt (dist[0]*dist[0] + dist[1]*dist[1]);
 			pitch = (atan2(dist[2], forward) * -180.0 / M_PI);
-			if (pitch < 0)
+			if (FLOAT_LT_ZERO(pitch))
 				pitch += 360.0;
 		}
 		
@@ -1595,11 +1597,10 @@ void CL_AddPlayerBeams (void)
 			if (b->entity != cl.playernum+1)
 			{
 				framenum = 2;
-//				Com_Printf ("Third person\n");
 				ent.angles[0] = -pitch;
 				ent.angles[1] = yaw + 180.0;
 				ent.angles[2] = 0;
-//				Com_Printf ("%f %f - %f %f %f\n", -pitch, yaw+180.0, b->offset[0], b->offset[1], b->offset[2]);
+
 				AngleVectors(ent.angles, f, r, u);
 					
 				// if it's a non-origin offset, it's a player, so use the hardcoded player offset
@@ -1666,7 +1667,7 @@ void CL_AddPlayerBeams (void)
 			V_AddEntity (&ent);			
 			return;
 		}
-		while (d > 0)
+		while (FLOAT_GT_ZERO(d))
 		{
 			VectorCopy (org, ent.origin);
 			ent.model = b->model;
@@ -1692,7 +1693,6 @@ void CL_AddPlayerBeams (void)
 				ent.angles[2] = (float)(randomMT() % 360);
 			}
 			
-//			Com_Printf("B: %d -> %d\n", b->entity, b->dest_entity);
 			V_AddEntity (&ent);
 
 			for (j=0 ; j<3 ; j++)
@@ -1730,7 +1730,6 @@ void CL_ProcessSustain ()
 		if (s->id)
 			if ((s->endtime >= cl.time) && (cl.time >= s->nextthink))
 			{
-//				Com_Printf ("think %d %d %d\n", cl.time, s->nextthink, s->thinkinterval);
 				s->think (s);
 			}
 			else if (s->endtime < cl.time)

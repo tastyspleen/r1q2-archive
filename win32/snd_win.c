@@ -138,14 +138,14 @@ static qboolean DS_CreateBuffers( void )
     format.cbSize = sizeof(WAVEFORMATEX);
     format.nAvgBytesPerSec = format.nSamplesPerSec*format.nBlockAlign; 
 
-	Com_DPrintf( "Creating DS buffers\n" );
+	Com_DPrintf( "Creating DS buffers\n");
 
 	Com_DPrintf("...setting EXCLUSIVE coop level: " );
 
 	ret = pDS->lpVtbl->SetCooperativeLevel(pDS, cl_hwnd, DSSCL_EXCLUSIVE);
 	if (ret != DS_OK)
 	{
-		Com_Printf ("failed (%s)\n", DSoundError(ret));
+		Com_Printf ("failed (%s)\n", LOG_CLIENT, DSoundError(ret));
 		FreeSound ();
 		return false;
 	}
@@ -178,7 +178,7 @@ static qboolean DS_CreateBuffers( void )
 			if (snd_firsttime)
 			{
 				Com_DPrintf ("...setting primary sound format: ");
-				Com_Printf ("failed (%s)\n", DSoundError(ret));
+				Com_Printf ("failed (%s)\n", LOG_CLIENT, DSoundError(ret));
 			}
 		}
 		else
@@ -191,7 +191,7 @@ static qboolean DS_CreateBuffers( void )
 	}
 	else
 	{
-		Com_Printf ("failed (%s)\n", DSoundError(ret));
+		Com_Printf ("failed (%s)\n", LOG_CLIENT, DSoundError(ret));
 	}
 
 	if ( !primary_format_set || !s_primary->intvalue)
@@ -210,7 +210,7 @@ static qboolean DS_CreateBuffers( void )
 		ret = pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL);
 		if (DS_OK != ret)
 		{
-			Com_Printf ("failed (%s)\n", DSoundError(ret));
+			Com_Printf ("failed (%s)\n", LOG_CLIENT, DSoundError(ret));
 			FreeSound ();
 			return false;
 		}
@@ -222,7 +222,7 @@ static qboolean DS_CreateBuffers( void )
 
 		if (DS_OK != pDSBuf->lpVtbl->GetCaps (pDSBuf, &dsbcaps))
 		{
-			Com_Printf ("*** GetCaps failed ***\n");
+			Com_Printf ("*** GetCaps failed ***\n", LOG_CLIENT|LOG_ERROR);
 			FreeSound ();
 			return false;
 		}
@@ -237,7 +237,7 @@ static qboolean DS_CreateBuffers( void )
 		pDS->lpVtbl->SetCooperativeLevel (pDS, cl_hwnd, DSSCL_WRITEPRIMARY);
 		if (DS_OK != ret)
 		{
-			Com_Printf ("failed (%s)\n", DSoundError(ret));
+			Com_Printf ("failed (%s)\n", LOG_CLIENT, DSoundError(ret));
 			FreeSound ();
 			return false;
 		}
@@ -245,7 +245,7 @@ static qboolean DS_CreateBuffers( void )
 
 		if (DS_OK != pDSPBuf->lpVtbl->GetCaps (pDSPBuf, &dsbcaps))
 		{
-			Com_Printf ("*** GetCaps failed ***\n");
+			Com_Printf ("*** GetCaps failed ***\n", LOG_CLIENT|LOG_ERROR);
 			return false;
 		}
 
@@ -258,7 +258,7 @@ static qboolean DS_CreateBuffers( void )
 	if (snd_firsttime)
 		Com_Printf("   %d channel(s)\n"
 		               "   %d bits/sample\n"
-					   "   %d bytes/sec\n",
+					   "   %d bytes/sec\n", LOG_CLIENT|LOG_NOTICE,
 					   dma.channels, dma.samplebits, dma.speed);
 	
 	gSndBufSize = dsbcaps.dwBufferBytes;
@@ -389,7 +389,6 @@ Direct-Sound support
 */
 sndinitstat SNDDMA_InitDirect (void)
 {
-	DWORD			speakerconfig;
 	DSCAPS			dscaps;
 	HRESULT			hresult;
 
@@ -405,7 +404,7 @@ sndinitstat SNDDMA_InitDirect (void)
 	else
 		dma.speed = 11025;
 
-	Com_Printf( "Initializing DirectSound\n");
+	Com_Printf( "Initializing DirectSound\n", LOG_CLIENT|LOG_NOTICE);
 
 	if ( !hInstDS )
 	{
@@ -415,7 +414,7 @@ sndinitstat SNDDMA_InitDirect (void)
 		
 		if (hInstDS == NULL)
 		{
-			Com_Printf ("failed (%d)\n", GetLastError());
+			Com_Printf ("failed (%d)\n", LOG_CLIENT, GetLastError());
 			return SIS_FAILURE;
 		}
 
@@ -428,7 +427,7 @@ sndinitstat SNDDMA_InitDirect (void)
 
 		if (!pDirectSoundCreate)
 		{
-			Com_Printf ("*** couldn't get DS procaddr (do you have DirectX installed properly?) ***\n");
+			Com_Printf ("*** couldn't get DS procaddr (do you have DirectX installed properly?) ***\n", LOG_CLIENT|LOG_ERROR);
 			return SIS_FAILURE;
 		}
 	}
@@ -438,7 +437,7 @@ sndinitstat SNDDMA_InitDirect (void)
 	{
 		if (hresult != DSERR_ALLOCATED)
 		{
-			Com_Printf( "failed (%d)\n", hresult );
+			Com_Printf( "failed (%d)\n", LOG_CLIENT, hresult );
 			return SIS_FAILURE;
 		}
 
@@ -448,7 +447,7 @@ sndinitstat SNDDMA_InitDirect (void)
 						"Sound not available",
 						MB_RETRYCANCEL | MB_SETFOREGROUND | MB_ICONEXCLAMATION) != IDRETRY)
 		{
-			Com_Printf ("failed, hardware already in use\n" );
+			Com_Printf ("failed, hardware already in use\n", LOG_CLIENT );
 			return SIS_NOTAVAIL;
 		}
 	}
@@ -458,7 +457,7 @@ sndinitstat SNDDMA_InitDirect (void)
 
 	if ( DS_OK != pDS->lpVtbl->GetCaps( pDS, &dscaps ) )
 	{
-		Com_Printf ("*** couldn't get DS caps ***\n");
+		Com_Printf ("*** couldn't get DS caps ***\n", LOG_CLIENT|LOG_ERROR);
 	}
 
 	if ( dscaps.dwFlags & DSCAPS_EMULDRIVER )
@@ -470,40 +469,6 @@ sndinitstat SNDDMA_InitDirect (void)
 
 	if ( !DS_CreateBuffers() )
 		return SIS_FAILURE;
-
-	Com_Printf ("Speaker config: ");
-	pDS->lpVtbl->GetSpeakerConfig (pDS, &speakerconfig);
-
-	switch (speakerconfig)
-	{
-		case DSSPEAKER_5POINT1:
-			Com_Printf ("5POINT1.\n");
-			break;
-		case DSSPEAKER_DIRECTOUT:
-			Com_Printf ("DIRECTOUT.\n");
-			break;
-		case DSSPEAKER_HEADPHONE:
-			Com_Printf ("HEADPHONE.\n");
-			break;
-		case DSSPEAKER_MONO:
-			Com_Printf ("MONO.\n");
-			break;
-		case DSSPEAKER_QUAD:
-			Com_Printf ("QUAD.\n");
-			break;
-		case DSSPEAKER_STEREO:
-			Com_Printf ("STEREO.\n");
-			break;
-		case DSSPEAKER_SURROUND:
-			Com_Printf ("SURROUND.\n");
-			break;
-		case DSSPEAKER_7POINT1:
-			Com_Printf ("7POINT1.\n");
-			break;
-		default:
-			Com_Printf ("%d (UNKNOWN)\n", speakerconfig);
-			break;
-	}
 
 	dsound_init = true;
 
@@ -526,7 +491,7 @@ qboolean SNDDMA_InitWav (void)
 	int				i;
 	HRESULT			hr;
 
-	Com_Printf( "Initializing wave sound\n" );
+	Com_Printf( "Initializing wave sound\n", LOG_CLIENT|LOG_NOTICE);
 	
 	snd_sent = 0;
 	snd_completed = 0;
@@ -560,7 +525,7 @@ qboolean SNDDMA_InitWav (void)
 	{
 		if (hr != MMSYSERR_ALLOCATED)
 		{
-			Com_Printf ("failed\n");
+			Com_Printf ("failed\n", LOG_CLIENT);
 			return false;
 		}
 
@@ -570,7 +535,7 @@ qboolean SNDDMA_InitWav (void)
 						"Sound not available",
 						MB_RETRYCANCEL | MB_SETFOREGROUND | MB_ICONEXCLAMATION) != IDRETRY)
 		{
-			Com_Printf ("hw in use\n" );
+			Com_Printf ("hw in use\n", LOG_CLIENT);
 			return false;
 		}
 	} 
@@ -587,7 +552,7 @@ qboolean SNDDMA_InitWav (void)
 	hData = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE, gSndBufSize); 
 	if (!hData) 
 	{ 
-		Com_Printf( " failed\n" );
+		Com_Printf( " failed\n", LOG_CLIENT);
 		FreeSound ();
 		return false; 
 	}
@@ -597,7 +562,7 @@ qboolean SNDDMA_InitWav (void)
 	lpData = GlobalLock(hData);
 	if (!lpData)
 	{ 
-		Com_Printf( " failed\n" );
+		Com_Printf( " failed\n", LOG_CLIENT);
 		FreeSound ();
 		return false; 
 	} 
@@ -615,7 +580,7 @@ qboolean SNDDMA_InitWav (void)
 
 	if (hWaveHdr == NULL)
 	{ 
-		Com_Printf( "failed\n" );
+		Com_Printf( "failed\n", LOG_CLIENT);
 		FreeSound ();
 		return false; 
 	} 
@@ -626,7 +591,7 @@ qboolean SNDDMA_InitWav (void)
 
 	if (lpWaveHdr == NULL)
 	{ 
-		Com_Printf( "failed\n" );
+		Com_Printf( "failed\n", LOG_CLIENT);
 		FreeSound ();
 		return false; 
 	}
@@ -643,7 +608,7 @@ qboolean SNDDMA_InitWav (void)
 		if (waveOutPrepareHeader(hWaveOut, lpWaveHdr+i, sizeof(WAVEHDR)) !=
 				MMSYSERR_NOERROR)
 		{
-			Com_Printf ("failed\n");
+			Com_Printf ("failed\n", LOG_CLIENT);
 			FreeSound ();
 			return false;
 		}
@@ -695,12 +660,12 @@ int SNDDMA_Init (qboolean fullInit)
 				snd_isdirect = true;
 
 				if (snd_firsttime)
-					Com_Printf ("dsound init succeeded\n" );
+					Com_Printf ("dsound init succeeded\n", LOG_CLIENT|LOG_NOTICE );
 			}
 			else
 			{
 				snd_isdirect = false;
-				Com_Printf ("*** dsound init failed ***\n");
+				Com_Printf ("*** dsound init failed ***\n", LOG_CLIENT|LOG_ERROR);
 			}
 		}
 	}
@@ -720,11 +685,11 @@ int SNDDMA_Init (qboolean fullInit)
 			if (snd_iswave)
 			{
 				if (snd_firsttime)
-					Com_Printf ("Wave sound init succeeded\n");
+					Com_Printf ("Wave sound init succeeded\n", LOG_CLIENT|LOG_NOTICE);
 			}
 			else
 			{
-				Com_Printf ("Wave sound init failed\n");
+				Com_Printf ("Wave sound init failed\n", LOG_CLIENT);
 			}
 		}
 	}
@@ -736,7 +701,7 @@ int SNDDMA_Init (qboolean fullInit)
 	if (!dsound_init && !wav_init)
 	{
 		if (snd_firsttime)
-			Com_Printf ("*** No sound device initialized ***\n");
+			Com_Printf ("*** No sound device initialized ***\n", LOG_CLIENT|LOG_NOTICE);
 
 		return 0;
 	}
@@ -799,7 +764,7 @@ void SNDDMA_BeginPainting (void)
 
 	// if the buffer was lost or stopped, restore it and/or restart it
 	if (pDSBuf->lpVtbl->GetStatus (pDSBuf, &dwStatus) != DS_OK)
-		Com_Printf ("Couldn't get sound buffer status\n");
+		Com_Printf ("Couldn't get sound buffer status\n", LOG_CLIENT);
 	
 	if (dwStatus & DSBSTATUS_BUFFERLOST)
 		pDSBuf->lpVtbl->Restore (pDSBuf);
@@ -817,7 +782,7 @@ void SNDDMA_BeginPainting (void)
 	{
 		if (hresult != DSERR_BUFFERLOST)
 		{
-			Com_Printf( "S_TransferStereo16: Lock failed with error '%s'\n", DSoundError( hresult ) );
+			Com_Printf( "S_TransferStereo16: Lock failed with error '%s'\n", LOG_CLIENT, DSoundError( hresult ) );
 			S_Shutdown ();
 			return;
 		}
@@ -894,7 +859,7 @@ void SNDDMA_Submit(void)
 
 		if (wResult != MMSYSERR_NOERROR)
 		{ 
-			Com_Printf ("Failed to write block to device\n");
+			Com_Printf ("Failed to write block to device\n", LOG_CLIENT);
 			FreeSound ();
 			return; 
 		} 

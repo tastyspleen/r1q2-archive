@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern cparticle_t	*active_particles, *free_particles;
 extern cparticle_t	particles[MAX_PARTICLES];
-extern int			cl_numparticles;
+//extern int			cl_numparticles;
 extern cvar_t		*vid_ref;
 
 extern void MakeNormalVectors (vec3_t forward, vec3_t right, vec3_t up);
@@ -39,10 +39,10 @@ void vectoangles2 (vec3_t value1, vec3_t angles)
 	float	forward;
 	float	yaw, pitch;
 
-	if (value1[1] == 0 && value1[0] == 0)
+	if (FLOAT_EQ_ZERO(value1[0]) && FLOAT_EQ_ZERO(value1[1]))
 	{
 		yaw = 0;
-		if (value1[2] > 0)
+		if (FLOAT_GT_ZERO(value1[2]))
 			pitch = 90;
 		else
 			pitch = 270;
@@ -50,19 +50,19 @@ void vectoangles2 (vec3_t value1, vec3_t angles)
 	else
 	{
 	// PMM - fixed to correct for pitch of 0
-		if (value1[0])
+		if (FLOAT_NE_ZERO(value1[0]))
 			yaw = (atan2(value1[1], value1[0]) * 180 / M_PI);
 		else if (value1[1] > 0)
 			yaw = 90;
 		else
 			yaw = 270;
 
-		if (yaw < 0)
+		if (FLOAT_LT_ZERO(yaw))
 			yaw += 360;
 
 		forward = sqrt (value1[0]*value1[0] + value1[1]*value1[1]);
 		pitch = (atan2(value1[2], forward) * 180 / M_PI);
-		if (pitch < 0)
+		if (FLOAT_LT_ZERO(pitch))
 			pitch += 360;
 	}
 
@@ -80,7 +80,7 @@ void CL_Flashlight (int ent, vec3_t pos)
 	dl = CL_AllocDlight (ent);
 	VectorCopy (pos,  dl->origin);
 	dl->radius = 400;
-	dl->minlight = 250;
+	//dl->minlight = 250;
 	dl->die = cl.time + 100;
 	dl->color[0] = 1;
 	dl->color[1] = 1;
@@ -96,7 +96,7 @@ void CL_ColorFlash (vec3_t pos, int ent, int intensity, float r, float g, float 
 {
 	cdlight_t	*dl;
 
-	if((vidref_val == VIDREF_SOFT) && ((r < 0) || (g<0) || (b<0)))
+	if((vidref_val == VIDREF_SOFT) && ((FLOAT_LT_ZERO(r) || FLOAT_LT_ZERO(g) || FLOAT_LT_ZERO(b))))
 	{
 		intensity = -intensity;
 		r = -r;
@@ -107,7 +107,7 @@ void CL_ColorFlash (vec3_t pos, int ent, int intensity, float r, float g, float 
 	dl = CL_AllocDlight (ent);
 	VectorCopy (pos,  dl->origin);
 	dl->radius = intensity;
-	dl->minlight = 250;
+	//dl->minlight = 250;
 	dl->die = cl.time + 100;
 	dl->color[0] = r;
 	dl->color[1] = g;

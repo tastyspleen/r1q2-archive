@@ -18,8 +18,10 @@ int ClipVelocity (vec3_t in, vec3_t normal, vec3_t out, float overbounce)
 	int		i, blocked;
 	
 	blocked = 0;
-	if (normal[2] > 0)
+	
+	if (FLOAT_GT_ZERO(normal[2]))
 		blocked |= 1;		// floor
+
 	if (!normal[2])
 		blocked |= 2;		// step
 	
@@ -111,7 +113,7 @@ void LE_RunEntity (localent_t *ent)
 			//LE_Physics_Fly (ent);
 			break;
 		default:
-			Com_Printf ("LE_RunEntity: bad movetype %i", ent->movetype, ent->classname);
+			Com_Printf ("LE_RunEntity: bad movetype %i", LOG_CLIENT, ent->movetype, ent->classname);
 	}
 
 	if (ent->think && cl.time >= ent->nextthink )

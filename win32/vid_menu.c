@@ -24,10 +24,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define REF_OPENGL	1
 #define REF_3DFX	2
 #define REF_POWERVR	3
-#define REF_VERITE	4
+//#define REF_VERITE	4
+#define	REF_R1GL	4
+#define	REF_NCGL	5
 
 extern cvar_t *vid_ref;
-extern cvar_t *vid_fullscreen;
 extern cvar_t *vid_gamma;
 extern cvar_t *scr_viewsize;
 
@@ -157,9 +158,17 @@ static void ApplyChanges( void *unused )
 		Cvar_Set( "vid_ref", "gl" );
 		Cvar_Set( "gl_driver", "pvrgl" );
 		break;
-	case REF_VERITE:
+	/*case REF_VERITE:
 		Cvar_Set( "vid_ref", "gl" );
 		Cvar_Set( "gl_driver", "veritegl" );
+		break;*/
+	case REF_R1GL:
+		Cvar_Set ( "vid_ref", "r1gl" );
+		Cvar_Set ( "gl_driver", "opengl32" );
+		break;
+	case REF_NCGL:
+		Cvar_Set ( "vid_ref", "ncgl" );
+		Cvar_Set ( "gl_driver", "opengl32" );
 		break;
 	}
 
@@ -234,6 +243,8 @@ void EXPORT VID_MenuInit( void )
 		"[default OpenGL]",
 		"[3Dfx OpenGL   ]",
 		"[PowerVR OpenGL]",
+		"[R1GL          ]",
+		"[NoCheat OpenGL]",
 //		"[Rendition OpenGL]",
 		0
 	};
@@ -283,9 +294,18 @@ void EXPORT VID_MenuInit( void )
 		else if ( strcmp( gl_driver->string, "pvrgl" ) == 0 )
 			s_ref_list[s_current_menu_index].curvalue = REF_POWERVR;
 		else if ( strcmp( gl_driver->string, "opengl32" ) == 0 )
-			s_ref_list[s_current_menu_index].curvalue = REF_OPENGL;
+		{
+			if ( strcmp( vid_ref->string, "r1gl" ) == 0 )
+				s_ref_list[s_current_menu_index].curvalue = REF_R1GL;
+			else if ( strcmp( vid_ref->string, "ncgl" ) == 0 )
+				s_ref_list[s_current_menu_index].curvalue = REF_NCGL;
+			else
+				s_ref_list[s_current_menu_index].curvalue = REF_OPENGL;
+		}
 		else
+		{
 			s_ref_list[s_current_menu_index].curvalue = REF_OPENGL;
+		}
 	}
 
 	s_software_menu.x = viddef.width * 0.50;

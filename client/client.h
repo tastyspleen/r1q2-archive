@@ -26,6 +26,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	BUILDING_CLIENT		1
 #define	DECOUPLED_RENDERER	1
 
+//shared by keys/console
+#define	MAXCMDLINE	512
+
 #include <math.h>
 #include <string.h>
 #include <stdarg.h>
@@ -264,16 +267,16 @@ typedef struct client_static_s
 	float			frametime;			// seconds since last frame
 
 // screen rendering information
-	float		disable_screen;		// showing loading plaque between levels
+	float			disable_screen;		// showing loading plaque between levels
 									// or changing rendering dlls
 									// if time gets > 30 seconds ahead, break it
-	int			disable_servercount;	// when we receive a frame and cl.servercount
+	int				disable_servercount;	// when we receive a frame and cl.servercount
 									// > cls.disable_servercount, clear disable_screen
 
 // connection information
-	char		servername[MAX_OSPATH];	// name of server from original connect
-	char		lastservername[MAX_OSPATH];	// name of server from original connect
-	float		connect_time;		// for connection retransmits
+	char			servername[MAX_OSPATH];	// name of server from original connect
+	char			lastservername[MAX_OSPATH];	// name of server from original connect
+	unsigned int	connect_time;		// for connection retransmits
 
 	int			quakePort;			// a 16 bit value that allows quake servers
 									// to work around address translating routers
@@ -298,7 +301,7 @@ typedef struct client_static_s
 
 	//r1: defer rendering when realtime < this
 	unsigned int	defer_rendering;
-	unsigned short	dlserverport;
+	//unsigned short	dlserverport;
 } client_static_t;
 
 extern client_static_t	cls;
@@ -355,8 +358,6 @@ extern	cvar_t	*freelook;
 
 extern	cvar_t	*cl_lightlevel;	// FIXME HACK
 
-extern	cvar_t	*ip_downloadport;
-
 extern	cvar_t	*cl_paused;
 extern	cvar_t	*cl_timedemo;
 
@@ -371,6 +372,11 @@ extern	cvar_t	*cl_strafejump_hack;
 extern	cvar_t	*cl_nolerp;
 //extern	cvar_t	*cl_snaps;
 
+extern	cvar_t	*cl_railtrail;
+extern	cvar_t	*cl_async;
+
+extern cvar_t *vid_fullscreen;
+
 extern int openal_active;
 
 #ifndef DEDICATED_ONLY
@@ -380,12 +386,13 @@ extern	qboolean send_packet_now;
 typedef struct
 {
 	int		key;				// so entities can reuse same entry
+	int		die;				// stop lighting after this time
+
 	vec3_t	color;
 	vec3_t	origin;
+
 	float	radius;
-	float	die;				// stop lighting after this time
-	float	decay;				// drop this each second
-	float	minlight;			// don't add when contributing less
+	//float	minlight;			// don't add when contributing less
 } cdlight_t;
 
 extern	centity_t	cl_entities[MAX_EDICTS];
@@ -443,16 +450,16 @@ void CL_ParticleEffect3 (vec3_t org, vec3_t dir, int color, int count);
 typedef struct particle_s
 {
 	struct particle_s	*next;
-	int			type;
 
-	float		time;
+	int			type;
+	int			color;
 
 	vec3_t		org;
 	vec3_t		vel;
 	vec3_t		accel;
 
-	float		color;
-	float		colorvel;
+	//float		colorvel;
+	float		time;
 	float		alpha;
 	float		alphavel;
 } cparticle_t;
@@ -470,7 +477,7 @@ void CL_ClearEffects (void);
 void CL_ClearTEnts (void);
 void CL_BlasterTrail (vec3_t start, vec3_t end);
 void CL_QuadTrail (vec3_t start, vec3_t end);
-void CL_RailTrail (vec3_t start, vec3_t end);
+void CL_RailTrail (vec3_t start, vec3_t end, byte clr);
 void CL_BubbleTrail (vec3_t start, vec3_t end);
 void CL_FlagTrail (vec3_t start, vec3_t end, float color);
 
@@ -520,7 +527,7 @@ void SmokeAndFlash(vec3_t origin);
 
 void CL_SetLightstyle (int i);
 
-void CL_RunParticles (void);
+//void CL_RunParticles (void);
 void CL_RunDLights (void);
 void CL_RunLightStyles (void);
 
@@ -604,8 +611,6 @@ void CL_Record_f (void);
 //
 // cl_parse.c
 //
-extern	char *svc_strings[];
-
 extern	int	serverPacketCount;
 extern	qboolean gotFrameFromServerPacket;
 

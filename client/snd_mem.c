@@ -49,6 +49,15 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 
 	outcount = sc->length / stepscale;
 	sc->length = outcount;
+
+	if (sc->length == 0)
+	{
+		Com_Printf ("ResampleSfx: Resampling %s results in empty sound!\n", LOG_CLIENT|LOG_WARNING, sfx->name);
+		//free at next opportunity
+		sfx->registration_sequence = 0;
+		return;
+	}
+
 	if (sc->loopstart != -1)
 		sc->loopstart = sc->loopstart / stepscale;
 
@@ -145,7 +154,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		info = GetWavinfo (s->name, data, size);
 		if (info.channels != 1)
 		{
-			Com_Printf ("%s is a stereo sample\n",s->name);
+			Com_Printf ("%s is an unsupported stereo sample\n", LOG_CLIENT|LOG_WARNING, s->name);
 			FS_FreeFile (data);
 			return NULL;
 		}
@@ -169,7 +178,6 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 
 	if (!openal_active)
 	{
-		
 		sc->length = info.samples;
 		sc->loopstart = info.loopstart;
 		sc->speed = info.rate;
@@ -294,7 +302,7 @@ void DumpChunks(void)
 		memcpy (str, data_p, 4);
 		data_p += 4;
 		iff_chunk_len = GetLittleLong();
-		Com_Printf ("0x%x : %s (%d)\n", (int)(data_p - 4), str, iff_chunk_len);
+		Com_Printf ("0x%x : %s (%d)\n", LOG_CLIENT, (int)(data_p - 4), str, iff_chunk_len);
 		data_p += (iff_chunk_len + 1) & ~1;
 	} while (data_p < iff_end);
 }
@@ -323,7 +331,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	FindChunk("RIFF");
 	if (!(data_p && !strncmp((const char *)data_p+8, "WAVE", 4)))
 	{
-		Com_Printf("GetWavinfo: Missing RIFF/WAVE chunks (%s)\n", name);
+		Com_Printf("GetWavinfo: Missing RIFF/WAVE chunks (%s)\n", LOG_CLIENT, name);
 		return info;
 	}
 
@@ -334,14 +342,14 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	FindChunk("fmt ");
 	if (!data_p)
 	{
-		Com_Printf("GetWavinfo: Missing fmt chunk (%s)\n", name);
+		Com_Printf("GetWavinfo: Missing fmt chunk (%s)\n", LOG_CLIENT, name);
 		return info;
 	}
 	data_p += 8;
 	format = GetLittleShort();
 	if (format != 1)
 	{
-		Com_Printf("GetWavinfo: Microsoft PCM format only (%s)\n", name);
+		Com_Printf("GetWavinfo: Microsoft PCM format only (%s)\n", LOG_CLIENT, name);
 		return info;
 	}
 
@@ -378,7 +386,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	FindChunk("data");
 	if (!data_p)
 	{
-		Com_Printf("GetWavinfo: Missing data chunk (%s)\n", name);
+		Com_Printf("GetWavinfo: Missing data chunk (%s)\n", LOG_CLIENT, name);
 		return info;
 	}
 
@@ -388,7 +396,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	if (info.samples)
 	{
 		if (samples < info.samples)
-			Com_Error (ERR_DROP, "Sound %s has a bad loop length", name);
+			Com_Error (ERR_DROP, "Sound %s has a bad loop length", LOG_CLIENT, name);
 	}
 	else
 		info.samples = samples;

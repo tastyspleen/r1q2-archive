@@ -3,7 +3,8 @@ R1Q2 Source Code
 Hello!
 I ask that if you copy any code into your own engine
 that you please credit me and include a link to the
-R1Q2 homepage.
+R1Q2 homepage. Where possible, please be specific
+about which features you have used from R1Q2.
 
 If you fork R1Q2 in any way please modify the build
 string to clearly indicate that it is a fork. I would

@@ -83,64 +83,65 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	K_MOUSE4		203
 #define	K_MOUSE5		204
 #define	K_MOUSE6		205
-#define	K_MOUSE7		205
-#define	K_MOUSE8		205
-#define	K_MOUSE9		205
+#define	K_MOUSE7		206
+#define	K_MOUSE8		207
+#define	K_MOUSE9		208
 
 //
 // joystick buttons
 //
-/*#define	K_JOY1			203
-#define	K_JOY2			204
-#define	K_JOY3			205
-#define	K_JOY4			206*/
+#define	K_JOY1			209
+#define	K_JOY2			210
+#define	K_JOY3			211
+#define	K_JOY4			212
 
 //
 // aux keys are for multi-buttoned joysticks to generate so they can use
 // the normal binding process
 //
-#define	K_AUX1			207
-#define	K_AUX2			208
-#define	K_AUX3			209
-#define	K_AUX4			210
-#define	K_AUX5			211
-#define	K_AUX6			212
-#define	K_AUX7			213
-#define	K_AUX8			214
-#define	K_AUX9			215
-#define	K_AUX10			216
-#define	K_AUX11			217
-#define	K_AUX12			218
-#define	K_AUX13			219
-#define	K_AUX14			220
-#define	K_AUX15			221
-#define	K_AUX16			222
-#define	K_AUX17			223
-#define	K_AUX18			224
-#define	K_AUX19			225
-#define	K_AUX20			226
-#define	K_AUX21			227
-#define	K_AUX22			228
-#define	K_AUX23			229
-#define	K_AUX24			230
-#define	K_AUX25			231
-#define	K_AUX26			232
-#define	K_AUX27			233
-#define	K_AUX28			234
-#define	K_AUX29			235
-#define	K_AUX30			236
-#define	K_AUX31			237
-#define	K_AUX32			238
+#define	K_AUX1			213
+#define	K_AUX2			214
+#define	K_AUX3			215
+#define	K_AUX4			216
+#define	K_AUX5			217
+#define	K_AUX6			218
+#define	K_AUX7			219
+#define	K_AUX8			220
+#define	K_AUX9			221
+#define	K_AUX10			222
+#define	K_AUX11			223
+#define	K_AUX12			224
+#define	K_AUX13			225
+#define	K_AUX14			226
+#define	K_AUX15			227
+#define	K_AUX16			228
+#define	K_AUX17			229
+#define	K_AUX18			230
+#define	K_AUX19			231
+#define	K_AUX20			232
+#define	K_AUX21			233
+#define	K_AUX22			234
+#define	K_AUX23			235
+#define	K_AUX24			236
+#define	K_AUX25			237
+#define	K_AUX26			238
+#define	K_AUX27			239
+#define	K_AUX28			240
+#define	K_AUX29			241
+#define	K_AUX30			242
+#define	K_AUX31			243
+#define	K_AUX32			244
 
-#define K_MWHEELDOWN	239
-#define K_MWHEELUP		240
+#define K_MWHEELDOWN	245
+#define K_MWHEELUP		246
 
 extern char		*keybindings[256];
 extern	int		key_repeats[256];
 
 extern	int	anykeydown;
-extern char chat_buffer[];
+extern	char chat_buffer[MAXCMDLINE];
 extern	int chat_bufferlen;
+extern	int	chat_cursorpos;
 extern	qboolean	chat_team;
 
 void Key_Event (int key, qboolean down, unsigned time);

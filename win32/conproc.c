@@ -139,7 +139,8 @@ void InitConProc (int argc, char **argv)
 		return;
 	}
 
-	if (!_beginthreadex (NULL, 0, RequestProc, NULL, 0, &threadAddr))
+	//if (!_beginthreadex (NULL, 0, RequestProc, NULL, 0, &threadAddr))
+	if (!CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)RequestProc, NULL, 0, &threadAddr))
 	{
 		CloseHandle (heventDone);
 		printf ("Couldn't create QHOST thread\n");
@@ -218,7 +219,8 @@ unsigned _stdcall RequestProc (void *arg)
 		SetEvent (heventChildSend);
 	}
 
-	_endthreadex (0);
+	//_endthreadex (0);
+	ExitThread (0);
 	return 0;
 }
 
@@ -256,7 +258,6 @@ BOOL GetScreenBufferLines (int *piLines)
 
 BOOL SetScreenBufferLines (int iLines)
 {
-
 	return SetConsoleCXCY (hStdout, 80, iLines);
 }
 

@@ -43,24 +43,33 @@ qboolean	NET_StringToSockaddr (char *s, struct sockaddr *sadr)
 
 	//r1: better than just the first digit for ip validity :)
 	p = s;
-	while (*p) {
-		if (*p == '.') {
+	while (*p)
+	{
+		if (*p == '.')
+		{
 			isip++;
-		} else if (*p == ':') {
+		}
+		else if (*p == ':') 
+		{
 			break;
-		} else if (!isdigit(*p)) {
-			isip = 0;
+		}
+		else if (!isdigit(*p))
+		{
+			isip = -1;
 			break;
 		}
 		p++;
 	}
+
+	if (isip != -1 && isip != 3)
+		return false;
 		
 	((struct sockaddr_in *)sadr)->sin_family = AF_INET;
 	
 	((struct sockaddr_in *)sadr)->sin_port = 0;
 
 	//r1: CHECK THE GODDAMN BUFFER SIZE... sigh yet another overflow.
-	strncpy (copy, s, sizeof(copy)-1);
+	Q_strncpy (copy, s, sizeof(copy)-1);
 
 	// strip off a trailing :port if present
 	for (colon = copy ; *colon ; colon++) {
@@ -72,7 +81,7 @@ qboolean	NET_StringToSockaddr (char *s, struct sockaddr *sadr)
 		}
 	}
 	
-	if (isip)
+	if (isip != -1)
 	{
 		*(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(copy);
 	}
@@ -143,7 +152,7 @@ void NetadrToSockadr (netadr_t *a, struct sockaddr_in *s)
 
 char	*NET_AdrToString (netadr_t *a)
 {
-	static	char	s[64];
+	static	char	s[32];
 	
 	Com_sprintf (s, sizeof(s), "%i.%i.%i.%i:%i", a->ip[0], a->ip[1], a->ip[2], a->ip[3], ntohs(a->port));
 
@@ -152,7 +161,7 @@ char	*NET_AdrToString (netadr_t *a)
 
 char	*NET_BaseAdrToString (netadr_t *a)
 {
-	static	char	s[64];
+	static	char	s[32];
 	
 	Com_sprintf (s, sizeof(s), "%i.%i.%i.%i", a->ip[0], a->ip[1], a->ip[2], a->ip[3]);
 
@@ -339,7 +348,7 @@ qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_me
 }
 
 
-void NET_SendLoopPacket (netsrc_t sock, int length, void *data)
+void NET_SendLoopPacket (netsrc_t sock, int length, const void *data)
 {
 	int		i;
 	loopback_t	*loop;
@@ -386,7 +395,7 @@ int NET_RecvTCP (int s, byte *buffer, int len)
 
 void NET_CloseSocket (int s)
 {
-	Com_Printf ("NET_CloseSocket: shutting down socket %d\n", s);
+	Com_DPrintf ("NET_CloseSocket: shutting down socket %d\n", s);
 	shutdown (s, 0x02);
 	closesocket (s);
 }
@@ -408,7 +417,7 @@ int NET_Listen (unsigned short port)
 
 	if (ioctlsocket (s, FIONBIO, (u_long *)&_true) == -1)
 	{
-		Com_Printf ("WARNING: NET_Listen: ioctl FIONBIO: %s\n", NET_ErrorString());
+		Com_Printf ("WARNING: NET_Listen: ioctl FIONBIO: %s\n", LOG_NET, NET_ErrorString());
 		return -1;
 	}
 
@@ -418,8 +427,7 @@ int NET_Listen (unsigned short port)
 	if ((listen (s, SOMAXCONN)) == -1)
 		return -1;
 
-	Com_Printf ("NET_Listen: socket %d is listening\n", s);
-
+	Com_DPrintf ("NET_Listen: socket %d is listening\n", s);
 	return s;
 }
 
@@ -460,7 +468,7 @@ int NET_Connect (netadr_t *to, int port)
 
 	if (ioctlsocket (s, FIONBIO, (u_long *)&_true) == -1)
 	{
-		Com_Printf ("WARNING: NET_Connect: ioctl FIONBIO: %s\n", NET_ErrorString());
+		Com_Printf ("WARNING: NET_Connect: ioctl FIONBIO: %s\n", LOG_NET, NET_ErrorString());
 		return -1;
 	}
 

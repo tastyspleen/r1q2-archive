@@ -47,7 +47,7 @@ void CL_CheckPredictionError (void)
 	else
 	{
 		if (cl_showmiss->intvalue && (delta[0] || delta[1] || delta[2]) )
-			Com_Printf ("prediction miss on %i: %i\n", cl.frame.serverframe, 
+			Com_Printf ("prediction miss on %i: %i\n", LOG_CLIENT, cl.frame.serverframe, 
 			delta[0] + delta[1] + delta[2]);
 
 		VectorCopy (cl.frame.playerstate.pmove.origin, cl.predicted_origins[frame]);
@@ -76,6 +76,39 @@ void CL_ClipMoveToEntities ( vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
 	int			num;
 	cmodel_t		*cmodel;
 	vec3_t		bmins, bmaxs;
+
+	//XXX: this breaks world clipping somehow...
+	/*
+	vec3_t		saved_mins, saved_maxs;
+
+	VectorCopy (mins, saved_mins);
+	VectorCopy (maxs, saved_maxs);
+
+	if (1)
+	{
+		for (i=0 ; i<cl.frame.num_entities ; i++)
+		{
+			num = (cl.frame.parse_entities + i)&(MAX_PARSE_ENTITIES-1);
+			ent = &cl_parse_entities[num];
+			
+			if (ent->number == cl.playernum+1)
+			{
+				x = 8*(ent->solid & 31);
+				zd = 8*((ent->solid>>5) & 31);
+				zu = 8*((ent->solid>>10) & 63) - 32;
+
+				bmins[0] = bmins[1] = -x;
+				bmaxs[0] = bmaxs[1] = x;
+				bmins[2] = -zd;
+				bmaxs[2] = zu;
+
+				VectorCopy (bmins, mins);
+				VectorCopy (bmaxs, maxs);
+
+				break;
+			}
+		}
+	}*/
 
 	for (i=0 ; i<cl.frame.num_entities ; i++)
 	{
@@ -133,6 +166,10 @@ void CL_ClipMoveToEntities ( vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
 		else if (trace.startsolid)
 			tr->startsolid = true;
 	}
+
+	//restore for pmove
+	/*VectorCopy (saved_mins, mins);
+	VectorCopy (saved_maxs, maxs);*/
 }
 
 
@@ -224,104 +261,128 @@ void CL_PredictMovement (void)
 	if (current - ack >= CMD_BACKUP)
 	{
 		if (cl_showmiss->intvalue)
-			Com_Printf ("exceeded CMD_BACKUP\n");
+			Com_Printf ("exceeded CMD_BACKUP\n", LOG_CLIENT);
 		return;	
 	}
 
 	// copy current state to pmove
-	memset (&pm, 0, sizeof(pm));
+	//memset (&pm, 0, sizeof(pm));
+	
+	/*pm.groundentity = NULL;
+	pm.numtouch = 0;
+	pm.snapinitial = false;
+	pm.touchents = NULL;
+	VectorClear (pm.viewangles);
+	pm.viewheight = 0;
+	pm.waterlevel = 0;
+	pm.watertype = 0;*/
+
+	pm.snapinitial = false;
 	pm.trace = CL_PMTrace;
 	pm.pointcontents = CL_PMpointcontents;
-
-	pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
-
 	pm.s = cl.frame.playerstate.pmove;
+
+	VectorClear (pm.viewangles);
 
 //	SCR_DebugGraph (current - ack - 1, 0);
 
 	frame = 0;
 
-#ifdef DECOUPLED_RENDERER
-	// run frames
-	while (++ack <= current) //jec - changed '<' to '<=' cause current is our pending cmd.
+	if (cl.enhancedServer)
 	{
-		frame = ack & (CMD_BACKUP-1);
-		cmd = &cl.cmds[frame];
-
-		if (!cmd->msec)
-			continue; //jec - ignore 'null' usercmd entries.
-
-		pm.cmd = *cmd;
-
-		if (cl.enhancedServer)
-		{
-			VectorCopy (cl.frame.playerstate.mins, pm.mins);
-			VectorCopy (cl.frame.playerstate.maxs, pm.maxs);
-		}
-		else
-		{
-			VectorSet (pm.mins, -16, -16, -24);
-			VectorSet (pm.maxs,  16,  16, 32);
-		}
-
-		if (pm.s.pm_type == PM_SPECTATOR && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-			pm.multiplier = 2;
-		else
-			pm.multiplier = 1;
-
-		pm.enhanced = cl.enhancedServer;
-		pm.strafehack = cl_strafejump_hack->intvalue;
-
-		Pmove (&pm);
-
-		// save for debug checking
-		VectorCopy (pm.s.origin, cl.predicted_origins[frame]);
+		VectorCopy (cl.frame.playerstate.mins, pm.mins);
+		VectorCopy (cl.frame.playerstate.maxs, pm.maxs);
+	}
+	else
+	{
+		VectorSet (pm.mins, -16, -16, -24);
+		VectorSet (pm.maxs,  16,  16, 32);
 	}
 
-	//r1: don't forget to reset ack so stair prediction works
-	//ack--;
-#else
-	// run frames
-	while (++ack < current)
+	if (pm.s.pm_type == PM_SPECTATOR && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		pm.multiplier = 2;
+	else
+		pm.multiplier = 1;
+
+	pm.enhanced = cl.enhancedServer;
+	pm.strafehack = cl_strafejump_hack->intvalue;
+
+	if (cl_async->intvalue)
 	{
-		frame = ack & (CMD_BACKUP-1);
-		cmd = &cl.cmds[frame];
+		// run frames
+		while (++ack <= current) //jec - changed '<' to '<=' cause current is our pending cmd.
+		{
+			frame = ack & (CMD_BACKUP-1);
+			cmd = &cl.cmds[frame];
 
-		pm.cmd = *cmd;
+			if (!cmd->msec)
+				continue; //jec - ignore 'null' usercmd entries.
 
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-			VectorCopy (cl.frame.playerstate.mins, pm.mins);
-			VectorCopy (cl.frame.playerstate.maxs, pm.maxs);
-		} else {
-			VectorSet (pm.mins, -16, -16, -24);
-			VectorSet (pm.maxs,  16,  16, 32);
+			pm.cmd = *cmd;
+
+			Pmove (&pm);
+
+			// save for debug checking
+			VectorCopy (pm.s.origin, cl.predicted_origins[frame]);
 		}
 
-		if (pm.s.pm_type == PM_SPECTATOR && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-			pm.multiplier = 2;
-		else
-			pm.multiplier = 1;
+		switch (cl_smoothsteps->intvalue)
+		{
+			case 3:
+				//get immediate results of this prediction vs last one
+				step = pm.s.origin[2] - cl.predicted_origin[2] * 8;
 
-		Pmove (&pm);
+				//r1ch: treat only some units as steps
+				if (((step > 62 && step < 66) || (step > 94 && step < 98) || (step > 126 && step < 130)) && !VectorCompare (pm.s.velocity, vec3_origin) && (pm.s.pm_flags & PMF_ON_GROUND))
+				{
+					cl.predicted_step = step * 0.125;
+					cl.predicted_step_time = cls.realtime - cls.frametime * 500;
+				}
+				break;
 
-		// save for debug checking
-		VectorCopy (pm.s.origin, cl.predicted_origins[frame]);
+			case 2:
+				//r1ch: make difference more aggressive
+				ack--;
+				/* intentional fall through */
+			case 1:
+				oldframe = (ack-2) & (CMD_BACKUP-1);
+				oldz = cl.predicted_origins[oldframe][2];
+				step = pm.s.origin[2] - oldz;
+
+				if (last_step_frame != current && step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) )
+				{
+					cl.predicted_step = step * 0.125;
+					cl.predicted_step_time = cls.realtime - cls.frametime * 500;
+					last_step_frame = current;
+				}
+				break;
+		}
+
 	}
-#endif
-
-	oldframe = (ack-2) & (CMD_BACKUP-1);
-	oldz = cl.predicted_origins[oldframe][2];
-	step = pm.s.origin[2] - oldz;
-
-	//r1ch: don't overwrite existing stair moves
-	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame && cl_smoothsteps->intvalue)
+	else
 	{
-		last_step_frame = current;
-		cl.predicted_step = step * 0.125;
-		cl.predicted_step_time = cls.realtime - cls.frametime * 500;
-#ifdef _DEBUG
-		//Com_Printf ("***step: %d [%f], time: %d, cur: %d, old: %d\n", step, cl.predicted_step, cl.predicted_step_time, current, oldframe);
-#endif
+		// run frames
+		while (++ack < current)
+		{
+			frame = ack & (CMD_BACKUP-1);
+			cmd = &cl.cmds[frame];
+
+			pm.cmd = *cmd;
+
+			Pmove (&pm);
+
+			// save for debug checking
+			VectorCopy (pm.s.origin, cl.predicted_origins[frame]);
+		}
+
+		oldframe = (ack-2) & (CMD_BACKUP-1);
+		oldz = cl.predicted_origins[oldframe][2];
+		step = pm.s.origin[2] - oldz;
+		if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) )
+		{
+			cl.predicted_step = step * 0.125;
+			cl.predicted_step_time = cls.realtime - cls.frametime * 500;
+		}
 	}
 
 	// copy results out for rendering

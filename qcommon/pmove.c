@@ -43,20 +43,20 @@ typedef struct
 	qboolean	ladder;
 } pml_t;
 
-pmove_new_t		*pm;
-pml_t		pml;
+static pmove_new_t		*pm;
+static pml_t			pml;
 
 
 // movement parameters
-float	pm_stopspeed = 100;
-float	pm_maxspeed = 300;
-float	pm_duckspeed = 100;
-float	pm_accelerate = 10;
-float	pm_airaccelerate = 0;
-float	pm_wateraccelerate = 10;
-float	pm_friction = 6;
-float	pm_waterfriction = 1;
-float	pm_waterspeed = 400;
+#define	pm_stopspeed 100.0f
+#define	pm_maxspeed 300.0f
+#define	pm_duckspeed 100.0f
+#define	pm_accelerate 10.0f
+float	pm_airaccelerate = 0.0f;
+#define	pm_wateraccelerate 10.0f
+#define	pm_friction 6.0f
+#define	pm_waterfriction  1.0f
+#define	pm_waterspeed 400.0f
 
 /*
 
@@ -142,7 +142,7 @@ void PM_StepSlideMove_ (void)
 			return;
 		}
 
-		if (trace.fraction > 0)
+		if (FLOAT_GT_ZERO(trace.fraction))
 		{	// actually covered some distance
 			VectorCopy (trace.endpos, pml.origin);
 			numplanes = 0;
@@ -374,7 +374,7 @@ void PM_Friction (void)
 
 // scale the velocity
 	newspeed = speed - drop;
-	if (newspeed < 0)
+	if (FLOAT_LT_ZERO(newspeed))
 	{
 		newspeed = 0;
 	}
@@ -399,7 +399,8 @@ void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
 
 	currentspeed = DotProduct (pml.velocity, wishdir);
 	addspeed = wishspeed - currentspeed;
-	if (addspeed <= 0)
+
+	if (FLOAT_LE_ZERO (addspeed))
 		return;
 
 	accelspeed = accel*pml.frametime*wishspeed;
@@ -420,7 +421,7 @@ void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 	currentspeed = DotProduct (pml.velocity, wishdir);
 	addspeed = wishspd - currentspeed;
 
-	if (addspeed <= 0)
+	if (FLOAT_LE_ZERO(addspeed))
 		return;
 
 	accelspeed = accel * wishspeed * pml.frametime;
@@ -617,18 +618,18 @@ void PM_AirMove (void)
 	if ( pml.ladder )
 	{
 		PM_Accelerate (wishdir, wishspeed, pm_accelerate);
-		if (!wishvel[2])
+		if (FLOAT_EQ_ZERO(wishvel[2]))
 		{
-			if (pml.velocity[2] > 0)
+			if (FLOAT_GT_ZERO(pml.velocity[2]))
 			{
 				pml.velocity[2] -= pm->s.gravity * pml.frametime;
-				if (pml.velocity[2] < 0)
+				if (FLOAT_LT_ZERO(pml.velocity[2]))
 					pml.velocity[2]  = 0;
 			}
 			else
 			{
 				pml.velocity[2] += pm->s.gravity * pml.frametime;
-				if (pml.velocity[2] > 0)
+				if (FLOAT_GT_ZERO (pml.velocity[2]))
 					pml.velocity[2]  = 0;
 			}
 		}
@@ -647,7 +648,7 @@ void PM_AirMove (void)
 			pml.velocity[2] -= pm->s.gravity * pml.frametime;
 // PGM
 
-		if (!pml.velocity[0] && !pml.velocity[1])
+		if (FLOAT_EQ_ZERO(pml.velocity[0]) && FLOAT_EQ_ZERO(pml.velocity[1]))
 			return;
 		PM_StepSlideMove ();
 	}
@@ -731,7 +732,7 @@ void PM_CatagorizePosition (void)
 		}
 
 #if 0
-		if (trace.fraction < 1.0 && trace.ent && pml.velocity[2] < 0)
+		if (trace.fraction < 1.0 && trace.ent && FLOAT_LT_ZERO(pml.velocity[2]))
 			pml.velocity[2] = 0;
 #endif
 
@@ -913,7 +914,7 @@ void PM_FlyMove (void)
 
 		// scale the velocity
 		newspeed = speed - drop;
-		if (newspeed < 0)
+		if (FLOAT_LT_ZERO(newspeed))
 			newspeed = 0;
 		newspeed /= speed;
 
@@ -948,7 +949,7 @@ void PM_FlyMove (void)
 
 	currentspeed = DotProduct(pml.velocity, wishdir);
 	addspeed = wishspeed - currentspeed;
-	if (addspeed <= 0)
+	if (FLOAT_LE_ZERO (addspeed))
 		return;
 	accelspeed = pm_accelerate*pml.frametime*wishspeed;
 	if (accelspeed > addspeed)
@@ -1078,7 +1079,7 @@ void PM_DeadMove (void)
 
 	forward = VectorLength (pml.velocity);
 	forward -= 20;
-	if (forward <= 0)
+	if (FLOAT_LE_ZERO(forward))
 	{
 		VectorClear (pml.velocity);
 	}
@@ -1129,7 +1130,7 @@ void PM_SnapPosition (void)
 
 	for (i=0 ; i<3 ; i++)
 	{
-		if (pml.origin[i] >= 0)
+		if (FLOAT_GE_ZERO (pml.origin[i]))
 			sign[i] = 1;
 		else 
 			sign[i] = -1;
@@ -1358,12 +1359,14 @@ void Pmove (pmove_new_t *pmove)
 	}
 
 	if (pm->s.pm_flags & PMF_TIME_TELEPORT)
-	{	// teleport pause stays exactly in place
+	{	
+		// teleport pause stays exactly in place
 	}
 	else if (pm->s.pm_flags & PMF_TIME_WATERJUMP)
-	{	// waterjump has no control, but falls
+	{	
+		// waterjump has no control, but falls
 		pml.velocity[2] -= pm->s.gravity * pml.frametime;
-		if (pml.velocity[2] < 0)
+		if (FLOAT_LT_ZERO(pml.velocity[2]))
 		{	// cancel as soon as we are falling down again
 			pm->s.pm_flags &= ~(PMF_TIME_WATERJUMP | PMF_TIME_LAND | PMF_TIME_TELEPORT);
 			pm->s.pm_time = 0;

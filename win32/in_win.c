@@ -97,6 +97,8 @@ void Joy_AdvancedUpdate_f (void);
 void IN_JoyMove (usercmd_t *cmd);
 #endif
 
+cvar_t	*cl_hidewindowtitle;
+
 qboolean	in_appactive;
 
 /*
@@ -126,7 +128,7 @@ void IN_MLookUp (void)
 		IN_CenterView ();
 }
 
-int			mouse_buttons;
+//int			mouse_buttons;
 int			mouse_oldbuttonstate;
 POINT		current_pos;
 int			mouse_x, mouse_y, old_mouse_x, old_mouse_y;//, mx_accum, my_accum;
@@ -158,19 +160,22 @@ void FreeDirectInput(int totalShutdown)
 {
     // Unacquire the device one last time just in case 
     // the app tried to exit while the device is still acquired.
-	if( g_pMouse ) {
+	if( g_pMouse )
+	{
         //g_pMouse->Unacquire();
 		//Com_Printf ("Unacquire() free\n");
 		IDirectInputDevice8_Unacquire (g_pMouse);
 	}
     
     // Release any DirectInput objects.
-	if( g_pMouse && totalShutdown) {
+	if( g_pMouse && totalShutdown)
+	{
 		IDirectInputDevice8_Release (g_pMouse);
 		g_pMouse = NULL;
 	}
 
-	if (g_pDI && totalShutdown) {
+	if (g_pDI && totalShutdown)
+	{
 		IDirectInput8_Release (g_pDI);
 		g_pDI = NULL;
 	}
@@ -206,26 +211,26 @@ int IN_InitDInputMouse (void)
         dwCoopFlags |= DISCL_BACKGROUND;
 
     // Create a DInput object
-	Com_Printf ("...creating DirectInput object: ");
+	Com_Printf ("...creating DirectInput object: ", LOG_CLIENT);
 	
 	//extern HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
 	//DirectInput8Create(hTheInstance, DIRECTINPUT_VERSION, , NULL);
     if( FAILED( hr = DirectInput8Create( global_hInstance, DIRECTINPUT_VERSION, (const GUID *)&IID_IDirectInput8,
                                          (VOID**)&g_pDI, NULL ) ) )
     {
-		Com_Printf ("failed: %d\n", hr);
+		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
         return 1;
     }
-	Com_Printf ("ok\n");
+	Com_Printf ("ok\n", LOG_CLIENT);
     
     // Obtain an interface to the system mouse device.
-	Com_Printf ("...creating device interface: ");
+	Com_Printf ("...creating device interface: ", LOG_CLIENT);
     if( FAILED( hr = IDirectInput8_CreateDevice(g_pDI, (const GUID *)&GUID_SysMouse, &g_pMouse, NULL ) ) )
     {
-		Com_Printf ("failed: %d\n", hr);
+		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
         return 1;
     }
-	Com_Printf ("ok\n");
+	Com_Printf ("ok\n", LOG_CLIENT);
     
     // Set the data format to "mouse format" - a predefined data format 
     //
@@ -234,29 +239,29 @@ int IN_InitDInputMouse (void)
     //
     // This tells DirectInput that we will be passing a
     // DIMOUSESTATE2 structure to IDirectInputDevice::GetDeviceState.
-	Com_Printf ("...setting data format: ");
+	Com_DPrintf ("...setting data format: ");
 	if( FAILED( hr = IDirectInputDevice8_SetDataFormat(g_pMouse, &c_dfDIMouse2 ) ) )
     {
-		Com_Printf ("failed: %d\n", hr);
+		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
         return 1;
     }
-	Com_Printf ("ok\n");
+	Com_DPrintf ("ok\n");
 
     // Set the cooperativity level to let DirectInput know how
     // this device should interact with the system and with other
     // DirectInput applications.
-	Com_Printf ("...setting DISCL_EXCLUSIVE coop level: ");
+	Com_DPrintf ("...setting DISCL_EXCLUSIVE coop level: ");
     hr = IDirectInputDevice8_SetCooperativeLevel (g_pMouse, cl_hwnd, dwCoopFlags );
     if( hr == DIERR_UNSUPPORTED && !bForeground && bExclusive )
     {
         FreeDirectInput(1);
-		Com_Printf ("failed: DIERR_UNSUPPORTED\n");
+		Com_Printf ("failed: DIERR_UNSUPPORTED\n", LOG_CLIENT);
         return 1;
     } else if (FAILED (hr)) {
-		Com_Printf ("failed: %d\n", hr);
+		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
         return 1;
     }
-	Com_Printf ("ok\n");
+	Com_DPrintf ("ok\n");
 
     if( !bImmediate )
     {
@@ -279,12 +284,6 @@ int IN_InitDInputMouse (void)
         if( FAILED( hr = IDirectInputDevice8_SetProperty(g_pMouse, DIPROP_BUFFERSIZE, &dipdw.diph ) ) )
             return hr;
     }
-
-    // Acquire the newly created device
-    //g_pMouse->Acquire();
-	/*Com_Printf ("...Acquire()ing device... ");
-	IDirectInputDevice8_Acquire (g_pMouse);
-	Com_Printf ("ok\n");*/
 
 	memset (&old_state, 0, sizeof(old_state));
 
@@ -313,6 +312,8 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 
     if( NULL == g_pMouse ) 
         return;
+
+	sys_msg_time = timeGetTime();
     
     dwElements = 32;
 	hr = IDirectInputDevice8_GetDeviceData (g_pMouse, sizeof(DIDEVICEOBJECTDATA),
@@ -357,7 +358,7 @@ void IN_ReadBufferedData( usercmd_t *cmd )
         return;
 
 	if (m_show->intvalue)
-		Com_Printf ("%d dwElements\n", dwElements);
+		Com_Printf ("%d dwElements\n", LOG_CLIENT, dwElements);
 
     // Study each of the buffer elements and process them.
     //
@@ -439,11 +440,11 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 
 				if( !(didod[ i ].dwData & 0x80) )
 				{
-					Key_Event (K_MOUSE1 + x, false, 10);
+					Key_Event (K_MOUSE1 + x, false, sys_msg_time);
 				}
 				else
 				{
-					Key_Event (K_MOUSE1 + x, true, 10);
+					Key_Event (K_MOUSE1 + x, true, sys_msg_time);
 				}
 				break;
 
@@ -473,7 +474,7 @@ void IN_ReadBufferedData( usercmd_t *cmd )
             case DIMOFS_Z:
 				if ( (int)didod[i].dwData > 0)
 				{
-					if (cls.key_dest == key_console)
+					if (cls.key_dest == key_console || cls.state <= ca_connected)
 					{
 						Key_Event (K_PGUP, true, 10);
 						Key_Event (K_PGUP, false, 10);
@@ -486,13 +487,13 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 					}
 					else
 					{
-						Key_Event (K_MWHEELUP, true, 10);
-						Key_Event (K_MWHEELUP, false, 10);
+						Key_Event (K_MWHEELUP, true, sys_msg_time);
+						Key_Event (K_MWHEELUP, false, sys_msg_time);
 					}
 				}
 				else if ((int)didod[i].dwData < 0)
 				{
-					if (cls.key_dest == key_console)
+					if (cls.key_dest == key_console || cls.state <= ca_connected)
 					{
 						Key_Event (K_PGDN, true, 10);
 						Key_Event (K_PGDN, false, 10);
@@ -505,8 +506,8 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 					}
 					else
 					{
-						Key_Event (K_MWHEELDOWN, true, 10);
-						Key_Event (K_MWHEELDOWN, false, 10);
+						Key_Event (K_MWHEELDOWN, true, sys_msg_time);
+						Key_Event (K_MWHEELDOWN, false, sys_msg_time);
 					}
 				}
                 break;
@@ -525,7 +526,9 @@ void IN_ReadImmediateData (usercmd_t *cmd)
         return;
     
     // Get the input's device state, and put the state in dims
-    memset(&dims2, 0, sizeof(dims2));
+    //memset(&dims2, 0, sizeof(dims2));
+
+	sys_msg_time = timeGetTime();
 
     hr = IDirectInputDevice8_GetDeviceState(g_pMouse, sizeof(DIMOUSESTATE2), &dims2 );
     if( FAILED(hr) ) 
@@ -542,7 +545,7 @@ void IN_ReadImmediateData (usercmd_t *cmd)
         //hr = g_pMouse->Acquire();
 		while( hr == DIERR_INPUTLOST )  {
             //hr = g_pMouse->Acquire();
-			Com_Printf ("Acquire() from readdata\n");
+			Com_Printf ("Acquire() from readdata\n", LOG_CLIENT);
 			hr = IDirectInputDevice8_Acquire (g_pMouse);
 		}
         // hr may be DIERR_OTHERAPPHASPRIO or other errors.  This
@@ -554,7 +557,7 @@ void IN_ReadImmediateData (usercmd_t *cmd)
     // The dims structure now has the state of the mouse, so 
     // display mouse coordinates (x, y, z) and buttons.
 	if (m_show->intvalue) {
-		Com_Printf ("(X=% 3.3d, Y=% 3.3d, Z=% 3.3d) B0=%c B1=%c B2=%c B3=%c B4=%c B5=%c B6=%c B7=%c\n",
+		Com_Printf ("(X=% 3.3d, Y=% 3.3d, Z=% 3.3d) B0=%c B1=%c B2=%c B3=%c B4=%c B5=%c B6=%c B7=%c\n", LOG_CLIENT,
                          dims2.lX, dims2.lY, dims2.lZ,
                         (dims2.rgbButtons[0] & 0x80) ? '1' : '0',
                         (dims2.rgbButtons[1] & 0x80) ? '1' : '0',
@@ -570,17 +573,17 @@ void IN_ReadImmediateData (usercmd_t *cmd)
 	{
 		if (old_state.rgbButtons[i] & 0x80 && !(dims2.rgbButtons[i] & 0x80))
 		{
-			Key_Event (K_MOUSE1 + i, false, 10);
+			Key_Event (K_MOUSE1 + i, false, sys_msg_time);
 		}
 		else if (dims2.rgbButtons[i] & 0x80 && !(old_state.rgbButtons[i] & 0x80))
 		{
-			Key_Event (K_MOUSE1 + i, true, 10);
+			Key_Event (K_MOUSE1 + i, true, sys_msg_time);
 		}
 	}
 
 	if (dims2.lZ > 0)
 	{
-		if (cls.key_dest == key_console)
+		if (cls.key_dest == key_console || cls.state <= ca_connected)
 		{
 			Key_Event (K_PGUP, true, 10);
 			Key_Event (K_PGUP, false, 10);
@@ -593,13 +596,13 @@ void IN_ReadImmediateData (usercmd_t *cmd)
 		}
 		else
 		{
-			Key_Event (K_MWHEELUP, true, 10);
-			Key_Event (K_MWHEELUP, false, 10);
+			Key_Event (K_MWHEELUP, true, sys_msg_time);
+			Key_Event (K_MWHEELUP, false, sys_msg_time);
 		}
 	}
 	else if (dims2.lZ < 0)
 	{
-		if (cls.key_dest == key_console)
+		if (cls.key_dest == key_console || cls.state <= ca_connected)
 		{
 			Key_Event (K_PGDN, true, 10);
 			Key_Event (K_PGDN, false, 10);
@@ -612,8 +615,8 @@ void IN_ReadImmediateData (usercmd_t *cmd)
 		}
 		else
 		{
-			Key_Event (K_MWHEELDOWN, true, 10);
-			Key_Event (K_MWHEELDOWN, false, 10);
+			Key_Event (K_MWHEELDOWN, true, sys_msg_time);
+			Key_Event (K_MWHEELDOWN, false, sys_msg_time);
 		}
 	}
 
@@ -669,9 +672,12 @@ void IN_ActivateMouse (void)
 	if (g_pDI) {
 		//Com_Printf ("Acquire() from activatemouse\n");
 		IDirectInputDevice8_Acquire (g_pMouse);
-	} else {
+	}
+	else if (!m_directinput->intvalue)
+	{
 #endif
-		if (mouseparmsvalid) {
+		if (mouseparmsvalid)
+		{
 			if (m_winxp_fix->intvalue)
 				restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, winxpmouseparms, 0);
 			else
@@ -682,12 +688,16 @@ void IN_ActivateMouse (void)
 		height = GetSystemMetrics (SM_CYSCREEN);
 
 		GetWindowRect ( cl_hwnd, &window_rect);
+
 		if (window_rect.left < 0)
 			window_rect.left = 0;
+
 		if (window_rect.top < 0)
 			window_rect.top = 0;
+
 		if (window_rect.right >= width)
 			window_rect.right = width-1;
+
 		if (window_rect.bottom >= height-1)
 			window_rect.bottom = height-1;
 
@@ -704,6 +714,12 @@ void IN_ActivateMouse (void)
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
 	}
 #endif
+
+	if (cl_hidewindowtitle->intvalue)
+	{
+		SetWindowLong (cl_hwnd, GWL_STYLE, WS_DLGFRAME|WS_VISIBLE);
+		SetWindowPos (cl_hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+	}
 
 	mouseactive = true;
 
@@ -732,8 +748,10 @@ void IN_DeactivateMouse (void)
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
 	if (g_pDI) {
 		FreeDirectInput(0);
-	} else {
+	}
+	else if (!m_directinput->intvalue)
 #endif
+	{
 		if (restore_spi)
 			SystemParametersInfo (SPI_SETMOUSE, 0, originalmouseparms, 0);
 
@@ -742,6 +760,12 @@ void IN_DeactivateMouse (void)
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
 	}
 #endif
+
+	if (cl_hidewindowtitle->intvalue)
+	{
+		SetWindowLong (cl_hwnd, GWL_STYLE, WS_OVERLAPPED|WS_BORDER|WS_CAPTION|WS_VISIBLE|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX);
+		SetWindowPos (cl_hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+	}
 
 	mouseactive = false;
 	while (ShowCursor (TRUE) < 0);
@@ -764,19 +788,25 @@ void IN_StartupMouse (void)
 	{
 		if (IN_InitDInputMouse())
 		{
-			Com_Printf ("Falling back to standard mouse support.\n");
+			Com_Printf ("Falling back to standard mouse support.\n", LOG_CLIENT);
 			Cvar_ForceSet ("m_directinput", "0");
+		}
+		else
+		{
+			mouseinitialized = true;
+			return;
 		}
 	}
 #endif
+	mouseparmsvalid = SystemParametersInfo (SPI_GETMOUSE, 0, originalmouseparms, 0);
 
 	/*cv = Cvar_Get ("in_initmouse", "1", CVAR_NOSET);
 	if ( !cv->value ) 
 		return; */
 
 	mouseinitialized = true;
-	mouseparmsvalid = SystemParametersInfo (SPI_GETMOUSE, 0, originalmouseparms, 0);
-	mouse_buttons = 8;
+	
+	//mouse_buttons = MAX_MOUSE_BUTTONS;
 }
 
 void IN_Restart_f (void)
@@ -810,7 +840,7 @@ void IN_MouseEvent (int mstate)
 		return;
 
 // perform button actions
-	for (i=0 ; i<mouse_buttons ; i++)
+	for (i=0 ; i<MAX_MOUSE_BUTTONS ; i++)
 	{
 		if ( (mstate & (1<<i)) &&
 			!(mouse_oldbuttonstate & (1<<i)) )
@@ -850,6 +880,9 @@ void IN_MouseMove (usercmd_t *cmd)
 			IN_ReadImmediateData (cmd);
 		return;
 	}
+
+	if (m_directinput->intvalue)
+		return;
 #endif
 
 	// find mouse movement
@@ -915,6 +948,12 @@ VIEW CENTERING
 cvar_t	*v_centermove;
 cvar_t	*v_centerspeed;
 
+void IN_CvarModified (cvar_t *self, char *oldValue, char *newValue)
+{
+	IN_Restart_f ();
+}
+
+qboolean os_winxp = false;
 
 /*
 ===========
@@ -925,10 +964,18 @@ void IN_Init (void)
 {
 	// mouse variables
 	m_filter				= Cvar_Get ("m_filter",					"0",		0);
-	m_winxp_fix				= Cvar_Get ("m_fixaccel",				"0",		0);
+
+	m_winxp_fix				= Cvar_Get ("m_fixaccel",				os_winxp ? "1" : "0",		0);
+
 	m_show					= Cvar_Get ("m_show",					"0",		0);
 	m_directinput			= Cvar_Get ("m_directinput",			"0",		0);
     in_mouse				= Cvar_Get ("in_mouse",					"1",		0);
+
+	cl_hidewindowtitle		= Cvar_Get ("cl_hidewindowtitle",		"0",		0);
+
+	m_winxp_fix->changed = IN_CvarModified;
+	in_mouse->changed = IN_CvarModified;
+	m_directinput->changed = IN_CvarModified;
 
 #ifdef JOYSTICK
 	// joystick variables
@@ -1028,7 +1075,7 @@ void IN_Frame (void)
 		|| cls.key_dest == key_menu)
 	{
 		// temporarily deactivate if in fullscreen
-		if (Cvar_VariableValue ("vid_fullscreen") == 0)
+		if (vid_fullscreen && vid_fullscreen->intvalue == 0)
 		{
 			IN_DeactivateMouse ();
 			return;
@@ -1099,7 +1146,6 @@ void IN_StartupJoystick (void)
 	// verify joystick driver is present
 	if ((numdevs = joyGetNumDevs ()) == 0)
 	{
-//		Com_Printf ("\njoystick not found -- driver not present\n\n");
 		return;
 	}
 
@@ -1117,7 +1163,7 @@ void IN_StartupJoystick (void)
 	// abort startup if we didn't find a valid joystick
 	if (mmr != JOYERR_NOERROR)
 	{
-		Com_Printf ("\njoystick not found -- no valid joysticks (%x)\n\n", mmr);
+		Com_Printf ("\njoystick not found -- no valid joysticks (%x)\n\n", LOG_CLIENT, mmr);
 		return;
 	}
 
@@ -1126,7 +1172,7 @@ void IN_StartupJoystick (void)
 	memset (&jc, 0, sizeof(jc));
 	if ((mmr = joyGetDevCaps (joy_id, &jc, sizeof(jc))) != JOYERR_NOERROR)
 	{
-		Com_Printf ("\njoystick not found -- invalid joystick capabilities (%x)\n\n", mmr); 
+		Com_Printf ("\njoystick not found -- invalid joystick capabilities (%x)\n\n", LOG_CLIENT, mmr); 
 		return;
 	}
 
@@ -1143,7 +1189,7 @@ void IN_StartupJoystick (void)
 	joy_avail = true; 
 	joy_advancedinit = false;
 
-	Com_Printf ("\njoystick detected\n\n"); 
+	Com_Printf ("\njoystick detected\n\n", LOG_CLIENT); 
 }
 
 
@@ -1210,7 +1256,7 @@ void Joy_AdvancedUpdate_f (void)
 		if (strcmp (joy_name->string, "joystick") != 0)
 		{
 			// notify user of advanced controller
-			Com_Printf ("\n%s configured\n\n", joy_name->string);
+			Com_Printf ("\n%s configured\n\n", LOG_CLIENT, joy_name->string);
 		}
 
 		// advanced initialization here

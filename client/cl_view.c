@@ -120,6 +120,7 @@ void V_AddLight (vec3_t org, float intensity, float r, float g, float b)
 
 	if (r_numdlights >= MAX_DLIGHTS)
 		return;
+
 	dl = &r_dlights[r_numdlights++];
 	VectorCopy (org, dl->origin);
 	dl->intensity = intensity;
@@ -141,6 +142,7 @@ void V_AddLightStyle (int style, float r, float g, float b)
 
 	if (style < 0 || style > MAX_LIGHTSTYLES)
 		Com_Error (ERR_DROP, "Bad light style %i", style);
+
 	ls = &r_lightstyles[style];
 
 	ls->white = r+g+b;
@@ -229,34 +231,37 @@ V_TestLights
 If cl_testlights is set, create 32 lights models
 ================
 */
+/*
+================
+V_TestLights
+
+If cl_testlights is set, create 32 lights models
+================
+*/
 void V_TestLights (void)
 {
+	int			i, j;
+	float		f, r;
 	dlight_t	*dl;
-	vec3_t		fwd;
-	trace_t		tr;
-	vec3_t		temp;
 
-	vec3_t right,up;
-
-	r_numdlights = 1;
+	r_numdlights = 32;
 	memset (r_dlights, 0, sizeof(r_dlights));
 
-	AngleVectors (cl.viewangles, fwd, right, up);
+	for (i=0 ; i<r_numdlights ; i++)
+	{
+		dl = &r_dlights[i];
 
-	VectorSet (temp, 0,0,0);
-	//VectorCopy (cl.viewangles, forward);
-	VectorScale (fwd, 2048, fwd);
+		r = 64 * ( (i%4) - 1.5 );
+		f = 64 * (i/4) + 128;
 
-	tr = CM_BoxTrace (cl.refdef.vieworg, fwd, temp, temp, 0, CONTENTS_SOLID|CONTENTS_MONSTER|CONTENTS_DEADMONSTER);
-
-	dl = &r_dlights[0];
-
-	VectorCopy (tr.endpos, dl->origin);
-
-	dl->color[0] = 1;
-	dl->color[1] = 1;
-	dl->color[2] = 1;
-	dl->intensity = 200;
+		for (j=0 ; j<3 ; j++)
+			dl->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
+			cl.v_right[j]*r;
+		dl->color[0] = ((i%6)+1) & 1;
+		dl->color[1] = (((i%6)+1) & 2)>>1;
+		dl->color[2] = (((i%6)+1) & 4)>>2;
+		dl->intensity = 200;
+	}
 }
 
 //===================================================================
@@ -271,8 +276,10 @@ Call before entering a new level, or after changing dlls
 void CL_PrepRefresh (void)
 {
 	char		mapname[MAX_QPATH];
+	
 	int			i;
-//	char		name[MAX_QPATH];
+	int			maxclients;
+
 	float		rotate;
 	vec3_t		axis;
 
@@ -283,25 +290,26 @@ void CL_PrepRefresh (void)
 	SCR_AddDirtyPoint (viddef.width-1, viddef.height-1);
 
 	// let the render dll load the map
-	strcpy (mapname, cl.configstrings[CS_MODELS+1] + 5);	// skip "maps/"
+	Q_strncpy (mapname, cl.configstrings[CS_MODELS+1] + 5, sizeof(mapname)-1);	// skip "maps/"
 	mapname[strlen(mapname)-4] = 0;		// cut off ".bsp"
 
 	Cvar_ForceSet ("$mapname", mapname);
 
 	// register models, pics, and skins
-	Com_Printf ("Map: %s\r", mapname); 
+	Com_Printf ("Map: %s\r", LOG_CLIENT, mapname); 
 	SCR_UpdateScreen ();
 	re.BeginRegistration (mapname);
-	Com_Printf ("                                     \r");
+	Com_Printf ("                                     \r", LOG_CLIENT);
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
 	// precache status bar pics
-	Com_Printf ("pics\r"); 
+	Com_Printf ("pics\r", LOG_CLIENT); 
 	SCR_UpdateScreen ();
 	SCR_TouchPics ();
-	Com_Printf ("                                     \r");
+	//Com_Printf ("                                     \r", LOG_CLIENT);
 
+	Com_Printf ("models\r", LOG_CLIENT); 
 	CL_RegisterTEntModels ();
 
 	num_cl_weaponmodels = 1;
@@ -343,7 +351,7 @@ void CL_PrepRefresh (void)
 			if (cl.configstrings[CS_MODELS+i][0] != '#')
 			{
 				cl.model_draw[i] = re.RegisterModel (cl.configstrings[CS_MODELS+i]);
-				if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '*')
+				if (cl.configstrings[CS_MODELS+i][0] == '*')
 					cl.model_clip[i] = CM_InlineModel (cl.configstrings[CS_MODELS+i]);
 				else
 					cl.model_clip[i] = NULL;
@@ -352,12 +360,13 @@ void CL_PrepRefresh (void)
 	}
 
 	cl.model_draw[1] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
+
 	if (cl.configstrings[CS_MODELS+1][0] == '*')
 		cl.model_clip[1] = CM_InlineModel (cl.configstrings[CS_MODELS+1]);
 	else
 		cl.model_clip[1] = NULL;
 
-	Com_Printf ("images\r"); 
+	Com_Printf ("images\r", LOG_CLIENT); 
 	SCR_UpdateScreen ();
 	for (i=1 ; i<MAX_IMAGES && cl.configstrings[CS_IMAGES+i][0] ; i++)
 	{
@@ -365,30 +374,37 @@ void CL_PrepRefresh (void)
 		Sys_SendKeyEvents ();	// pump message loop
 	}
 	
-	Com_Printf ("                                     \r");
-	for (i=0 ; i<MAX_CLIENTS ; i++)
+	Com_Printf ("                                     \r", LOG_CLIENT);
+
+	if (cl.attractloop)
+		maxclients = MAX_CLIENTS;
+	else
+		maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
+
+	for (i=0 ; i<maxclients ; i++)
 	{
 		if (!cl.configstrings[CS_PLAYERSKINS+i][0])
 			continue;
-		Com_Printf ("client %i\r", i); 
+
+		Com_Printf ("client %i  \r", LOG_CLIENT, i); 
 		SCR_UpdateScreen ();
 		Sys_SendKeyEvents ();	// pump message loop
 		CL_ParseClientinfo (i);
-		Com_Printf ("                                     \r");
 	}
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
+	Com_Printf ("base client     \r", LOG_CLIENT, i); 
 	CL_LoadClientinfo (&cl.baseclientinfo, "");
 
 	// set sky textures and speed
-	Com_Printf ("sky\r", i); 
+	Com_Printf ("sky             \r", LOG_CLIENT); 
 	SCR_UpdateScreen ();
 	rotate = atof (cl.configstrings[CS_SKYROTATE]);
 	sscanf (cl.configstrings[CS_SKYAXIS], "%f %f %f", 
 		&axis[0], &axis[1], &axis[2]);
 	re.SetSky (cl.configstrings[CS_SKY], rotate, axis);
-	Com_Printf ("                                     \r");
+	Com_Printf ("   \r", LOG_CLIENT);
 
 	// the renderer can now free unneeded stuff
 	re.EndRegistration ();
@@ -452,7 +468,7 @@ float CalcFov (float fov_x, float width, float height)
 void V_Gun_Next_f (void)
 {
 	gun_frame++;
-	Com_Printf ("frame %i\n", gun_frame);
+	Com_Printf ("frame %i\n", LOG_CLIENT, gun_frame);
 }
 
 void V_Gun_Prev_f (void)
@@ -460,7 +476,7 @@ void V_Gun_Prev_f (void)
 	gun_frame--;
 	if (gun_frame < 0)
 		gun_frame = 0;
-	Com_Printf ("frame %i\n", gun_frame);
+	Com_Printf ("frame %i\n", LOG_CLIENT, gun_frame);
 }
 
 void V_Gun_Model_f (void)
@@ -484,7 +500,7 @@ void V_Gun_Model_f (void)
 SCR_DrawCrosshair
 =================
 */
-void SCR_DrawCrosshair (void)
+__inline void SCR_DrawCrosshair (void)
 {
 	if (!crosshair->intvalue)
 		return;
@@ -513,7 +529,7 @@ char parseMsg[] = "OLDPARSE";
 char overflowMsg[] = "OVERFLOW";
 
 extern int __cdecl entitycmpfnc( const entity_t *, const entity_t * );
-
+extern int			scr_draw_loading;
 /*
 ==================
 V_RenderView
@@ -627,7 +643,7 @@ void V_RenderView(void)
 
 	
 	if (cl_stats->intvalue)
-		Com_Printf ("ent:%i  lt:%i  part:%i\n", r_numentities, r_numdlights, r_numparticles);
+		Com_Printf ("ent:%i  lt:%i  part:%i\n", LOG_CLIENT, r_numentities, r_numdlights, r_numparticles);
 	//if ( log_stats->value && ( log_stats_file != 0 ) )
 	//	fprintf( log_stats_file, "%i,%i,%i,",r_numentities, r_numdlights, r_numparticles);
 
@@ -678,7 +694,7 @@ void V_RenderView(void)
 	}
 
 	//FIXME: incorrect use of scr_ prefix
-	if (scr_showturtle->intvalue)
+	if (scr_showturtle->intvalue && !scr_draw_loading && cls.state == ca_active)
 	{
 		frame_t *old;
 
@@ -729,12 +745,12 @@ V_Viewpos_f
 */
 void V_Viewpos_f (void)
 {
-	Com_Printf ("(%i %i %i) : %i\n", (int)cl.refdef.vieworg[0],
+	Com_Printf ("(%i %i %i) : %i\n", LOG_CLIENT, (int)cl.refdef.vieworg[0],
 		(int)cl.refdef.vieworg[1], (int)cl.refdef.vieworg[2], 
 		(int)cl.refdef.viewangles[YAW]);
 }
 
-void OnCrossHairChange (cvar_t *self, char *old, char *new)
+void OnCrossHairChange (cvar_t *self, char *old, char *newValue)
 {
 	self->modified = false;
 	SCR_TouchPics();

@@ -35,15 +35,8 @@ void SV_FlushRedirect (int sv_redirected, char *outputbuf)
 {
 	if (sv_redirected == RD_PACKET)
 	{
-		//NET_SendPacket (NS_SERVER, strlen(outputbuf), outputbuf, net_from);
 		Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s", outputbuf);
 	}
-	/*else if (sv_redirected == RD_CLIENT)
-	{
-		MSG_BeginWriteByte (&sv_client->netchan.message, svc_print);
-		MSG_WriteByte (&sv_client->netchan.message, PRINT_HIGH);
-		MSG_WriteString (&sv_client->netchan.message, outputbuf);
-	}*/
 }
 
 
@@ -55,26 +48,19 @@ EVENT MESSAGES
 =============================================================================
 */
 
-static sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type)
+void SV_MSGListIntegrityCheck (client_t *cl)
 {
-	message_queue_t *msg;
+#ifndef NDEBUG
+	messagelist_t	*msg;
 
-	msg = &cl->messageQueue;
+	msg = cl->msgListStart;
 
 	while (msg->next)
 		msg = msg->next;
 
-	msg->next = Z_TagMalloc (sizeof(*msg), TAGMALLOC_MSG_QUEUE);
-	msg = msg->next;
-
-	msg->type = type;
-	msg->next = NULL;
-	//msg->queued_frame = sv.framenum;
-	msg->data = Z_TagMalloc (size, TAGMALLOC_MSG_QUEUE);
-
-	SZ_Init (&msg->buf, msg->data, size);
-
-	return &msg->buf;
+	if (msg != cl->msgListEnd)
+		Com_Error (ERR_FATAL, "SV_MSGListIntegrityCheck: messagelist_t corrupted!");
+#endif
 }
 
 /*
@@ -84,35 +70,27 @@ SV_ClientPrintf
 Sends text across to be displayed if the level passes
 =================
 */
-void EXPORT SV_ClientPrintf (client_t *cl, int level, char *fmt, ...)
+void SV_ClientPrintf (client_t *cl, int level, char *fmt, ...)
 {
 	va_list		argptr;
-	char		string[1400];
+	char		string[MAX_USABLEMSG-3];
 	int			msglen;
-	sizebuf_t	*dst;
 
 	if (level < cl->messagelevel)
 		return;
-	
+
 	va_start (argptr,fmt);
 	msglen = Q_vsnprintf (string, sizeof(string)-1, fmt, argptr);
 	va_end (argptr);
 	string[sizeof(string)-1] = 0;
 
 	if (msglen == -1)
-	{
-		Com_Printf ("SV_ClientPrintf: overflow\n");
-		msglen = 1399;
-	}
+		Com_Printf ("WARNING: SV_ClientPrintf: overflow\n", LOG_SERVER|LOG_WARNING);
 
-	if (cl->netchan.message.cursize + msglen > cl->netchan.message.maxsize || cl->messageQueue.next)
-		dst = MSGQueueAlloc (cl, msglen+3, svc_print);
-	else
-		dst = &cl->netchan.message;
-
-	MSG_BeginWriteByte (dst, svc_print);
-	MSG_WriteByte (dst, level);
-	MSG_WriteString (dst, string);
+	MSG_BeginWriting (svc_print);
+	MSG_WriteByte (level);
+	MSG_WriteString (string);
+	SV_AddMessage (cl, true);
 }
 
 /*
@@ -125,14 +103,20 @@ Sends text to all active clients
 void EXPORT SV_BroadcastPrintf (int level, char *fmt, ...)
 {
 	va_list		argptr;
-	char		string[2048];
+	char		string[MAX_USABLEMSG-3];
 	client_t	*cl;
 	int			i;
+	int			msglen;
 
 	va_start (argptr,fmt);
-	vsnprintf (string, sizeof(string)-1, fmt,argptr);
+	msglen = Q_vsnprintf (string, sizeof(string)-1, fmt,argptr);
 	va_end (argptr);
 	
+	string[sizeof(string)-1] = 0;
+
+	if (msglen == -1)
+		Com_Printf ("WARNING: SV_BroadcastPrintf: overflow\n", LOG_SERVER|LOG_WARNING);
+
 	// echo to console
 	if (dedicated->intvalue)
 	{
@@ -142,19 +126,184 @@ void EXPORT SV_BroadcastPrintf (int level, char *fmt, ...)
 		for (i=0 ; i<sizeof(copy)-1 && string[i] ; i++)
 			copy[i] = string[i]&127;
 		copy[i] = 0;
-		Com_Printf ("%s", copy);
+		if (level == PRINT_CHAT)
+			Com_Printf ("%s", LOG_SERVER|LOG_CHAT, copy);
+		else
+			Com_Printf ("%s", LOG_SERVER, copy);
 	}
 
 	for (i=0, cl = svs.clients ; i<maxclients->intvalue; i++, cl++)
 	{
 		if (level < cl->messagelevel)
 			continue;
+
 		if (cl->state != cs_spawned)
 			continue;
-		MSG_BeginWriteByte (&cl->netchan.message, svc_print);
-		MSG_WriteByte (&cl->netchan.message, level);
-		MSG_WriteString (&cl->netchan.message, string);
+
+		MSG_BeginWriting (svc_print);
+		MSG_WriteByte (level);
+		MSG_WriteString (string);
+		SV_AddMessage (cl, true);
 	}
+}
+
+messagelist_t * SV_DeleteMessage (client_t *cl, messagelist_t *message, messagelist_t *last)
+{
+	//only free if it was malloced
+	if (message->cursize > MSG_MAX_SIZE_BEFORE_MALLOC)
+		free (message->data);
+
+	last->next = message->next;
+	
+	//end of the list
+	if (message == cl->msgListEnd)
+		cl->msgListEnd = last;
+
+#ifdef _DEBUG
+	memset (message, 0xCC, sizeof(*message));
+#endif
+
+	return last;
+}
+
+void SV_ClearMessageList (client_t *client)
+{
+	messagelist_t *message, *last;
+
+	message = client->msgListStart;
+
+	for (;;)
+	{
+		last = message;
+		message = message->next;
+
+		if (!message)
+			break;
+
+		message = SV_DeleteMessage (client, message, last);
+	}
+}
+
+void SV_AddMessageSingle (client_t *cl, qboolean reliable)
+{
+	int				index;
+	messagelist_t	*next;
+
+	if (cl->state <= cs_zombie)
+	{
+		Com_Printf ("Warning, SV_AddMessage to zombie/free client.\n", LOG_SERVER|LOG_WARNING);
+		return;
+	}
+
+	//an overflown client
+	if (!cl->messageListData)
+		return;
+
+	//doesn't want unreliables (irc bots/etc)
+	if (cl->nodata && !reliable)
+		return;
+
+	//get next message position
+	index = (cl->msgListEnd - cl->msgListStart) + 1;
+
+	//have they overflown?
+	if (index >= MAX_MESSAGES_PER_LIST-1)
+	{
+		Com_Printf ("WARNING: Index overflow for %s.\n", LOG_SERVER|LOG_WARNING, cl->name);
+
+		//clear the buffer for overflow print and malloc cleanup
+		SV_ClearMessageList (cl);
+
+		//drop them
+		cl->notes |= NOTE_OVERFLOWED;
+		return;
+	}
+
+	//set up links
+	next = &cl->messageListData[index];
+	cl->msgListEnd->next = next;
+
+	cl->msgListEnd = next;
+	next->next = NULL;
+
+	SV_MSGListIntegrityCheck (cl);
+
+	//write message to this buffer
+	MSG_EndWrite (next);
+
+	SV_MSGListIntegrityCheck (cl);
+
+	//check its sane, should never happen...
+	if (next->cursize >= MAX_USABLEMSG)
+	{
+		//uh oh...
+		Com_Printf ("ALERT: SV_AddMessageSingle: Message size %d to %s is larger than MAX_USABLEMSG!!\n", LOG_SERVER|LOG_WARNING, next->cursize, cl->name);
+
+		//clear the buffer for overflow print and malloc cleanup
+		SV_ClearMessageList (cl);
+
+		//drop them
+		cl->notes |= NOTE_OVERFLOWED;
+		return;
+	}
+
+	//set reliable flag
+	next->reliable = reliable;
+}
+
+void SV_CheckForOverflow (void)
+{
+	int				i;
+	client_t		*cl;
+
+	for (i=0,cl=svs.clients ; i<maxclients->intvalue ; i++,cl++)
+	{
+		if (cl->state <= cs_zombie)
+			continue;
+
+		if (!(cl->notes & NOTE_OVERFLOWED) || (cl->notes & NOTE_OVERFLOW_DONE))
+			continue;
+
+		cl->notes |= NOTE_OVERFLOW_DONE;
+
+		//drop message
+		if (cl->name[0])
+		{
+			if (cl->state == cs_spawned)
+			{
+				SV_BroadcastPrintf (PRINT_HIGH, "%s overflowed\n", cl->name);
+			}
+			else
+			{
+				Com_Printf ("%s overflowed message list size!\n", LOG_SERVER|LOG_WARNING, cl->name);
+			}
+		}
+
+		SV_DropClient (cl, true);
+	}
+}
+
+void SV_AddMessage (client_t *cl, qboolean reliable)
+{
+	SV_AddMessageSingle (cl, reliable);
+	MSG_FreeData ();
+	SV_CheckForOverflow ();
+}
+
+void SV_AddMessageAll (qboolean reliable)
+{
+	int				i;
+	client_t		*cl;
+
+	for (i=0,cl=svs.clients ; i<maxclients->intvalue ; i++,cl++)
+	{
+		if (cl->state <= cs_zombie)
+			continue;
+
+		SV_AddMessageSingle (cl, reliable);
+	}
+	MSG_FreeData();
+	SV_CheckForOverflow ();
 }
 
 /*
@@ -176,8 +325,8 @@ void SV_BroadcastCommand (char *fmt, ...)
 	vsnprintf (string, sizeof(string)-1, fmt, argptr);
 	va_end (argptr);
 
-	MSG_BeginWriteByte (&sv.multicast, svc_stufftext);
-	MSG_WriteString (&sv.multicast, string);
+	MSG_BeginWriting (svc_stufftext);
+	MSG_WriteString (string);
 	SV_Multicast (NULL, MULTICAST_ALL_R);
 }
 
@@ -219,12 +368,12 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 	}
 
 	//r1: check we have data in the multicast buffer
-	if (!sv.multicast.cursize)
+	if (!MSG_GetLength())
 		Com_Error (ERR_DROP, "SV_Multicast: no data");
 
 	// if doing a serverrecord, store everything
 	if (svs.demofile)
-		SZ_Write (&svs.demo_multicast, sv.multicast.data, sv.multicast.cursize);
+		SZ_Write (&svs.demo_multicast, MSG_GetData(), MSG_GetLength());
 	
 	switch (to)
 	{
@@ -261,8 +410,22 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 	{
 		if (client->state <= cs_zombie)
 			continue;
-
-		if (client->state != cs_spawned && !reliable)
+		
+		if (
+				client->state != cs_spawned &&
+				(
+					!reliable ||
+					(
+					//r1: don't send these types to connecting clients, they are pointless even if reliable.
+						MSG_GetType() == svc_muzzleflash ||
+						MSG_GetType() == svc_muzzleflash2 ||
+						MSG_GetType() == svc_temp_entity ||
+						MSG_GetType() == svc_print ||
+						MSG_GetType() == svc_sound ||
+						MSG_GetType() == svc_centerprint
+					)
+				)
+			)
 			continue;
 
 		if (mask)
@@ -276,13 +439,11 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 				continue;
 		}
 
-		if (reliable)
-			SZ_Write (&client->netchan.message, sv.multicast.data, sv.multicast.cursize);
-		else
-			SZ_Write (&client->datagram, sv.multicast.data, sv.multicast.cursize);
+		SV_AddMessageSingle (client, reliable);
 	}
 
-	SZ_Clear (&sv.multicast);
+	MSG_FreeData();
+	SV_CheckForOverflow();
 }
 
 
@@ -323,19 +484,19 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 	vec3_t		origin_v;
 	qboolean	use_phs;
 	client_t	*client;
-	sizebuf_t	*to;
+//	sizebuf_t	*to;
 	qboolean	force_pos= false;
 
-	if (volume < 0 || volume > 1.0)
+	if (FLOAT_LT_ZERO(volume) || volume > 1.0)
 		Com_Error (ERR_DROP, "SV_StartSound: volume = %f", volume);
 
-	if (attenuation < 0 || attenuation > 4)
+	if (FLOAT_LT_ZERO(attenuation) || attenuation > 4)
 		Com_Error (ERR_DROP, "SV_StartSound: attenuation = %f", attenuation);
 
 //	if (channel < 0 || channel > 15)
 //		Com_Error (ERR_FATAL, "SV_StartSound: channel = %i", channel);
 
-	if (timeofs < 0 || timeofs > 0.255)
+	if (FLOAT_LT_ZERO(timeofs) || timeofs > 0.255)
 		Com_Error (ERR_DROP, "SV_StartSound: timeofs = %f", timeofs);
 
 	ent = NUM_FOR_EDICT(entity);
@@ -415,30 +576,26 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 			}
 		}
 
-		if (channel & CHAN_RELIABLE)
-			to = &client->netchan.message;
-		else
-			to = &client->datagram;
-			
-		MSG_BeginWriteByte (to, svc_sound);
-		MSG_WriteByte (to, flags);
-		MSG_WriteByte (to, soundindex);
+		MSG_BeginWriting (svc_sound);
+		MSG_WriteByte (flags);
+		MSG_WriteByte (soundindex);
 
 		if (flags & SND_VOLUME)
-			MSG_WriteByte (to, volume*255);
+			MSG_WriteByte (volume*255);
 
 		if (flags & SND_ATTENUATION)
-			MSG_WriteByte (to, attenuation*64);
+			MSG_WriteByte (attenuation*64);
 
 		if (flags & SND_OFFSET)
-			MSG_WriteByte (to, timeofs*1000);
+			MSG_WriteByte (timeofs*1000);
 
 		if (flags & SND_ENT)
-			MSG_WriteShort (to, sendchan);
+			MSG_WriteShort (sendchan);
 
 		if (flags & SND_POS)
-			MSG_WritePos (to, origin);
+			MSG_WritePos (origin);
 
+		SV_AddMessage (client, (channel & CHAN_RELIABLE));
 	}
 	// if the sound doesn't attenuate,send it to everyone
 	// (global radio chatter, voiceovers, etc)
@@ -470,7 +627,58 @@ FRAME UPDATES
 ===============================================================================
 */
 
+void SV_WriteReliableMessages (client_t *client, int buffSize)
+{
+	//shouldn't happen...
+	if (client->state == cs_free)
+	{
+		Com_Printf ("SV_WriteReliableMessages: Writing to free client!!\n", LOG_SERVER|LOG_WARNING);
+		return;
+	}
 
+	//writing to overflowed client, don't bother trying to get any final messages through
+	if (client->messageListData == NULL)
+		return;
+
+	//if the reliable is free, let's fill it up
+	if (!client->netchan.reliable_length)
+	{
+		messagelist_t	*message, *last;
+		
+		client->netchan.message.maxsize = buffSize;
+
+		message = client->msgListStart;
+
+		for (;;)
+		{
+			last = message;
+			message = message->next;
+
+			if (!message)
+				break;
+
+			//its a reliable message
+			if (message->reliable)
+			{
+				//but it wouldn't fit.
+				if (message->cursize + client->netchan.message.cursize > client->netchan.message.maxsize)
+					break;
+
+				//it fits, write it in
+				SZ_Write (&client->netchan.message, message->data, message->cursize);
+
+				//and delete from the message list
+				message = SV_DeleteMessage (client, message, last);
+			}
+		}
+
+		SV_MSGListIntegrityCheck (client);
+
+		//something very bad happened if this occurs
+		if (client->netchan.message.overflowed)
+			Com_Error (ERR_DROP, "SV_SendClientDatagram: netchan message overflow! (this should never happen)");
+	}
+}
 
 /*
 =======================
@@ -479,94 +687,278 @@ SV_SendClientDatagram
 */
 static qboolean SV_SendClientDatagram (client_t *client)
 {
-//	qboolean	temp;
-	byte		msg_buf[MAX_MSGLEN];
-	sizebuf_t	msg;
-	int			ret;
+	byte			msg_buf[MAX_USABLEMSG];
+	sizebuf_t		msg;
+	int				ret;
+	messagelist_t	*message, *last;
+	byte			*wanted;
 
-	SV_BuildClientFrame (client);
-
+	//init unreliable portion
 	SZ_Init (&msg, msg_buf, sizeof(msg_buf));
+
 	msg.allowoverflow = true;
 
-	// send over all the relevant entity_state_t
-	// and the player_state_t
-	if (!client->nodata)
-		SV_WriteFrameToClient (client, &msg);
-
-	// copy the accumulated multicast datagram
-	// for this client out to the message
-	// it is necessary for this to be after the WriteEntities
-	// so that entity references will be current
-	if (client->datagram.cursize)
+	if (client->netchan.reliable_length)
 	{
-		if (client->datagram.overflowed)
-			Com_Printf ("WARNING: datagram overflowed for %s\n", client->name);
-		else
-			SZ_Write (&msg, client->datagram.data, client->datagram.cursize);
-		SZ_Clear (&client->datagram);
-	}
-
-	//temp = client->netchan.message.overflowed;
-
-	if (msg.overflowed)
-	{	
-		// must have room left for the packet header
-		Com_DPrintf ("WARNING: msg overflowed for %s\n", client->name);
-		SZ_Clear (&msg);
+		//fix up maxsize for how much space we can fill up safely.
+		//reliable is full, so we can fill up remainder of the packet.
+		msg.maxsize = sizeof(msg_buf) - client->netchan.reliable_length;
 	}
 	else
 	{
-
-		//r1ch: fill in any spare room in the netchan with msg queue
-		while (client->messageQueue.next)
+		//reliable is empty - we must allow for at least one reliable message, set available space appropriately.
+		message = client->msgListStart;
+		for (;;)
 		{
-			message_queue_t *msgq;
-			int remainingSpace;
-			int remainingMsg;
+			message = message->next;
 
-			msgq = client->messageQueue.next;
-
-			remainingSpace = 1000 - client->netchan.message.cursize - msg.cursize;
-
-			if (remainingSpace < 100)
+			if (!message)
 				break;
 
-			remainingMsg = msgq->buf.cursize;
-
-			if (remainingMsg < remainingSpace)
+			if (message->reliable)
 			{
-				SZ_Write (&client->netchan.message, msgq->data, msgq->buf.cursize);
-
-				client->messageQueue.next = msgq->next;
-				Z_Free (msgq->data);
-				Z_Free (msgq);
+				wanted = message->data;
+				msg.maxsize = sizeof(msg_buf) - message->cursize;
+				//Com_Printf ("SV_SendClientDatagram: Reserving %d bytes of buffer space for %s. Have %d for unreliable.\n", LOG_GENERAL, message->cursize, client->name, msg.maxsize);
+				break;
 			}
-			else
+		}
+	}
+
+	//this will write an unreliable svc_frame to the message list
+	if (!client->nodata)
+	{
+		byte		frame_buf[4096];
+		sizebuf_t	frame;
+
+		SV_BuildClientFrame (client);
+
+		//we write svc_frame to it's own buffer to allow for compression
+		SZ_Init (&frame, frame_buf, sizeof(frame_buf));
+		frame.allowoverflow = true;
+
+		//adjust for packetentities hack
+		if (sv_packetentities_hack->intvalue == 1 || client->protocol == ORIGINAL_PROTOCOL_VERSION)
+			frame.maxsize = msg.maxsize;
+
+retryframe:
+
+		// send over all the relevant entity_state_t
+		// and the player_state_t
+		SV_WriteFrameToClient (client, &frame);
+
+		//if frame overflowed, we're screwed either way :)
+		if (!frame.overflowed)
+		{
+			if (frame.cursize > msg.maxsize)
 			{
-				if (client->protocol == ENHANCED_PROTOCOL_VERSION)
+				//r1q2 clients get compressed frame, normal clients get nothing
+				byte	compressed_frame[4096];
+				int		compressed_frame_len;
+
+				compressed_frame_len = ZLibCompressChunk (frame_buf, frame.cursize, compressed_frame, sizeof(compressed_frame), Z_DEFAULT_COMPRESSION, -15);
+
+				if (compressed_frame_len != -1 && compressed_frame_len <= msg.maxsize - 5)
 				{
-					byte zBuff[4096];
-					int zLen;
-
-					zLen = ZLibCompressChunk (msgq->data, msgq->buf.cursize, zBuff, sizeof(zBuff), Z_DEFAULT_COMPRESSION, -15);
-
-					if (zLen + 5 >= remainingSpace || !zLen)
-						break;
-
-					MSG_BeginWriteByte (&client->netchan.message, svc_zpacket);
-					MSG_WriteShort (&client->netchan.message, zLen);
-					MSG_WriteShort (&client->netchan.message, msgq->buf.cursize);
-					SZ_Write (&client->netchan.message, zBuff, zLen);
-
-					client->messageQueue.next = msgq->next;
-					Z_Free (msgq->data);
-					Z_Free (msgq);
+					Com_Printf ("SV_SendClientDatagram: svc_frame for %s: %d -> %d\n", LOG_GENERAL, client->name, frame.cursize, compressed_frame_len);
+					SZ_WriteByte (&msg, svc_zpacket);
+					SZ_WriteShort (&msg, compressed_frame_len);
+					SZ_WriteShort (&msg, frame.cursize);
+					SZ_Write (&msg, compressed_frame, compressed_frame_len);
 				}
 				else
 				{
-					break;
+					if (sv_packetentities_hack->intvalue == 2)
+					{
+						Com_Printf ("SV_SendClientDatagram: zlib svc_frame %d -> %d for %s still didn't fit, using msg.maxsize of %d\n", LOG_GENERAL, frame.cursize, compressed_frame_len, client->name, msg.maxsize);
+						SZ_Clear (&frame);
+						frame.maxsize = msg.maxsize;
+						goto retryframe;
+					}
 				}
+			}
+			else
+			{
+				//it fits as-is, write it out
+				SZ_Write (&msg, frame_buf, frame.cursize);
+			}
+		}
+	}
+
+	if (msg.overflowed)
+	{
+		Com_Printf ("WARNING: Message overflow for %s after frame. Shouldn't happen!!\n", LOG_SERVER|LOG_WARNING, client->name);
+		SZ_Clear (&msg);
+	}
+
+	//msg at this point now contains the svc_frame
+	//now we fill it up with all the other unreliable messages, starting with the most "obvious"
+	//effects - these are tempents (except ones which make no sound - waste), sounds, then the rest.
+
+	//first we check if we have enough room for even bothering - packetentities may have filled it up!
+	if (msg.cursize + 8 < msg.maxsize)
+	{
+		message = client->msgListStart;
+		for (;;)
+		{
+			last = message;
+			message = message->next;
+
+			if (!message)
+				break;
+
+			if (!message->reliable)
+			{
+				if (message->data[0] == svc_temp_entity)
+				{
+					//don't include trivial in this part
+					if (message->data[1] == TE_BLOOD || message->data[1] == TE_SPLASH)
+						continue;
+
+					//drop some semi-useless effects
+					if (message->data[1] == TE_GUNSHOT || message->data[1] == TE_BULLET_SPARKS || message->data[1] == TE_SHOTGUN)
+					{
+						//randomly drop some of these
+						if (randomMT() < 0x80000000)
+							continue;
+					}
+
+					//not gonna fit, try another one
+					if (msg.cursize + message->cursize > msg.maxsize)
+					{
+						message = SV_DeleteMessage (client, message, last);
+						continue;
+					}
+
+					//write it in
+					SZ_Write (&msg, message->data, message->cursize);
+
+					//free it
+					message = SV_DeleteMessage (client, message, last);
+				}
+			}
+		}
+
+		SV_MSGListIntegrityCheck (client);
+
+		//recheck how much space we have
+		if (msg.cursize + 8 < msg.maxsize)
+		{
+			//now we write sounds
+			message = client->msgListStart;
+			for (;;)
+			{
+				last = message;
+				message = message->next;
+
+				if (!message)
+					break;
+
+				if (!message->reliable)
+				{
+					if (message->data[0] == svc_sound)
+					{
+						//not gonna fit, try another one
+						if (msg.cursize + message->cursize > msg.maxsize)
+						{
+							message = SV_DeleteMessage (client, message, last);
+							continue;
+						}
+
+						//write it in
+						SZ_Write (&msg, message->data, message->cursize);
+
+						//free it
+						message = SV_DeleteMessage (client, message, last);
+					}
+				}
+			}
+
+			SV_MSGListIntegrityCheck (client);
+
+			//recheck how much space is available
+			if (msg.cursize + 8 < msg.maxsize)
+			{
+				//everything else we can fit
+				message = client->msgListStart;
+				for (;;)
+				{
+					last = message;
+					message = message->next;
+
+					if (!message)
+						break;
+
+					if (!message->reliable)
+					{
+						//not gonna fit, try another one
+						if (msg.cursize + message->cursize > msg.maxsize)
+						{
+							message = SV_DeleteMessage (client, message, last);
+							continue;
+						}
+
+						//write it in
+						SZ_Write (&msg, message->data, message->cursize);
+
+						//free it
+						message = SV_DeleteMessage (client, message, last);
+					}
+				}
+
+				SV_MSGListIntegrityCheck (client);
+			}
+		}
+	}
+
+	//another "should never happen"...
+	if (msg.overflowed)
+		Com_Error (ERR_DROP, "SV_SendClientDatagram: unreliable message overflow!");
+
+	//now we nuke all remaining unreliable content
+	//unreliable is by nature time sensitive - no point queueing it.
+	message = client->msgListStart;
+	for (;;)
+	{
+		last = message;
+		message = message->next;
+
+		if (!message)
+			break;
+
+		if (!message->reliable)
+		{
+			Com_DPrintf ("SCD: Dropped an unreliable %s to %s.\n", svc_strings[*message->data], client->name);
+			message = SV_DeleteMessage (client, message, last);
+		}
+	}
+
+	SV_MSGListIntegrityCheck (client);
+
+	//now we fill the reliable portion if it's empty -- but not too much so we can hopefully always
+	//fit an svc_frame so we measure using hacks and frameSize. however we must commit to delivering
+	//one reliable message at least to avoid getting stuck on never sending large messages.
+
+	if (client->netchan.reliable_length)
+	{
+		SV_WriteReliableMessages (client, sizeof(msg_buf) - msg.cursize);
+	}
+	else
+	{
+		SV_WriteReliableMessages (client, sizeof(msg_buf) - msg.cursize);
+		message = client->msgListStart;
+		for (;;)
+		{
+			message = message->next;
+
+			if (!message)
+				break;
+
+			if (message->reliable)
+			{
+				if (message->data == wanted)
+					Com_Error (ERR_FATAL, "SV_SendClientDatagram: wanted to send message but it never got written!");
+				break;
 			}
 		}
 	}
@@ -683,121 +1075,17 @@ void SV_SendClientMessages (void)
 	// send a message to each connected client
 	for (i=0, c = svs.clients ; i<maxclients->intvalue; i++, c++)
 	{
-		if (!c->state)
+		if (c->state == cs_free)
 			continue;
 
-		// if the reliable message overflowed,
-		// drop the client
-		if (c->netchan.message.overflowed)
+		//r1: totally rewrote how reliable/datagram works. concept of overflow
+		//is now obsolete.
+
+		if (sv.state == ss_cinematic || sv.state == ss_demo || sv.state == ss_pic)
 		{
-#ifndef NO_ZLIB
-			if (c->netchan.protocol == ENHANCED_PROTOCOL_VERSION)
-			{
-				byte message[4096], buffer[4096], *p;
-				int compressedLen;
-
-				if (c->netchan.message.cursize >= 4096)
-				{
-					if (*c->name)
-					{
-						if (c->state == cs_spawned) {
-							SV_BroadcastPrintf (PRINT_HIGH, "%s's buffer got too big (%d)\n", c->name, c->netchan.message.cursize);
-						} else {
-							SV_ClientPrintf (c, PRINT_HIGH, "%s's buffer got too big (%d)\n", c->name, c->netchan.message.cursize);
-						}
-					}
-
-					SZ_Clear (&c->netchan.message);
-					SZ_Clear (&c->datagram);
-
-					Com_Printf ("Dropping %s, netchan overflow.\n", c->name);
-					SV_DropClient (c);
-				}
-				else
-				{
-					p = message;
-					*p = svc_zpacket;
-					p++;
-					compressedLen = ZLibCompressChunk (c->netchan.message.data, c->netchan.message.cursize, buffer, sizeof(buffer), Z_DEFAULT_COMPRESSION, -15);
-					if (compressedLen +5 > MAX_USABLEMSG || !compressedLen)
-					{
-						//r1: stop overflow spam from unconnected clients
-						if (*c->name)
-						{
-							if (c->state == cs_spawned) {
-								SV_BroadcastPrintf (PRINT_HIGH, "%s still overflowed even after zPacket (%d->%d(>%d))\n", c->name, c->netchan.message.cursize, compressedLen, c->netchan.message.maxsize);
-							} else {
-								SV_ClientPrintf (c, PRINT_HIGH, "%s still overflowed even after zPacket (%d->%d(>%d))\n", c->name, c->netchan.message.cursize, compressedLen, c->netchan.message.maxsize);
-							}
-						}
-
-						SZ_Clear (&c->netchan.message);
-						SZ_Clear (&c->datagram);
-
-						Com_Printf ("Dropping %s, compressed packet overflow.\n", c->name);
-						SV_DropClient (c);
-					}
-					else
-					{
-						*(short *)p = compressedLen;
-						p += sizeof(short);
-						*(short *)p = c->netchan.message.cursize;
-						p += sizeof(short);
-						memcpy (p, buffer, compressedLen);
-						p += compressedLen;
-						SZ_Clear (&c->netchan.message);
-						SZ_Write (&c->netchan.message, message, p - message);
-					}
-				}
-			}
-			else
-#endif
-			{
-				Com_Printf ("WARNING: %s overflowed buffer by %d bytes\n", c->name, c->netchan.message.cursize);
-				SZ_Clear (&c->netchan.message);
-				SZ_Clear (&c->datagram);
-
-				//r1: stop overflow spam from unconnected clients
-				if (*c->name)
-				{
-					if (c->state == cs_spawned)
-						SV_BroadcastPrintf (PRINT_HIGH, "%s overflowed\n", c->name);
-					else
-						SV_ClientPrintf (c, PRINT_HIGH, "%s overflowed\n", c->name);
-				}
-				SV_DropClient (c);
-			}
-		}
-		/*
-		else
-		{
-			if (c->netchan.message.cursize > MAX_USABLEMSG)
-				c->netchan.message.overflowed = true;
-
-			if (c->netchan.message.overflowed)
-			{
-					SZ_Clear (&c->netchan.message);
-					SZ_Clear (&c->datagram);
-
-					//r1: stop overflow spam from unconnected clients
-					if (*c->name)
-					{
-						if (c->state == cs_spawned) {
-							SV_BroadcastPrintf (PRINT_HIGH, "%s overflowed\n", c->name);
-						} else {
-							SV_ClientPrintf (c, PRINT_HIGH, "%s overflowed\n", c->name);
-						}
-					}
-					SV_DropClient (c);
-				}
-			}
-		}*/
-
-		if (sv.state == ss_cinematic 
-			|| sv.state == ss_demo 
-			|| sv.state == ss_pic
-			)
+			SV_WriteReliableMessages (c, MAX_USABLEMSG);
 			Netchan_Transmit (&c->netchan, msglen, msgbuf);
+		}
 		else if (c->state == cs_spawned)
 		{
 			// don't overrun bandwidth
@@ -808,8 +1096,9 @@ void SV_SendClientMessages (void)
 		}
 		else
 		{
+			SV_WriteReliableMessages (c, MAX_USABLEMSG);
 			// just update reliable	if needed
-			if (c->netchan.message.cursize	|| curtime - c->netchan.last_sent > 100 )
+			if (c->netchan.reliable_length || curtime - c->netchan.last_sent > 100)
 				Netchan_Transmit (&c->netchan, 0, NULL);
 		}
 	}

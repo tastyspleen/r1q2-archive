@@ -133,11 +133,11 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 
 #if 0
 	if (numprojs)
-		MSG_BeginWriteByte (msg, svc_packetentities2);
+		MSG_BeginWriting (svc_packetentities2);
 	else
 #endif
 
-	MSG_BeginWriteByte (msg, svc_packetentities);
+	MSG_BeginWriting (svc_packetentities);
 
 	if (!from)
 		from_num_entities = 0;
@@ -153,7 +153,8 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 	while (newindex < to->num_entities || oldindex < from_num_entities)
 	{
 		//r1: anti-packet overflow
-		if (sv_packetentities_hack->intvalue && msg->cursize > (MAX_USABLEMSG - cl->datagram.cursize - cl->netchan.message.cursize))
+		//note, worst case delta will generate 47 bytes of output. this should be extremely rare so we use 40.
+		if (sv_packetentities_hack->intvalue && MSG_GetLength() + msg->cursize >= (msg->maxsize - 40))
 			break;
 
 		if (newindex >= to->num_entities)
@@ -189,7 +190,7 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
 
-			MSG_WriteDeltaEntity (NULL, oldent, newent, msg, false, newent->number <= maxclients->intvalue, 0, cl->protocol);
+			MSG_WriteDeltaEntity (oldent, newent, false, newent->number <= maxclients->intvalue, cl->protocol);
 
 			oldindex++;
 			newindex++;
@@ -198,7 +199,7 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 	
 		if (newnum < oldnum)
 		{	// this is a new entity, send it from the baseline
-			MSG_WriteDeltaEntity (NULL, &cl->lastlines[newnum], newent, msg, true, true, 0, cl->protocol);
+			MSG_WriteDeltaEntity (&cl->lastlines[newnum], newent, true, true, cl->protocol);
 
 			newindex++;
 			continue;
@@ -211,31 +212,35 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 			if (oldnum >= 256)
 				bits |= U_NUMBER16 | U_MOREBITS1;
 
-			MSG_WriteByte (msg,	bits&255 );
+			MSG_WriteByte (bits&255 );
 			if (bits & 0x0000ff00)
-				MSG_WriteByte (msg,	(bits>>8)&255 );
+				MSG_WriteByte ((bits>>8)&255 );
 
 			if (bits & U_NUMBER16)
-				MSG_WriteShort (msg, oldnum);
+				MSG_WriteShort (oldnum);
 			else
-				MSG_WriteByte (msg, oldnum);
+				MSG_WriteByte (oldnum);
 
 			oldindex++;
 			continue;
 		}
 	}
 
-	//if (msg->cursize > 600) {
-	//}
+	MSG_WriteShort (0);	// end of packetentities
 
-	MSG_WriteShort (msg, 0);	// end of packetentities
-
+	MSG_EndWriting (msg);
 #if 0
 	if (numprojs)
 		SV_EmitProjectileUpdate(msg);
 #endif
 }
 
+#define Vec_RangeCap(x,minv,maxv) \
+{ \
+	if ((x)[0] > (maxv)) (x)[0] = (maxv); else if ((x)[0] < (minv)) x[0] = (minv); \
+	if ((x)[1] > (maxv)) (x)[1] = (maxv); else if ((x)[1] < (minv)) x[1] = (minv); \
+	if ((x)[2] > (maxv)) (x)[2] = (maxv); else if ((x)[2] < (minv)) x[2] = (minv); \
+}
 
 
 /*
@@ -246,23 +251,40 @@ SV_WritePlayerstateToClient
 */
 static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg)//, client_t *client)
 {
-	int						i;
-	int						pflags;
-	//player_state_t		*new_ps, *old_ps, *ops;
-	//union player_state_t	*u_new, *u_old;
-	player_state_new		dummy;
-	int						statbits;
+	int							i;
+	int							pflags;
+	static player_state_new		null_playerstate = {0};
+	int							statbits;
 
-	player_state_new		*ps, *ops;
+	player_state_new			*ps, *ops;
 
 	ps = &to->ps;
 
-	if (!from) {
-		memset (&dummy, 0, sizeof(dummy));
-		ops = &dummy;
-	} else {
+	if (!from)
+		ops = &null_playerstate;
+	else
 		ops = &from->ps;
-	}
+
+	//r1: cap to byte range for these
+	Vec_RangeCap (ps->viewoffset, -32, 31.75);
+	Vec_RangeCap (ps->kick_angles, -32, 31.75);
+
+	//r1: fix signed char range errors
+	Vec_RangeCap (ps->gunoffset, -32, 31.75);
+	Vec_RangeCap (ps->gunangles, -32, 31.75);
+
+	//and these are written as bytes too
+	if (ps->blend[0] > 1)
+		ps->blend[0] = 1;
+
+	if (ps->blend[1] > 1)
+		ps->blend[1] = 1;
+
+	if (ps->blend[2] > 1)
+		ps->blend[2] = 1;
+
+	if (ps->blend[3] > 1)
+		ps->blend[3] = 1;
 
 	//
 	// determine what needs to be sent
@@ -338,43 +360,43 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	//
 	// write it
 	//
-	MSG_BeginWriteByte (msg, svc_playerinfo);
-	MSG_WriteShort (msg, pflags);
+	MSG_BeginWriting (svc_playerinfo);
+	MSG_WriteShort (pflags);
 
 	//
 	// write the pmove_state_t
 	//
 	if (pflags & PS_M_TYPE)
-		MSG_WriteByte (msg, ps->pmove.pm_type);
+		MSG_WriteByte (ps->pmove.pm_type);
 
 	if (pflags & PS_M_ORIGIN)
 	{
-		MSG_WriteShort (msg, ps->pmove.origin[0]);
-		MSG_WriteShort (msg, ps->pmove.origin[1]);
-		MSG_WriteShort (msg, ps->pmove.origin[2]);
+		MSG_WriteShort (ps->pmove.origin[0]);
+		MSG_WriteShort (ps->pmove.origin[1]);
+		MSG_WriteShort (ps->pmove.origin[2]);
 	}
 
 	if (pflags & PS_M_VELOCITY)
 	{
-		MSG_WriteShort (msg, ps->pmove.velocity[0]);
-		MSG_WriteShort (msg, ps->pmove.velocity[1]);
-		MSG_WriteShort (msg, ps->pmove.velocity[2]);
+		MSG_WriteShort (ps->pmove.velocity[0]);
+		MSG_WriteShort (ps->pmove.velocity[1]);
+		MSG_WriteShort (ps->pmove.velocity[2]);
 	}
 
 	if (pflags & PS_M_TIME)
-		MSG_WriteByte (msg, ps->pmove.pm_time);
+		MSG_WriteByte (ps->pmove.pm_time);
 
 	if (pflags & PS_M_FLAGS)
-		MSG_WriteByte (msg, ps->pmove.pm_flags);
+		MSG_WriteByte (ps->pmove.pm_flags);
 
 	if (pflags & PS_M_GRAVITY)
-		MSG_WriteShort (msg, ps->pmove.gravity);
+		MSG_WriteShort (ps->pmove.gravity);
 
 	if (pflags & PS_M_DELTA_ANGLES)
 	{
-		MSG_WriteShort (msg, ps->pmove.delta_angles[0]);
-		MSG_WriteShort (msg, ps->pmove.delta_angles[1]);
-		MSG_WriteShort (msg, ps->pmove.delta_angles[2]);
+		MSG_WriteShort (ps->pmove.delta_angles[0]);
+		MSG_WriteShort (ps->pmove.delta_angles[1]);
+		MSG_WriteShort (ps->pmove.delta_angles[2]);
 	}
 
 	//
@@ -382,62 +404,58 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	//
 	if (pflags & PS_VIEWOFFSET)
 	{
-		MSG_WriteChar (msg, ps->viewoffset[0]*4);
-		MSG_WriteChar (msg, ps->viewoffset[1]*4);
-		MSG_WriteChar (msg, ps->viewoffset[2]*4);
+		MSG_WriteChar (ps->viewoffset[0]*4);
+		MSG_WriteChar (ps->viewoffset[1]*4);
+		MSG_WriteChar (ps->viewoffset[2]*4);
 	}
 
 	if (pflags & PS_VIEWANGLES)
 	{
-		MSG_WriteAngle16 (msg, ps->viewangles[0]);
-		MSG_WriteAngle16 (msg, ps->viewangles[1]);
-		MSG_WriteAngle16 (msg, ps->viewangles[2]);
+		MSG_WriteAngle16 (ps->viewangles[0]);
+		MSG_WriteAngle16 (ps->viewangles[1]);
+		MSG_WriteAngle16 (ps->viewangles[2]);
 	}
 
 	if (pflags & PS_KICKANGLES)
 	{
-		MSG_WriteByte (msg, (byte)(ps->kick_angles[0]*4) & 0xFF);
-		MSG_WriteByte (msg, (byte)(ps->kick_angles[1]*4) & 0xFF);
-		MSG_WriteByte (msg, (byte)(ps->kick_angles[2]*4) & 0xFF);
+		//r1: fixed, these are read as chars on client!
+		MSG_WriteChar (ps->kick_angles[0]*4);
+		MSG_WriteChar (ps->kick_angles[1]*4);
+		MSG_WriteChar (ps->kick_angles[2]*4);
 	}
 
 	if (pflags & PS_WEAPONINDEX)
 	{
-		MSG_WriteByte (msg, ps->gunindex);
+		MSG_WriteByte (ps->gunindex);
 	}
 
 	if (pflags & PS_WEAPONFRAME)
 	{
-		MSG_WriteByte (msg, ps->gunframe);
-		MSG_WriteChar (msg, ps->gunoffset[0]*4);
-		MSG_WriteChar (msg, ps->gunoffset[1]*4);
-		MSG_WriteChar (msg, ps->gunoffset[2]*4);
-		MSG_WriteChar (msg, ps->gunangles[0]*4);
-		MSG_WriteChar (msg, ps->gunangles[1]*4);
-		MSG_WriteChar (msg, ps->gunangles[2]*4);
+		MSG_WriteByte (ps->gunframe);
+
+		MSG_WriteChar (ps->gunoffset[0]*4);
+		MSG_WriteChar (ps->gunoffset[1]*4);
+		MSG_WriteChar (ps->gunoffset[2]*4);
+
+		MSG_WriteChar (ps->gunangles[0]*4);
+		MSG_WriteChar (ps->gunangles[1]*4);
+		MSG_WriteChar (ps->gunangles[2]*4);
 	}
 
 	if (pflags & PS_BLEND)
 	{
-		MSG_WriteByte (msg, ps->blend[0]*255);
-
 		//r1: fix byte overflow making this lower than it was supposed to be
-		if (ps->blend[1] > 1)
-			ps->blend[1] = 1;
-		if (ps->blend[2] > 1)
-			ps->blend[2] = 1;
-		if (ps->blend[3] > 1)
-			ps->blend[3] = 1;
-		MSG_WriteByte (msg, ps->blend[1]*255);
-		MSG_WriteByte (msg, ps->blend[2]*255);
-		MSG_WriteByte (msg, ps->blend[3]*255);
+		MSG_WriteByte (ps->blend[0]*255);
+		MSG_WriteByte (ps->blend[1]*255);
+		MSG_WriteByte (ps->blend[2]*255);
+		MSG_WriteByte (ps->blend[3]*255);
 	}
 
 	if (pflags & PS_FOV)
-		MSG_WriteByte (msg, ps->fov);
+		MSG_WriteByte (ps->fov);
 
 	if (pflags & PS_RDFLAGS)
-		MSG_WriteByte (msg, ps->rdflags);
+		MSG_WriteByte (ps->rdflags);
 
 	if (pflags & PS_BBOX) {
 		int j, k;
@@ -465,7 +483,7 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 
 		solid = (k<<10) | (j<<5) | i;
 
-		MSG_WriteShort (msg, solid);
+		MSG_WriteShort (solid);
 	}
 
 	// send stats
@@ -473,10 +491,13 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	for (i=0 ; i<MAX_STATS ; i++)
 		if (ps->stats[i] != ops->stats[i])
 			statbits |= 1<<i;
-	MSG_WriteLong (msg, statbits);
+
+	MSG_WriteLong (statbits);
 	for (i=0 ; i<MAX_STATS ; i++)
 		if (statbits & (1<<i) )
-			MSG_WriteShort (msg, ps->stats[i]);
+			MSG_WriteShort (ps->stats[i]);
+
+	MSG_EndWriting (msg);
 }
 
 
@@ -513,14 +534,14 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 		lastframe = client->lastframe;
 	}
 
-	MSG_BeginWriteByte (msg, svc_frame);
-	MSG_WriteLong (msg, framenum);
-	MSG_WriteLong (msg, lastframe);	// what we are delta'ing from
-	MSG_WriteByte (msg, client->surpressCount);	// rate dropped packets
+	SZ_WriteByte (msg, svc_frame);
+	SZ_WriteLong (msg, framenum);
+	SZ_WriteLong (msg, lastframe);	// what we are delta'ing from
+	SZ_WriteByte (msg, client->surpressCount);	// rate dropped packets
 	client->surpressCount = 0;
 
 	// send over the areabits
-	MSG_WriteByte (msg, frame->areabytes);
+	SZ_WriteByte (msg, frame->areabytes);
 	SZ_Write (msg, frame->areabits, frame->areabytes);
 
 	// delta encode the playerstate
@@ -758,8 +779,14 @@ void SV_BuildClientFrame (client_t *client)
 			&& !ent->s.event)
 			continue;
 
-		if (sv_gamedebug->intvalue && !ent->inuse)
-			Com_Printf ("WARNING: Entity %d is marked as unused but still contains state and thus may be sent to clients!\n", e);
+		if (!ent->inuse)
+		{
+			if (sv_gamedebug->intvalue)
+				Com_Printf ("GAME WARNING: Entity %d is marked as unused but still contains state and thus may be sent to clients!\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, e);
+
+			if (sv_entity_inuse_hack->intvalue)
+				continue;
+		}
 
 		// ignore if not touching a PV leaf
 		if (ent != clent)
@@ -831,7 +858,8 @@ void SV_BuildClientFrame (client_t *client)
 			continue; // added as a special projectile
 #endif
 
-		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client)) {
+		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP)
+		{
 			// *********** NiceAss Start ************
 			VectorCopy(org, start);
 #ifdef ENHANCED_SERVER
@@ -951,10 +979,10 @@ void SV_RecordDemoMessage (void)
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
 
 	// write a frame message that doesn't contain a player_state_t
-	MSG_BeginWriteByte (&buf, svc_frame);
-	MSG_WriteLong (&buf, sv.framenum);
+	SZ_WriteByte (&buf, svc_frame);
+	SZ_WriteLong (&buf, sv.framenum);
 
-	MSG_BeginWriteByte (&buf, svc_packetentities);
+	SZ_WriteByte (&buf, svc_packetentities);
 
 	e = 1;
 	ent = EDICT_NUM(e);
@@ -965,13 +993,16 @@ void SV_RecordDemoMessage (void)
 			ent->s.number && 
 			(ent->s.modelindex || ent->s.effects || ent->s.sound || ent->s.event) && 
 			!(ent->svflags & SVF_NOCLIENT))
-			MSG_WriteDeltaEntity (NULL, &null_entity_state, &ent->s, &buf, false, true, false, ENHANCED_PROTOCOL_VERSION);
+		{
+			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, ORIGINAL_PROTOCOL_VERSION);
+			MSG_EndWriting (&buf);
+		}
 
 		e++;
 		ent = EDICT_NUM(e);
 	}
 
-	MSG_WriteShort (&buf, 0);		// end of packetentities
+	SZ_WriteShort (&buf, 0);		// end of packetentities
 
 	// now add the accumulated multicast information
 	SZ_Write (&buf, svs.demo_multicast.data, svs.demo_multicast.cursize);

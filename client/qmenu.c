@@ -611,7 +611,7 @@ void Slider_Draw( menuslider_s *s )
 
 	s->range = ( s->curvalue - s->minvalue ) / ( float ) ( s->maxvalue - s->minvalue );
 
-	if ( s->range < 0)
+	if (FLOAT_LT_ZERO(s->range))
 		s->range = 0;
 	if ( s->range > 1)
 		s->range = 1;

@@ -282,7 +282,7 @@ static void M_Print (int cx, int cy, char *str)
 	}
 }
 
-static void M_PrintWhite (int cx, int cy, char *str)
+/*static void M_PrintWhite (int cx, int cy, char *str)
 {
 	while (*str)
 	{
@@ -290,12 +290,12 @@ static void M_PrintWhite (int cx, int cy, char *str)
 		str++;
 		cx += 8;
 	}
-}
+}*/
 
-static void M_DrawPic (int x, int y, char *pic)
+/*static void M_DrawPic (int x, int y, char *pic)
 {
 	re.DrawPic (x + ((viddef.width - 320)>>1), y + ((viddef.height - 240)>>1), pic);
-}
+}*/
 
 
 /*
@@ -1027,7 +1027,8 @@ static menulist_s		s_r1q2_winxp;
 
 static menulist_s		s_r1q2_defer;
 static menulist_s		s_r1q2_async;
-static menulist_s		s_r1q2_smooth;
+static menulist_s		s_r1q2_autorecord;
+static menulist_s		s_r1q2_xaniarail;
 
 static menuframework_s	s_options_menu;
 static menuaction_s		s_options_r1q2_action;
@@ -1089,10 +1090,16 @@ static void AsyncFunc (void *unused)
 	Cvar_SetValue ("cl_async", s_r1q2_async.curvalue);
 }
 
-static void SmoothFunc (void *unused)
+static void AutoFunc (void *unused)
 {
-	Cvar_SetValue ("cl_smoothsteps", s_r1q2_smooth.curvalue);
+	Cvar_SetValue ("cl_autorecord", s_r1q2_autorecord.curvalue);
 }
+
+static void RailTrailFunc (void *unused)
+{
+	Cvar_SetValue ("cl_railtrail", s_r1q2_xaniarail.curvalue);
+}
+
 
 static void R1Q2_MenuInit (void)
 {
@@ -1133,7 +1140,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_winxp.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_winxp.generic.x	= 0;
 	s_r1q2_winxp.generic.y	= 40;
-	s_r1q2_winxp.generic.name	= "mouse acceleration fix";
+	s_r1q2_winxp.generic.name	= "xp mouse acceleration fix";
 	s_r1q2_winxp.generic.callback = AccelFixFunc;
 	s_r1q2_winxp.itemnames = yesno_names;
 	s_r1q2_winxp.curvalue = Cvar_VariableValue ("m_fixaccel");
@@ -1154,13 +1161,21 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_async.itemnames = yesno_names;
 	s_r1q2_async.curvalue = Cvar_VariableValue ("cl_async");
 
-	s_r1q2_smooth.generic.type = MTYPE_SPINCONTROL;
-	s_r1q2_smooth.generic.x	= 0;
-	s_r1q2_smooth.generic.y	= 80;
-	s_r1q2_smooth.generic.name	= "smooth stair climbing";
-	s_r1q2_smooth.generic.callback = SmoothFunc;
-	s_r1q2_smooth.itemnames = yesno_names;
-	s_r1q2_smooth.curvalue = Cvar_VariableValue ("cl_smoothsteps");
+	s_r1q2_autorecord.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_autorecord.generic.x	= 0;
+	s_r1q2_autorecord.generic.y	= 80;
+	s_r1q2_autorecord.generic.name	= "automatic demo record";
+	s_r1q2_autorecord.generic.callback = AutoFunc;
+	s_r1q2_autorecord.itemnames = yesno_names;
+	s_r1q2_autorecord.curvalue = Cvar_VariableValue ("cl_autorecord");
+
+	s_r1q2_xaniarail.generic.type = MTYPE_SPINCONTROL;
+	s_r1q2_xaniarail.generic.x	= 0;
+	s_r1q2_xaniarail.generic.y	= 90;
+	s_r1q2_xaniarail.generic.name	= "\"xania\" railgun trail";
+	s_r1q2_xaniarail.generic.callback = RailTrailFunc;
+	s_r1q2_xaniarail.itemnames = yesno_names;
+	s_r1q2_xaniarail.curvalue = Cvar_VariableValue ("cl_railtrail");
 
 /*
 	s_options_invertmouse_box.generic.type = MTYPE_SPINCONTROL;
@@ -1205,7 +1220,8 @@ static void R1Q2_MenuInit (void)
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_winxp );
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_defer );
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_async );
-	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_smooth );
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_autorecord );
+	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_xaniarail );
 }
 
 static void R1Q2_MenuDraw (void)
@@ -1391,7 +1407,7 @@ static void Options_MenuInit( void )
 
 	static const char *compatibility_items[] =
 	{
-		"max compatibility", "max performance", 0
+		"normal writing", "direct writing", 0
 	};
 
 	static const char *yesno_names[] =
@@ -2451,7 +2467,8 @@ void M_AddToServerList (netadr_t adr, char *info)
 
 	// ignore if duplicated
 	for (i=0 ; i<m_num_servers ; i++)
-		if (!strcmp(info, local_server_names[i]))
+		//if (!strcmp(info, local_server_names[i]))
+		if (NET_CompareAdr (&adr, &local_server_netadr[i]))
 			return;
 
 	local_server_netadr[m_num_servers] = adr;
@@ -2483,9 +2500,9 @@ static void AddressBookFunc( void *self )
 	M_Menu_AddressBook_f();
 }
 
-static void NullCursorDraw( void *self )
+/*static void NullCursorDraw( void *self )
 {
-}
+}*/
 
 static void SearchLocalGames( void )
 {
@@ -2595,6 +2612,7 @@ static int	  nummaps;
 
 static menuaction_s	s_startserver_start_action;
 static menuaction_s	s_startserver_dmoptions_action;
+
 static menufield_s	s_timelimit_field;
 static menufield_s	s_fraglimit_field;
 static menufield_s	s_maxclients_field;
@@ -2851,7 +2869,7 @@ static void StartServer_MenuInit( void )
 	s_timelimit_field.generic.statusbar = "0 = no limit";
 	s_timelimit_field.length = 3;
 	s_timelimit_field.visible_length = 3;
-	strcpy( s_timelimit_field.buffer, Cvar_VariableString("timelimit") );
+	strncpy( s_timelimit_field.buffer, Cvar_VariableString("timelimit"), sizeof(s_timelimit_field.buffer)-1);
 
 	s_fraglimit_field.generic.type = MTYPE_FIELD;
 	s_fraglimit_field.generic.name = "frag limit";
@@ -2861,7 +2879,7 @@ static void StartServer_MenuInit( void )
 	s_fraglimit_field.generic.statusbar = "0 = no limit";
 	s_fraglimit_field.length = 3;
 	s_fraglimit_field.visible_length = 3;
-	strcpy( s_fraglimit_field.buffer, Cvar_VariableString("fraglimit") );
+	strncpy( s_fraglimit_field.buffer, Cvar_VariableString("fraglimit"), sizeof(s_fraglimit_field.buffer)-1);
 
 	/*
 	** maxclients determines the maximum number of players that can join
@@ -2877,10 +2895,10 @@ static void StartServer_MenuInit( void )
 	s_maxclients_field.generic.statusbar = NULL;
 	s_maxclients_field.length = 3;
 	s_maxclients_field.visible_length = 3;
-	if ( Cvar_VariableValue( "maxclients" ) == 1 )
-		strcpy( s_maxclients_field.buffer, "8" );
+	if ( Cvar_VariableValue( "maxclients" ) == 1)
+		strcpy( s_maxclients_field.buffer, "8");
 	else 
-		strcpy( s_maxclients_field.buffer, Cvar_VariableString("maxclients") );
+		strncpy( s_maxclients_field.buffer, Cvar_VariableString("maxclients"), sizeof(s_maxclients_field.buffer)-1);
 
 	s_hostname_field.generic.type = MTYPE_FIELD;
 	s_hostname_field.generic.name = "hostname";
@@ -2890,7 +2908,7 @@ static void StartServer_MenuInit( void )
 	s_hostname_field.generic.statusbar = NULL;
 	s_hostname_field.length = 12;
 	s_hostname_field.visible_length = 12;
-	strcpy( s_hostname_field.buffer, Cvar_VariableString("hostname") );
+	strncpy( s_hostname_field.buffer, Cvar_VariableString("hostname"), sizeof(s_hostname_field.buffer));
 
 	s_startserver_dmoptions_action.generic.type = MTYPE_ACTION;
 	s_startserver_dmoptions_action.generic.name	= " deathmatch flags";
@@ -3509,7 +3527,7 @@ static void AddressBook_MenuInit( void )
 	for ( i = 0; i < NUM_ADDRESSBOOK_ENTRIES; i++ )
 	{
 		cvar_t *adr;
-		char buffer[20];
+		char buffer[16];
 
 		Com_sprintf( buffer, sizeof( buffer ), "adr%d", i );
 
@@ -3525,7 +3543,7 @@ static void AddressBook_MenuInit( void )
 		s_addressbook_fields[i].length			= 60;
 		s_addressbook_fields[i].visible_length	= 30;
 
-		strcpy( s_addressbook_fields[i].buffer, adr->string );
+		strncpy( s_addressbook_fields[i].buffer, adr->string, sizeof (s_addressbook_fields[i].buffer));
 
 		Menu_AddItem( &s_addressbook_menu, &s_addressbook_fields[i] );
 	}
@@ -3536,7 +3554,7 @@ const char *AddressBook_MenuKey( int key )
 	if ( key == K_ESCAPE )
 	{
 		int index;
-		char buffer[20];
+		char buffer[16];
 
 		for ( index = 0; index < NUM_ADDRESSBOOK_ENTRIES; index++ )
 		{
@@ -3593,9 +3611,9 @@ static playermodelinfo_s s_pmi[MAX_PLAYERMODELS];
 static char *s_pmnames[MAX_PLAYERMODELS];
 static int s_numplayermodels;
 
-static int rate_tbl[] = { 2500, 3200, 4300, 5000, 10000, 12000, 25000, 0 };
+static int rate_tbl[] = { 2500, 3200, 4300, 5000, 15000, 0 };
 static const char *rate_names[] = { "28.8 Modem", "33.6 Modem", "56.6 Modem", "ISDN",
-	"Cable Modem", "DSL Modem", "T1/LAN", "User defined", 0 };
+	"Cable/DSL/LAN", "User defined", 0 };
 
 static void DownloadOptionsFunc( void *self )
 {
@@ -3639,7 +3657,7 @@ static qboolean IconOfSkinExists( char *skin, char **pcxfiles, int npcxfiles )
 	int i;
 	char scratch[1024];
 
-	strcpy( scratch, skin );
+	Q_strncpy( scratch, skin, sizeof(scratch)-7);
 	*strrchr( scratch, '.' ) = 0;
 	strcat( scratch, "_i.pcx" );
 
@@ -3686,6 +3704,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 	if ( npms > MAX_PLAYERMODELS )
 		npms = MAX_PLAYERMODELS;
 
+	//jesus christ this is fucking ugly
 	for ( i = 0; i < npms; i++ )
 	{
 		int k, s;
@@ -3699,8 +3718,9 @@ static qboolean PlayerConfig_ScanDirectories( void )
 			continue;
 
 		// verify the existence of tris.md2
-		strcpy( scratch, dirnames[i] );
+		Q_strncpy( scratch, dirnames[i], sizeof(scratch)-10);
 		strcat( scratch, "/tris.md2" );
+
 		if ( !Sys_FindFirst( scratch, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM ) )
 		{
 			free( dirnames[i] );
@@ -3711,7 +3731,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 		Sys_FindClose();
 
 		// verify the existence of at least one pcx skin
-		strcpy( scratch, dirnames[i] );
+		Q_strncpy( scratch, dirnames[i], sizeof(scratch)-10);
 		strcat( scratch, "/*.pcx" );
 		pcxnames = FS_ListFiles( scratch, &npcxfiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM );
 
@@ -3756,7 +3776,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 					else
 						c = b;
 
-					strcpy( scratch, c + 1 );
+					Q_strncpy( scratch, c + 1, sizeof(scratch)-1);
 
 					if ( strrchr( scratch, '.' ) )
 						*strrchr( scratch, '.' ) = 0;
@@ -3780,12 +3800,13 @@ static qboolean PlayerConfig_ScanDirectories( void )
 		else
 			c = b;
 
-		strncpy( s_pmi[s_numplayermodels].displayname, c + 1, MAX_DISPLAYNAME-1 );
-		strcpy( s_pmi[s_numplayermodels].directory, c + 1 );
+		strncpy( s_pmi[s_numplayermodels].displayname, c + 1, MAX_DISPLAYNAME-1);
+		strncpy( s_pmi[s_numplayermodels].directory, c + 1, MAX_QPATH-1);
 
 		FreeFileList( pcxnames, npcxfiles );
 
-		s_numplayermodels++;
+		if (++s_numplayermodels == MAX_PLAYERMODELS)
+			break;
 	}
 	if ( dirnames )
 		FreeFileList( dirnames, ndirs );
@@ -3840,7 +3861,8 @@ static qboolean PlayerConfig_MenuInit( void )
 	if ( hand->value < 0 || hand->value > 2 )
 		Cvar_Set( "hand", "0" );
 
-	strcpy( currentdirectory, skin->string );
+	//r1: BUFFER OVERFLOW WAS HERE
+	Q_strncpy( currentdirectory, skin->string, sizeof(currentdirectory)-1);
 
 	if ( strchr( currentdirectory, '/' ) )
 	{
@@ -3892,7 +3914,7 @@ static qboolean PlayerConfig_MenuInit( void )
 	s_player_name_field.generic.y		= 0;
 	s_player_name_field.length	= 20;
 	s_player_name_field.visible_length = 20;
-	strcpy( s_player_name_field.buffer, name->string );
+	strncpy( s_player_name_field.buffer, name->string, sizeof(s_player_name_field.buffer)-1);
 	s_player_name_field.cursor = strlen( name->string );
 
 	s_player_model_title.generic.type = MTYPE_SEPARATOR;

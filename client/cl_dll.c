@@ -81,16 +81,16 @@ qboolean CL_InitClientDLL (void)
 		CL_FreeCllib ();
 	}
 
-	Com_Printf( "------ Loading client_dll.dll ------\n");
+	Com_Printf( "------ Loading client_dll.dll ------\n", LOG_CLIENT);
 
 	if ( ( cllib_library = LoadLibrary( name ) ) == 0 )
 	{
-		Com_Printf( "LoadLibrary(\"%s\") failed\n", name );
+		Com_Printf( "LoadLibrary(\"%s\") failed\n", LOG_CLIENT, name );
 		return false;
 	}
 
 	if ( ( GetClAPI = (GetClAPI_t)GetProcAddress( cllib_library, "GetClAPI" ) ) == 0 ) {
-		Com_Printf("GetProcAddress failed on %s\n", name );
+		Com_Printf("GetProcAddress failed on %s\n", LOG_CLIENT, name );
 		return false;
 	}
 
@@ -139,7 +139,7 @@ qboolean CL_InitClientDLL (void)
 			break;
 		default:
 			CL_FreeCllib ();
-			Com_Printf ("r1q2 doesn't support your client dll version (%s)\n", name);
+			Com_Printf ("r1q2 doesn't support your client dll version (%s)\n", LOG_CLIENT, name);
 			return false;
 	}
 
@@ -150,7 +150,7 @@ qboolean CL_InitClientDLL (void)
 		return false;
 	}
 
-	Com_Printf( "------------------------------------\n");
+	Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	cllib_active = true;
 
 	return true;
@@ -165,7 +165,7 @@ CL_ClDLL_Restart_f
 void CL_ClDLL_Restart_f (void)
 {
 	if (!CL_InitClientDLL ()) {
-		Com_Printf( "------------------------------------\n");
+		Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	}
 }
 #endif

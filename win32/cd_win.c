@@ -142,7 +142,7 @@ void CDAudio_Play2(int track, qboolean looping)
 	}
 	if (mciStatusParms.dwReturn != MCI_CDA_TRACK_AUDIO)
 	{
-		Com_Printf("CDAudio: track %i is not audio\n", track);
+		Com_Printf("CDAudio: track %i is not audio\n", LOG_CLIENT, track);
 		return;
 	}
 
@@ -298,7 +298,7 @@ static void CD_f (void)
 		{
 			for (n = 1; n < 100; n++)
 				if (remap[n] != n)
-					Com_Printf("  %u -> %u\n", n, remap[n]);
+					Com_Printf("  %u -> %u\n", LOG_CLIENT, n, remap[n]);
 			return;
 		}
 		for (n = 1; n <= ret; n++)
@@ -317,7 +317,7 @@ static void CD_f (void)
 		CDAudio_GetAudioDiskInfo();
 		if (!cdValid)
 		{
-			Com_Printf("No CD in player.\n");
+			Com_Printf("No CD in player.\n", LOG_CLIENT);
 			return;
 		}
 	}
@@ -363,11 +363,11 @@ static void CD_f (void)
 
 	if (Q_stricmp(command, "info") == 0)
 	{
-		Com_Printf("%u tracks\n", maxTrack);
+		Com_Printf("%u tracks\n", LOG_CLIENT, maxTrack);
 		if (playing)
-			Com_Printf("Currently %s track %u\n", playLooping ? "looping" : "playing", playTrack);
+			Com_Printf("Currently %s track %u\n", LOG_CLIENT, playLooping ? "looping" : "playing", playTrack);
 		else if (wasPlaying)
-			Com_Printf("Paused %s track %u\n", playLooping ? "looping" : "playing", playTrack);
+			Com_Printf("Paused %s track %u\n", LOG_CLIENT, playLooping ? "looping" : "playing", playTrack);
 		return;
 	}
 }
@@ -449,7 +449,7 @@ int CDAudio_Init(void)
 	mciOpenParms.lpstrDeviceType = "cdaudio";
 	if (dwReturn = mciSendCommand(0, MCI_OPEN, MCI_OPEN_TYPE | MCI_OPEN_SHAREABLE, (DWORD) (LPVOID) &mciOpenParms))
 	{
-		Com_Printf("CDAudio_Init: MCI_OPEN failed (%i)\n", dwReturn);
+		Com_Printf("CDAudio_Init: MCI_OPEN failed (%i)\n", LOG_CLIENT, dwReturn);
 		return -1;
 	}
 	wDeviceID = mciOpenParms.wDeviceID;
@@ -458,7 +458,7 @@ int CDAudio_Init(void)
     mciSetParms.dwTimeFormat = MCI_FORMAT_TMSF;
     if (dwReturn = mciSendCommand(wDeviceID, MCI_SET, MCI_SET_TIME_FORMAT, (DWORD)(LPVOID) &mciSetParms))
     {
-		Com_Printf("MCI_SET_TIME_FORMAT failed (%i)\n", dwReturn);
+		Com_Printf("MCI_SET_TIME_FORMAT failed (%i)\n", LOG_CLIENT, dwReturn);
         mciSendCommand(wDeviceID, MCI_CLOSE, 0, (DWORD)NULL);
 		return -1;
     }
@@ -470,14 +470,13 @@ int CDAudio_Init(void)
 
 	if (CDAudio_GetAudioDiskInfo())
 	{
-//		Com_Printf("CDAudio_Init: No CD in player.\n");
 		cdValid = false;
 		enabled = false;
 	}
 
 	Cmd_AddCommand ("cd", CD_f);
 
-	Com_Printf("CD Audio Initialized\n");
+	Com_Printf("CD Audio Initialized\n", LOG_CLIENT);
 
 	return 0;
 }
