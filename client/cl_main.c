@@ -25,6 +25,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define __TIMESTAMP__ __DATE__ " " __TIME__
 #endif
 
+int deffered_model_index;
+
 cvar_t	*freelook;
 
 cvar_t	*adr0;
@@ -420,7 +422,7 @@ void CL_ForwardToServer_f (void)
 		return;
 	}
 
-	//r1: support \xxx escape sequences
+	//r1: support \xxx escape sequences for testing various evil hacks
 #ifdef _DEBUG
 	{
 		char *rew = Cmd_Args();
@@ -561,7 +563,7 @@ void CL_SendConnectPacket (void)
 		Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
 			cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 	}*/
-	Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n",
 		cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 }
 
@@ -657,7 +659,7 @@ void CL_CheckForResend (void)
 	//_asm int 3;
 	Com_Printf ("Connecting to %s...\n", cls.servername);
 
-	Netchan_OutOfBandPrint (NS_CLIENT, adr, "getchallenge\n");
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "getchallenge\n");
 }
 
 
@@ -713,15 +715,6 @@ netadr_t	last_rcon_to;
 void CL_Rcon_f (void)
 {
 	char	message[1024];
-	int		i;
-
-	//Com_Printf ("rcon_client_password: %p\nrcon_client_password->string: %p [%s]\n", rcon_client_password, rcon_client_password->string, rcon_client_password->string);
-	/*if (!rcon_client_password->string || !*rcon_client_password->string)
-	{
-		Com_Printf ("You must set 'rcon_password' before\n"
-					"issuing an rcon command.\n");
-		return;
-	}*/
 
 	//r1: buffer check ffs!
 	if ((strlen(Cmd_Args()) + strlen(rcon_client_password->string) + 16) >= sizeof(message)) {
@@ -745,11 +738,14 @@ void CL_Rcon_f (void)
 		strcat (message, " ");
 	}
 
-	for (i=1 ; i<Cmd_Argc() ; i++)
+	strcat (message, Cmd_Args());
+
+	/*for (i=1 ; i<Cmd_Argc() ; i++)
 	{
 		strcat (message, Cmd_Argv(i));
 		strcat (message, " ");
-	}
+	}*/
+	
 
 	if (cls.state >= ca_connected)
 		last_rcon_to = cls.netchan.remote_address;
@@ -768,7 +764,7 @@ void CL_Rcon_f (void)
 			last_rcon_to.port = ShortSwap (PORT_SERVER);
 	}
 	
-	NET_SendPacket (NS_CLIENT, strlen(message)+1, message, last_rcon_to);
+	NET_SendPacket (NS_CLIENT, strlen(message)+1, message, &last_rcon_to);
 }
 
 
@@ -842,9 +838,9 @@ void CL_Disconnect (qboolean skipdisconnect)
 		final[0] = clc_stringcmd;
 		strcpy ((char *)final+1, "disconnect");
 
-		Netchan_Transmit (&cls.netchan, strlen((const char *)final), final);
-		Netchan_Transmit (&cls.netchan, strlen((const char *)final), final);
-		Netchan_Transmit (&cls.netchan, strlen((const char *)final), final);
+		Netchan_Transmit (&cls.netchan, 11, final);
+		Netchan_Transmit (&cls.netchan, 11, final);
+		Netchan_Transmit (&cls.netchan, 11, final);
 	}
 
 	CL_ClearState ();
@@ -871,7 +867,8 @@ void CL_Disconnect (qboolean skipdisconnect)
 
 void CL_Disconnect_f (void)
 {
-	Com_Error (ERR_DROP, "Disconnected from server");
+	if (cls.state != ca_disconnected)
+		Com_Error (ERR_DROP, "Disconnected from server");
 }
 
 
@@ -994,7 +991,7 @@ void CL_PingServers_f (void)
 
 	//r1: only ping original, r1q2 servers respond to either, but 3.20 server would
 	//reply with errors on receiving enhanced info
-	Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
 	//}
 
 	/*noipx = Cvar_Get ("noipx", "0", CVAR_NOSET);
@@ -1022,7 +1019,7 @@ void CL_PingServers_f (void)
 		if (!adr.port)
 			adr.port = ShortSwap(PORT_SERVER);
 		//Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", ENHANCED_PROTOCOL_VERSION));
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
 	}
 }
 
@@ -1062,14 +1059,18 @@ void CL_ConnectionlessPacket (void)
 {
 	char	*s;
 	char	*c;
-	netadr_t remote;
+
+	netadr_t	remote_addr;
+	netadr_t	*remote;
 
 	MSG_BeginReading (&net_message);
 	MSG_ReadLong (&net_message);	// skip the -1
 
 	s = MSG_ReadStringLine (&net_message);
 
-	NET_StringToAdr (cls.servername, &remote);
+	NET_StringToAdr (cls.servername, &remote_addr);
+
+	remote = &remote_addr;
 
 	Cmd_TokenizeString (s, false);
 
@@ -1077,7 +1078,7 @@ void CL_ConnectionlessPacket (void)
 
 	//r1: server responding to a status broadcast (ignores security check due
 	//to broadcasts responding)
-	if (!strcmp(c, "info"))
+	if (!strcmp(c, "info") && cls.state == ca_disconnected)
 	{
 		CL_ParseStatusMessage ();
 		return;
@@ -1086,12 +1087,12 @@ void CL_ConnectionlessPacket (void)
 	{
 		if (!cls.passivemode)
 		{
-			Com_DPrintf ("Illegal %s from %s.  Ignored.\n", c, NET_AdrToString (net_from));
+			Com_DPrintf ("Illegal %s from %s.  Ignored.\n", c, NET_AdrToString (&net_from));
 		}
 		else
 		{
-			Com_Printf ("Received %s from %s -- beginning connection.\n", c, NET_AdrToString (net_from));
-			strcpy (cls.servername, NET_AdrToString (net_from));
+			Com_Printf ("Received %s from %s -- beginning connection.\n", c, NET_AdrToString (&net_from));
+			strcpy (cls.servername, NET_AdrToString (&net_from));
 			cls.state = ca_connecting;
 			cls.connect_time = -99999;
 			cls.passivemode = false;
@@ -1101,12 +1102,12 @@ void CL_ConnectionlessPacket (void)
 
 	//r1: security check. (only allow from current connected server
 	//and last destination client sent an rcon to)
-	if (!NET_CompareBaseAdr (net_from, remote) && !NET_CompareBaseAdr (net_from, last_rcon_to)) {
-		Com_DPrintf ("Illegal %s from %s.  Ignored.\n", c, NET_AdrToString (net_from));
+	if (!NET_CompareBaseAdr (&net_from, remote) && !NET_CompareBaseAdr (&net_from, &last_rcon_to)) {
+		Com_DPrintf ("Illegal %s from %s.  Ignored.\n", c, NET_AdrToString (&net_from));
 		return;
 	}
 
-	Com_Printf ("%s: %s\n", NET_AdrToString (net_from), c);
+	Com_Printf ("%s: %s\n", NET_AdrToString (&net_from), c);
 
 	// server connection
 	if (!strcmp(c, "client_connect"))
@@ -1129,7 +1130,7 @@ void CL_ConnectionlessPacket (void)
 
 		Com_DPrintf ("client_connect: new\n");
 
-		Netchan_Setup (NS_CLIENT, &cls.netchan, net_from, cls.serverProtocol, cls.quakePort);
+		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort);
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message, "new");
 		send_packet_now = true;
@@ -1138,9 +1139,10 @@ void CL_ConnectionlessPacket (void)
 	}
 
 	// remote command from gui front end
-	if (!strcmp(c, "cmd"))
+	// r1: removed, this is dangerous to leave in with new NET_IsLocalAddress code.
+	/*if (!strcmp(c, "cmd"))
 	{
-		if (!NET_IsLocalAddress(net_from))
+		if (!NET_IsLocalAddress(&net_from))
 		{
 			Com_DPrintf ("Command packet from remote host.  Ignored.\n");
 			return;
@@ -1150,7 +1152,7 @@ void CL_ConnectionlessPacket (void)
 		Cbuf_AddText (s);
 		Cbuf_AddText ("\n");
 		return;
-	}
+	}*/
 
 	// print command from somewhere
 	if (!strcmp(c, "print"))
@@ -1208,7 +1210,7 @@ void CL_ConnectionlessPacket (void)
 	// echo request from server
 	if (!strcmp(c, "echo"))
 	{
-		Netchan_OutOfBandPrint (NS_CLIENT, net_from, "%s", Cmd_Argv(1) );
+		Netchan_OutOfBandPrint (NS_CLIENT, &net_from, "%s", Cmd_Argv(1) );
 		return;
 	}
 
@@ -1232,7 +1234,7 @@ void CL_ReadPackets (void)
 		if (*(int *)net_message.data == -1)
 		{
 			if (i == -1)
-				Com_Printf ("Port unreachable from %s\n", NET_AdrToString (net_from));
+				Com_Printf ("Port unreachable from %s\n", NET_AdrToString (&net_from));
 			else
 				CL_ConnectionlessPacket ();
 			continue;
@@ -1244,17 +1246,17 @@ void CL_ReadPackets (void)
 		if (net_message.cursize < 8)
 		{
 			//r1: delegated to DPrintf (someone could spam your console with crap otherwise)
-			Com_DPrintf ("%s: Runt packet\n",NET_AdrToString(net_from));
+			Com_DPrintf ("%s: Runt packet\n",NET_AdrToString(&net_from));
 			continue;
 		}
 
 		//
 		// packet from server
 		//
-		if (!NET_CompareAdr (net_from, cls.netchan.remote_address))
+		if (!NET_CompareAdr (&net_from, &cls.netchan.remote_address))
 		{
 			Com_DPrintf ("%s:sequenced packet without connection\n"
-				,NET_AdrToString(net_from));
+				,NET_AdrToString(&net_from));
 			continue;
 		}
 
@@ -1552,7 +1554,7 @@ char *colortext(char *text){
 
 void CL_RequestNextDownload (void)
 {
-	unsigned	map_checksum;		// for detecting cheater maps
+	//unsigned	map_checksum;		// for detecting cheater maps
 	char fn[MAX_OSPATH];
 	dmdl_t *pheader;
 
@@ -1913,13 +1915,13 @@ void CL_RequestNextDownload (void)
 
 		CL_LoadLoc (locbuff);
 
-		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
+		/*CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 
 		if (map_checksum && map_checksum != atoi(cl.configstrings[CS_MAPCHECKSUM])) {
 			Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x\n",
 				map_checksum, atoi(cl.configstrings[CS_MAPCHECKSUM]));
 			return;
-		}
+		}*/
 	}
 
 	if (precache_check > ENV_CNT && precache_check < TEXTURE_CNT) {
@@ -2013,7 +2015,7 @@ void CL_SendStatusPacket_f (void)
 	if (cls.state <= ca_connected)
 		return;
 
-	Netchan_OutOfBandPrint (NS_CLIENT, cls.netchan.remote_address, "info %d\n", cls.serverProtocol);
+	Netchan_OutOfBandPrint (NS_CLIENT, &cls.netchan.remote_address, "info %d\n", cls.serverProtocol);
 }
 
 void CL_Toggle_f (void)
@@ -2181,7 +2183,7 @@ void CL_InitLocal (void)
 	cl_protocol = Cvar_Get ("cl_protocol", "35", 0);
 #endif
 
-	cl_defertimer = Cvar_Get ("cl_defertimer", "1", CVAR_ARCHIVE);
+	cl_defertimer = Cvar_Get ("cl_defertimer", "1", 0);
 	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "1", 0);
 	cl_instantpacket = Cvar_Get ("cl_instantpacket", "1", 0);
 	cl_strafejump_hack = Cvar_Get ("cl_strafejump_hack", "0", 0);
@@ -2400,169 +2402,6 @@ extern qboolean	ActiveApp;
 extern cvar_t *cl_lents;
 void LE_RunLocalEnts (void);
 
-#ifndef DECOUPLED_RENDERER
-
-/*
-==================
-CL_SendCommand
-
-==================
-*/
-void CL_SendCommand (void)
-{
-	// get new key events
-	Sys_SendKeyEvents ();
-
-	// allow mice or other external controllers to add commands
-#ifdef JOYSTICK
-	IN_Commands ();
-#endif
-
-	// process console commands
-	Cbuf_Execute ();
-
-	// fix any cheating cvars
-	CL_FixCvarCheats ();
-
-	// send intentions now
-	CL_SendCmd ();
-
-	// resend a connection request if necessary
-	CL_CheckForResend ();
-
-	CL_RunDownloadQueue ();
-}
-
-void CL_Frame (int msec)
-{
-	static int	extratime;
-	//static int  lasttimecalled;
-
-#ifndef NO_SERVER
-	if (dedicated->value)
-		return;
-#endif
-
-	//msec *= 2;
-	extratime += msec;
-
-	//IN_ReadImmediateData (NULL);
-	//SCR_UpdateScreen ();
-	if (!cl_timedemo->value)
-	{
-		if (cls.state == ca_connected && extratime < 100)
-			return;			// don't flood packets out while connecting
-		if (extratime < 1000/cl_maxfps->value)
-			return;			// framerate is too high
-	}
-
-	// let the mouse activate or deactivate
-	IN_Frame ();
-
-#ifdef WIN32
-	if (!ActiveApp && !Com_ServerState())
-		NET_Client_Sleep (500);
-#endif
-
-	// decide the simulation time
-	cls.frametime = extratime/1000.0;
-	cl.time += extratime;
-	cls.realtime = curtime;
-
-	extratime = 0;
-
-#if 0
-	if (cls.frametime > (1.0 / cl_minfps->value))
-		cls.frametime = (1.0 / cl_minfps->value);
-#else
-	if (cls.frametime > (1.0 / 5))
-		cls.frametime = (1.0 / 5);
-#endif
-
-	//IN_ReadImmediateData (NULL);
-
-	// if in the debugger last frame, don't timeout
-	/*if (msec > 5000)
-		cls.netchan.last_received = Sys_Milliseconds ();
-
-	if (cls.state == ca_connected && extratime < 100)
-		goto skip;			// don't flood packets out while connecting
-
-	if (extratime < 1000/cl_maxfps->value)
-		goto skip;			// framerate is too high
-
-	*/
-
-	// fetch results from server
-	CL_ReadPackets ();
-
-	// send a new command message to the server
-	CL_SendCommand ();
-
-//skip:
-	// predict all unacknowledged movements
- 	CL_PredictMovement ();
-
-	//r1: run local ent physics/thinking/etc
-	if (cl_lents->value)
-		LE_RunLocalEnts ();
-
-	// allow rendering DLL change
-	VID_CheckChanges ();
-
-	if (host_speeds->value)
-		time_before_ref = Sys_Milliseconds ();
-
-	if (!cl.refresh_prepped && cls.state == ca_active) {
-		CL_PrepRefresh ();
-	} else {
-		SCR_UpdateScreen ();
-	}
-
-	if (host_speeds->value)
-		time_after_ref = Sys_Milliseconds ();
-
-	// update audio
-	S_Update (cl.refdef.vieworg, cl.v_forward, cl.v_right, cl.v_up);
-	
-#ifdef CD_AUDIO
-	CDAudio_Update();
-#endif
-
-	// advance local effects for next frame
-	CL_RunDLights ();
-	CL_RunLightStyles ();
-#ifdef CINEMATICS
-	SCR_RunCinematic ();
-#endif
-	SCR_RunConsole ();
-
-	//cls.framecount++;
-
-	/*if ( log_stats->value )
-	{
-		if ( cls.state == ca_active )
-		{
-			if ( !lasttimecalled )
-			{
-				lasttimecalled = Sys_Milliseconds();
-				if ( log_stats_file )
-					fprintf( log_stats_file, "0\n" );
-			}
-			else
-			{
-				int now = Sys_Milliseconds();
-
-				if ( log_stats_file )
-					fprintf( log_stats_file, "%d\n", now - lasttimecalled );
-				lasttimecalled = now;
-			}
-		}
-	}*/
-}
-
-#else
-
 //CL_RefreshInputs
 //jec - updates all input events
 
@@ -2588,6 +2427,42 @@ void CL_RefreshInputs (void)
 	//jec - update usercmd state
 	if (cls.state > ca_connecting)
 		CL_RefreshCmd();
+}
+
+void CL_LoadDeferredModels (void)
+{
+	if (!cl.refresh_prepped || deffered_model_index >= MAX_MODELS)
+		return;
+
+	for (;;)
+	{
+		deffered_model_index ++;
+
+		if (!cl.configstrings[CS_MODELS+deffered_model_index][0])
+			continue;
+
+		if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '#')
+		{
+			// special player weapon model
+			if (num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS)
+			{
+				strncpy(cl_weaponmodels[num_cl_weaponmodels], cl.configstrings[CS_MODELS+deffered_model_index]+1,
+					sizeof(cl_weaponmodels[num_cl_weaponmodels]) - 1);
+				num_cl_weaponmodels++;
+			}
+		} 
+		else
+		{
+			cl.model_draw[deffered_model_index] = re.RegisterModel (cl.configstrings[CS_MODELS+deffered_model_index]);
+			if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '*')
+				cl.model_clip[deffered_model_index] = CM_InlineModel (cl.configstrings[CS_MODELS+deffered_model_index]);
+			else
+				cl.model_clip[deffered_model_index] = NULL;
+
+		}
+
+		break;
+	}
 }
 
 //CL_SendCommand
@@ -2645,6 +2520,9 @@ void CL_Frame (int msec)
 	cls.frametime = packet_delta/1000.0;
 	cls.realtime = curtime;
 
+	//if (cls.frametime > 0.05)
+	//	Com_Printf ("Hitch warning: %f (%d ms)\n", cls.frametime, msec);
+
 	//if in the debugger last frame, don't timeout
 	if (msec > 5000)
 		cls.netchan.last_received = Sys_Milliseconds ();
@@ -2694,6 +2572,7 @@ void CL_Frame (int msec)
 		packet_delta = 0;
 		//inputCount = 0;
 		CL_SendCommand ();
+		CL_LoadDeferredModels();
 	}
 
 	//jec- Render the display
@@ -2794,7 +2673,6 @@ void CL_Frame (int msec)
 		//cls.framecount++;
 	//}
 }
-#endif
 
 //============================================================================
 

@@ -151,11 +151,8 @@ MULTICAST_PVS_R
 
 short   ShortSwap (short l);
 #if !YOU_HAVE_A_BROKEN_COMPUTER
-#define	BigShort(l) (l)
 #define LittleShort(l) (l)
-#define BigLong(l) (l)
 #define LittleLong(l) (l)
-#define BigFloat(l) (l)
 #define LittleFloat(l) (l)
 #endif
 
@@ -293,11 +290,8 @@ int Q_strncasecmp (char *s1, char *s2, int n);
 //=============================================
 
 #if YOU_HAVE_A_BROKEN_COMPUTER
-short	BigShort(short l);
 short	LittleShort(short l);
-int		BigLong (int l);
 int		LittleLong (int l);
-float	BigFloat (float l);
 float	LittleFloat (float l);
 #endif
 

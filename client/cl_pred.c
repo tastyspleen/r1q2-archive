@@ -277,7 +277,7 @@ void CL_PredictMovement (void)
 	}
 
 	//r1: don't forget to reset ack so stair prediction works
-	ack--;
+	//ack--;
 #else
 	// run frames
 	while (++ack < current)
@@ -312,13 +312,13 @@ void CL_PredictMovement (void)
 	step = pm.s.origin[2] - oldz;
 
 	//r1ch: don't overwrite existing stair moves
-	if (cl_smoothsteps->value && step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame)
+	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame && cl_smoothsteps->value)
 	{
 		last_step_frame = current;
 		cl.predicted_step = step * 0.125;
 		cl.predicted_step_time = cls.realtime - cls.frametime * 500;
 #ifdef _DEBUG
-		Com_Printf ("***step: %d [%f], time: %d, cur: %d, old: %d\n", step, cl.predicted_step, cl.predicted_step_time, current, oldframe);
+		//Com_Printf ("***step: %d [%f], time: %d, cur: %d, old: %d\n", step, cl.predicted_step, cl.predicted_step_time, current, oldframe);
 #endif
 	}
 

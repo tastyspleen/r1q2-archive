@@ -676,7 +676,7 @@ void Sys_ConsoleOutput (char *string)
 		int len;
 		char buff[1152];
 		len = Com_sprintf (buff, sizeof(buff), "line\n%s", string);
-		Netchan_OutOfBand (NS_SERVER, netaddress_pyroadmin, len, (byte *)buff);
+		Netchan_OutOfBand (NS_SERVER, &netaddress_pyroadmin, len, (byte *)buff);
 	}
 
 	p = string;

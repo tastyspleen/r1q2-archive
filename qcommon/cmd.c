@@ -767,7 +767,8 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 			// strip off any trailing whitespace
 			l = strlen(cmd_args) - 1;
 			if (l == 1022) {
-				Com_Printf ("Cmd_TokenizeString: overflowed, possible attack detected.\nargv[0] = %s, remote = %s, len = %d\n", cmd_argv[0], NET_AdrToString(net_from), net_message.cursize);
+				Com_Printf ("Cmd_TokenizeString: overflowed, possible attack detected.\nargv[0] = %s, remote = %s, len = %d\n",
+					cmd_argv[0], NET_AdrToString(&net_from), net_message.cursize);
 				return;
 			}
 			for ( ; l >= 0 ; l--)

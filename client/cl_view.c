@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 #include "localent.h"
 
+extern int deffered_model_index;
+
 //=============
 //
 // development tools for weapons
@@ -267,9 +269,9 @@ Call before entering a new level, or after changing dlls
 */
 void CL_PrepRefresh (void)
 {
-	char		mapname[32];
+	char		mapname[MAX_QPATH];
 	int			i;
-	char		name[MAX_QPATH];
+//	char		name[MAX_QPATH];
 	float		rotate;
 	vec3_t		axis;
 
@@ -291,6 +293,8 @@ void CL_PrepRefresh (void)
 	re.BeginRegistration (mapname);
 	Com_Printf ("                                     \r");
 
+	Netchan_Transmit (&cls.netchan, 0, NULL);
+
 	// precache status bar pics
 	Com_Printf ("pics\r"); 
 	SCR_UpdateScreen ();
@@ -302,38 +306,20 @@ void CL_PrepRefresh (void)
 	num_cl_weaponmodels = 1;
 	strcpy(cl_weaponmodels[0], "weapon.md2");
 
-	for (i=1 ; i<MAX_MODELS && cl.configstrings[CS_MODELS+i][0] ; i++)
-	{
-		strcpy (name, cl.configstrings[CS_MODELS+i]);
-		name[37] = 0;	// never go beyond one line
-		if (name[0] != '*')
-			Com_Printf ("%s\r", name); 
-		SCR_UpdateScreen ();
-		Sys_SendKeyEvents ();	// pump message loop
-		if (name[0] == '#')
-		{
-			// special player weapon model
-			if (num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS)
-			{
-				strncpy(cl_weaponmodels[num_cl_weaponmodels], cl.configstrings[CS_MODELS+i]+1,
-					sizeof(cl_weaponmodels[num_cl_weaponmodels]) - 1);
-				num_cl_weaponmodels++;
-			}
-		} 
-		else
-		{
-			cl.model_draw[i] = re.RegisterModel (cl.configstrings[CS_MODELS+i]);
-			if (name[0] == '*')
-				cl.model_clip[i] = CM_InlineModel (cl.configstrings[CS_MODELS+i]);
-			else
-				cl.model_clip[i] = NULL;
+	Netchan_Transmit (&cls.netchan, 0, NULL);
 
-		}
-		if (name[0] != '*')
-			Com_Printf ("                                     \r");
-	}
+	deffered_model_index = 1;
 
-	Com_Printf ("images\r", i); 
+	for (i = 0; i < MAX_MODELS; i++)
+		cl.model_draw[i] = NULL;
+
+	cl.model_draw[1] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
+	if (cl.configstrings[CS_MODELS+1][0] == '*')
+		cl.model_clip[1] = CM_InlineModel (cl.configstrings[CS_MODELS+1]);
+	else
+		cl.model_clip[1] = NULL;
+
+	Com_Printf ("images\r"); 
 	SCR_UpdateScreen ();
 	for (i=1 ; i<MAX_IMAGES && cl.configstrings[CS_IMAGES+i][0] ; i++)
 	{
@@ -352,6 +338,8 @@ void CL_PrepRefresh (void)
 		CL_ParseClientinfo (i);
 		Com_Printf ("                                     \r");
 	}
+
+	Netchan_Transmit (&cls.netchan, 0, NULL);
 
 	CL_LoadClientinfo (&cl.baseclientinfo, "unnamed\\male/grunt");
 

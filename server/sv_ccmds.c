@@ -66,11 +66,11 @@ static void SV_SetMaster_f (void)
 		if (master_adr[slot].port == 0)
 			master_adr[slot].port = ShortSwap (PORT_MASTER);
 
-		Com_Printf ("Master server at %s\n", NET_AdrToString (master_adr[slot]));
+		Com_Printf ("Master server at %s\n", NET_AdrToString (&master_adr[slot]));
 
 		Com_Printf ("Sending a ping.\n");
 
-		Netchan_OutOfBandPrint (NS_SERVER, master_adr[slot], "ping");
+		Netchan_OutOfBandPrint (NS_SERVER, &master_adr[slot], "ping");
 
 		slot++;
 	}
@@ -525,7 +525,7 @@ static void SV_GameMap_f (void)
 	}
 	else
 	{	// save the map just exited
-		if (!strstr (map, ".") && !strstr (map, "$") && *map != '*')
+		if (!strstr (map, ".") && !strstr (map, "$"))
 		{
 			Com_sprintf (expanded, sizeof(expanded), "maps/%s.zbsp", map);
 			//r1: always terminate!
@@ -665,7 +665,10 @@ static void SV_Loadgame_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("USAGE: loadgame <directory>\n");
+		//Com_Printf ("USAGE: loadgame <directory>\n");
+		Com_Printf ("Purpose: Load a saved game.\n"
+					"Syntax : loadgame <directory>\n"
+					"Example: loadgame base1\n");
 		return;
 	}
 
@@ -822,8 +825,11 @@ static void SV_DelCvarBan_f (void)
 		return;
 	}
 
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("usage: delcvarban cvarname\n");
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Purpose: Remove a cvar check.\n"
+					"Syntax : delcvarban <cvarname>\n"
+					"Example: delcvarban gl_modulate\n");
 		return;
 	}
 
@@ -847,8 +853,14 @@ static void SV_AddCvarBan_f (void)
 	int blockmethod, i;
 	char *cvar, *blocktype, *iffound, message[1024], *x;
 	
-	if (Cmd_Argc() < 5) {
-		Com_Printf ("Usage: addcvarban cvarname ((=|<|>|!)numvalue|string|*) (KICK|BLACKHOLE) message\n");
+	if (Cmd_Argc() < 5)
+	{
+		//Com_Printf ("Usage: addcvarban cvarname ((=|<|>|!)numvalue|string|*) (KICK|BLACKHOLE) message\n");
+		Com_Printf ("Purpose: Add a check for a client cvar.\n"
+					"Syntax : addcvarban <cvarname> <(=|<|>|!)numvalue|string|*> <KICK|BLACKHOLE> <message>\n"
+					"Example: addcvarban gl_modulate >2 KICK Use a lower gl_modulate\n"
+					"Example: addcvarban frkq2_bot * BLACKHOLE That client is not allowed\n"
+					"Example: addcvarban vid_ref sw KICK Software mode is not allowed\n");
 		return;
 	}
 
@@ -907,7 +919,7 @@ static void SV_Listholes_f (void)
 	while (hole->next)
 	{
 		hole = hole->next;
-		Com_Printf ("%d: %s (%s)\n", ++index, NET_AdrToString (hole->netadr), hole->reason);
+		Com_Printf ("%d: %s (%s)\n", ++index, NET_AdrToString (&hole->netadr), hole->reason);
 	}
 }
 
@@ -917,7 +929,9 @@ static void SV_Delhole_f (void)
 	int x;
 
 	if (Cmd_Argc() < 2) {
-		Com_Printf ("Usage: delhole index\n");
+		Com_Printf ("Purpose: Remove a blackhole from the list.\n"
+					"Syntax : delhole <index>\n"
+					"Example: delhole 1\n");
 		return;
 	}
 
@@ -1015,7 +1029,7 @@ static void SV_Addhole_f (void)
 		return;
 	}
 
-	Blackhole (adr, "%s", Cmd_Args2(2));
+	Blackhole (&adr, "%s", Cmd_Args2(2));
 }
 
 /*
@@ -1117,7 +1131,7 @@ void SV_Status_f (void)
 
 		Com_Printf ("%7i ", svs.realtime - cl->lastmessage );
 
-		s = NET_AdrToString ( cl->netchan.remote_address);
+		s = NET_AdrToString (&cl->netchan.remote_address);
 		Com_Printf ("%s", s);
 		l = 22 - strlen(s);
 		for (j=0 ; j<l ; j++)
@@ -1526,8 +1540,8 @@ static void SV_PassiveConnect_f (void)
 			}
 			else
 			{
-				Netchan_OutOfBand (NS_SERVER, addr, 15, (byte *)"passive_connect");
-				Com_Printf ("passive_connect request sent to %s\n", NET_AdrToString (addr));
+				Netchan_OutOfBand (NS_SERVER, &addr, 15, (byte *)"passive_connect");
+				Com_Printf ("passive_connect request sent to %s\n", NET_AdrToString (&addr));
 			}
 		}
 	}

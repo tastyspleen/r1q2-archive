@@ -61,205 +61,30 @@ int			server_port;
 
 char *NET_ErrorString (void);
 
+//Aiee...
+#include "../qcommon/net_common.c"
+
 //=============================================================================
 
 //r1: for some reason attempting to macroize this fails badly..
-__inline void NetadrToSockadr (netadr_t *a, struct sockaddr *s)
+/*__inline void NetadrToSockadr (netadr_t *a, struct sockaddr *s)
 {
 	memset (s, 0, sizeof(*s));
 
-	if (a->type == NA_BROADCAST)
-	{
-		((struct sockaddr_in *)s)->sin_family = AF_INET;
-		((struct sockaddr_in *)s)->sin_port = a->port;
-		((struct sockaddr_in *)s)->sin_addr.s_addr = INADDR_BROADCAST;
-	}
-	else if (a->type == NA_IP)
+	if (a->type == NA_IP)
 	{
 		((struct sockaddr_in *)s)->sin_family = AF_INET;
 		((struct sockaddr_in *)s)->sin_addr.s_addr = *(int *)&a->ip;
 		((struct sockaddr_in *)s)->sin_port = a->port;
 	}
-}
-
-#define SockadrToNetadr(s,a) \
-	a->type = NA_IP; \
-	*(int *)&a->ip = ((struct sockaddr_in *)s)->sin_addr.s_addr; \
-	a->port = ((struct sockaddr_in *)s)->sin_port; \
-
-char	*NET_AdrToString (netadr_t a)
-{
-	static	char	s[32];
-
-	if (a.type == NA_LOOPBACK)
-		//Com_sprintf (s, sizeof(s), "loopback");
-		strcpy (s, "loopback");
-	else if (a.type == NA_IP)
-		Com_sprintf (s, sizeof(s), "%i.%i.%i.%i:%i", a.ip[0], a.ip[1], a.ip[2], a.ip[3], ntohs(a.port));
-	//else
-	//	Com_sprintf (s, sizeof(s), "%02x%02x%02x%02x:%02x%02x%02x%02x%02x%02x:%i", a.ipx[0], a.ipx[1], a.ipx[2], a.ipx[3], a.ipx[4], a.ipx[5], a.ipx[6], a.ipx[7], a.ipx[8], a.ipx[9], ntohs(a.port));
-
-	return s;
-}
-
-#if 0
-qboolean	NET_CompareAdr (netadr_t a, netadr_t b)
-{
-	if (a.type != b.type)
-		return false;
-
-	if (a.type == NA_LOOPBACK)
-		return true;
-
-	if (a.type == NA_IP)
+	else if (a->type == NA_BROADCAST)
 	{
-		if (a.ip[0] == b.ip[0] && a.ip[1] == b.ip[1] && a.ip[2] == b.ip[2] && a.ip[3] == b.ip[3] && a.port == b.port)
-			return true;
-		return false;
+		((struct sockaddr_in *)s)->sin_family = AF_INET;
+		((struct sockaddr_in *)s)->sin_port = a->port;
+		((struct sockaddr_in *)s)->sin_addr.s_addr = INADDR_BROADCAST;
 	}
+}*/
 
-	return false;
-}
-
-/*
-===================
-NET_CompareBaseAdr
-
-Compares without the port
-===================
-*/
-qboolean	NET_CompareBaseAdr (netadr_t a, netadr_t b)
-{
-	if (a.type != b.type)
-		return false;
-
-	if (a.type == NA_LOOPBACK)
-		return true;
-
-	if (a.type == NA_IP)
-	{
-		if (a.ip[0] == b.ip[0] && a.ip[1] == b.ip[1] && a.ip[2] == b.ip[2] && a.ip[3] == b.ip[3])
-			return true;
-		return false;
-	}
-
-	return false;
-}
-
-qboolean	NET_IsLocalAddress (netadr_t adr)
-{
-	return adr.type == NA_LOOPBACK;
-}
-#endif
-
-/*
-=============
-NET_StringToAdr
-
-localhost
-idnewt
-idnewt:28000
-192.246.40.70
-192.246.40.70:28000
-=============
-*/
-/*#define DO(src,dest)	\
-	copy[0] = s[src];	\
-	copy[1] = s[src + 1];	\
-	sscanf (copy, "%x", &val);	\
-	((struct sockaddr_ipx *)sadr)->dest = val*/
-
-qboolean	NET_StringToSockaddr (char *s, struct sockaddr *sadr)
-{
-	int	isip = 0;
-	char *p;
-	struct hostent	*h;
-	char	*colon;
-//	int		val;
-	char	copy[128];
-	
-	memset (sadr, 0, sizeof(*sadr));
-
-	//r1: better than just the first digit for ip validity :)
-	p = s;
-	while (*p) {
-		if (*p == '.') {
-			isip++;
-		} else if (*p == ':') {
-			break;
-		} else if (!isdigit(*p)) {
-			isip = 0;
-			break;
-		}
-		p++;
-	}
-		
-	((struct sockaddr_in *)sadr)->sin_family = AF_INET;
-	
-	((struct sockaddr_in *)sadr)->sin_port = 0;
-
-	//r1: CHECK THE GODDAMN BUFFER SIZE... sigh yet another overflow.
-	strncpy (copy, s, sizeof(copy)-1);
-
-	// strip off a trailing :port if present
-	for (colon = copy ; *colon ; colon++) {
-		if (*colon == ':')
-		{
-			*colon = 0;
-			((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));
-			break;
-		}
-	}
-	
-	if (isip)
-	{
-		*(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(copy);
-	}
-	else
-	{
-		if (! (h = gethostbyname(copy)) )
-			return false;
-		*(int *)&((struct sockaddr_in *)sadr)->sin_addr = *(int *)h->h_addr_list[0];
-	}
-	
-	return true;
-}
-
-#undef DO
-
-/*
-=============
-NET_StringToAdr
-
-localhost
-idnewt
-idnewt:28000
-192.246.40.70
-192.246.40.70:28000
-=============
-*/
-qboolean	NET_StringToAdr (char *s, netadr_t *a)
-{
-	struct sockaddr sadr;
-
-	if (!strcmp (s, "localhost"))
-	{
-		memset (a, 0, sizeof(*a));
-
-		//r1: should need some kind of ip data to prevent comparisons with empty ips?
-		a->ip[0] = 127;
-		a->ip[3] = 1;
-		a->type = NA_LOOPBACK;
-		return true;
-	}
-
-	if (!NET_StringToSockaddr (s, &sadr))
-		return false;
-	
-	SockadrToNetadr (&sadr, a);
-
-	return true;
-}
 
 /*
 =============================================================================
@@ -361,7 +186,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 	if (ret == net_message->maxsize)
 	{
-		Com_Printf ("Oversize packet from %s\n", NET_AdrToString (*net_from));
+		Com_Printf ("Oversize packet from %s\n", NET_AdrToString (net_from));
 		return 0;
 	}
 
@@ -485,26 +310,25 @@ int NET_Connect (netadr_t *to, int port)
 }
 
 
-int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
+int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to)
 {
 //	char *z;
 	int		ret;
-	struct sockaddr	addr;
+	struct sockaddr_in	addr;
 	int		net_socket;
 
-	if ( to.type == NA_LOOPBACK )
-	{
-		NET_SendLoopPacket (sock, length, data);
-		return 0;
-	}
-
-	if (to.type == NA_BROADCAST)
+	if (to->type == NA_IP)
 	{
 		net_socket = ip_sockets[sock];
 		if (!net_socket)
 			return 0;
 	}
-	else if (to.type == NA_IP)
+	else if ( to->type == NA_LOOPBACK )
+	{
+		NET_SendLoopPacket (sock, length, data);
+		return 0;
+	}
+	else if (to->type == NA_BROADCAST)
 	{
 		net_socket = ip_sockets[sock];
 		if (!net_socket)
@@ -513,9 +337,9 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
 	else
 		Com_Error (ERR_FATAL, "NET_SendPacket: bad address type");
 
-	NetadrToSockadr (&to, &addr);
+	NetadrToSockadr (to, &addr);
 
-	ret = sendto (net_socket, data, length, 0, &addr, sizeof(addr) );
+	ret = sendto (net_socket, data, length, 0, (const struct sockaddr *)&addr, sizeof(addr) );
 	
 	if (ret == -1)
 	{
@@ -527,7 +351,7 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
 			return 0;
 
 		// some PPP links dont allow broadcasts
-		if ((err == WSAEADDRNOTAVAIL) && ((to.type == NA_BROADCAST)))
+		if ((err == WSAEADDRNOTAVAIL) && ((to->type == NA_BROADCAST)))
 			return 0;
 
 #ifndef NO_SERVER
@@ -555,7 +379,8 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
 			//    - if we are a listen server then we would Com_Error out at this point without
 			//    this fix (or hack if you prefer).
 			else {
-				if (to.type != NA_BROADCAST && !(length == 11 && *(int *)data == -1) && !(sock == NS_SERVER && err == WSAECONNRESET))
+				if (to->type != NA_BROADCAST && !(length == 11 && *(int *)data == -1) &&
+					!(sock == NS_SERVER && err == WSAECONNRESET))
 					Com_Error (ERR_NET, "NET_SendPacket ERROR: %s", NET_ErrorString());
 			}
 		}

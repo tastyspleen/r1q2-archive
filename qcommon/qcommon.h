@@ -161,11 +161,8 @@ void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd
 #if YOU_HAVE_A_BROKEN_COMPUTER
 extern	qboolean		bigendien;
 
-extern	short	BigShort (short l);
 extern	short	LittleShort (short l);
-extern	int		BigLong (int l);
 extern	int		LittleLong (int l);
-extern	float	BigFloat (float l);
 extern	float	LittleFloat (float l);
 #endif
 //============================================================================
@@ -605,7 +602,7 @@ void		NET_Shutdown (void);
 int			NET_Config (int openFlags);
 
 int			NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
-int			NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to);
+int			NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t *to);
 
 int NET_Accept (int s, netadr_t *address);
 int NET_Listen (unsigned short port);
@@ -620,15 +617,18 @@ int NET_Connect (netadr_t *to, int port);
 //qboolean	NET_IsLocalAddress (netadr_t adr);
 
 #define NET_IsLocalAddress(x) \
-	(x.type == NA_LOOPBACK)
+	((x)->type == NA_LOOPBACK || (x)->ip[0] == 127)
 
 #define NET_CompareAdr(a,b) \
-	((*(int *)a.ip == *(int *)b.ip) && a.port == b.port)
+	((*(int *)(a)->ip == *(int *)(b)->ip) && (a)->port == (b)->port)
+
+#define NET_CompareAdrOld(a,b) \
+	((*(int *)(a).ip == *(int *)(b).ip) && (a).port == (b).port)
 
 #define NET_CompareBaseAdr(a,b) \
-	(*(int *)a.ip == *(int *)b.ip)
+	(*(int *)(a)->ip == *(int *)(b)->ip)
 
-char		*NET_AdrToString (netadr_t a);
+char		*NET_AdrToString (netadr_t *a);
 qboolean	NET_StringToAdr (char *s, netadr_t *a);
 void		NET_Sleep(int msec);
 void NET_Client_Sleep (int msec);
@@ -678,12 +678,12 @@ extern	byte		net_message_buffer[MAX_MSGLEN];
 
 
 void Netchan_Init (void);
-void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t adr, int protocol, int qport);
+void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport);
 
 qboolean Netchan_NeedReliable (netchan_t *chan);
 int	 Netchan_Transmit (netchan_t *chan, int length, byte /*@null@*/*data);
-void Netchan_OutOfBand (int net_socket, netadr_t adr, int length, byte *data);
-void Netchan_OutOfBandPrint (int net_socket, netadr_t adr, char *format, ...);
+void Netchan_OutOfBand (int net_socket, netadr_t *adr, int length, byte *data);
+void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, char *format, ...);
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg);
 
 //qboolean Netchan_CanReliable (netchan_t *chan);

@@ -541,8 +541,8 @@ void CL_SendCmd (void)
 		CL_FixUpGender();
 		userinfo_modified = false;
 #ifdef _DEBUG
-		Com_Printf ("userinfo update:\n");
-		Cbuf_ExecuteText (EXEC_NOW, "userinfo\n");
+		//Com_Printf ("userinfo update:\n");
+		//Cbuf_ExecuteText (EXEC_NOW, "userinfo\n");
 #endif
 		MSG_WriteByte (&cls.netchan.message, clc_userinfo);
 		MSG_WriteString (&cls.netchan.message, Cvar_Userinfo() );

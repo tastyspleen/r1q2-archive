@@ -36,7 +36,7 @@ void SV_FlushRedirect (int sv_redirected, char *outputbuf)
 	if (sv_redirected == RD_PACKET)
 	{
 		//NET_SendPacket (NS_SERVER, strlen(outputbuf), outputbuf, net_from);
-		Netchan_OutOfBandPrint (NS_SERVER, net_from, "print\n%s", outputbuf);
+		Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s", outputbuf);
 	}
 	/*else if (sv_redirected == RD_CLIENT)
 	{

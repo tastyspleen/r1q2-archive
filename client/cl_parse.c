@@ -647,23 +647,22 @@ void CL_ParseServerData (void)
 
 	Com_DPrintf ("Serverdata packet received. protocol=%d, servercount=%d, attractloop=%d, clnum=%d, game=%s, map=%s, dlserver=%d\n", cls.serverProtocol, cl.servercount, cl.attractloop, cl.playernum, cl.gamedir, str, cls.dlserverport);
 
-#ifdef CINEMATICS
 	if (cl.playernum == -1)
 	{	// playing a cinematic or showing a pic, not a level
-		SCR_PlayCinematic (str);
+		//SCR_PlayCinematic (str);
+		// tell the server to advance to the next map / cinematic
+		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+		SZ_Print (&cls.netchan.message, va("nextserver %i\n", cl.servercount));
 	}
 	else
 	{
-#endif
 		// seperate the printfs so the server message can have a color
 		Com_Printf("\n\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
-		Com_Printf ("%c%s\n", 2, str);
+		Com_Printf ("\2%s\n", str);
 
 		// need to prep refresh at next oportunity
 		cl.refresh_prepped = false;
-#ifdef CINEMATICS
 	}
-#endif
 }
 /*
 ==================
@@ -939,7 +938,7 @@ void CL_ParseConfigString (void)
 
 	//Com_Printf ("configstring %i: %s\n", i, s);
 
-	// do something apropriate 
+	// do something apropriate
 
 	if (i >= CS_LIGHTS && i < CS_LIGHTS+MAX_LIGHTSTYLES)
 		CL_SetLightstyle (i - CS_LIGHTS);
@@ -959,6 +958,15 @@ void CL_ParseConfigString (void)
 				cl.model_clip[i-CS_MODELS] = CM_InlineModel (cl.configstrings[i]);
 			else
 				cl.model_clip[i-CS_MODELS] = NULL;
+		}
+
+		//r1: load map whilst connecting to save a bit of time
+		if (i == CS_MODELS + 1)
+		{
+			CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &i);
+			if (i && i != atoi(cl.configstrings[CS_MAPCHECKSUM]))
+				Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x\n",
+					i, atoi(cl.configstrings[CS_MAPCHECKSUM]));
 		}
 	}
 	else if (i >= CS_SOUNDS && i < CS_SOUNDS+MAX_MODELS)
@@ -1166,8 +1174,8 @@ void CL_ParseServerMessage (void)
 			Cbuf_AddText (s);
 
 #ifdef _DEBUG
-			strcpy (s, StripHighBits (s, 2));
-			Com_Printf ("stuff: %s\n", s);
+			//strcpy (s, StripHighBits (s, 2));
+			//Com_Printf ("stuff: %s\n", s);
 #endif
 			break;
 			

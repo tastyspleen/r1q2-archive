@@ -781,6 +781,10 @@ void CL_FireEntityEvents (frame_t *frame)
 		s1 = &cl_parse_entities[num];
 		if (s1->event)
 			CL_EntityEvent (s1);
+
+		if (s1->effects & EF_TELEPORTER)
+			CL_TeleporterParticles (s1);
+
 	}
 }
 
@@ -1081,60 +1085,25 @@ void CL_AddPacketEntities (frame_t *frame)
 		}
 		else
 		{	
-			//int i;
-
-			//r1: prediction tests.
-#ifdef _DEBUG
-			//vec3_t	newpos;
-		
-			// interpolate origin
-			vec3_t vel;
+#ifdef _DEB4UG
+			for (i=0 ; i<3 ; i++)
+			{
+				//cent->prev.origin[i] = cent->current.origin[i];
 			
-			VectorSubtract (cent->current.origin, cent->prev.origin, vel);
-			VectorScale (vel, cl_predict->value, vel);
+				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + (1 + cl.lerpfrac) * 
+					(cent->current.origin[i] - cent->prev.origin[i]);
+			}
+			//VectorCopy (cent->current.origin, cent->prev.origin);
+#else
 
-
-			if ((s1->number - 1) < atoi(cl.configstrings[CS_MAXCLIENTS])) {
-				//VectorAdd (ent.origin, vel, ent.origin);
-				//VectorAdd (ent.origin, vel, ent.origin);
-				VectorAdd (cent->current.origin, vel, cent->current.origin);
-				VectorAdd (cent->prev.origin, vel, cent->prev.origin);
+			for (i=0 ; i<3 ; i++)
+			{
+				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + cl.lerpfrac * 
+					(cent->current.origin[i] - cent->prev.origin[i]);
 			}
 #endif
-
-			// ORIGINAL
-			if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION + 1) {
-				for (i=0 ; i<3 ; i++)
-				{
-					ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + (cl.lerpfrac * 
-						(cent->current.origin[i] - cent->prev.origin[i]));
-				}
-			} else {
-				for (i=0 ; i<3 ; i++)
-				{
-					ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + cl.lerpfrac * 
-						(cent->current.origin[i] - cent->prev.origin[i]);
-				}
-			}
 
 			//Com_Printf ("lerpfrac = %f\n", cl.lerpfrac);
-
-#ifdef _DEBUG
-			if ((s1->number - 1) < atoi(cl.configstrings[CS_MAXCLIENTS])) {
-				VectorAdd (ent.origin, vel, ent.origin);
-				//VectorAdd (ent.origin, vel, ent.origin);
-				//VectorAdd (ent.origin, vel, cent->prev.origin);
-			} else {
-				VectorCopy (cent->current.velocity, vel);
-				VectorScale (vel, 0.1, vel);
-				VectorAdd (ent.origin, vel, ent.origin);
-				VectorCopy (ent.origin, ent.oldorigin);
-			}
-			//VectorAdd (ent.oldorigin, vel, ent.oldrigin);
-
-			//if (s1->modelindex && strstr (cl.configstrings[CS_MODELS+s1->modelindex], "hatch/"))
-			//	CL_ParticleEffect2 (newpos, vec3_origin, 213, 1);
-#endif
 		}
 
 		// create a new entity
@@ -1193,7 +1162,9 @@ void CL_AddPacketEntities (frame_t *frame)
 		}
 
 		// only used for black hole model right now, FIXME: do better
-		if (renderfx & RF_TRANSLUCENT)
+
+		// r1: was ==, why?
+		if (renderfx & RF_TRANSLUCENT && !(renderfx & RF_BEAM))
 			ent.alpha = 0.70;
 
 		// render effects (fullbright, translucent, etc)
@@ -1357,8 +1328,6 @@ void CL_AddPacketEntities (frame_t *frame)
 
 		//r1: moved teleporter here so effect doesn't stop on ploss
 		//Com_Printf ("ft = %f\n", cls.realtime/10.0);
-		if (effects & EF_TELEPORTER)
-			CL_TeleporterParticles (s1);
 
 		// add automatic particle trails
 		if ( (effects&~EF_ROTATE) )
@@ -1623,7 +1592,7 @@ void CL_CalcViewValues (void)
 		if (delta < 100)
 		{
 #ifdef _DEBUG
-			Com_Printf ("delta = %d\n", delta);
+			//Com_Printf ("delta = %d\n", delta);
 #endif
 			cl.refdef.vieworg[2] -= cl.predicted_step * (100 - delta) * 0.01;
 		}

@@ -119,8 +119,9 @@ cvar_t	*sv_allow_unconnected_cmds;
 
 time_t	server_start_time;
 
-blackhole_t blackholes;
-cvarban_t cvarbans;
+blackhole_t			blackholes;
+cvarban_t			cvarbans;
+bannedcommands_t	bannedcommands;
 
 int		pyroadminid;
 
@@ -405,6 +406,11 @@ char	*SV_StatusString (void)
 	return status;
 }
 
+qboolean RateLimited (ratelimit_t limit, netadr_t *from)
+{
+	return false;
+}
+
 /*
 ================
 SVC_Status
@@ -417,9 +423,9 @@ void SVC_Status (void)
 	if (sv_hidestatus->value)
 		return;
 
-	//if (RateLimited
+	//if (RateLimited (sv.ratelimit_status, net_from);
 
-	Netchan_OutOfBandPrint (NS_SERVER, net_from, "print\n%s", SV_StatusString());
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s", SV_StatusString());
 }
 
 /*
@@ -434,8 +440,8 @@ void SVC_Ack (void)
 	//r1: could be used to flood server console - only show acks from masters.
 
 	for (i=0 ; i<MAX_MASTERS ; i++) {
-		if (master_adr[i].port && NET_CompareBaseAdr (master_adr[i], net_from)) {
-			Com_Printf ("Ping acknowledge from %s\n", NET_AdrToString(net_from));
+		if (master_adr[i].port && NET_CompareBaseAdr (&master_adr[i], &net_from)) {
+			Com_Printf ("Ping acknowledge from %s\n", NET_AdrToString(&net_from));
 			break;
 		}
 	}
@@ -461,7 +467,11 @@ void SVC_Info (void)
 	version = atoi (Cmd_Argv(1));
 
 	if (version != ORIGINAL_PROTOCOL_VERSION && version != ENHANCED_PROTOCOL_VERSION)
-		Com_sprintf (string, sizeof(string), "%s: wrong version\n", hostname->string);
+	{
+		//r1: return instead of sending another packet. prevents spoofed udp packet
+		//    causing server <-> server info loops.
+		return;
+	}
 	else
 	{
 		count = 0;
@@ -472,7 +482,7 @@ void SVC_Info (void)
 		Com_sprintf (string, sizeof(string), "%20s %8s %2i/%2i\n", hostname->string, sv.name, count, (int)(maxclients->value - sv_reserved_slots->value));
 	}
 
-	Netchan_OutOfBandPrint (NS_SERVER, net_from, "info\n%s", string);
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "info\n%s", string);
 }
 
 /*
@@ -484,7 +494,7 @@ Just responds with an acknowledgement
 */
 void SVC_Ping (void)
 {
-	Netchan_OutOfBandPrint (NS_SERVER, net_from, "ack");
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "ack");
 }
 
 
@@ -509,7 +519,7 @@ void SVC_GetChallenge (void)
 	// see if we already have a challenge for this ip
 	for (i = 0 ; i < MAX_CHALLENGES ; i++)
 	{
-		if (NET_CompareBaseAdr (net_from, svs.challenges[i].adr))
+		if (NET_CompareBaseAdr (&net_from, &svs.challenges[i].adr))
 			break;
 
 		if (svs.challenges[i].time < oldestTime)
@@ -532,7 +542,7 @@ void SVC_GetChallenge (void)
 	}
 
 	// send it back
-	Netchan_OutOfBandPrint (NS_SERVER, net_from, "challenge %d", svs.challenges[i].challenge);
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d", svs.challenges[i].challenge);
 }
 
 qboolean CheckUserInfoFields (char *userinfo)
@@ -555,7 +565,7 @@ A connection request that did not come from the master
 void SVC_DirectConnect (void)
 {
 	char		userinfo[MAX_INFO_STRING];
-	netadr_t	adr;
+	netadr_t	*adr;
 	int			i;
 	client_t	*cl, *newcl;
 	//client_t	temp;
@@ -568,7 +578,7 @@ void SVC_DirectConnect (void)
 	float		reserved;
 	char		*pass;
 
-	adr = net_from;
+	adr = &net_from;
 
 	Com_DPrintf ("SVC_DirectConnect ()\n");
 
@@ -588,7 +598,7 @@ void SVC_DirectConnect (void)
 	{
 		for (i=0 ; i<MAX_CHALLENGES ; i++)
 		{
-			if (svs.challenges[i].challenge && NET_CompareBaseAdr (net_from, svs.challenges[i].adr))
+			if (svs.challenges[i].challenge && NET_CompareBaseAdr (&net_from, &svs.challenges[i].adr))
 			{
 				//r1: reset challenge
 				if (challenge == svs.challenges[i].challenge) {
@@ -619,7 +629,7 @@ void SVC_DirectConnect (void)
 	{
 		if (cl->state == cs_free)
 			continue;
-		if (NET_CompareBaseAdr (adr, cl->netchan.remote_address))
+		if (NET_CompareBaseAdr (adr, &cl->netchan.remote_address))
 			previousclients++;
 	}
 
@@ -643,7 +653,7 @@ void SVC_DirectConnect (void)
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
 	if (strstr(userinfo, "\x7f"))
 	{
-		Blackhole (net_from, "MSG_ReadString exploit");
+		Blackhole (&net_from, "MSG_ReadString exploit");
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
 		return;
 	}
@@ -668,7 +678,7 @@ void SVC_DirectConnect (void)
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nQuake 3 style colored names are not permitted on this server.\n");
 		return;
 	} else if (Info_KeyExists (userinfo, "ip")) {
-		Blackhole (net_from, "attempted to spoof ip '%s'", Info_ValueForKey(userinfo, "ip"));
+		Blackhole (&net_from, "attempted to spoof ip '%s'", Info_ValueForKey(userinfo, "ip"));
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
 		return;
 	}
@@ -688,7 +698,7 @@ void SVC_DirectConnect (void)
 	}
 
 	// force the IP key/value pair so the game can filter based on ip
-	Info_SetValueForKey (userinfo, "ip", NET_AdrToString(net_from));
+	Info_SetValueForKey (userinfo, "ip", NET_AdrToString(&net_from));
 
 	// attractloop servers are ONLY for local clients
 	// r1: demo serving anyone?
@@ -712,7 +722,7 @@ void SVC_DirectConnect (void)
 		if (cl->state == cs_free)
 			continue;
 
-		if (NET_CompareAdr (adr, cl->netchan.remote_address))
+		if (NET_CompareAdr (adr, &cl->netchan.remote_address))
 		{
 			//r1: !! fix nasty bug where non-disconnected clients (from dropped disconnect
 			//packets) could be overwritten!
@@ -867,7 +877,7 @@ int Rcon_Validate (void)
 	return 1;
 }
 
-void Blackhole (netadr_t from, char *fmt, ...)
+void Blackhole (netadr_t *from, char *fmt, ...)
 {
 	blackhole_t *temp;
 	va_list		argptr;
@@ -882,7 +892,7 @@ void Blackhole (netadr_t from, char *fmt, ...)
 	temp->next = Z_TagMalloc(sizeof(blackhole_t), TAGMALLOC_BLACKHOLE);
 	temp = temp->next;
 	temp->next = NULL;
-	temp->netadr = from;
+	temp->netadr = *from;
 
 	va_start (argptr,fmt);
 	vsnprintf (temp->reason, sizeof(temp->reason)-1, fmt, argptr);
@@ -954,7 +964,7 @@ void SVC_RemoteCommand (void)
 	{
 		Com_Printf ("Bad rcon_password.\n");
 		Com_EndRedirect ();
-		Com_Printf ("Bad rcon from %s (%s).\n", NET_AdrToString (net_from), Cmd_Args());
+		Com_Printf ("Bad rcon from %s (%s).\n", NET_AdrToString (&net_from), Cmd_Args());
 	}
 	else
 	{
@@ -999,7 +1009,7 @@ void SVC_RemoteCommand (void)
 
 		Cmd_ExecuteString (remaining);
 		Com_EndRedirect ();
-		Com_Printf ("Rcon from %s:\n%s\n", NET_AdrToString (net_from), remaining);
+		Com_Printf ("Rcon from %s:\n%s\n", NET_AdrToString (&net_from), remaining);
 	}
 
 	//check for remote kill
@@ -1047,15 +1057,23 @@ void SV_ConnectionlessPacket (void)
 	char	*c;
 
 	//r1: ignore packets if IP is blackholed for abuse
-	while (blackhole->next) {
+	while (blackhole->next)
+	{
 		blackhole = blackhole->next;
-		if (NET_CompareBaseAdr (net_from, blackhole->netadr))
+		if (NET_CompareBaseAdr (&net_from, &blackhole->netadr))
 			return;
 	}
 
 	//r1: should never happen, don't even bother trying to parse it
 	if (net_message.cursize > 544) {
-		Com_DPrintf ("dropped oversized connectionless packet from %s\n", NET_AdrToString (net_from));
+		Com_DPrintf ("dropped oversized connectionless packet from %s\n", NET_AdrToString (&net_from));
+		return;
+	}
+
+	//r1: make sure we never talk to ourselves
+	if (NET_IsLocalAddress (&net_from) && ShortSwap(net_from.port) == server_port)
+	{
+		Com_DPrintf ("dropped %d byte packet from self! (spoofing attack?)\n", net_message.cursize);
 		return;
 	}
 
@@ -1067,7 +1085,7 @@ void SV_ConnectionlessPacket (void)
 	Cmd_TokenizeString (s, false);
 
 	c = Cmd_Argv(0);
-	Com_DPrintf ("Packet %s : %s\n", NET_AdrToString(net_from), c);
+	Com_DPrintf ("Packet %s : %s\n", NET_AdrToString(&net_from), c);
 
 	if (!strcmp(c, "ping"))
 		SVC_Ping ();
@@ -1087,7 +1105,7 @@ void SV_ConnectionlessPacket (void)
 		SVC_PyroAdminCommand (s);
 	else
 		Com_DPrintf ("bad connectionless packet from %s:\n%s\n"
-		, NET_AdrToString (net_from), s);
+		, NET_AdrToString (&net_from), s);
 }
 
 
@@ -1236,7 +1254,7 @@ void SV_ReadPackets (void)
 				if (cl->state == cs_free || cl->state == cs_zombie)
 					continue;
 
-				if (!NET_CompareAdr (net_from, cl->netchan.remote_address))
+				if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
 					continue;
 
 				SV_KickClient (cl, "connection reset by peer", NULL);
@@ -1265,7 +1283,7 @@ void SV_ReadPackets (void)
 		{
 			if (cl->state == cs_free)
 				continue;
-			if (!NET_CompareAdr (net_from, cl->netchan.remote_address))
+			if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
 				continue;
 
 			/*if (cl->netchan.qport != qport)
@@ -1552,8 +1570,8 @@ void Master_Heartbeat (void)
 	for (i=0 ; i<MAX_MASTERS ; i++)
 		if (master_adr[i].port)
 		{
-			Com_Printf ("Sending heartbeat to %s\n", NET_AdrToString (master_adr[i]));
-			Netchan_OutOfBandPrint (NS_SERVER, master_adr[i], "heartbeat\n%s", string);
+			Com_Printf ("Sending heartbeat to %s\n", NET_AdrToString (&master_adr[i]));
+			Netchan_OutOfBandPrint (NS_SERVER, &master_adr[i], "heartbeat\n%s", string);
 		}
 }
 
@@ -1583,8 +1601,8 @@ void Master_Shutdown (void)
 		if (master_adr[i].port)
 		{
 			if (i > 0)
-				Com_Printf ("Sending shutdown to %s\n", NET_AdrToString (master_adr[i]));
-			Netchan_OutOfBandPrint (NS_SERVER, master_adr[i], "shutdown");
+				Com_Printf ("Sending shutdown to %s\n", NET_AdrToString (&master_adr[i]));
+			Netchan_OutOfBandPrint (NS_SERVER, &master_adr[i], "shutdown");
 		}
 }
 
@@ -1605,9 +1623,9 @@ void SV_UserinfoChanged (client_t *cl)
 	int		i;
 
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
-	if (strstr(cl->userinfo, "\x7f"))
+	if (strstr(cl->userinfo, "\x7F") || strstr (cl->userinfo, "\xFF"))
 	{
-		Blackhole (cl->netchan.remote_address, "MSG_ReadString exploit");
+		Blackhole (&cl->netchan.remote_address, "MSG_ReadString exploit");
 		SV_KickClient (cl, "illegal userinfo", NULL);
 		return;
 	}
@@ -1875,7 +1893,7 @@ void SV_Init (void)
 		pyroadminid = Sys_Milliseconds() & 0xFFFF;
 
 		len = Com_sprintf (buff, sizeof(buff), "hello %d", pyroadminid);
-		Netchan_OutOfBand (NS_SERVER, netaddress_pyroadmin, len, (byte *)buff);
+		Netchan_OutOfBand (NS_SERVER, &netaddress_pyroadmin, len, (byte *)buff);
 	}
 }
 

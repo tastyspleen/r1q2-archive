@@ -75,8 +75,6 @@ typedef struct link_s
 
 
 typedef struct edict_s edict_t;
-//typedef union gclient_s gclient_t;
-
 
 #ifndef GAME_INCLUDE
 

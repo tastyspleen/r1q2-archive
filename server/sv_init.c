@@ -474,7 +474,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 	if (ch)
 	{
 		*ch = 0;
-			Cvar_Set ("nextserver", va("gamemap \"%s\"", ch+1));
+		Cvar_Set ("nextserver", va("gamemap \"%s\"", ch+1));
 	}
 	else
 		Cvar_Set ("nextserver", "");
@@ -497,7 +497,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 	//r1: should be using memmove for this, overlapping strcpy = unreliable
 	if (level[0] == '*')
 		//strcpy (level, level+1);
-		memmove (level, level+1, strlen(level+1));
+		memmove (level, level+1, strlen(level)+1);
 
 	l = strlen(level);
 	if (l > 4 && !strcmp (level+l-4, ".cin") )

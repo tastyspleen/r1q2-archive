@@ -113,7 +113,7 @@ Netchan_OutOfBand
 Sends an out-of-band datagram
 ================
 */
-void Netchan_OutOfBand (int net_socket, netadr_t adr, int length, byte *data)
+void Netchan_OutOfBand (int net_socket, netadr_t *adr, int length, byte *data)
 {
 	sizebuf_t	send;
 	byte		send_buf[MAX_MSGLEN];
@@ -136,7 +136,7 @@ Netchan_OutOfBandPrint
 Sends a text message in an out-of-band datagram
 ================
 */
-void Netchan_OutOfBandPrint (int net_socket, netadr_t adr, char *format, ...)
+void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, char *format, ...)
 {
 	va_list		argptr;
 	static char		string[MAX_MSGLEN - 4];
@@ -157,12 +157,12 @@ Netchan_Setup
 called to open a channel to a remote system
 ==============
 */
-void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t adr, int protocol, int qport)
+void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport)
 {
 	memset (chan, 0, sizeof(*chan));
 	
 	chan->sock = sock;
-	chan->remote_address = adr;
+	chan->remote_address = *adr;
 	if (protocol == ENHANCED_PROTOCOL_VERSION)
 	{
 		SZ_Init (&chan->message, chan->message_buf, MAX_USABLEMSG);
@@ -239,7 +239,7 @@ int Netchan_Transmit (netchan_t *chan, int length, byte *data)
 	{
 		chan->fatal_error = true;
 		Com_Printf ("%s:Outgoing message overflow\n"
-			, NET_AdrToString (chan->remote_address));
+			, NET_AdrToString (&chan->remote_address));
 		return -2;
 	}
 
@@ -281,10 +281,10 @@ int Netchan_Transmit (netchan_t *chan, int length, byte *data)
 	if (send.maxsize - send.cursize >= length)
 		SZ_Write (&send, data, length);
 	else
-		Com_Printf ("Netchan_Transmit: dumped unreliable to %s (max %d - cur %d >= un %d (r=%d))\n", NET_AdrToString(chan->remote_address), send.maxsize, send.cursize, length, chan->reliable_length);
+		Com_Printf ("Netchan_Transmit: dumped unreliable to %s (max %d - cur %d >= un %d (r=%d))\n", NET_AdrToString(&chan->remote_address), send.maxsize, send.cursize, length, chan->reliable_length);
 
 // send the datagram
-	if (NET_SendPacket (chan->sock, send.cursize, send.data, chan->remote_address) == -1)
+	if (NET_SendPacket (chan->sock, send.cursize, send.data, &chan->remote_address) == -1)
 		return -1;
 
 	if (showpackets->value)
@@ -361,7 +361,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 	{
 		if (showdrop->value)
 			Com_Printf ("%s:Out of order packet %i at %i\n"
-				, NET_AdrToString (chan->remote_address)
+				, NET_AdrToString (&chan->remote_address)
 				,  sequence
 				, chan->incoming_sequence);
 		return false;
@@ -375,7 +375,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 	if (chan->dropped > 0 && showdrop->value)
 	{
 		Com_Printf ("%s:Dropped %i packets at %i\n"
-		, NET_AdrToString (chan->remote_address)
+		, NET_AdrToString (&chan->remote_address)
 		, chan->dropped
 		, sequence);
 	}
@@ -406,4 +406,3 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 
 	return true;
 }
-

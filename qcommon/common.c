@@ -991,16 +991,14 @@ void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t /*@ou
 
 // read time to run command
 	msec = MSG_ReadByte (msg_read);
-	if (msec == -1)
-		Com_Error (ERR_FATAL, "MSG_ReadDeltaUsercmd: Attempted to read past end of message");
-	else if (msec > 250)
+
+	if (msec > 250)
 		Com_Printf ("MSG_ReadDeltaUsercmd: funky msec (%d)!\n", msec);
 
 	move->msec = msec;
 
 // read the light level
 	move->lightlevel = MSG_ReadByte (msg_read);
-	//Com_Printf ("%d\n", move->lightlevel);
 }
 
 
@@ -1256,6 +1254,7 @@ typedef struct zhead_s
 static zhead_t	z_chain;
 static int		z_count = 0;
 static int		z_bytes = 0;
+unsigned long long z_allocs = 0;
 
 /*
 ========================
@@ -1279,6 +1278,9 @@ void EXPORT Z_Free (void *ptr)
 
 	z->prev->next = z->next;
 	z->next->prev = z->prev;
+
+	if (z->next->magic != Z_MAGIC)
+		Com_Error (ERR_FATAL, "Z_Free: memory corruption detected");
 
 	z_count--;
 	z_bytes -= z->size;
@@ -1338,6 +1340,11 @@ void Z_Stats_f (void)
 
 	Com_Printf ("\n  CALCED_TOTAL: %i bytes in %i blocks\n", bigtotal, bignum);
 	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", z_bytes, z_count);
+#ifdef WIN32
+	Com_Printf ("%I64u total allocations\n", z_allocs);
+#else
+	Com_Printf ("%llu total allocations\n", z_allocs);
+#endif
 }
 
 /*
@@ -1369,6 +1376,9 @@ void * EXPORT Z_TagMalloc (int size, int tag)
 	if (size <= 0)
 		Com_Error (ERR_FATAL, "Z_Malloc: trying to allocate %d bytes!", size);
 
+	if (tag < 0 || tag > 0xFFFF)
+		Com_Error (ERR_FATAL, "Z_Malloc: bad tag %d", tag);
+
 	size = size + sizeof(zhead_t);
 	z = malloc(size);
 
@@ -1376,8 +1386,12 @@ void * EXPORT Z_TagMalloc (int size, int tag)
 		Com_Error (ERR_FATAL, "Z_Malloc: failed on allocation of %i bytes for %s (already %i bytes in %i blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
 
 	memset (z, 0, size);
+
 	z_count++;
+	z_allocs++;
+
 	z_bytes += size;
+
 	z->magic = Z_MAGIC;
 	z->tag = tag;
 	z->size = size;
@@ -1901,7 +1915,7 @@ char *StripHighBits (char *string, int highbits)
 	{
 		c = *string++;
 		if (highbits) {
-			c &= 127;		// strip high bits
+			//c &= 127;		// strip high bits
 			if (c >= 32 && c < 127)
 				*p++ = c;
 		} else {

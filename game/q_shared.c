@@ -948,29 +948,14 @@ qboolean	bigendien;
 
 // can't just use function pointers, or dll linkage can
 // mess up when qcommon is included in multiple places
-short	(*_BigShort) (short l);
+
 short	(*_LittleShort) (short l);
-int		(*_BigLong) (int l);
 int		(*_LittleLong) (int l);
-float	(*_BigFloat) (float l);
 float	(*_LittleFloat) (float l);
 
-short	BigShort(short l){return _BigShort(l);}
 short	LittleShort(short l) {return _LittleShort(l);}
-int		BigLong (int l) {return _BigLong(l);}
 int		LittleLong (int l) {return _LittleLong(l);}
-float	BigFloat (float l) {return _BigFloat(l);}
 float	LittleFloat (float l) {return _LittleFloat(l);}
-
-short   ShortSwap (short l)
-{
-	byte    b1,b2;
-
-	b1 = l&255;
-	b2 = (l>>8)&255;
-
-	return (b1<<8) + b2;
-}
 
 short	ShortNoSwap (short l)
 {
@@ -1029,21 +1014,15 @@ void Swap_Init (void)
 	if ( *(short *)swaptest == 1)
 	{
 		bigendien = false;
-		_BigShort = ShortSwap;
 		_LittleShort = ShortNoSwap;
-		_BigLong = LongSwap;
 		_LittleLong = LongNoSwap;
-		_BigFloat = FloatSwap;
 		_LittleFloat = FloatNoSwap;
 	}
 	else
 	{
 		bigendien = true;
-		_BigShort = ShortNoSwap;
 		_LittleShort = ShortSwap;
-		_BigLong = LongNoSwap;
 		_LittleLong = LongSwap;
-		_BigFloat = FloatNoSwap;
 		_LittleFloat = FloatSwap;
 	}
 }

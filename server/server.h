@@ -40,7 +40,8 @@ extern bannedcommands_t bannedcommands;
 typedef struct ratelimit_s
 {
 	netadr_t	from;
-	int			time;
+	int			count;
+	int			time[16];
 } ratelimit_t;
 
 // some qc commands are only valid before the server has finished
@@ -72,8 +73,9 @@ typedef struct
 
 	// demo server information
 	FILE		*demofile;
-	//qboolean	timedemo;		// don't time sync
-	ratelimit_t	status;
+	
+	// rate limit status requests
+	ratelimit_t	ratelimit_status[16];
 } server_t;
 
 #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
@@ -342,7 +344,7 @@ void Sys_DisableTray (void);
 void Sys_Minimize (void);
 #endif
 
-void Blackhole (netadr_t from, char *fmt, ...);
+void Blackhole (netadr_t *from, char *fmt, ...);
 
 //
 // sv_phys.c
