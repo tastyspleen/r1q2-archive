@@ -203,6 +203,14 @@ void SV_DropClient (client_t *drop)
 	drop->name[0] = 0;
 }
 
+void SV_KickClient (client_t *cl, char *reason, char *cprintf)
+{
+	if (reason && cl->state == cs_spawned && *cl->name)
+		SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: %s\n", cl->name, reason);
+	if (cprintf)
+		SV_ClientPrintf (cl, PRINT_HIGH, "%s", cprintf);
+	SV_DropClient (cl);
+}
 
 
 /*
@@ -1148,7 +1156,7 @@ void SV_GiveMsec (void)
 
 		if (cl->state == cs_spawned)
 		{
-			//r1: better? speed cheat detection via use of msec underblows
+			//r1: better? speed cheat detection via use of msec underflows
 			if (cl->commandMsec < 0)
 			{
 #ifndef _DEBUG
@@ -1176,9 +1184,7 @@ void SV_GiveMsec (void)
 
 			if (sv_enforcetime->value > 1 && cl->commandMsecOverflowCount >= 10)
 			{
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: possible speed cheat detected)\n", cl->name);
-				SV_ClientPrintf (cl, PRINT_HIGH, "You were kicked from the game.\n");
-				SV_DropClient (cl);
+				SV_KickClient (cl, "possible speed cheat detected", "You were kicked from the game.\n");
 				continue;
 			}
 		}
@@ -1216,9 +1222,7 @@ void SV_ReadPackets (void)
 				if (!NET_CompareAdr (net_from, cl->netchan.remote_address))
 					continue;
 
-				if (cl->state == cs_spawned && *cl->name)
-					SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: connection reset by peer\n", cl->name);
-				SV_DropClient (cl);
+				SV_KickClient (cl, "connection reset by peer", NULL);
 				break;
 			}
 			continue;
@@ -1233,11 +1237,11 @@ void SV_ReadPackets (void)
 
 		// read the qport out of the message so we can fix up
 		// stupid address translating routers
-		MSG_BeginReading (&net_message);
-		MSG_ReadLong (&net_message);		// sequence number
-		MSG_ReadLong (&net_message);		// sequence number
+		//MSG_BeginReading (&net_message);
+		//MSG_ReadLong (&net_message);		// sequence number
+		//MSG_ReadLong (&net_message);		// sequence number
 		
-		MSG_ReadShort (&net_message);
+		//MSG_ReadShort (&net_message);
 
 		// check for packets from connected clients
 		for (i=0, cl=svs.clients ; i<maxclients->value ; i++,cl++)
@@ -1322,32 +1326,7 @@ void SV_CheckTimeouts (void)
 
 				//r1ch: fps spam protection
 				if (sv_fpsflood->value && cl->fps > sv_fpsflood->value)
-				{
-					SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: too many packets/sec (%d))\n", cl->name, cl->fps);
-					//if (cl->protocol == ENHANCED_PROTOCOL_VERSION)
-					//	SV_ClientPrintf (cl, PRINT_HIGH, "You were kicked from the game.\n(Tip: try increasing your cl_snaps to avoid flooding the server)\n");
-					//else
-					SV_ClientPrintf (cl, PRINT_HIGH, "You were kicked from the game.\n(Tip: try lowering your cl_maxfps to avoid flooding the server)\n");
-					SV_DropClient (cl);
-				}
-
-				//XXX: fixme
-				/*if (cl->fps <= 1)
-				{
-					if (!cl->nodata)
-					{
-						Com_DPrintf ("SV_CheckTimeouts: %d pps from %s, setting nodata.\n", cl->fps, cl->name);
-						cl->nodata = true;
-					}
-				}
-				else
-				{
-					if (cl->nodata)
-					{
-						Com_DPrintf ("SV_CheckTimeouts: %d pps from %s, unsetting nodata.\n", cl->fps, cl->name);
-						cl->nodata = false;
-					}
-				}*/
+					SV_KickClient (cl, va("too many packets/sec (%d)", cl->fps), "You were kicked from the game.\n(Tip: try lowering your cl_maxfps to avoid flooding the server)\n");
 
 				cl->packetCount = 0;
 			}
@@ -1355,7 +1334,7 @@ void SV_CheckTimeouts (void)
 			if (cl->lastmessage < droppoint)
 			{
 				//r1: only message if they spawned (less spam plz)
-				if (cl->state == cs_spawned)
+				if (cl->state == cs_spawned && *cl->name)
 					SV_BroadcastPrintf (PRINT_HIGH, "%s timed out\n", cl->name);
 				SV_DropClient (cl); 
 				cl->state = cs_free;	// don't bother with zombie state
@@ -1715,7 +1694,7 @@ void SV_Init (void)
 	Cvar_Get ("fraglimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("timelimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("cheats", "0", CVAR_SERVERINFO|CVAR_LATCH);
-	Cvar_Get ("protocol", va("%i", ENHANCED_PROTOCOL_VERSION), CVAR_SERVERINFO|CVAR_NOSET);
+	Cvar_Get ("protocol", va("%i", ENHANCED_PROTOCOL_VERSION), CVAR_NOSET);
 
 	//r1: default 8
 	maxclients = Cvar_Get ("maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);

@@ -30,19 +30,31 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 int		hunkcount;
 
 
-byte	*membase;
 int		hunkmaxsize;
 int		cursize;
 
-#define	VIRTUAL_ALLOC
+#define	VIRTUAL_ALLOC 1
+//#define CREATE_HEAP 1
+
+#if CREATE_HEAP
+HANDLE	membase;
+#else
+byte	*membase;
+#endif
 
 void *Hunk_Begin (int maxsize)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
 	cursize = 0;
 	hunkmaxsize = maxsize;
-#ifdef VIRTUAL_ALLOC
+#if VIRTUAL_ALLOC
 	membase = VirtualAlloc (NULL, maxsize, MEM_RESERVE, PAGE_NOACCESS);
+#elif CREATE_HEAP
+	{
+		ULONG lfh = 2;
+		membase = HeapCreate (HEAP_NO_SERIALIZE | HEAP_GENERATE_EXCEPTIONS, 0, maxsize);
+		HeapSetInformation (membase, HeapCompatibilityInformation, &lfh, sizeof(lfh));
+	}
 #else
 	membase = malloc (maxsize);
 	memset (membase, 0, maxsize);
@@ -54,14 +66,27 @@ void *Hunk_Begin (int maxsize)
 
 void *Hunk_Alloc (int size)
 {
-#ifdef VIRTUAL_ALLOC
+#if VIRTUAL_ALLOC || CREATE_HEAP
 	void	*buf;
 #endif
 
 	// round to cacheline
 	size = (size+31)&~31;
 
-#ifdef VIRTUAL_ALLOC
+#if CREATE_HEAP
+	buf = HeapAlloc (membase, 0, size);
+	if (!buf)
+	{
+		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
+		Sys_Error ("HeapAlloc failed.\n%s", buf);
+	}
+	cursize += size;
+	if (cursize > hunkmaxsize)
+		Sys_Error ("HeapAlloc overflow");
+	return buf;
+#else
+
+#if VIRTUAL_ALLOC
 	// commit pages as needed
 //	buf = VirtualAlloc (membase+cursize, size, MEM_COMMIT, PAGE_READWRITE);
 	buf = VirtualAlloc (membase, cursize+size, MEM_COMMIT, PAGE_READWRITE);
@@ -76,6 +101,7 @@ void *Hunk_Alloc (int size)
 		Sys_Error ("Hunk_Alloc overflow");
 
 	return (void *)(membase+cursize-size);
+#endif
 }
 
 int Hunk_End (void)
@@ -99,8 +125,10 @@ int Hunk_End (void)
 void Hunk_Free (void *base)
 {
 	if ( base )
-#ifdef VIRTUAL_ALLOC
+#if VIRTUAL_ALLOC
 		VirtualFree (base, 0, MEM_RELEASE);
+#elif CREATE_HEAP
+		HeapDestroy (membase);
 #else
 		free (base);
 #endif

@@ -234,6 +234,7 @@ Q2DED_OBJS = \
 	$(BUILDDIR)/svded/md4.o \
 	$(BUILDDIR)/svded/net_chan.o \
 	$(BUILDDIR)/svded/mersennetwister.o \
+	$(BUILDDIR)/svded/redblack.o \
 	\
 	$(BUILDDIR)/svded/sv_ccmds.o \
 	$(BUILDDIR)/svded/sv_ents.o \
@@ -284,6 +285,9 @@ $(BUILDDIR)/svded/net_chan.o :   $(COMMON_DIR)/net_chan.c
 	$(DO_DED_CC)
 	
 $(BUILDDIR)/svded/mersennetwister.o :  $(COMMON_DIR)/mersennetwister.c
+	$(DO_DED_CC)
+
+$(BUILDDIR)/svded/redblack.o :  $(COMMON_DIR)/redblack.c
 	$(DO_DED_CC)
 	
 $(BUILDDIR)/svded/q_shared.o :   $(GAME_DIR)/q_shared.c

@@ -1002,7 +1002,7 @@ void SCR_TouchPics (void)
 
 	if (crosshair->value)
 	{
-		if (crosshair->value > 3 || crosshair->value < 0)
+		if (crosshair->value > 9 || crosshair->value < 0)
 			crosshair->value = 3;
 
 		Com_sprintf (crosshair_pic, sizeof(crosshair_pic), "ch%i", (int)(crosshair->value));

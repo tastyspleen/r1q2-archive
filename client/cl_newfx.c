@@ -429,7 +429,8 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 			p->alpha = 0.5;
 	//		p->alphavel = -1.0 / (1+frand()*0.2);
 			// only last one frame!
-			p->alphavel = INSTANT_PARTICLE;
+			//p->alphavel = INSTANT_PARTICLE;
+			p->type = PT_INSTANT;
 	//		p->color = 0x74 + (randomMT()&7);
 //			p->color = 223 - (randomMT()&7);
 			p->color = 223;
@@ -854,7 +855,8 @@ void CL_Tracker_Shell(vec3_t origin)
 		p->time = cl.time;
 
 		p->alpha = 1.0;
-		p->alphavel = INSTANT_PARTICLE;
+		//p->alphavel = INSTANT_PARTICLE;
+		p->type = PT_INSTANT;
 		p->color = 0;
 
 		dir[0] = crand();
@@ -885,7 +887,8 @@ void CL_MonsterPlasma_Shell(vec3_t origin)
 		p->time = cl.time;
 
 		p->alpha = 1.0;
-		p->alphavel = INSTANT_PARTICLE;
+		//p->alphavel = INSTANT_PARTICLE;
+		p->type = PT_INSTANT;
 		p->color = 0xe0;
 
 		dir[0] = crand();
@@ -921,7 +924,8 @@ void CL_Widowbeamout (cl_sustain_t *self)
 		p->time = cl.time;
 
 		p->alpha = 1.0;
-		p->alphavel = INSTANT_PARTICLE;
+		//p->alphavel = INSTANT_PARTICLE;
+		p->type = PT_INSTANT;
 		p->color = colortable[randomMT()&3];
 
 		dir[0] = crand();
@@ -957,7 +961,8 @@ void CL_Nukeblast (cl_sustain_t *self)
 		p->time = cl.time;
 
 		p->alpha = 1.0;
-		p->alphavel = INSTANT_PARTICLE;
+		p->alphavel = 0;//-1000;
+		p->type = PT_INSTANT;
 		p->color = colortable[randomMT()&3];
 
 		dir[0] = crand();

@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "qcommon.h"
+#include "redblack.h"
 
 // define this to dissalow any data but the demo pak file
 //#define	NO_ADDONS
@@ -63,6 +64,7 @@ char	fs_gamedir[MAX_OSPATH];
 cvar_t	*fs_basedir;
 cvar_t	*fs_gamedirvar;
 cvar_t	*fs_cache;
+cvar_t	*fs_noextern;
 
 typedef struct filelink_s
 {
@@ -212,10 +214,27 @@ struct fscache_s {
 	unsigned int	fileseek;
 };
 
+struct rbtree *rb;
+
+static int _compare(const void *pa, const void *pb, const void *config)
+{
+	return strcmp ((const char *)pa, (const char *)pb);
+}
+
+void FS_InitCache (void)
+{
+	rb = rbinit (_compare, NULL);
+
+	if (!rb)
+		Sys_Error (ERR_FATAL, "FS_InitCache: rbinit failed"); 
+}
+
 fscache_t fscache;
 
 void FS_FlushCache (void)
 {
+	RBLIST *rblist;
+	const void *val;
 	fscache_t *last = NULL, *temp;
 
 	temp = &fscache;
@@ -234,8 +253,75 @@ void FS_FlushCache (void)
 	}
 
 	memset (&fscache, 0, sizeof(fscache));
+
+	if ((rblist=rbopenlist(rb)))
+	{
+		while((val=rbreadlist(rblist)))
+			rbdelete (val, rb);
+	}
+	rbcloselist(rblist);		
 }
 
+void FS_Stats_f (void)
+{
+	int i;
+	const void *val;
+	fscache_t *temp;
+
+	i = 0;
+
+	for(val=rblookup(RB_LUFIRST, NULL, rb); val!=NULL; val=rblookup(RB_LUNEXT, val, rb))
+		i++;
+
+	Com_Printf ("%d entries in binary search tree cache.\n", i);
+
+	temp = &fscache;
+	temp = temp->next;
+
+	i = 0;
+
+	if (temp)
+	{
+		while (temp->next)
+		{
+			i++;
+			temp = temp->next;
+		}
+	}
+
+	Com_Printf ("%d entries in linked list hash cache.\n", i);
+}
+#define BTREE_SEARCH 1
+
+#ifdef BTREE_SEARCH
+void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename)
+{
+	void		**newitem;
+	fscache_t	*cache;
+
+	cache = Z_TagMalloc (sizeof(fscache_t), TAGMALLOC_FSCACHE);
+	cache->filelen = filelen;
+	cache->fileseek = fileseek;
+
+	if (path)
+	{
+		cache->filepath = Z_TagMalloc (strlen(path)+1, TAGMALLOC_FSCACHE);
+		strcpy (cache->filepath, path);
+	}
+	else
+	{
+		cache->filepath = NULL;
+	}
+
+	cache->filename = Z_TagMalloc (strlen (filename)+1, TAGMALLOC_FSCACHE);
+	strcpy (cache->filename, filename);
+
+	//Com_Printf ("Adding %s: ", filename);
+	newitem = rbsearch (filename, rb);
+	*newitem = cache;
+	//Com_Printf ("\n");
+}
+#else
 void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigned int fileseek, fscache_t *cache, char *filename)
 {
 	cache->next = Z_TagMalloc (sizeof(fscache_t), TAGMALLOC_FSCACHE);
@@ -249,7 +335,6 @@ void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigne
 	{
 		cache->filepath = Z_TagMalloc (strlen(path)+1, TAGMALLOC_FSCACHE);
 		strcpy (cache->filepath, path);
-		//strlwr (cache->filepath);
 	}
 	else
 	{
@@ -259,6 +344,7 @@ void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigne
 	cache->filename = Z_TagMalloc (strlen (filename)+1, TAGMALLOC_FSCACHE);
 	strcpy (cache->filename, filename);
 }
+#endif
 
 /*
 ===========
@@ -279,29 +365,48 @@ int FS_FOpenFile (char *filename, FILE **file)
 	pack_t			*pak;
 	int				i;
 	filelink_t		*link;
+#ifndef BTREE_SEARCH
 	unsigned int	hash;
+#endif
 
 	// check for links first
-	for (link = fs_links ; link ; link=link->next)
+	if (!fs_noextern->value)
 	{
-		if (!strncmp (filename, link->from, link->fromlength))
+		for (link = fs_links ; link ; link=link->next)
 		{
-			Com_sprintf (netpath, sizeof(netpath), "%s%s",link->to, filename+link->fromlength);
-			*file = fopen (netpath, "rb");
-			if (*file)
-			{		
-				Com_DPrintf ("link file: %s\n",netpath);
-				return FS_filelength (*file);
+			if (!strncmp (filename, link->from, link->fromlength))
+			{
+				Com_sprintf (netpath, sizeof(netpath), "%s%s",link->to, filename+link->fromlength);
+				*file = fopen (netpath, "rb");
+				if (*file)
+				{		
+					Com_DPrintf ("link file: %s\n",netpath);
+					return FS_filelength (*file);
+				}
+				return -1;
 			}
-			return -1;
 		}
 	}
 
-//
-// search through the path, one element at a time
-//
+#ifdef BTREE_SEARCH
 
-	//hash = Com_BlockChecksum (filename, s_len);
+	//Com_Printf ("Begin search for %s: ", filename);
+	cache = rbfind (filename, rb);
+	if (cache)
+	{
+		//Com_Printf (" (cached)\n");
+		cache = *(fscache_t **)cache;
+		if (cache->filepath == NULL)
+		{
+			*file = NULL;
+			return -1;
+		}
+		*file = fopen (cache->filepath, "rb");
+		fseek (*file, cache->fileseek, SEEK_SET);
+		return cache->filelen;
+	}
+	//Com_Printf (" (not cached)\n");
+#else
 	hash = hashify (filename);
 
 	while (cache->next)
@@ -319,6 +424,7 @@ int FS_FOpenFile (char *filename, FILE **file)
 			return cache->filelen;
 		}
 	}
+#endif
 
 	//s_len -= 6;
 	for (search = fs_searchpaths ; search ; search = search->next)
@@ -328,7 +434,10 @@ int FS_FOpenFile (char *filename, FILE **file)
 			// look through all the pak file elements
 			pak = search->pack;
 			for (i=0 ; i<pak->numfiles ; i++) {
-				if (pak->files[i].hash == hash && !Q_stricmp (pak->files[i].name, filename))
+#ifndef BTREE_SEARCH
+				if (pak->files[i].hash == hash)
+#endif
+				if (!Q_stricmp (pak->files[i].name, filename))
 				{	// found it!
 					Com_DPrintf ("PackFile: %s : %s\n",pak->filename, filename);
 				// open a new file on the pakfile
@@ -337,15 +446,21 @@ int FS_FOpenFile (char *filename, FILE **file)
 						Com_Error (ERR_FATAL, "Couldn't reopen %s", pak->filename);	
 					fseek (*file, pak->files[i].filepos, SEEK_SET);
 					if (fs_cache->value)
+					{
+#ifdef BTREE_SEARCH
+						FS_AddToCache (pak->filename, pak->files[i].filelen, pak->files[i].filepos, filename);
+#else
 						FS_AddToCache (hash, pak->filename, pak->files[i].filelen, pak->files[i].filepos, cache, filename);
+#endif
+					}
 					return pak->files[i].filelen;
 				}
 			}
 		}
-		else
+		else if (!fs_noextern->value)
 		{
 			int filelen;
-	// check a file in the directory tree
+			// check a file in the directory tree
 			
 			Com_sprintf (netpath, sizeof(netpath), "%s/%s",search->filename, filename);
 			
@@ -357,7 +472,13 @@ int FS_FOpenFile (char *filename, FILE **file)
 
 			filelen = FS_filelength (*file);
 			if (fs_cache->value)
+			{
+#ifdef BTREE_SEARCH
+				FS_AddToCache (netpath, filelen, 0, filename);
+#else
 				FS_AddToCache (hash, netpath, filelen, 0, cache, filename);
+#endif
+			}
 			return filelen;
 		}
 		
@@ -366,7 +487,13 @@ int FS_FOpenFile (char *filename, FILE **file)
 	Com_DPrintf ("FindFile: can't find %s\n", filename);
 
 	if (fs_cache->value >= 2)
+	{
+#ifdef BTREE_SEARCH
+		FS_AddToCache (NULL, 0, 0, filename);
+#else
 		FS_AddToCache (hash, NULL, 0, 0, cache, filename);
+#endif
+	}
 	
 	*file = NULL;
 	return -1;
@@ -970,6 +1097,12 @@ void FS_InitFilesystem (void)
 	//r1: allow manual cache flushing
 	Cmd_AddCommand ("fsflushcache", FS_FlushCache);
 
+	//r1: fs stats
+	Cmd_AddCommand ("fsstats", FS_Stats_f);
+
+	//r1: binary tree filesystem cache
+	FS_InitCache ();
+
 	//r1: init fs cache
 	FS_FlushCache ();
 
@@ -993,4 +1126,5 @@ void FS_InitFilesystem (void)
 		FS_SetGamedir (fs_gamedirvar->string);
 
 	fs_cache = Cvar_Get ("fs_cache", "2", 0);
+	fs_noextern = Cvar_Get ("fs_noextern", "0", 0);
 }

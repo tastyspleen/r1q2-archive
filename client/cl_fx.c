@@ -2195,7 +2195,7 @@ void CL_AddParticles (void)
 		next = p->next;
 
 		// PMM - added INSTANT_PARTICLE handling for heat beam
-		if (p->alphavel != INSTANT_PARTICLE)
+		if (p->type != PT_INSTANT)
 		{
 			time = (cl.time - p->time)*0.001;
 			alpha = p->alpha + time*p->alphavel;
@@ -2232,10 +2232,11 @@ void CL_AddParticles (void)
 
 		V_AddParticle (org, color, alpha);
 		// PMM
-		if (p->alphavel == INSTANT_PARTICLE)
+		if (p->type == PT_INSTANT)
 		{
 			p->alphavel = 0.0;
 			p->alpha = 0.0;
+			p->type = PT_NONE;
 		}
 	}
 

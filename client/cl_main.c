@@ -55,6 +55,7 @@ cvar_t	*r_maxfps;
 cvar_t	*cl_maxfps;
 cvar_t	*cl_async;
 cvar_t	*cl_smoothsteps;
+cvar_t	*cl_instantpacket;
 
 cvar_t	*cl_gun;
 
@@ -356,6 +357,7 @@ void Cmd_ForwardToServer (void)
 		SZ_Print (&cls.netchan.message, " ");
 		SZ_Print (&cls.netchan.message, Cmd_Args());
 	}
+	send_packet_now = true;
 }
 
 /*void CL_Setenv_f( void )
@@ -449,6 +451,7 @@ void CL_ForwardToServer_f (void)
 		Com_DPrintf ("CL_ForwardToServer_f: Wrote '%s'\n", Cmd_Args());
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		SZ_Print (&cls.netchan.message, Cmd_Args());
+		send_packet_now = true;
 	}
 }
 
@@ -577,6 +580,7 @@ void CL_Reconnect_f (void)
 		cls.state = ca_connected;
 		MSG_WriteChar (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message, "new");		
+		send_packet_now = true;
 		return;
 	}
 
@@ -1122,7 +1126,8 @@ void CL_ConnectionlessPacket (void)
 
 		Netchan_Setup (NS_CLIENT, &cls.netchan, net_from, cls.serverProtocol, cls.quakePort);
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-		MSG_WriteString (&cls.netchan.message, "new");	
+		MSG_WriteString (&cls.netchan.message, "new");
+		send_packet_now = true;
 		cls.state = ca_connected;
 		return;
 	}
@@ -1963,6 +1968,7 @@ void CL_RequestNextDownload (void)
 
 	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 	MSG_WriteString (&cls.netchan.message, va("begin %i\n", precache_spawncount) );
+	send_packet_now = true;
 }
 
 /*
@@ -2160,6 +2166,7 @@ void CL_InitLocal (void)
 
 	cl_defertimer = Cvar_Get ("cl_defertimer", "1", CVAR_ARCHIVE);
 	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "1", 0);
+	cl_instantpacket = Cvar_Get ("cl_instantpacket", "1", 0);
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "0", CVAR_ARCHIVE);
@@ -2538,8 +2545,8 @@ void CL_Frame (int msec)
 //CL_RefreshInputs
 //jec - updates all input events
 
-int CL_RefreshCmd (void);
-int CL_RefreshInputs (void)
+void CL_RefreshCmd (void);
+void CL_RefreshInputs (void)
 {
 	// process new key events
 	Sys_SendKeyEvents ();
@@ -2559,9 +2566,7 @@ int CL_RefreshInputs (void)
 
 	//jec - update usercmd state
 	if (cls.state > ca_connecting)
-		return CL_RefreshCmd();
-
-	return send_packet_now;
+		CL_RefreshCmd();
 }
 
 //CL_SendCommand
@@ -2651,8 +2656,15 @@ void CL_Frame (int msec)
 		packet_frame = false;
 
 	//jec - update the inputs (keybd, mouse, server, etc)
-	if (CL_RefreshInputs ())
+	CL_RefreshInputs ();
+
+	if (cl_instantpacket->value && send_packet_now)
+	{
+		Com_DPrintf ("*** instantpacket\n");
 		packet_frame = true;
+	}
+
+	send_packet_now = false;
 
 	//jec- send commands to the server
 	//if (++inputCount >= cl_snaps->value && packet_frame)

@@ -578,17 +578,14 @@ qboolean SV_SendClientDatagram (client_t *client)
 
 		// send the datagram
 		ret = Netchan_Transmit (&client->netchan, msg.cursize, msg.data);
-		if (ret == -1) {
-			if (client->state == cs_spawned && *client->name)
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: connection reset by peer\n", client->name);
-			SV_DropClient (client);
+		if (ret == -1)
+		{
+			SV_KickClient (client, "connection reset by peer", NULL);
 			return false;
 		}
 		else if (ret == -2)
 		{
-			if (client->state == cs_spawned && *client->name)
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: outgoing message overflow\n", client->name);
-			SV_DropClient (client);
+			SV_KickClient (client, "outgoing message overflow", NULL);
 			return false;
 		}
 	}

@@ -975,11 +975,10 @@ void SV_ExecuteUserCommand (char *s)
 	if (!teststring)
 		return;
 
-	if (strcmp (teststring, s)) {
-		if (sv_client->state == cs_spawned && *sv_client->name)
-			SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: attempted server exploit\n", sv_client->name);
+	if (strcmp (teststring, s))
+	{
 		Blackhole (net_from, "attempted command expansion: %s", s);
-		SV_DropClient (sv_client);
+		SV_KickClient (sv_client, "attempted server exploit", NULL);
 		return;
 	}
 
@@ -1079,10 +1078,7 @@ void SV_ExecuteUserCommand (char *s)
 			strstr (Cmd_Args(), "- Failed Auth")
 			))
 		{
-			if (sv_client->state == cs_spawned && *sv_client->name)
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: client is using q2ace\n", sv_client->name);
-			SV_ClientPrintf (sv_client, PRINT_HIGH, "q2ace is not permitted on this server, please use regular Quake II.\n");
-			SV_DropClient (sv_client);
+			SV_KickClient (sv_client, "client is using q2ace", "q2ace is not permitted on this server, please use regular Quake II.\n");
 			return;
 		}
 	}
@@ -1144,10 +1140,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 	{
 		if (net_message.readcount > net_message.cursize)
 		{
-			if (cl->state == cs_spawned && *cl->name)
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: bad read\n", cl->name);
-			Com_Printf ("SV_ReadClientMessage: bad read\n");
-			SV_DropClient (cl);
+			SV_KickClient (cl, "bad read", "SV_ExecuteClientMessage: bad read\n");
 			return;
 		}
 
@@ -1158,11 +1151,8 @@ void SV_ExecuteClientMessage (client_t *cl)
 		switch (c)
 		{
 		default:
-			if (cl->state == cs_spawned && *cl->name)
-				SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: unknown command char\n", cl->name);
-			Com_Printf ("SV_ReadClientMessage: unknown command char %d\n", c);
-			SV_ClientPrintf (cl, PRINT_HIGH, "SV_ReadClientMessage: unknown command char %d\n", c);
-			SV_DropClient (cl);
+			Com_Printf ("SV_ExecuteClientMessage: unknown command byte %d\n", c);
+			SV_KickClient (cl, "unknown command byte", va("unknown command byte %d", c));
 			return;
 					
 			//FIXME: remove this?
@@ -1175,11 +1165,9 @@ void SV_ExecuteClientMessage (client_t *cl)
 			break;
 
 		case clc_move:
-			if (move_issued) {
-				if (cl->state == cs_spawned && *cl->name)
-					SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: client issued clc_move when move_issued\n", cl->name);
-				Com_Printf ("SV_ReadClientMessage: clc_move when move_issued\n");
-				SV_DropClient (cl);
+			if (move_issued)
+			{
+				SV_KickClient (cl, "client issued clc_move when move_issued", "SV_ExecuteClientMessage: clc_move when move_issued\n");
 				return;		// someone is trying to cheat...
 			}
 
@@ -1188,7 +1176,15 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 			//r1ch: suck up the extra checksum byte that is no longer used
 			if (cl->protocol == ORIGINAL_PROTOCOL_VERSION)
+			{
 				MSG_ReadByte (&net_message);
+			}
+			else if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
+			{
+				Com_Printf ("SV_ReadClientMessage: bad protocol %d (memory overwritten!)\n", cl->protocol);
+				SV_KickClient (cl, "client state corrupted", "SV_ExecuteClientMessage: client state corrupted");
+				return;
+			}
 
 			lastframe = MSG_ReadLong (&net_message);
 
@@ -1196,15 +1192,16 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//note, this doesn't affect server->client if the clients frame
 			//was too old (ie client lagged out) so should be safe to enable
 			//nodelta clients typically consume 4-5x bandwidth than normal.
-			if (lastframe == -1 && cl->lastframe == -1) {
-				if (++cl->nodeltaframes >= 100 && !sv_allownodelta->value) {
-					if (cl->state == cs_spawned && *cl->name)
-						SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: client is using cl_nodelta\n", cl->name);
-					SV_ClientPrintf (cl, PRINT_HIGH, "ERROR: You may not use cl_nodelta on this server as it consumes excessive bandwidth. Please set cl_nodelta 0 if you wish to be able to play on this server.\n");
-					SV_DropClient (cl);
+			if (lastframe == -1 && cl->lastframe == -1)
+			{
+				if (++cl->nodeltaframes >= 100 && !sv_allownodelta->value)
+				{
+					SV_KickClient (cl, "client is using cl_nodelta", "ERROR: You may not use cl_nodelta on this server as it consumes excessive bandwidth. Please set cl_nodelta 0 if you wish to be able to play on this server.\n");
 					return;
 				}
-			} else {
+			}
+			else
+			{
 				cl->nodeltaframes = 0;
 			}
 
@@ -1217,16 +1214,33 @@ void SV_ExecuteClientMessage (client_t *cl)
 			}
 
 			memset (&nullcmd, 0, sizeof(nullcmd));
+
+			//r1: check there are actually enough usercmds in the message!
 			MSG_ReadDeltaUsercmd (&net_message, &nullcmd, &oldest);
+			if (net_message.readcount > net_message.cursize)
+			{
+				SV_KickClient (cl, "bad clc_move usercmd read (oldest)", NULL);
+				return;
+			}
+
 			MSG_ReadDeltaUsercmd (&net_message, &oldest, &oldcmd);
+			if (net_message.readcount > net_message.cursize)
+			{
+				SV_KickClient (cl, "bad clc_move usercmd read (oldcmd)", NULL);
+				return;
+			}
+
 			MSG_ReadDeltaUsercmd (&net_message, &oldcmd, &newcmd);
+			if (net_message.readcount > net_message.cursize)
+			{
+				SV_KickClient (cl, "bad clc_move usercmd read (newcmd)", NULL);
+				return;
+			}
 
 			if (cl->state == cs_spawned && newcmd.msec > 250)
 			{
 				Blackhole (cl->netchan.remote_address, "illegal msec value (%d)", newcmd.msec);
-				if (cl->state == cs_spawned && *cl->name)
-					SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: illegal pmove msec detected\n", cl->name);
-				SV_DropClient (cl);
+				SV_KickClient (cl, "illegal pmove msec detected", NULL);
 				return;
 			}
 
@@ -1287,7 +1301,8 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//r1: another security check, client caps at 256+1, but a hacked client could
 			//    send huge strings, if they are then used in a mod which sends a %s cprintf
 			//    to the exe, this could result in a buffer overflow for example.
-			if (strlen(s) > 257) {
+			if (strlen(s) > 257)
+			{
 				Com_Printf ("%s: excessive stringcmd discarded.\n", cl->name);
 				break;
 			}

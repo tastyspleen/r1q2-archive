@@ -364,6 +364,10 @@ extern	cvar_t	*scr_sizegraph;
 
 //extern	cvar_t	*cl_snaps;
 
+#ifndef DEDICATED_ONLY
+extern	qboolean send_packet_now;
+#endif
+
 typedef struct
 {
 	int		key;				// so entities can reuse same entry
@@ -430,12 +434,14 @@ void CL_ParticleEffect3 (vec3_t org, vec3_t dir, int color, int count);
 typedef struct particle_s
 {
 	struct particle_s	*next;
+	int			type;
 
 	float		time;
 
 	vec3_t		org;
 	vec3_t		vel;
 	vec3_t		accel;
+
 	float		color;
 	float		colorvel;
 	float		alpha;
@@ -446,7 +452,8 @@ typedef struct particle_s
 #define	PARTICLE_GRAVITY	40
 #define BLASTER_PARTICLE_COLOR		0xe0
 // PMM
-#define INSTANT_PARTICLE	-10000.0
+#define PT_NONE		0
+#define PT_INSTANT	1
 // PGM
 // ========
 

@@ -337,6 +337,7 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 		}
 	}
 
+	send_packet_now = true;
 	cls.downloadpending = true;
 
 	return false;
@@ -424,6 +425,8 @@ void CL_Download_f (void)
 			MSG_WriteString (&cls.netchan.message, va("download %s 0", cls.downloadname));
 		}
 	}
+
+	send_packet_now = true;
 
 	//cls.downloadnumber++;
 }
@@ -567,9 +570,11 @@ void CL_ParseDownload (void)
 		cls.downloadpercent = percent;
 
 		//r1: enhanced server only sends download messages as status updates.
-		if (!cls.dlserverport) {
+		if (!cls.dlserverport)
+		{
 			MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 			SZ_Print (&cls.netchan.message, "nextdl");
+			send_packet_now = true;
 		}
 	}
 	else

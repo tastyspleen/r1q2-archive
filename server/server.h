@@ -282,6 +282,7 @@ extern	edict_t		*sv_player;
 //
 void SV_FinalMessage (char *message, qboolean reconnect);
 void SV_DropClient (client_t *drop);
+void SV_KickClient (client_t *cl, char *reason, char *cprintf);
 
 int EXPORT SV_ModelIndex (char *name);
 int EXPORT SV_SoundIndex (char *name);

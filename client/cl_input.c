@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 
 cvar_t	*cl_nodelta;
-cvar_t	*cl_instantpacket;
 
 extern	unsigned	sys_frame_time;
 unsigned	frame_msec;
@@ -372,7 +371,7 @@ __inline void CL_InitCmd (void)
 // CL_RefreshCmd
 //jec - adds any new input changes to usercmd
 //	that occurred since last Init or RefreshCmd
-int CL_RefreshCmd (void)
+void CL_RefreshCmd (void)
 {	
 	int i, ms;
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
@@ -382,7 +381,7 @@ int CL_RefreshCmd (void)
 
 	// bounds checking
 	if (frame_msec < 1)
-		return 0;
+		return;
 
 	if (frame_msec > 1000)
 		frame_msec = 500;
@@ -411,11 +410,14 @@ int CL_RefreshCmd (void)
 	//update counter
 	old_sys_frame_time = sys_frame_time;
 
-	//r1: send packet immediately on important events
-	if (cl_instantpacket->value && ((in_attack.state & 3) || (in_use.state & 3)))
-		return 1;
 
-	return 0;
+	//7 = starting attack 1  2  4
+	//5 = during attack   1     4 
+	//4 = idle                  4
+
+	//r1: send packet immediately on important events
+	if (((in_attack.state & 2) || (in_use.state & 2)))
+		send_packet_now = true;
 }
 
 // CL_FinalizeCmd
@@ -495,7 +497,6 @@ void CL_InitInput (void)
 	Cmd_AddCommand ("-klook", IN_KLookUp);
 
 	cl_nodelta = Cvar_Get ("cl_nodelta", "0", 0);
-	cl_instantpacket = Cvar_Get ("cl_instantpacket", "0", 0);
 }
 
 

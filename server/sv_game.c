@@ -395,21 +395,21 @@ the multiplier for clients running in the new protocol for fast spectator moveme
 void EXPORT SV_Pmove (pmove_t *pm)
 {
 	pmove_new_t epm;
+
+	//transfer old pmove to new struct
 	memcpy (&epm, pm, sizeof(pmove_t));
-	epm.cmd = pm->cmd;
-	epm.groundentity = pm->groundentity;
-	epm.pointcontents = pm->pointcontents;
-	epm.trace = pm->trace;
-	epm.multiplier = 1;
 
-	if (sv_client->protocol == ENHANCED_PROTOCOL_VERSION && pm->s.pm_type == PM_SPECTATOR)
+	//r1ch: allow non-client calls of this function
+	if (sv_client && sv_client->protocol == ENHANCED_PROTOCOL_VERSION && pm->s.pm_type == PM_SPECTATOR)
 		epm.multiplier = 2;
+	else
+		epm.multiplier = 1;
 
+	//pmove
 	Pmove (&epm);
-
-	pm->groundentity = epm.groundentity;
+	
+	//copy results back out
 	memcpy (pm, &epm, sizeof(pmove_t));
-	memcpy (pm->touchents, &epm.touchents, sizeof(pm->touchents));
 }
 
 /*
