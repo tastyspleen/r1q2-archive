@@ -33,7 +33,7 @@ int		hunkcount;
 int		hunkmaxsize;
 int		cursize;
 
-//#define	VIRTUAL_ALLOC 1
+#define	VIRTUAL_ALLOC 1
 //#define CREATE_HEAP 1
 
 #if CREATE_HEAP
@@ -107,6 +107,7 @@ int Hunk_End (void)
 {
 
 	// free the remaining unused virtual memory
+#if VIRTUAL_ALLOC
 #if 0
 	void	*buf;
 
@@ -114,6 +115,11 @@ int Hunk_End (void)
 	buf = VirtualAlloc (membase, cursize, MEM_COMMIT, PAGE_READONLY);
 	if (!buf)
 		Sys_Error ("VirtualAlloc commit failed");
+#endif
+#else
+	/**base = realloc (membase, cursize);
+	if (!*base)
+		ri.Sys_Error (ERR_FATAL, "realloc (%p, %d) failed", membase, cursize);*/
 #endif
 
 	hunkcount++;

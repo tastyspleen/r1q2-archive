@@ -129,7 +129,7 @@ int Sys_FileLength (const char *path)
 
 void VID_Restart_f (void);
 void S_Init (qboolean fullInit);
-void Sys_Error (char *error, ...)
+void Sys_Error (const char *error, ...)
 {
 	va_list		argptr;
 	char		text[1024];
@@ -157,8 +157,12 @@ void Sys_Error (char *error, ...)
 	else if (ret == IDIGNORE)
 	{
 #ifndef DEDICATED_ONLY
-		VID_Restart_f ();
-		S_Init (true);
+		if (!dedicated->intvalue)
+		{
+			VID_Restart_f ();
+			S_Init (true);
+			Cbuf_AddText ("precache\n");
+		}
 #endif
 		NET_Init ();
 		return;

@@ -254,7 +254,7 @@ void Con_MessageMode_f (void)
 
 	if (!chat_bufferlen && Cmd_Argc() > 1)
 	{
-		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer)-2);
+		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer[chat_curbuffer])-2);
 		if (chat_buffer[0])
 		{
 			strcat (chat_buffer[chat_curbuffer], " ");
@@ -277,7 +277,7 @@ void Con_MessageMode2_f (void)
 
 	if (!chat_bufferlen && Cmd_Argc() > 1)
 	{
-		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer)-2);
+		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer[chat_curbuffer])-2);
 		if (chat_buffer[0])
 		{
 			strcat (chat_buffer[chat_curbuffer], " ");

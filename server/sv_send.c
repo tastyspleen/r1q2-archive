@@ -70,7 +70,7 @@ SV_ClientPrintf
 Sends text across to be displayed if the level passes
 =================
 */
-void SV_ClientPrintf (client_t *cl, int level, char *fmt, ...)
+void SV_ClientPrintf (client_t *cl, int level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		string[MAX_USABLEMSG-3];
@@ -100,7 +100,7 @@ SV_BroadcastPrintf
 Sends text to all active clients
 =================
 */
-void EXPORT SV_BroadcastPrintf (int level, char *fmt, ...)
+void EXPORT SV_BroadcastPrintf (int level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		string[MAX_USABLEMSG-3];
@@ -185,7 +185,7 @@ void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 
 	if (cl->state <= cs_zombie)
 	{
-		Com_Printf ("Warning, SV_AddMessage to zombie/free client.\n", LOG_SERVER|LOG_WARNING);
+		Com_Printf ("Warning, SV_AddMessage to zombie/free client %d.\n", LOG_SERVER|LOG_WARNING, cl - svs.clients);
 		return;
 	}
 
@@ -203,7 +203,7 @@ void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 	//have they overflown?
 	if (index >= MAX_MESSAGES_PER_LIST-1)
 	{
-		Com_Printf ("WARNING: Index overflow for %s.\n", LOG_SERVER|LOG_WARNING, cl->name);
+		Com_Printf ("WARNING: Index overflow (%d) for %s.\n", LOG_SERVER|LOG_WARNING, index, cl->name);
 
 		//clear the buffer for overflow print and malloc cleanup
 		SV_ClearMessageList (cl);
@@ -307,7 +307,7 @@ SV_BroadcastCommand
 Sends text to all active clients
 =================
 */
-void SV_BroadcastCommand (char *fmt, ...)
+void SV_BroadcastCommand (const char *fmt, ...)
 {
 	va_list		argptr;
 	char		string[1024];

@@ -92,7 +92,7 @@ static struct sfx_s	*cl_sfx_rockexp;
 static struct sfx_s	*cl_sfx_grenexp;
 static struct sfx_s	*cl_sfx_watrexp;
 // RAFAEL
-static struct sfx_s	*cl_sfx_plasexp;
+//static struct sfx_s	*cl_sfx_plasexp;
 
 struct sfx_s	*cl_sfx_footsteps[4];
 
@@ -111,7 +111,7 @@ static struct model_s	*cl_mod_bfg_explo;
 
 struct model_s	*cl_mod_powerscreen;
 // RAFAEL
-static struct model_s	*cl_mod_plasmaexplo;
+//static struct model_s	*cl_mod_plasmaexplo;
 
 //R1:
 static struct model_s	*le_mod_debris1;

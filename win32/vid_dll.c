@@ -28,8 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "winquake.h"
 //#include "zmouse.h"
 
-qboolean	reload_video = false;
-
 // Structure containing functions exported from refresh DLL
 refexport_t	re;
 
@@ -119,7 +117,7 @@ DLL GLUE
 */
 
 #define	MAXPRINTMSG	4096
-void EXPORT VID_Printf (int print_level, char *fmt, ...)
+void EXPORT VID_Printf (int print_level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
@@ -144,7 +142,7 @@ void EXPORT VID_Printf (int print_level, char *fmt, ...)
 	}
 }
 
-void EXPORT VID_Error (int err_level, char *fmt, ...)
+void EXPORT VID_Error (int err_level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
@@ -630,28 +628,25 @@ static void VID_Front_f( void )
 */
 typedef struct vidmode_s
 {
-	const char *description;
 	int         width, height;
-	int         mode;
 } vidmode_t;
 
 vidmode_t vid_modes[] =
 {
-	{ "Mode 0: 320x240",   320, 240,   0 },
-	{ "Mode 1: 400x300",   400, 300,   1 },
-	{ "Mode 2: 512x384",   512, 384,   2 },
-	{ "Mode 3: 640x480",   640, 480,   3 },
-	{ "Mode 4: 800x600",   800, 600,   4 },
-	{ "Mode 5: 960x720",   960, 720,   5 },
-	{ "Mode 6: 1024x768",  1024, 768,  6 },
-	{ "Mode 7: 1152x864",  1152, 864,  7 },
-	{ "Mode 8: 1280x960",  1280, 960, 8 },
-	{ "Mode 9: 1600x1200", 1600, 1200, 9 },
-	{ "Mode 10: 2048x1536", 2048, 1536, 10 },
-	{ "Mode 11: 2560x1920", 2560, 1920, 11 },
-	{ "Mode 12: 1280x1024", 1280, 1024, 12 },
-	{ "Mode 13: 1680x1050", 1680, 1050, 13 }
-	
+	{320,	240},
+	{400,	300},
+	{512,	384},
+	{640,	480},
+	{800,	600},
+	{960,	720},
+	{1024,	768},
+	{1152,	864},
+	{1280,	960},
+	{1600,	120,},
+	{2048,	1536},
+	{1280,	1024},
+	{1680,	1050},
+	{2560,	1920},	
 };
 
 qboolean EXPORT VID_GetModeInfo( int *width, int *height, int mode )
@@ -851,14 +846,6 @@ is to check to see if any of the video mode parameters have changed, and if they
 update the rendering DLL and/or video mode to match.
 ============
 */
-
-void VID_Ref_Modified (cvar_t *cvar, char *old, char *newv)
-{
-	if (reload_video)
-		VID_ReloadRefresh();
-	reload_video = true;
-}
-
 void VID_ReloadRefresh (void)
 {
 	char errMessage[256];
@@ -958,8 +945,6 @@ VID_Init
 */
 void VID_Init (void)
 {
-	cvar_t *glmode;
-
 	/* Create the video variables so we know how to start the graphics drivers */
 	vid_ref = Cvar_Get ("vid_ref", "soft", CVAR_ARCHIVE);
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
@@ -976,8 +961,8 @@ void VID_Init (void)
 	//r1q2 specific:
 	vid_xpos->changed = VID_XY_Modified;
 	vid_ypos->changed = VID_XY_Modified;
-	vid_fullscreen->changed = VID_Ref_Modified;
-	vid_ref->changed = VID_Ref_Modified;
+	//vid_fullscreen->changed = VID_Ref_Modified;
+	//vid_ref->changed = VID_Ref_Modified;
 
 	//FIXME: make this changable
 	/*if (gl_mode)
@@ -1008,10 +993,6 @@ void VID_Init (void)
 	/* Start the graphics mode and load refresh DLL */
 	//vid_ref->changed (NULL, NULL, NULL);
 	VID_ReloadRefresh ();
-
-	//r1: now renderer is loaded we can hijack some of its cvars for the changed code
-	if ((glmode = Cvar_FindVar ("gl_mode")))
-		glmode->changed = VID_Ref_Modified;
 
 	//FIXME: combine multi line changes into a single reload of refresh dll
 		

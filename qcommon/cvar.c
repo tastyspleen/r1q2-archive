@@ -147,7 +147,7 @@ char *Cvar_VariableString (const char *var_name)
 		}
 		else if (!strcmp (var_name, "$random"))
 		{
-			return va ("%u", randomMT());
+			return va ("%lu", randomMT());
 		}
 		else if (!strcmp (var_name, "$inc"))
 		{
@@ -585,35 +585,6 @@ void Cvar_Set_f (void)
 		Cvar_Set (Cmd_Argv(1), Cmd_Argv(2));
 }
 
-void Cvar_UnSet_f (void)
-{
-	cvar_t	*v;
-	cvar_t	*last = cvar_vars;
-
-	if (Cmd_Argc() < 2)
-	{
-		Com_Printf ("usage: unset <variable>\n", LOG_GENERAL);
-		return;
-	}
-
-	for (v=cvar_vars ; v ; v=v->next)
-	{
-		if (!strcmp (Cmd_Argv(1), v->name))
-		{
-			last->next = v->next;
-			Z_Free (v->name);
-			Z_Free (v->string);
-			if (v->latched_string)
-				Z_Free (v->latched_string);
-			Z_Free (v);
-			Com_Printf ("Variable '%s' removed.\n", LOG_GENERAL, Cmd_Argv(1));
-			return;
-		}
-		last = v;
-	}
-
-	Com_Printf ("Variable '%s' not found.\n", LOG_GENERAL, Cmd_Argv(1));
-}
 
 /*
 ============
@@ -764,7 +735,6 @@ void Cvar_Init (void)
 	cvartree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
 
 	Cmd_AddCommand ("set", Cvar_Set_f);
-	Cmd_AddCommand ("unset", Cvar_UnSet_f);
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
 
 	developer = Cvar_Get ("developer", "0", 0);

@@ -1065,6 +1065,22 @@ static void SV_AddUserinfoBan_f (void)
 		Com_Printf ("userinfoban for '%s %s' added.\n", LOG_GENERAL, cvar, blocktype);
 }
 
+int MaskBits (unsigned long mask)
+{
+	int		i;
+	int		bits;
+
+	bits = 0;
+
+	for (i = 0; i < 32; i++)
+	{
+		if (mask & (1 << i))
+			bits++;
+	}
+
+	return bits;
+}
+
 //===============================================================
 
 static void SV_Listholes_f (void)
@@ -1077,7 +1093,7 @@ static void SV_Listholes_f (void)
 	while (hole->next)
 	{
 		hole = hole->next;
-		Com_Printf ("%d: %s (%s)\n", LOG_GENERAL, ++index, NET_AdrToString (&hole->netadr), hole->reason);
+		Com_Printf ("%d: %s/%d (%s)\n", LOG_GENERAL, ++index, NET_inet_ntoa (hole->ip), MaskBits (hole->mask), hole->reason);
 	}
 }
 
@@ -1106,7 +1122,7 @@ static void SV_Delhole_f (void)
 		{
 			temp = temp->next;
 
-			if (NET_CompareBaseAdr (&temp->netadr, &adr))
+			if (*(unsigned long *)adr.ip == temp->ip)
 				goto remove;
 
 			x++;
@@ -1248,23 +1264,63 @@ static void SV_DelCommandBan_f (void)
 
 static void SV_Addhole_f (void)
 {
-	netadr_t adr;
+	netadr_t	adr;
 
-	if (Cmd_Argc() < 3)
+	int			method;
+	int			mask;
+	char		*ip;
+	char		*s;
+
+	if (Cmd_Argc() < 4)
 	{
 		Com_Printf ("Purpose: Prevents a given IP from communicating with the server.\n"
-					"Syntax : addhole <ip-address> <reason>\n"
-					"Example: addhole 192.168.0.1 trying to cheat\n", LOG_GENERAL);
+					"Syntax : addhole <ip-address/mask> <SILENT|MESSAGE> <message>\n"
+					"Example: addhole 192.168.0.1 MESSAGE You are not welcome on this server.\n"
+					"Example: addhole 172.16.0.0/16 SILENT The clients will never see this text.\n", LOG_GENERAL);
 		return;
 	}
 
-	if (!(NET_StringToAdr (Cmd_Argv(1), &adr)))
+	ip = Cmd_Argv(1);
+
+	s = strchr (Cmd_Argv(1), '/');
+	if (s)
+	{
+		*s = 0;
+		s++;
+		if (!*s)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return;
+		}
+		mask = atoi (s);
+		if (mask < 0 || mask > 32)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return;
+		}
+	}
+	else
+	{
+		mask = 32;
+	}
+
+	if (!Q_stricmp (Cmd_Argv(2), "SILENT"))
+		method = BLACKHOLE_SILENT;
+	else if (!Q_stricmp (Cmd_Argv(2), "MESSAGE"))
+		method = BLACKHOLE_MESSAGE;
+	else
+	{
+		Com_Printf ("Unknown blackhole action '%s'\n", LOG_GENERAL, Cmd_Argv(2));
+		return;
+	}
+
+	if (!(NET_StringToAdr (ip, &adr)))
 	{
 		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, Cmd_Argv(1));
 		return;
 	}
 
-	Blackhole (&adr, false, "%s", Cmd_Args2(2));
+	Blackhole (&adr, false, mask, method, "%s", Cmd_Args2(3));
 }
 
 /*
@@ -1669,7 +1725,7 @@ void SV_Status_f (void)
 			Com_Printf ("%2i %5i ", LOG_GENERAL, i, ((struct gclient_old_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
 #endif
 
-		if (cl->state == cs_connected) {
+		if (cl->state == cs_connected || cl->state == cs_spawning) {
 			if (cl->download)
 				Com_Printf ("DNLD ", LOG_GENERAL);
 			else 

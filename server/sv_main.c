@@ -150,6 +150,8 @@ cvar_t	*sv_download_refuselimit;
 cvar_t	*sv_download_drop_file;
 cvar_t	*sv_download_drop_message;
 
+cvar_t	*sv_blackhole_mask;
+
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
 
@@ -248,19 +250,6 @@ void SV_DropClient (client_t *drop, qboolean notify)
 		ge->ClientDisconnect (drop->edict);
 	}
 
-	if (drop->download)
-	{
-		FS_FreeFile (drop->download);
-		drop->download = NULL;
-	}
-
-	//r1: free baselines
-	if (drop->lastlines)
-	{
-		Z_Free (drop->lastlines);
-		drop->lastlines = NULL;
-	}
-
 	drop->state = cs_zombie;
 
 	drop->name[0] = 0;
@@ -301,6 +290,20 @@ void SV_CleanClient (client_t *drop)
 	{
 		Z_Free (drop->downloadFileName);
 		drop->downloadFileName = NULL;
+	}
+
+	//r1: download data
+	if (drop->download)
+	{
+		FS_FreeFile (drop->download);
+		drop->download = NULL;
+	}
+
+	//r1: free baselines
+	if (drop->lastlines)
+	{
+		Z_Free (drop->lastlines);
+		drop->lastlines = NULL;
 	}
 }
 
@@ -518,7 +521,7 @@ char	*SV_StatusString (void)
 		for (i=0 ; i<(int)maxclients->intvalue ; i++)
 		{
 			cl = &svs.clients[i];
-			if (cl->state == cs_connected || cl->state == cs_spawned )
+			if (cl->state >= cs_connected)
 			{
 	#ifdef ENHANCED_SERVER
 					Com_sprintf (player, sizeof(player), "%i %i \"%s\"\n", 
@@ -592,7 +595,7 @@ void SVC_Status (void)
 
 	RateSample (&svs.ratelimit_status);
 
-	if (RateLimited (&svs.ratelimit_status, 1000))
+	if (RateLimited (&svs.ratelimit_status, sv_ratelimit_status->intvalue))
 	{
 		Com_DPrintf ("SVC_Status: Dropped status request from %s\n", NET_AdrToString (&net_from));
 		return;
@@ -917,7 +920,7 @@ void SVC_DirectConnect (void)
 	{
 		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s (%s)\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr), MakePrintable (userinfo));
 		Com_Printf ("EXPLOIT: Client %s supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), MakePrintable (userinfo));
-		Blackhole (adr, true, "illegal userinfo string");
+		Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal userinfo string");
 		return;
 	}
 
@@ -931,7 +934,7 @@ void SVC_DirectConnect (void)
 			ptr = userinfo;
 		p = MakePrintable (ptr);
 		Com_Printf ("EXPLOIT: Client %s supplied userinfo string containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), p);
-		Blackhole (adr, true, "0xFF in userinfo (%.32s)", p);
+		Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in userinfo (%.32s)", p);
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
 		return;
 	}
@@ -964,7 +967,7 @@ void SVC_DirectConnect (void)
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s\n", match->message);
 
 		if (match->blockmethod == CVARBAN_BLACKHOLE)
-			Blackhole (adr, true, "userinfovarban: %s == %s", key, Info_ValueForKey (userinfo, key));
+			Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "userinfovarban: %s == %s", key, Info_ValueForKey (userinfo, key));
 
 		Com_DPrintf ("    userinfo ban %s matched\n", key);
 		return;
@@ -989,7 +992,7 @@ void SVC_DirectConnect (void)
 		char	*p;
 		p = Info_ValueForKey(userinfo, "ip");
 		Com_Printf ("EXPLOIT: Client %s attempted to spoof IP address: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), p);
-		Blackhole (adr, true, "attempted to spoof ip '%s'", p);
+		Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "attempted to spoof ip '%s'", p);
 		return;
 	}
 
@@ -1225,7 +1228,23 @@ int Rcon_Validate (void)
 	return 0;
 }
 
-void Blackhole (netadr_t *from, qboolean isAutomatic, char *fmt, ...)
+unsigned long CalcMask (int bits)
+{
+	int				i;
+	unsigned long	mask;
+
+	mask = -1;
+
+	for (i = 0; i < 32; i++)
+	{
+		if (i >= bits)
+			mask &= ~(1 << i);
+	}
+
+	return mask;
+}
+
+void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...)
 {
 	blackhole_t *temp;
 	va_list		argptr;
@@ -1234,6 +1253,7 @@ void Blackhole (netadr_t *from, qboolean isAutomatic, char *fmt, ...)
 		return;
 
 	temp = &blackholes;
+
 	while (temp->next)
 		temp = temp->next;
 
@@ -1241,14 +1261,22 @@ void Blackhole (netadr_t *from, qboolean isAutomatic, char *fmt, ...)
 	temp = temp->next;
 
 	temp->next = NULL;
-	temp->netadr = *from;
+
+	temp->ip = *(unsigned long *)from->ip;
+	temp->mask = CalcMask(mask);
+	temp->method = method;
+
+	temp->ratelimit.period = 1000;
 
 	va_start (argptr,fmt);
 	vsnprintf (temp->reason, sizeof(temp->reason)-1, fmt, argptr);
 	va_end (argptr);
 
+	//terminate
+	temp->reason[sizeof(temp->reason)-1] = 0;
+
 	if (sv.state)
-		Com_Printf ("Added %s to blackholes for %s.\n", LOG_SERVER|LOG_EXPLOIT, NET_AdrToString (from), temp->reason);
+		Com_Printf ("Added %s/%d to blackholes for %s.\n", LOG_SERVER|LOG_EXPLOIT, NET_inet_ntoa (temp->ip), mask, temp->reason);
 }
 
 qboolean UnBlackhole (int index)
@@ -1454,8 +1482,17 @@ void SV_ConnectionlessPacket (void)
 	while (blackhole->next)
 	{
 		blackhole = blackhole->next;
-		if (NET_CompareBaseAdr (&net_from, &blackhole->netadr))
+		if ((*(unsigned long *)net_from.ip & blackhole->mask) == (blackhole->ip & blackhole->mask))
+		{
+			//do rate limiting in case there is some long-ish reason
+			if (blackhole->method == BLACKHOLE_MESSAGE)
+			{
+				RateSample (&blackhole->ratelimit);
+				if (!RateLimited (&blackhole->ratelimit, 2))
+					Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s\n", blackhole->reason);
+			}
 			return;
+		}
 	}
 
 	//r1: should never happen, don't even bother trying to parse it
@@ -1745,7 +1782,7 @@ void SV_ReadPackets (void)
 					cl->packetCount++;
 
 					//r1: send a reply immediately if the client is connecting
-					if (cl->state == cs_connected && cl->msgListStart->next)
+					if ((cl->state == cs_connected || cl->state == cs_spawning) && cl->msgListStart->next)
 					{
 						SV_WriteReliableMessages (cl, MAX_USABLEMSG);
 						Netchan_Transmit (&cl->netchan, 0, NULL);
@@ -1811,7 +1848,7 @@ void SV_CheckTimeouts (void)
 			continue;
 		}
 
-		if (cl->state == cs_connected || cl->state == cs_spawned) 
+		if (cl->state >= cs_connected)
 		{
 			if (flagRun)
 			{
@@ -1978,13 +2015,21 @@ void SV_Frame (int msec)
 
 		//r1: execute commands now
 		if (dedicated->intvalue)
+		{
 			Cbuf_Execute();
+			if (!svs.initialized)
+				return;
+		}
 		NET_Sleep(sv.time - svs.realtime);
 		return;
 	}
 
 	//r1: execute commands now
 	Cbuf_Execute();
+
+	//may have executed some kind of quit
+	if (!svs.initialized)
+		return;
 
 	//r1: run tcp downloads
 	SV_RunDownloadServer ();
@@ -2160,7 +2205,7 @@ static void UserinfoBanDrop (char *key, banmatch_t *ban, char *result)
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
 
 	if (ban->blockmethod == CVARBAN_BLACKHOLE)
-		Blackhole (&sv_client->netchan.remote_address, true, "userinfovarban: %s == %s", key, result);
+		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "userinfovarban: %s == %s", key, result);
 
 	Com_Printf ("Dropped client %s, userinfovarban: %s == %s\n", LOG_SERVER|LOG_DROP, sv_client->name, key, result);
 
@@ -2197,7 +2242,7 @@ void SV_UserinfoChanged (client_t *cl)
 			ptr = cl->userinfo;
 		p = MakePrintable (ptr);
 		Com_Printf ("EXPLOIT: Client %s[%s] supplied userinfo string containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), p);
-		Blackhole (&cl->netchan.remote_address, true, "0xFF in userinfo (%.32s)", p);
+		Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in userinfo (%.32s)", p);
 		SV_KickClient (cl, "illegal userinfo", NULL);
 		return;
 	}
@@ -2206,7 +2251,7 @@ void SV_UserinfoChanged (client_t *cl)
 	{
 		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s[%s] (%s)\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
 		Com_Printf ("EXPLOIT: Client %s[%s] supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
-		Blackhole (&cl->netchan.remote_address, true, "illegal userinfo string");
+		Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal userinfo string");
 		return;
 	}
 
@@ -2277,11 +2322,6 @@ void SV_UpdateWindowTitle (cvar_t *cvar, char *old, char *newvalue)
 		//for linux this currently does nothing
 		Sys_SetWindowText (buff);
 	}
-}
-
-void UpdateStatusRateLimit (cvar_t *var, char *oldvalue, char *newvalue)
-{
-	svs.ratelimit_status.period = sv_ratelimit_status->intvalue;
 }
 
 void _password_changed (cvar_t *var, char *oldvalue, char *newvalue)
@@ -2473,7 +2513,6 @@ void SV_Init (void)
 
 	//r1: rate limiting for status requests to prevent udp spoof DoS
 	sv_ratelimit_status = Cvar_Get ("sv_ratelimit_status", "15", 0);
-	sv_ratelimit_status->changed = UpdateStatusRateLimit;
 
 	//r1: allow new SVF_ ent flags? some mods mistakenly extend SVF_ for their own purposes.
 	sv_new_entflags = Cvar_Get ("sv_new_entflags", "0", 0);
@@ -2500,6 +2539,9 @@ void SV_Init (void)
 
 	sv_download_drop_file = Cvar_Get ("sv_download_drop_file", "", 0);
 	sv_download_drop_message = Cvar_Get ("sv_download_drop_message", "This mod requires client-side files, please visit the mod homepage to download them.", 0);
+
+	//r1: default blackhole mask
+	sv_blackhole_mask = Cvar_Get ("sv_blackhole_mask", "32", 0);
 
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN

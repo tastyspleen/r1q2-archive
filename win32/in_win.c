@@ -1203,7 +1203,7 @@ void IN_Init (void)
 	m_directinput			= Cvar_Get ("m_directinput",			"0",		0);
     in_mouse				= Cvar_Get ("in_mouse",					"1",		0);
 
-	in_dinputkeyboard		= Cvar_Get ("in_dinputkeyboard",		"1",		0);
+	in_dinputkeyboard		= Cvar_Get ("in_dinputkeyboard",		"0",		0);
 
 	k_repeatrate			= Cvar_Get ("k_repeatrate",				"0",		0);
 	k_repeatdelay			= Cvar_Get ("k_repeatdelay",			"0",		0);

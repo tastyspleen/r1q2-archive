@@ -150,6 +150,11 @@ void NetadrToSockadr (netadr_t *a, struct sockaddr_in *s)
 	}
 }
 
+char	*NET_inet_ntoa (unsigned long ip)
+{
+	return inet_ntoa (*(struct in_addr *)&ip);
+}
+
 char	*NET_AdrToString (netadr_t *a)
 {
 	static	char	s[32];

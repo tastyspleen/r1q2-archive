@@ -301,6 +301,8 @@ void CL_PrepRefresh (void)
 	re.BeginRegistration (mapname);
 	Com_Printf ("                                     \r", LOG_CLIENT);
 
+	Sys_SendKeyEvents ();
+
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
 	// precache status bar pics
@@ -331,10 +333,17 @@ void CL_PrepRefresh (void)
 
 	Netchan_Transmit (&cls.netchan, 0, NULL);
 
+	cl.model_draw[0] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
+
+	if (cl.configstrings[CS_MODELS+1][0] == '*')
+		cl.model_clip[0] = CM_InlineModel (cl.configstrings[CS_MODELS+1]);
+	else
+		cl.model_clip[0] = NULL;
+
 	if (cl_defermodels->intvalue)
 	{
 		deffered_model_index = 1;
-		for (i = 0; i < MAX_MODELS; i++)
+		for (i = 1; i < MAX_MODELS; i++)
 		{
 			cl.model_clip[i] = NULL;
 			cl.model_draw[i] = NULL;
@@ -343,7 +352,7 @@ void CL_PrepRefresh (void)
 	else
 	{
 		deffered_model_index = MAX_MODELS;
-		for (i = 0; i < MAX_MODELS; i++)
+		for (i = 1; i < MAX_MODELS; i++)
 		{
 			if (!cl.configstrings[CS_MODELS+i][0])
 				continue;
@@ -356,17 +365,14 @@ void CL_PrepRefresh (void)
 				else
 					cl.model_clip[i] = NULL;
 			}
+
+			Com_Printf ("%s                         \r", LOG_CLIENT, cl.configstrings[CS_MODELS+i]); 
+			SCR_UpdateScreen ();
+			Sys_SendKeyEvents ();
 		}
 	}
 
-	cl.model_draw[1] = re.RegisterModel (cl.configstrings[CS_MODELS+1]);
-
-	if (cl.configstrings[CS_MODELS+1][0] == '*')
-		cl.model_clip[1] = CM_InlineModel (cl.configstrings[CS_MODELS+1]);
-	else
-		cl.model_clip[1] = NULL;
-
-	Com_Printf ("images\r", LOG_CLIENT); 
+	Com_Printf ("images\r                             ", LOG_CLIENT); 
 	SCR_UpdateScreen ();
 	for (i=1 ; i<MAX_IMAGES && cl.configstrings[CS_IMAGES+i][0] ; i++)
 	{
@@ -389,8 +395,8 @@ void CL_PrepRefresh (void)
 		if (!cl.configstrings[CS_PLAYERSKINS+i][0])
 			continue;
 
-		//SCR_UpdateScreen ();
-		Sys_SendKeyEvents ();	// pump message loop
+		SCR_UpdateScreen ();
+		Sys_SendKeyEvents ();
 		CL_ParseClientinfo (i);
 	}
 
@@ -408,7 +414,8 @@ void CL_PrepRefresh (void)
 	Com_Printf ("   \r", LOG_CLIENT);
 
 	// the renderer can now free unneeded stuff
-	re.EndRegistration ();
+	if (deffered_model_index == MAX_MODELS)
+		re.EndRegistration ();
 
 	// clear any lines of console text
 	Con_ClearNotify ();
@@ -723,7 +730,7 @@ void V_RenderView(void)
 				re.DrawChar (1+(x*8), 282, 128 + parseMsg[x] );
 		}
 
-		if (!gotFrameFromServerPacket)
+		if (noFrameFromServerPacket > 2)
 		{
 			int x;
 			for (x=0 ; x<sizeof(overflowMsg)-1; x++)

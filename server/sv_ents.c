@@ -839,7 +839,7 @@ void SV_BuildClientFrame (client_t *client)
 
 				if (!ent->s.modelindex)
 				{	
-					if (ent->s.sound)
+					if (ent->s.sound && !ent->s.effects)
 					{
 						// don't send sounds if they will be attenuated away
 						vec3_t	delta;

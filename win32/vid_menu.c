@@ -237,8 +237,10 @@ void EXPORT VID_MenuInit( void )
 		"[2048 1536]",
 		"[1280 1024]",
 		"[1680 1050]",
+		"[2560x1920]",
 		0
 	};
+
 	static const char *refs[] =
 	{
 		"[software      ]",
@@ -274,14 +276,14 @@ void EXPORT VID_MenuInit( void )
 	if ( !sw_stipplealpha )
 		sw_stipplealpha = Cvar_Get( "sw_stipplealpha", "0", CVAR_ARCHIVE );
 
-	s_mode_list[SOFTWARE_MENU].curvalue = sw_mode->value;
-	s_mode_list[OPENGL_MENU].curvalue = gl_mode->value;
+	s_mode_list[SOFTWARE_MENU].curvalue = sw_mode->intvalue;
+	s_mode_list[OPENGL_MENU].curvalue = gl_mode->intvalue;
 
 	if ( !scr_viewsize )
 		scr_viewsize = Cvar_Get ("viewsize", "100", CVAR_ARCHIVE);
 
-	s_screensize_slider[SOFTWARE_MENU].curvalue = scr_viewsize->value/10;
-	s_screensize_slider[OPENGL_MENU].curvalue = scr_viewsize->value/10;
+	s_screensize_slider[SOFTWARE_MENU].curvalue = scr_viewsize->intvalue/10;
+	s_screensize_slider[OPENGL_MENU].curvalue = scr_viewsize->intvalue/10;
 
 	if ( strcmp( vid_ref->string, "soft" ) == 0 )
 	{

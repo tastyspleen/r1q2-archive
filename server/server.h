@@ -112,6 +112,7 @@ typedef enum
 	cs_zombie,		// client has been disconnected, but don't reuse
 					// connection for a couple seconds
 	cs_connected,	// has been assigned to a client_t, but not in game yet
+	cs_spawning,	// r1: received new, not begin yet.
 	cs_spawned		// client is fully in game
 } serverclient_state_t;
 
@@ -382,6 +383,8 @@ extern	cvar_t		*sv_download_drop_message;
 
 extern	cvar_t		*sv_msecs;
 
+extern	cvar_t		*sv_blackhole_mask;
+
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
 
@@ -454,7 +457,7 @@ void Sys_DisableTray (void);
 void Sys_Minimize (void);
 #endif
 
-void Blackhole (netadr_t *from, qboolean isAutomatic, char *fmt, ...);
+void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...) __attribute__ ((format (printf, 4, 5)));;
 
 //
 // sv_phys.c
@@ -482,9 +485,10 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/origin, multicast_t to);
 void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 					int soundindex, float volume,
 					float attenuation, float timeofs);
-void SV_ClientPrintf (client_t *cl, int level, char *fmt, ...);
-void SV_BroadcastPrintf (int level, char *fmt, ...);
-void SV_BroadcastCommand (char *fmt, ...);
+
+void SV_ClientPrintf (client_t *cl, int level, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
+void SV_BroadcastPrintf (int level, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
+void SV_BroadcastCommand (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type);
 //void SV_AddMessageQueue (client_t *client, int extrabytes);
@@ -515,7 +519,7 @@ void SV_RecordDemoMessage (void);
 void SV_BuildClientFrame (client_t *client);
 
 
-void SV_Error (char *error, ...);
+void SV_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
 
 //
 // sv_game.c
@@ -591,10 +595,16 @@ typedef struct blackhole_s blackhole_t;
 
 struct blackhole_s
 {
-	blackhole_t	*next;
-	netadr_t	netadr;
-	char		reason[128];
+	blackhole_t		*next;
+	unsigned long	ip;
+	unsigned long	mask;
+	int				method;
+	char			reason[128];
+	ratelimit_t		ratelimit;
 };
+
+#define	BLACKHOLE_SILENT	0
+#define	BLACKHOLE_MESSAGE	1
 
 #define CVARBAN_KICK		1
 #define CVARBAN_BLACKHOLE	2

@@ -406,7 +406,7 @@ void SV_InitGame (void)
 	}
 
 	svs.ratelimit_badrcon.period = 500;
-	svs.ratelimit_status.period = sv_ratelimit_status->intvalue;
+	svs.ratelimit_status.period = 1000;
 
 	svs.spawncount = randomMT()&0x7FFFFFFF;
 

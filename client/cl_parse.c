@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 
 int			serverPacketCount;
-qboolean	gotFrameFromServerPacket;
+int			noFrameFromServerPacket;
 
 void CL_Reconnect_f (void);
 
@@ -1101,7 +1101,7 @@ void CL_ParseServerMessage (void)
 	int			cmd;
 	char		*s;
 	int			i;
-
+	qboolean	gotFrame;
 //
 // if recording demos, copy the message out
 //
@@ -1111,7 +1111,7 @@ void CL_ParseServerMessage (void)
 		Com_Printf ("------------------\n", LOG_CLIENT);
 
 	serverPacketCount++;
-	gotFrameFromServerPacket = false;
+	gotFrame = false;
 
 //
 // parse the message
@@ -1203,6 +1203,9 @@ void CL_ParseServerMessage (void)
 			s = MSG_ReadString (&net_message);
 			if (i == PRINT_CHAT)
 			{
+				if (CL_IgnoreMatch (s))
+					break;
+
 				S_StartLocalSound ("misc/talk.wav");
 				if (cl_filterchat->intvalue)
 				{
@@ -1217,6 +1220,24 @@ void CL_ParseServerMessage (void)
 					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
 					cls.spamTime = cls.realtime + random() * 1500; 
 			}
+
+			// for getting debug info overnight :)
+/*#ifdef _DEBUG
+			{
+				char *p;
+				p = strstr (s, "was machinegunned by ");
+				if (p)
+				{
+					char *q;
+					p += 21;
+					q = strstr (p, ".");
+					if (q) *q = 0;
+					Cbuf_AddText ("chase ");
+					Cbuf_AddText (p);
+					Cbuf_AddText ("\n");
+				}
+			}
+#endif*/
 			Com_Printf ("%s", LOG_CLIENT|LOG_CHAT, s);
 			con.ormask = 0;
 			break;
@@ -1256,7 +1277,7 @@ void CL_ParseServerMessage (void)
 
 		case svc_frame:
 			CL_ParseFrame ();
-			gotFrameFromServerPacket = true;
+			gotFrame = true;
 			break;
 
 		// ************** r1q2 specific BEGIN ****************
@@ -1290,4 +1311,9 @@ void CL_ParseServerMessage (void)
 
 		}
 	}
+
+	if (!gotFrame)
+		noFrameFromServerPacket++;
+	else
+		noFrameFromServerPacket = 0;
 }

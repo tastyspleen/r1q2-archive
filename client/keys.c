@@ -1175,8 +1175,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 		return;
 		}*/
 
-	//if (key == 201)
-	//	Com_Printf ("%d is %d for %u\n", LOG_GENERAL, key, down, time);
+	//Com_Printf ("%d is %d for %u\n", LOG_GENERAL, key, down, time);
 
 	// update auto-repeat status
 	if (down)
@@ -1200,10 +1199,19 @@ void Key_Event (int key, qboolean down, unsigned time)
 	}
 
 	//for dinput
-	if (keydown[K_ALT] && key == K_ENTER)
+	if (down && keydown[K_ALT])
 	{
-		Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
-		return;
+		if (key == K_ENTER)
+		{
+			Com_Printf ("ALT+Enter, setting fullscreen %d.\n", LOG_CLIENT, !vid_fullscreen->intvalue);
+			Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->intvalue );
+			return;
+		}
+		else if (key == K_TAB)
+		{
+			//prevent executing action on alt+tab
+			return;
+		}
 	}
 
 	if (key == K_SHIFT)

@@ -189,31 +189,31 @@ typedef struct
 #ifdef UNDEFINED
 typedef struct
 {
-	void	(*Sys_Error) (int err_level, char *str, ...);
+	void	(*Sys_Error) (int err_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 
-	void	(*Cmd_AddCommand) (char *name, void(*cmd)(void));
-	void	(*Cmd_RemoveCommand) (char *name);
+	void	(*Cmd_AddCommand) (const char *name, void(*cmd)(void));
+	void	(*Cmd_RemoveCommand) (const char *name);
 	int		(*Cmd_Argc) (void);
 	char	*(*Cmd_Argv) (int i);
 	void	(*Cmd_ExecuteText) (int exec_when, char *text);
 
-	void	(*Con_Printf) (int print_level, char *str, ...);
+	void	(*Con_Printf) (int print_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 
 	// files will be memory mapped read only
 	// the returned buffer may be part of a larger pak file,
 	// or a discrete file from anywhere in the quake search path
 	// a -1 return means the file does not exist
 	// NULL can be passed for buf to just determine existance
-	int		(*FS_LoadFile) (char *name, void **buf);
+	int		(*FS_LoadFile) (const char *name, void **buf);
 	void	(*FS_FreeFile) (void *buf);
 
 	// gamedir will be the current directory that generated
 	// files should be stored to, ie: "f:\quake\id1"
 	char	*(*FS_Gamedir) (void);
 
-	cvar_t	*(*Cvar_Get) (char *name, char *value, int flags);
-	cvar_t	*(*Cvar_Set)( char *name, char *value );
-	void	 (*Cvar_SetValue)( char *name, float value );
+	cvar_t	*(*Cvar_Get) (const char *name, const char *value, int flags);
+	cvar_t	*(*Cvar_Set)( const char *name, const char *value );
+	void	 (*Cvar_SetValue)( const char *name, float value );
 
 	qboolean	(*Vid_GetModeInfo)( int *width, int *height, int mode );
 	void		(*Vid_MenuInit)( void );
@@ -227,31 +227,31 @@ typedef struct
 //
 typedef struct
 {
-	void	(IMPORT *Sys_Error) (int err_level, char *str, ...);
+	void	(IMPORT *Sys_Error) (int err_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 
-	void	(IMPORT *Cmd_AddCommand) (char *name, void(*cmd)(void));
-	void	(IMPORT *Cmd_RemoveCommand) (char *name);
+	void	(IMPORT *Cmd_AddCommand) (const char *name, void(*cmd)(void));
+	void	(IMPORT *Cmd_RemoveCommand) (const char *name);
 	int		(IMPORT *Cmd_Argc) (void);
 	char	*(IMPORT *Cmd_Argv) (int i);
 	void	(IMPORT *Cmd_ExecuteText) (int exec_when, char *text);
 
-	void	(IMPORT *Con_Printf) (int print_level, char *str, ...);
+	void	(IMPORT *Con_Printf) (int print_level, const char *str, ...) __attribute__ ((format (printf, 2, 3)));
 
 	// files will be memory mapped read only
 	// the returned buffer may be part of a larger pak file,
 	// or a discrete file from anywhere in the quake search path
 	// a -1 return means the file does not exist
 	// NULL can be passed for buf to just determine existance
-	int		(IMPORT *FS_LoadFile) (char *name, void **buf);
+	int		(IMPORT *FS_LoadFile) (const char *name, void **buf);
 	void	(IMPORT *FS_FreeFile) (void *buf);
 
 	// gamedir will be the current directory that generated
 	// files should be stored to, ie: "f:\quake\id1"
 	char	*(IMPORT *FS_Gamedir) (void);
 
-	cvar_t	*(IMPORT *Cvar_Get) (char *name, char *value, int flags);
-	cvar_t	*(IMPORT *Cvar_Set)( char *name, char *value );
-	void	 (IMPORT *Cvar_SetValue)( char *name, float value );
+	cvar_t	*(IMPORT *Cvar_Get) (const char *name, const char *value, int flags);
+	cvar_t	*(IMPORT *Cvar_Set)( const char *name, const char *value );
+	void	 (IMPORT *Cvar_SetValue)( const char *name, float value );
 
 	qboolean	(IMPORT *Vid_GetModeInfo)( int *width, int *height, int mode );
 	void		(IMPORT *Vid_MenuInit)( void );

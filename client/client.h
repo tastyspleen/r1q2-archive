@@ -442,6 +442,8 @@ void CL_ParticleEffect2 (vec3_t org, vec3_t dir, int color, int count);
 void CL_ParticleEffect3 (vec3_t org, vec3_t dir, int color, int count);
 
 
+qboolean CL_IgnoreMatch (const char *string);
+
 //=================================================
 
 // ========
@@ -612,7 +614,7 @@ void CL_Record_f (void);
 // cl_parse.c
 //
 extern	int	serverPacketCount;
-extern	qboolean gotFrameFromServerPacket;
+extern	int noFrameFromServerPacket;
 
 void CL_ParseServerMessage (void);
 void CL_LoadClientinfo (clientinfo_t *ci, char *s);
@@ -736,32 +738,32 @@ typedef struct
 	void	(EXPORT *MSG_ReadDir) (sizebuf_t *sb, vec3_t vector);
 	void	(EXPORT *MSG_ReadData) (sizebuf_t *sb, void *buffer, int size);
 
-	void	(EXPORT *Cmd_AddCommand) (char *name, void(*cmd)(void));
-	void	(EXPORT *Cmd_RemoveCommand) (char *name);
+	void	(EXPORT *Cmd_AddCommand) (const char *name, void(*cmd)(void));
+	void	(EXPORT *Cmd_RemoveCommand) (const char *name);
 
 	int		(EXPORT *Cmd_Argc) (void);
 	char	*(EXPORT *Cmd_Argv) (int i);
 
 	void	(EXPORT *Cmd_ExecuteText) (int exec_when, char *text);
 
-	void	(EXPORT *Com_Error) (int err_level, char *str, ...);
-	void	(EXPORT *Com_Printf) (char *str, ...);
+	void	(EXPORT *Com_Error) (int err_level, const char *str, ...);
+	void	(EXPORT *Com_Printf) (const char *str, ...);
 
 	// files will be memory mapped read only
 	// the returned buffer may be part of a larger pak file,
 	// or a discrete file from anywhere in the quake search path
 	// a -1 return means the file does not exist
 	// NULL can be passed for buf to just determine existance
-	int		(EXPORT *FS_LoadFile) (char *name, void **buf);
+	int		(EXPORT *FS_LoadFile) (const char *name, void **buf);
 	void	(EXPORT *FS_FreeFile) (void *buf);
 
 	// gamedir will be the current directory that generated
 	// files should be stored to, ie: "f:\quake\id1"
 	char	*(EXPORT *FS_Gamedir) (void);
 
-	cvar_t	*(EXPORT *Cvar_Get) (char *name, char *value, int flags);
-	cvar_t	*(EXPORT *Cvar_Set)( char *name, char *value );
-	void	 (EXPORT *Cvar_SetValue)( char *name, float value );
+	cvar_t	*(EXPORT *Cvar_Get) (const char *name, const char *value, int flags);
+	cvar_t	*(EXPORT *Cvar_Set)( const char *name, const char *value );
+	void	 (EXPORT *Cvar_SetValue)( const char *name, float value );
 
 	// memory management
 	void	*(EXPORT *Z_Alloc) (int size);

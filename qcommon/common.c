@@ -48,7 +48,7 @@ char	*binary_name;
 //int		realtime;
 jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
 
-static FILE	*log_stats_file;
+//static FILE	*log_stats_file;
 
 cvar_t	*host_speeds;
 cvar_t	*log_stats;
@@ -148,6 +148,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CLIENT_SOUNDCACHE, "CLIENT_SOUNDCACHE", 0},
 	{TAGMALLOC_CLIENT_DLL, "CLIENT_DLL", 0},
 	{TAGMALLOC_CLIENT_LOC, "CLIENT_LOC", 0},
+	{TAGMALLOC_CLIENT_IGNORE, "CLIENT_IGNORE", 0},
 	{TAGMALLOC_BLACKHOLE, "BLACKHOLE", 0},
 	{TAGMALLOC_CVARBANS, "CVARBANS", 0},
 	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE", 0},
@@ -203,7 +204,7 @@ Both client and server can use this, and it will output
 to the apropriate place.
 =============
 */
-void Com_Printf (char *fmt, int level, ...)
+void Com_Printf (const char *fmt, int level, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
@@ -255,10 +256,12 @@ void Com_Printf (char *fmt, int level, ...)
 				return;
 			}
 			Com_sprintf (name, sizeof(name), "%s/%s", FS_Gamedir (), logfile_name->string);
+
 			if (logfile_active->intvalue > 2)
 				logfile = fopen (name, "a");
 			else
 				logfile = fopen (name, "w");
+
 			if (!logfile)
 			{
 				Cvar_ForceSet ("logfile", "0");
@@ -293,9 +296,9 @@ void Com_Printf (char *fmt, int level, ...)
 
 					if (fprintf (logfile, "%s\n", msgptr) < 0)
 					{
-						Cvar_ForceSet ("logfile", "0");
 						fclose (logfile);
 						logfile = NULL;
+						Cvar_ForceSet ("logfile", "0");
 						Com_Printf ("ALERT: Error writing to logfile %s, file closed.\n", LOG_GENERAL|LOG_WARNING, logfile_name->string);
 						return;
 					}
@@ -338,7 +341,7 @@ Com_DPrintf
 A Com_Printf that only shows up if the "developer" cvar is set
 ================
 */
-void Com_DPrintf (char *fmt, ...)
+void Com_DPrintf (char const *fmt, ...)
 {
 	if (!developer->intvalue)
 	{
@@ -367,7 +370,7 @@ Both client and server can use this, and it will
 do the apropriate things.
 =============
 */
-void Com_Error (int code, char *fmt, ...)
+void Com_Error (int code, const char *fmt, ...)
 {
 	va_list		argptr;
 	static char		msg[MAXPRINTMSG];
@@ -1607,7 +1610,7 @@ void EXPORT Z_FreeDebug (void *ptr)
 
 	z = ((zhead_t *)ptr) - 1;
 
-	Z_Verify (va ("Z_FreeDebug: START FREE FROM %s OF %p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", ptr));
+	Z_Verify ("Z_FreeDebug: START FREE FROM %s OF %p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG");
 
 	//magic test
 	if (z->magic != Z_MAGIC && z->magic != Z_MAGIC_DEBUG)
@@ -1635,7 +1638,7 @@ void EXPORT Z_FreeDebug (void *ptr)
 
 	free (z);
 
-	Z_Verify (va ("Z_FreeDebug: END FREE OF %p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE"));
+	Z_Verify ("Z_FreeDebug: END FREE OF %p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE");
 }
 
 /*
@@ -1720,10 +1723,16 @@ void Z_FreeTags (int tag)
 Z_FreeTags
 ========================
 */
-void Z_Verify (const char *entry)
+void Z_Verify (const char *format, ...)
 {
-	int		i;
-	zhead_t	*z, *next;
+	va_list		argptr;
+	int			i;
+	zhead_t		*z, *next;
+	char		string[1024];
+	
+	va_start (argptr, format);
+	vsnprintf (string, sizeof(string)-1, format, argptr);
+	va_end (argptr);
 
 	i = 0;
 
@@ -1736,20 +1745,20 @@ void Z_Verify (const char *entry)
 			{
 				//size sanity test
 				if (z->size <= 0 || z->size > 0x40000000)
-					Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
+					Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
 
 				//we could segfault here if size is invalid :(
 				if ((*(byte **)&z)[z->size-1] != 0xCC)
-					Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
+					Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
 			}
 			else
 			{
-				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p", entry, (void *)(z+1));
+				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p", string, (void *)(z+1));
 			}
 		}
 
 		if (i++ > z_count * 2)
-			Com_Error (ERR_DIE, "Z_Verify: memory chain state corrupted during '%s'", entry);
+			Com_Error (ERR_DIE, "Z_Verify: memory chain state corrupted during '%s'", string);
 	}
 }
 
@@ -1757,7 +1766,7 @@ void *Z_TagMallocDebug (int size, int tag)
 {
 	zhead_t	*z;
 
-	Z_Verify (va ("Z_TagMallocDebug: START ALLOCATION OF %d BYTES FOR TAG %d (%s)", size, tag, tag < TAGMALLOC_MAX_TAGS ?  tagmalloc_tags[tag].name : "UNKNOWN TAG"));
+	Z_Verify ("Z_TagMallocDebug: START ALLOCATION OF %d BYTES FOR TAG %d (%s)", size, tag, tag < TAGMALLOC_MAX_TAGS ?  tagmalloc_tags[tag].name : "UNKNOWN TAG");
 
 	if (size <= 0 && tag < TAGMALLOC_MAX_TAGS)
 		Com_Error (ERR_DIE, "Z_TagMalloc: trying to allocate %d bytes!", size);
@@ -1794,7 +1803,7 @@ void *Z_TagMallocDebug (int size, int tag)
 	z_chain.next->prev = z;
 	z_chain.next = z;
 
-	Z_Verify (va ("Z_TagMallocDebug: END ALLOCATION OF %d BYTES FOR TAG %d (%s)", size, tag, tag < TAGMALLOC_MAX_TAGS ?  tagmalloc_tags[tag].name : "UNKNOWN TAG"));
+	Z_Verify ("Z_TagMallocDebug: END ALLOCATION OF %d BYTES FOR TAG %d (%s)", size, tag, tag < TAGMALLOC_MAX_TAGS ?  tagmalloc_tags[tag].name : "UNKNOWN TAG");
 
 	return (void *)(z+1);
 }
@@ -2143,6 +2152,15 @@ void _z_debug_changed (cvar_t *cvar, char *o, char *n)
 	Com_Printf ("Z_Debug: Intensive memory checking %s.\n", LOG_GENERAL, cvar->intvalue ? "enabled" : "disabled");
 }
 
+void _logfile_changed (cvar_t *cvar, char *o, char *n)
+{
+	if (cvar->intvalue == 0)
+	{
+		if (logfile)
+			fclose (logfile);
+	}
+}
+
 void Qcommon_Init (int argc, char **argv)
 {
 	char	*s;
@@ -2216,11 +2234,15 @@ void Qcommon_Init (int argc, char **argv)
 	log_stats = Cvar_Get ("log_stats", "0", 0);
 	timescale = Cvar_Get ("timescale", "1", 0);
 	fixedtime = Cvar_Get ("fixedtime", "0", 0);
+
 	logfile_active = Cvar_Get ("logfile", "0", 0);
 	logfile_timestamp = Cvar_Get ("logfile_timestamp", "1", 0);
 	logfile_timestamp_format = Cvar_Get ("logfile_timestamp_format", "[%Y-%m-%d %H:%M]", 0);
 	logfile_name = Cvar_Get ("logfile_name", "qconsole.log", 0);
 	logfile_filterlevel = Cvar_Get ("logfile_filterlevel", "0", 0);
+
+	logfile_active->changed = _logfile_changed;
+
 	con_filterlevel = Cvar_Get ("con_filterlevel", "0", 0);
 
 #ifndef DEDICATED_ONLY
@@ -2257,8 +2279,8 @@ void Qcommon_Init (int argc, char **argv)
 
 	Com_Printf ("====== Quake2 Initialized ======\n", LOG_GENERAL);	
 	Com_Printf ("R1Q2 build " BUILD ", compiled " __DATE__ ".\n"
-				"http://www.r1ch.net/stuff/r1q2/\n", LOG_GENERAL,
-				BUILDSTRING " " CPUSTRING " (%s)\n\n", binary_name);
+				"http://www.r1ch.net/stuff/r1q2/\n"
+				BUILDSTRING " " CPUSTRING " (%s)\n\n", LOG_GENERAL, binary_name);
 
 #ifndef DEDICATED_ONLY
 	CL_Init ();
@@ -2597,3 +2619,23 @@ Qcommon_Shutdown
 void Qcommon_Shutdown (void)
 {
 }
+
+void Z_CheckGameLeaks (void)
+{
+	z_memloc_t	*loc, *last;
+
+	loc = last = &z_game_locations;
+
+	if (loc->next)
+	{
+		Com_Printf ("Memory leak detected in Game DLL. Leaked blocks: ", LOG_GENERAL|LOG_WARNING);
+
+		while (loc->next)
+		{
+			loc = loc->next;
+			Com_Printf ("%p (%d bytes)%s", LOG_GENERAL|LOG_WARNING, loc->address, loc->size, loc->next ? ", " : "");
+		}
+		Com_Printf ("\n", LOG_GENERAL|LOG_WARNING);
+	}
+}
+

@@ -132,10 +132,19 @@ struct edict_s
 typedef struct
 {
 	// special messages
-	void	(EXPORT *bprintf) (int printlevel, char *fmt, ...);
-	void	(EXPORT *dprintf) (char *fmt, ...);
-	void	(EXPORT *cprintf) (edict_t *ent, int printlevel, char *fmt, ...);
-	void	(EXPORT *centerprintf) (edict_t *ent, char *fmt, ...);
+	// it seems gcc 2 doesn't like these at all.
+#if __GNUC__ > 2
+	void	(EXPORT *bprintf) (int printlevel, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
+	void	(EXPORT *dprintf) (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+	void	(EXPORT *cprintf) (edict_t *ent, int printlevel, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
+	void	(EXPORT *centerprintf) (edict_t *ent, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
+#else
+	void	(EXPORT *bprintf) (int printlevel, const char *fmt, ...);
+	void	(EXPORT *dprintf) (const char *fmt, ...);
+	void	(EXPORT *cprintf) (edict_t *ent, int printlevel, const char *fmt, ...);
+	void	(EXPORT *centerprintf) (edict_t *ent, const char *fmt, ...);
+#endif
+
 	void	(EXPORT *sound) (edict_t *ent, int channel, int soundindex, float volume, float attenuation, float timeofs);
 	void	(EXPORT *positioned_sound) (vec3_t origin, edict_t *ent, int channel, int soundinedex, float volume, float attenuation, float timeofs);
 
@@ -145,14 +154,18 @@ typedef struct
 	// they connect, and changes are sent to all connected clients.
 	void	(EXPORT *configstring) (int num, char *string);
 
-	void	(EXPORT *error) (char *fmt, ...);
+#if __GNUC__ > 2
+	void	(EXPORT *error) (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+#else
+	void	(EXPORT *error) (const char *fmt, ...);
+#endif
 
 	// the *index functions create configstrings and some internal server state
 	int		(EXPORT *modelindex) (const char *name);
 	int		(EXPORT *soundindex) (const char *name);
 	int		(EXPORT *imageindex) (const char *name);
 
-	void	(EXPORT *setmodel) (edict_t *ent, char *name);
+	void	(EXPORT *setmodel) (edict_t *ent, const char *name);
 
 	// collision detection
 	trace_t	(EXPORT *trace) (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edict_t *passent, int contentmask);
@@ -219,19 +232,19 @@ typedef struct
 	void		(IMPORT *Shutdown) (void);
 
 	// each new level entered will cause a call to SpawnEntities
-	void		(IMPORT *SpawnEntities) (char *mapname, char *entstring, char *spawnpoint);
+	void		(IMPORT *SpawnEntities) (const char *mapname, const char *entstring, const char *spawnpoint);
 
 	// Read/Write Game is for storing persistant cross level information
 	// about the world state and the clients.
 	// WriteGame is called every time a level is exited.
 	// ReadGame is called on a loadgame.
-	void		(IMPORT *WriteGame) (char *filename, qboolean autosave);
-	void		(IMPORT *ReadGame) (char *filename);
+	void		(IMPORT *WriteGame) (const char *filename, qboolean autosave);
+	void		(IMPORT *ReadGame) (const char *filename);
 
 	// ReadLevel is called after the default map information has been
 	// loaded with SpawnEntities
-	void		(IMPORT *WriteLevel) (char *filename);
-	void		(IMPORT *ReadLevel) (char *filename);
+	void		(IMPORT *WriteLevel) (const char *filename);
+	void		(IMPORT *ReadLevel) (const char *filename);
 
 	qboolean	(IMPORT *ClientConnect) (edict_t *ent, char *userinfo);
 	void		(IMPORT *ClientBegin) (edict_t *ent);

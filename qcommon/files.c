@@ -697,7 +697,7 @@ void FS_Read (void *buffer, int len, FILE *f)
 		if (block > MAX_READ)
 			block = MAX_READ;
 
-		read = (int)fread (buf, 1, block, f);
+		read = (int)fread (buf, block, 1, f);
 		if (read == 0)
 		{
 			// we might have been trying to read from a CD
@@ -717,8 +717,8 @@ void FS_Read (void *buffer, int len, FILE *f)
 
 		// do some progress bar thing here...
 
-		remaining -= read;
-		buf += read;
+		remaining -= block;
+		buf += block;
 	}
 }
 
@@ -733,7 +733,7 @@ a null buffer will just return the file length without loading
 int lenCount = 0;
 int buffCount = 0;
 char emptyFile = 0;
-int EXPORT FS_LoadFile (char *path, void /*@out@*/ /*@null@*/**buffer)
+int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 {
 	FILE	*h;
 	byte	*buf;

@@ -28,6 +28,32 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 int deffered_model_index;
 
 extern cvar_t	*qport;
+extern cvar_t	*vid_ref;
+
+typedef struct incoming_s
+{
+	netadr_t	remote;
+	int			type;
+	unsigned	time;
+} incoming_t;
+
+#define	CL_UNDEF				0
+#define	CL_RCON					1
+#define	CL_SERVER_INFO			2
+#define	CL_SERVER_STATUS		3
+#define	CL_SERVER_STATUS_FULL	4
+
+//list of addresses other than remote that can send us connectionless and for what purpose
+static incoming_t	incoming_allowed[16];
+static int			incoming_allowed_index;
+
+typedef struct ignore_s
+{
+	struct ignore_s	*next;
+	char			*text;
+} ignore_t;
+
+ignore_t	cl_ignores;
 
 cvar_t	*freelook;
 
@@ -136,8 +162,6 @@ centity_t		cl_entities[MAX_EDICTS];
 entity_state_t	cl_parse_entities[MAX_PARSE_ENTITIES];
 
 qboolean	send_packet_now;
-
-extern	qboolean reload_video;
 
 extern	cvar_t *allow_download;
 extern	cvar_t *allow_download_players;
@@ -291,6 +315,77 @@ void CL_Stop_f (void)
 	CL_EndRecording();
 
 	Com_Printf ("Stopped demo, recorded %d bytes.\n", LOG_CLIENT, len);
+}
+
+void CL_Ignore_f (void)
+{
+	ignore_t	*list, *last, *newentry;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("usage: ignore text\n", LOG_GENERAL);
+		return;
+	}
+
+	list = &cl_ignores;
+
+	last = list->next;
+
+	newentry = Z_TagMalloc (sizeof(*list), TAGMALLOC_CLIENT_IGNORE);
+	newentry->text = CopyString (Cmd_Args(), TAGMALLOC_CLIENT_IGNORE);
+	newentry->next = last;
+	list->next = newentry;
+
+	Com_Printf ("%s added to ignore list.\n", LOG_GENERAL, newentry->text);
+}
+
+qboolean CL_IgnoreMatch (const char *string)
+{
+	ignore_t	*entry;
+
+	entry = &cl_ignores;
+
+	while (entry->next)
+	{
+		entry = entry->next;
+		if (strstr (string, entry->text))
+			return true;
+	}
+
+	return false;
+}
+
+void CL_Unignore_f (void)
+{
+	ignore_t	*entry, *last;
+	char		*match;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("usage: unignore text\n", LOG_GENERAL);
+		return;
+	}
+
+	match = Cmd_Args();
+	entry = last = &cl_ignores;
+
+	while (entry->next)
+	{
+		entry = entry->next;
+
+		if (!Q_stricmp (match, entry->text))
+		{
+			last->next = entry->next;
+			Z_Free (entry->text);
+			Z_Free (entry);
+
+			Com_Printf ("Ignore '%s' removed.\n", LOG_GENERAL, match);
+			return;
+		}
+		last = entry;
+	}
+
+	Com_Printf ("Ignore '%s' not found.\n", LOG_GENERAL, match);
 }
 
 /*
@@ -757,10 +852,10 @@ CL_Rcon_f
   an unconnected command.
 =====================
 */
-netadr_t	last_rcon_to;
 void CL_Rcon_f (void)
 {
-	char	message[1024];
+	char		message[1024];
+	netadr_t	to;
 
 	//r1: buffer check ffs!
 	if ((strlen(Cmd_Args()) + strlen(rcon_client_password->string) + 16) >= sizeof(message)) {
@@ -791,7 +886,9 @@ void CL_Rcon_f (void)
 	
 
 	if (cls.state >= ca_connected)
-		last_rcon_to = cls.netchan.remote_address;
+	{
+		to = cls.netchan.remote_address;
+	}
 	else
 	{
 		if (!strlen(rcon_address->string))
@@ -802,14 +899,76 @@ void CL_Rcon_f (void)
 
 			return;
 		}
-		NET_StringToAdr (rcon_address->string, &last_rcon_to);
-		if (last_rcon_to.port == 0)
-			last_rcon_to.port = ShortSwap (PORT_SERVER);
+		NET_StringToAdr (rcon_address->string, &to);
+		if (to.port == 0)
+			to.port = ShortSwap (PORT_SERVER);
 	}
 	
-	NET_SendPacket (NS_CLIENT, (int)strlen(message)+1, message, &last_rcon_to);
+	//allow remote response
+	incoming_allowed[incoming_allowed_index & 15].remote = to;
+	incoming_allowed[incoming_allowed_index & 15].type = CL_RCON;
+	incoming_allowed[incoming_allowed_index & 15].time = cls.realtime + 2500;
+	incoming_allowed_index++;
+
+	NET_SendPacket (NS_CLIENT, (int)strlen(message)+1, message, &to);
 }
 
+void CL_ServerStatus_f (void)
+{
+	netadr_t	adr;
+	int			i;
+	int			type;
+	
+	i = 1;
+
+	if (!strcmp (Cmd_Argv(1), "/s"))
+	{
+		i++;
+		type = CL_SERVER_STATUS_FULL;
+	}
+	else if (!strcmp (Cmd_Argv(1), "/i"))
+	{
+		i++;
+		type = CL_SERVER_INFO;
+	}
+	else
+	{
+		type = CL_SERVER_STATUS;
+	}
+
+	NET_Config (NET_CLIENT);		// allow remote
+
+	if (i >= Cmd_Argc())
+	{
+		if (cls.state < ca_connected)
+		{
+			Com_Printf ("usage: serverstatus [/s|/i] [server]\n", LOG_GENERAL);
+			return;
+		}
+		adr = cls.netchan.remote_address;
+	}
+	else
+	{
+		if (!NET_StringToAdr (Cmd_Argv(i), &adr))
+		{
+			Com_Printf ("Bad address %s\n", LOG_CLIENT, Cmd_Argv(i));
+			return;
+		}
+	}
+
+	if (!adr.port)
+		adr.port = ShortSwap (PORT_SERVER);
+
+	if (type == CL_SERVER_INFO)
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "info 34");
+	else
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "status");
+
+	incoming_allowed[incoming_allowed_index & 15].remote = adr;
+	incoming_allowed[incoming_allowed_index & 15].type = type;
+	incoming_allowed[incoming_allowed_index & 15].time = cls.realtime + 2500;
+	incoming_allowed_index++;
+}
 
 /*
 =====================
@@ -1012,6 +1171,11 @@ void CL_Packet_f (void)
 	}
 	*out = 0;
 
+	incoming_allowed[incoming_allowed_index & 15].remote = adr;
+	incoming_allowed[incoming_allowed_index & 15].type = CL_UNDEF;
+	incoming_allowed[incoming_allowed_index & 15].time = cls.realtime + 2500;
+	incoming_allowed_index++;
+
 	NET_SendPacket (NS_CLIENT, out-send, send, &adr);
 }
 #endif
@@ -1048,7 +1212,7 @@ void CL_Changing_f (void)
 	Com_Printf ("\nChanging map...\n", LOG_CLIENT);
 
 	//shut up
-	gotFrameFromServerPacket = true;
+	noFrameFromServerPacket = 0;
 }
 
 
@@ -1153,6 +1317,9 @@ Responses to broadcasts, etc
 */
 void CL_ConnectionlessPacket (void)
 {
+	int		type;
+	int		i;
+
 	char	*s;
 	char	*c;
 
@@ -1171,6 +1338,8 @@ void CL_ConnectionlessPacket (void)
 	Cmd_TokenizeString (s, false);
 
 	c = Cmd_Argv(0);
+
+	type = CL_UNDEF;
 
 	//r1: server responding to a status broadcast (ignores security check due
 	//to broadcasts responding)
@@ -1198,13 +1367,26 @@ void CL_ConnectionlessPacket (void)
 	}
 
 	//r1: security check. (only allow from current connected server
-	//and last destination client sent an rcon to)
-	if (!NET_CompareBaseAdr (&net_from, remote) && !NET_CompareBaseAdr (&net_from, &last_rcon_to)) {
+	//and last destinations client sent a packet to)
+	for (i = 0; i < sizeof(incoming_allowed) / sizeof(incoming_allowed[0]); i++)
+	{
+		if (incoming_allowed[i].time > cls.realtime && NET_CompareBaseAdr (&net_from, &incoming_allowed[i].remote))
+		{
+			type = incoming_allowed[i].type;
+			goto safe;
+		}
+	}
+
+	if (!NET_CompareBaseAdr (&net_from, remote))
+	{
 		Com_DPrintf ("Illegal %s from %s.  Ignored.\n", c, NET_AdrToString (&net_from));
 		return;
 	}
 
-	Com_Printf ("%s: %s\n", LOG_CLIENT, NET_AdrToString (&net_from), c);
+safe:
+
+	if (type == CL_UNDEF)
+		Com_Printf ("%s: %s\n", LOG_CLIENT, NET_AdrToString (&net_from), c);
 
 	// server connection
 	if (!strcmp(c, "client_connect"))
@@ -1259,30 +1441,132 @@ void CL_ConnectionlessPacket (void)
 	// print command from somewhere
 	if (!strcmp(c, "print"))
 	{
-		//netadr_t remote;
-		//NET_StringToAdr (cls.servername, &remote);
-		/*if (cls.state < ca_connecting) {
-			Com_DPrintf ("Print packet when not connected from %s.  Ignored.\n", NET_AdrToString(net_from));
-			return;
-		}
-		if (!NET_CompareBaseAdr (net_from, remote)) {
-			Com_DPrintf ("Print packet from non-server %s.  Ignored.\n", NET_AdrToString(net_from));
-			return;
-		}*/
 		s = MSG_ReadString (&net_message);
 
-		//BIG HACK to allow new client on old server!
-		Com_Printf ("%s", LOG_CLIENT, s);
-		if (!strstr (s, "full") &&
-			!strstr (s, "locked") &&
-			!strncmp (s, "Server is ", 10) &&
-			cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
+		switch (type)
 		{
-			Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, ORIGINAL_PROTOCOL_VERSION);
-			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-			//force immediate retry
-			cls.connect_time = -99999;
+			case CL_RCON:
+			case CL_SERVER_INFO:
+				Com_Printf ("%s", LOG_CLIENT, s);
+				break;
+			case CL_SERVER_STATUS:
+			case CL_SERVER_STATUS_FULL:
+				{
+					char	*p;
+					char	*player_name;
+					char	*player_score;
+					char	*player_ping;
 
+					//skip the serverinfo
+					if (type == CL_SERVER_STATUS)
+					{
+						p = strstr (s, "\n");
+						if (!p)
+							return;
+						else
+							p++;
+					}
+					else
+					{
+						int		flip;
+
+						Com_Printf ("Server Info\n"
+									"-----------\n", LOG_CLIENT);
+
+						flip = 0;
+						p = s + 1;
+
+						//make it more readable
+						while (*p)
+						{
+							if (*p == '\\')
+							{
+								if (flip)
+									*p = '\n';
+								else
+									*p = '=';
+								flip ^= 1;
+							}
+							else if (*p == '\n')
+							{
+								while (*p && *p == '\n')
+								{
+									*p = 0;
+									p++;
+								}
+								break;
+							}
+							p++;
+						}
+						Com_Printf ("%s\n", LOG_CLIENT, s+1);
+					}
+
+					Com_Printf ("Name            Score Ping\n"
+								"--------------- ----- ----\n", LOG_CLIENT);
+
+		/*
+		0 0 "OCLD"
+		86 86 "a vehicle"
+		81 28 "1ST-Timer"
+		27 51 "[DSH]Fella"
+		86 24 "[MCB]Jonny"
+		*/
+					//icky icky parser
+					while (*p)
+					{
+						if (isdigit (*p))
+						{
+							player_score = p;
+							p = strchr (player_score, ' ');
+							if (p)
+							{
+								*p = 0;
+								p++;
+								if (isdigit (*p))
+								{
+									player_ping = p;
+									p = strchr (player_ping, ' ');
+									if (p)
+									{
+										*p = 0;
+										p++;
+										if (*p == '"')
+										{
+											player_name = p + 1;
+											p = strchr (player_name, '"');
+											if (p)
+											{
+												*p = 0;
+												p++;
+												if (*p == '\n')
+												{
+													Com_Printf ("%-15s %5s %4s\n", LOG_CLIENT, player_name, player_score, player_ping);
+													p++;
+												} else return;
+											} else return;
+										} else return;
+									} else return;
+								} else return;
+							} else return;
+						} else return;
+					}
+				}
+				break;
+			default:
+				//BIG HACK to allow new client on old server!
+				Com_Printf ("%s", LOG_CLIENT, s);
+				if (!strstr (s, "full") &&
+					!strstr (s, "locked") &&
+					!strncmp (s, "Server is ", 10) &&
+					cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
+				{
+					Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, ORIGINAL_PROTOCOL_VERSION);
+					cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+					//force immediate retry
+					cls.connect_time = -99999;
+
+				}
+				break;
 		}
 		return;
 	}
@@ -1403,7 +1687,11 @@ void CL_ReadPackets (void)
 		if (++cl.timeoutcount > 5)	// timeoutcount saves debugger
 		{
 			Com_Printf ("\nServer connection timed out.\n", LOG_CLIENT);
+#ifdef _DEBUG
+			CL_Reconnect_f ();
+#else
 			CL_Disconnect (false);
+#endif
 			return;
 		}
 	}
@@ -1532,6 +1820,7 @@ void CL_FreeLocs (void)
 	cl_locations.next = NULL;
 }
 
+//you wanted locs, you got em... dear god this is terrible code :)
 qboolean CL_LoadLoc (const char *filename)
 {
 	char	*locBuffer;
@@ -1539,16 +1828,32 @@ qboolean CL_LoadLoc (const char *filename)
 	char *x, *y, *z, *name, *line;
 	int	linenum;
 	int len;
+	FILE	*handle;
 
 	CL_FreeLocs ();
 
-	len = FS_LoadFile ((char *)filename, &locBuffer);
+	len = FS_LoadFile ((char *)filename, NULL);
 
-	if (!locBuffer)
+	if (len == -1)
 	{
 		Com_DPrintf ("CL_LoadLoc: %s not found\n", filename);
 		return false;
 	}
+
+	FS_FOpenFile (filename, &handle, true);
+	if (!handle)
+	{
+		Com_Printf ("CL_LoadLoc: couldn't open %s\n", LOG_CLIENT|LOG_WARNING, filename);
+		return false;
+	}
+
+	locBuffer = Z_TagMalloc (len+2, TAGMALLOC_CLIENT_LOC);
+	FS_Read (locBuffer, len, handle);
+	FS_FCloseFile (handle);
+
+	//terminate if no EOL
+	locBuffer[len-1] = '\n';
+	locBuffer[len] = 0;
 
 	linenum = 0;
 
@@ -1562,7 +1867,11 @@ qboolean CL_LoadLoc (const char *filename)
 
 		//skip whitespace
 		while (*line && (*line == ' ' || *line == '\t' || *line == '\r' || *line == '\n'))
+		{
 			line++;
+			if (line - locBuffer >= len)
+				break;
+		}
 
 		//eof now?
 		if (line - locBuffer >= len)
@@ -1573,23 +1882,32 @@ qboolean CL_LoadLoc (const char *filename)
 
 		name = y = z = NULL;
 
-		while (*line) {
+		while (*line)
+		{
 			if (*line == ' ' || *line == '\t') {
 				*line++ = '\0';
 				y = line;
 				break;
 			}
 			line++;
+			if (line - locBuffer >= len)
+				break;
 		}
 
-		while (*line) {
+		while (*line)
+		{
 			if (*line == ' ' || *line == '\t') {
 				*line++ = '\0';
 				z = line;
 				break;
 			}
 			line++;
+			if (line - locBuffer >= len)
+				break;
 		}
+
+		if (line - locBuffer >= len)
+			break;
 
 		while (*line)
 		{
@@ -1600,7 +1918,12 @@ qboolean CL_LoadLoc (const char *filename)
 				break;
 			}
 			line++;
+			if (line - locBuffer >= len)
+				break;
 		}
+
+		if (line - locBuffer >= len)
+			break;
 
 		while (*line)
 		{
@@ -1609,6 +1932,8 @@ qboolean CL_LoadLoc (const char *filename)
 				break;
 			}
 			line++;
+			if (line - locBuffer >= len)
+				break;
 		}
 
 		if (!*x || !y || !*y || !z || !*z || !name || !*name)
@@ -2426,14 +2751,6 @@ void CL_Precache_f (void)
 	CL_RequestNextDownload();
 }
 
-void CL_SendStatusPacket_f (void)
-{
-	if (cls.state <= ca_connected)
-		return;
-
-	Netchan_OutOfBandPrint (NS_CLIENT, &cls.netchan.remote_address, "info %d\n", cls.serverProtocol);
-}
-
 void CL_Toggle_f (void)
 {
 	cvar_t *tvar;
@@ -2689,7 +3006,10 @@ void CL_InitLocal (void)
 	Cmd_AddCommand ("toggle", CL_Toggle_f);
 
 	//r1: server status (connectionless)
-	Cmd_AddCommand ("sstatus", CL_SendStatusPacket_f);
+	Cmd_AddCommand ("serverstatus", CL_ServerStatus_f);
+
+	Cmd_AddCommand ("ignore", CL_Ignore_f);
+	Cmd_AddCommand ("unignore", CL_Unignore_f);
 
 	//r1: loc support
 	Cmd_AddCommand ("addloc", CL_AddLoc_f);
@@ -2917,6 +3237,7 @@ void CL_LoadDeferredModels (void)
 
 		if (deffered_model_index == MAX_MODELS)
 		{
+			re.EndRegistration ();
 			Com_DPrintf ("CL_LoadDeferredModels: All done.\n");
 			return;
 		}
@@ -3016,10 +3337,9 @@ void CL_Synchronous_Frame (int msec)
 	CL_PredictMovement ();
 
 	// allow rendering DLL change
-	if (reload_video)
+	if (vid_ref->modified)
 	{
 		VID_ReloadRefresh ();
-		reload_video = false;
 	}
 
 	if (!cl.refresh_prepped && cls.state == ca_active)
@@ -3210,10 +3530,9 @@ void CL_Frame (int msec)
 			//set the mouse on/off
 			IN_Frame();
 
-			if (reload_video)
+			if (vid_ref->modified)
 			{
 				VID_ReloadRefresh ();
-				reload_video = false;
 			}
 		}
 		
@@ -3242,6 +3561,9 @@ void CL_Frame (int msec)
 		CL_RunDLights ();
 		CL_RunLightStyles ();
 		SCR_RunConsole ();
+
+		if (cls.state <= ca_active)
+			NET_Client_Sleep (1);
 	}
 	else
 	{

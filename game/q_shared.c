@@ -25,10 +25,6 @@ vec3_t vec3_origin = {0,0,0};
 
 //============================================================================
 
-//#ifdef _WIN32
-//#pragma optimize( "", off )
-//#endif
-
 void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
 	float	m[3][3];
@@ -102,10 +98,6 @@ void _Q_assert (char *expression, char *function, unsigned line)
 	Com_Printf ("Q_assert: Assertion '%s' failed on %s:%u\n", LOG_GENERAL, expression, function, line);
 	DEBUGBREAKPOINT;
 }
-
-//#ifdef _WIN32
-//#pragma optimize( "", on )
-//#endif
 
 void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@out@*//*@null@*/right, vec3_t /*@out@*//*@null@*/up)
 {
@@ -289,7 +281,7 @@ float Q_fabs (float f)
 #pragma warning (disable:4035)
 __declspec( naked ) long __cdecl Q_ftol( float f )
 {
-	static volatile int tmp;
+	static int tmp;
 	__asm fld dword ptr [esp+4]
 	__asm fistp tmp
 	__asm mov eax, tmp
@@ -440,8 +432,8 @@ dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
 
 __declspec( naked ) int __cdecl BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
-	static volatile int bops_initialized;
-	static volatile int Ljmptab[8];
+	static int bops_initialized;
+	static int Ljmptab[8];
 
 	__asm {
 
@@ -1073,16 +1065,20 @@ varargs versions of all text functions.
 FIXME: make this buffer size safe someday
 ============
 */
-char	*va(char *format, ...)
+char	*va(const char *format, ...)
 {
 	va_list		argptr;
-	static char		string[1024];
+
+	static char		string[2][1024];
+	static int		index;
+
+	index  ^= 1;
 	
 	va_start (argptr, format);
-	vsnprintf (string, sizeof(string)-1, format,argptr);
+	vsnprintf (string[index], sizeof(string[index])-1, format, argptr);
 	va_end (argptr);
 
-	return string;	
+	return string[index];
 }
 
 
@@ -1237,7 +1233,7 @@ int Q_stricmp (char *s1, char *s2)
 #endif
 
 
-int Com_sprintf (char /*@out@*/*dest, int size, char *fmt, ...)
+int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...)
 {
 	int			len;
 	va_list		argptr;
@@ -1358,7 +1354,7 @@ void Info_RemoveKey (char *s, char *key)
 
 	if (strchr (key, '\\'))
 	{
-		Com_Printf ("Info_RemoveKey: Tried to remove illegal key '%s'\n", LOG_WARNING|LOG_GENERAL);
+		Com_Printf ("Info_RemoveKey: Tried to remove illegal key '%s'\n", LOG_WARNING|LOG_GENERAL, key);
 		return;
 	}
 
@@ -1442,27 +1438,28 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 
 	if (strchr (key, '\\') || strchr (value, '\\') )
 	{
-		Com_Printf ("Can't use keys or values with a \\\n", LOG_GENERAL);
+		Com_Printf ("Can't use keys or values with a \\ (attempted to set key '%s')\n", LOG_GENERAL, key);
 		return;
 	}
 
 	if (strchr (key, ';') )
 	{
-		Com_Printf ("Can't use keys or values with a semicolon\n", LOG_GENERAL);
+		Com_Printf ("Can't use keys or values with a semicolon (attempted to set key '%s')\n", LOG_GENERAL, key);
 		return;
 	}
 
 	if (strchr (key, '"') || strchr (value, '"') )
 	{
-		Com_Printf ("Can't use keys or values with a \"\n", LOG_GENERAL);
+		Com_Printf ("Can't use keys or values with a \" (attempted to set key '%s')\n", LOG_GENERAL, key);
 		return;
 	}
 
 	if (strlen(key) > MAX_INFO_KEY-1 || strlen(value) > MAX_INFO_KEY-1)
 	{
-		Com_Printf ("Keys and values must be < 64 characters.\n", LOG_GENERAL);
+		Com_Printf ("Keys and values must be < 64 characters (attempted to set key '%s')\n", LOG_GENERAL, key);
 		return;
 	}
+
 	Info_RemoveKey (s, key);
 
 	if (!value || !value[0])
@@ -1492,7 +1489,7 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 //====================================================================
 
 #ifndef WIN32
-int Q_vsnprintf (char *buff, size_t len, char *fmt, va_list va)
+int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va)
 {
 	int ret;
 
@@ -1503,7 +1500,7 @@ int Q_vsnprintf (char *buff, size_t len, char *fmt, va_list va)
 	return -1;
 }
 
-int Q_snprintf (char *buff, size_t len, char *fmt, ...)
+int Q_snprintf (char *buff, size_t len, const char *fmt, ...)
 {
 	int ret;
 

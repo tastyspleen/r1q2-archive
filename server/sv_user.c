@@ -102,10 +102,10 @@ static void SV_AddConfigstrings (void)
 	int		wrote;
 	int		len;
 
-	if (sv_client->state != cs_connected)
+	if (sv_client->state != cs_spawning)
 	{
 		//r1: dprintf to avoid console spam from idiot client
-		Com_DPrintf ("configstrings not valid -- already spawned\n");
+		Com_DPrintf ("configstrings not valid -- not spawning\n");
 		return;
 	}
 
@@ -371,6 +371,9 @@ static void SV_New_f (void)
 			return;
 		}
 	}
+
+	//r1: new client state now to prevent multiple new from causing high cpu / overflows.
+	sv_client->state = cs_spawning;
 
 	//
 	// serverdata needs to go over for all types of servers
@@ -667,9 +670,9 @@ void SV_BaselinesMessage (qboolean userCmd)
 
 	Com_DPrintf ("Baselines() from %s\n", sv_client->name);
 
-	if (sv_client->state != cs_connected)
+	if (sv_client->state != cs_spawning)
 	{
-		Com_DPrintf ("%s: baselines not valid -- already spawned\n", sv_client->name);
+		Com_DPrintf ("%s: baselines not valid -- not spawning\n", sv_client->name);
 		return;
 	}
 	
@@ -694,7 +697,7 @@ void SV_BaselinesMessage (qboolean userCmd)
 	if (startPos < 0)
 	{
 		Com_Printf ("Illegal baseline offset from %s[%s], client dropped\n", LOG_SERVER|LOG_EXPLOIT, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
-		Blackhole (&sv_client->netchan.remote_address, true, "attempted DoS (negative baselines)");
+		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "attempted DoS (negative baselines)");
 		SV_DropClient (sv_client, false);
 		return;
 	}
@@ -868,6 +871,7 @@ static void SV_Begin_f (void)
 	if ( atoi(Cmd_Argv(1)) != svs.spawncount )
 	{
 		Com_Printf ("SV_Begin_f from %s for a different level\n", LOG_SERVER|LOG_NOTICE, sv_client->name);
+		sv_client->state = cs_connected;
 		SV_New_f ();
 		return;
 	}
@@ -1027,7 +1031,7 @@ static void SV_NextDownload_f (void)
 			return;
 		}
 
-		if (z.total_out >= realBytes || z.total_out >= (MAX_USABLEMSG - 6) || z.total_out < 1300)
+		if (z.total_out >= realBytes || z.total_out >= (MAX_USABLEMSG - 6) || realBytes < 1300)
 			goto olddownload;
 
 		//r1: use message queue so other reliable messages put in the stream perhaps by game won't cause overflow
@@ -1156,7 +1160,7 @@ static void SV_BeginDownload_f(void)
 		MSG_WriteByte (0);
 		SV_AddMessage (sv_client, true);
 		Com_Printf ("EXPLOIT: Client %s[%s] tried to download illegal path: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address), name);
-		Blackhole (&sv_client->netchan.remote_address, true, "download exploit (path %s)", name);
+		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "download exploit (path %s)", name);
 		SV_DropClient (sv_client, false);
 		return;
 	}
@@ -1169,7 +1173,7 @@ static void SV_BeginDownload_f(void)
 		MSG_WriteByte (0);
 		SV_AddMessage (sv_client, true);
 		Com_Printf ("EXPLOIT: Client %s[%s] supplied illegal download offset for %s: %d\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address), name, offset);
-		Blackhole (&sv_client->netchan.remote_address, true, "download exploit (offset %d)", offset);
+		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "download exploit (offset %d)", offset);
 		SV_DropClient (sv_client, false);
 		return;
 	}
@@ -1438,7 +1442,7 @@ static void CvarBanDrop (char *match, banmatch_t *ban, char *result)
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
 
 	if (ban->blockmethod == CVARBAN_BLACKHOLE)
-		Blackhole (&sv_client->netchan.remote_address, true, "cvarban: %s == %s", match, result);
+		Blackhole (&sv_client->netchan.remote_address, false, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "cvarban: %s == %s", match, result);
 
 	Com_Printf ("Dropped client %s, cvarban: %s == %s\n", LOG_SERVER|LOG_DROP, sv_client->name, match, result);
 
@@ -1447,9 +1451,9 @@ static void CvarBanDrop (char *match, banmatch_t *ban, char *result)
 
 banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result)
 {
-	banmatch_t	*match;
-	char		*matchvalue;
-	int			not;
+	banmatch_t			*match;
+	char				*matchvalue;
+	int					not;
 
 	while (bans->next)
 	{
@@ -1556,18 +1560,32 @@ static void SV_CvarResult_f (void)
 		return;
 	}
 
+	stringCmdCount--;
+
 	match = VarBanMatch (&cvarbans, Cmd_Argv(1), result);
 
 	if (match)
-		CvarBanDrop (Cmd_Argv(1), match, result);
-
-	stringCmdCount--;
-
-	/*if (strcmp (Cmd_Argv(1), "version"))
 	{
+		CvarBanDrop (Cmd_Argv(1), match, result);
+	}
+	else
+	{
+		varban_t	*bans;
+
+		if (!strcmp (Cmd_Argv(1), "version"))
+			return;
+
+		bans = &cvarbans;
+
+		while (bans->next)
+		{
+			if (!strcmp (Cmd_Argv(1), bans->varname))
+				return;
+		}
+
 		Com_Printf ("Dropping %s for bad cvar check result ('%s' unrequested).\n", LOG_SERVER|LOG_DROP, sv_client->name, Cmd_Argv(1));
 		SV_DropClient (sv_client, false);
-	}*/
+	}
 }
 
 void SV_Nextserver (void)
@@ -1666,7 +1684,6 @@ void SV_ExecuteUserCommand (char *s)
 
 		if (strcmp (teststring, s))
 		{
-			//Blackhole (&net_from, true, "attempted command expansion: %s", s);
 			Com_Printf ("EXPLOIT: Client %s[%s] attempted macro-expansion: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), MakePrintable(s));
 			SV_KickClient (sv_client, "attempted server exploit", NULL);
 			return;
@@ -1682,7 +1699,7 @@ void SV_ExecuteUserCommand (char *s)
 		if (ptr < s)
 			ptr = s;
 		p = MakePrintable (ptr);
-		Blackhole (&net_from, true, "0xFF in command packet (%.32s)", p);
+		Blackhole (&net_from, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in command packet (%.32s)", p);
 		Com_Printf ("EXPLOIT: Client %s[%s] tried to use a command containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), p);
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
 		return;
@@ -1970,7 +1987,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			if (cl->state == cs_spawned && newcmd.msec > 250)
 			{
 				Com_Printf ("EXPLOIT: Client %s[%s] tried to use illegal msec value: %d\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), newcmd.msec);
-				Blackhole (&cl->netchan.remote_address, true, "illegal msec value (%d)", newcmd.msec);
+				Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal msec value (%d)", newcmd.msec);
 				SV_KickClient (cl, "illegal pmove msec detected", NULL);
 				return;
 			}

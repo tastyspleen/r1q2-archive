@@ -4134,61 +4134,10 @@ GALLERY MENU
 
 =======================================================================
 */
-#if 0
-void M_Menu_Gallery_f( void )
-{
-	extern void Gallery_MenuDraw( void );
-	extern const char *Gallery_MenuKey( int key );
-
-	M_PushMenu( Gallery_MenuDraw, Gallery_MenuKey );
-}
-#endif
-
-/*
-=======================================================================
-
-QUIT MENU
-
-=======================================================================
-*/
-
-static const char *M_Quit_Key (int key)
-{
-	switch (key)
-	{
-	case K_ESCAPE:
-	case 'n':
-	case 'N':
-		M_PopMenu ();
-		break;
-
-	case 'Y':
-	case 'y':
-		cls.key_dest = key_console;
-		CL_Quit_f ();
-		break;
-
-	default:
-		break;
-	}
-
-	return NULL;
-
-}
-
-
-static void M_Quit_Draw (void)
-{
-	int		w, h;
-
-	re.DrawGetPicSize (&w, &h, "quit");
-	re.DrawPic ( (viddef.width-w)/2, (viddef.height-h)/2, "quit");
-}
-
 
 static void M_Menu_Quit_f (void)
 {
-	M_PushMenu (M_Quit_Draw, M_Quit_Key);
+	CL_Quit_f ();
 }
 
 

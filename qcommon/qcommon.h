@@ -687,11 +687,12 @@ int NET_Connect (netadr_t *to, int port);
 	((x)->type == NA_LOOPBACK)
 
 #define NET_CompareAdr(a,b) \
-	((*(int *)(a)->ip == *(int *)(b)->ip) && (a)->port == (b)->port)
+	((*(unsigned long *)(a)->ip == *(unsigned long *)(b)->ip) && (a)->port == (b)->port)
 
 #define NET_CompareBaseAdr(a,b) \
-	(*(int *)(a)->ip == *(int *)(b)->ip)
+	(*(unsigned long *)(a)->ip == *(unsigned long *)(b)->ip)
 
+char		*NET_inet_ntoa (unsigned long ip);
 char		*NET_AdrToString (netadr_t *a);
 qboolean	NET_StringToAdr (char *s, netadr_t *a);
 #ifndef NO_SERVER
@@ -751,7 +752,7 @@ void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol,
 qboolean Netchan_NeedReliable (netchan_t *chan);
 int	 Netchan_Transmit (netchan_t *chan, int length, const byte /*@null@*/*data);
 void Netchan_OutOfBand (int net_socket, netadr_t *adr, int length, const byte *data);
-void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, char *format, ...);
+void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, const char *format, ...);
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg);
 
 //qboolean Netchan_CanReliable (netchan_t *chan);
@@ -768,8 +769,8 @@ CMODEL
 
 #include "../qcommon/qfiles.h"
 
-cmodel_t	*CM_LoadMap (char *name, qboolean clientload, unsigned *checksum);
-cmodel_t	*CM_InlineModel (char *name);	// *1, *2, etc
+cmodel_t	*CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum);
+cmodel_t	*CM_InlineModel (const char *name);	// *1, *2, etc
 
 //extern int			CM_NumClusters (void);
 //extern int			CM_NumInlineModels (void);
@@ -877,7 +878,7 @@ void	FS_FCloseFile (FILE *f);
 // note: this can't be called from another DLL, due to MS libc issues
 
 void FS_FlushCache (void);
-int		EXPORT FS_LoadFile (char *path, void /*@out@*/ /*@null@*/**buffer);
+int		EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer);
 // a null buffer will just return the file length without loading
 // a -1 length is not present
 
@@ -913,10 +914,10 @@ MISC
 
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
 void		Com_EndRedirect (void);
-void 		Com_Printf (char *fmt, int level, ...);
-void 		Com_Printf (char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
-void 		Com_DPrintf (char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-void 		Com_Error (int code, char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
+void 		Com_Printf (const char *fmt, int level, ...);
+void 		Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
+void 		Com_DPrintf (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+void 		Com_Error (int code, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 void 		Com_Quit (void);
 
 //extern __inline int			Com_ServerState (void);		// this should have just been a cvar...
@@ -942,7 +943,7 @@ extern	cvar_t	*dedicated;
 extern	cvar_t	*host_speeds;
 extern	cvar_t	*log_stats;
 
-extern	FILE *log_stats_file;
+//extern	FILE *log_stats_file;
 
 extern char	*binary_name;
 
@@ -987,6 +988,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CLIENT_SOUNDCACHE,
 	TAGMALLOC_CLIENT_DLL,
 	TAGMALLOC_CLIENT_LOC,
+	TAGMALLOC_CLIENT_IGNORE,
 	TAGMALLOC_BLACKHOLE,
 	TAGMALLOC_CVARBANS,
 	TAGMALLOC_MSG_QUEUE,
@@ -1006,7 +1008,8 @@ extern void *(*Z_TagMalloc)(int size, int tag);
 void EXPORT Z_FreeGame (void *buf);
 void * EXPORT Z_TagMallocGame (int size, int tag);
 void EXPORT Z_FreeTagsGame (int tag);
-void Z_Verify(const char *entry);
+void Z_Verify (const char *format, ...);
+void Z_CheckGameLeaks (void);
 
 void Qcommon_Init (int argc, char **argv);
 void Qcommon_Frame (int msec);
@@ -1071,7 +1074,7 @@ char	*Sys_ConsoleInput (void);
 void	Sys_ConsoleOutput (const char *string);
 #endif
 void	Sys_SendKeyEvents (void);
-void	Sys_Error (char *error, ...) __attribute__ ((format (printf, 1, 2)));
+void	Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
 void	Sys_Quit (void);
 char	*Sys_GetClipboardData( void );
 void	Sys_CopyProtect (void);

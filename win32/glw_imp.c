@@ -87,7 +87,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
     wc.hInstance     = glw_state.hInstance;
     wc.hIcon         = 0;
     wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
-	wc.hbrBackground = (void *)COLOR_GRAYTEXT;
+	wc.hbrBackground = (HBRUSH)COLOR_GRAYTEXT;
     wc.lpszMenuName  = 0;
     wc.lpszClassName = WINDOW_CLASS_NAME;
 
@@ -165,7 +165,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 /*
 ** GLimp_SetMode
 */
-rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen )
+rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen )
 {
 	int width, height;
 	const char *win_fs[] = { "W", "FS" };
@@ -978,7 +978,8 @@ qboolean GLimp_InitGL (void)
 
 	RegisterOpenGLWindow (glw_state.hInstance);
 
-	if (1) {
+	//if (1)
+	{
 		int     iAttributes[30];
 		float   fAttributes[] = {0, 0};
 		int     iResults[30];
@@ -1055,13 +1056,14 @@ qboolean GLimp_InitGL (void)
 		}
 
 		{
-			char buffer[4096];
-			strncpy( buffer, qglGetString( GL_RENDERER ), sizeof(buffer)-1 );
-			if (strcmp (buffer, "GDI Generic") == 0) {
+			const char *s;
+			s = qglGetString( GL_RENDERER );
+
+			if (strcmp (s, "GDI Generic") == 0) {
 				ri.Con_Printf (PRINT_ALL, "«ÃÈÌﬂ…ÓÈÙ«Ã®©†≈ÚÚÔÚ∫ no hardware accelerated pixelformats matching your current settings (try editing gl_colorbits/gl_alphabits/gl_depthbits/gl_stencilbits)\n");
 				return init_regular();
 			}
-			ri.Con_Printf (PRINT_ALL, "Getting capabilities of '%s'\n", buffer);
+			ri.Con_Printf (PRINT_ALL, "Getting capabilities of '%s'\n", s);
 		}
 
 		wglGetExtensionsStringARB = (PFNWGLGETEXTENSIONSSTRINGARBPROC)qwglGetProcAddress("wglGetExtensionsStringARB");
@@ -1254,7 +1256,7 @@ qboolean GLimp_InitGL (void)
 			gl_config.bitDepth = iResults[1];		
 			gl_config.wglPFD = true;
 		}
-	} else {
+	/*} else {
 
 		if ( !VerifyDriver() )
 		{
@@ -1262,11 +1264,8 @@ qboolean GLimp_InitGL (void)
 			goto fail;
 		}
 
-		/*
-		** print out PFD specifics 
-		*/
 		ri.Con_Printf( PRINT_ALL, "GL PFD: pf(%d) color(%d-bits) Z(%d-bit)\n", pixelformat, ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits );
-		gl_config.bitDepth = pfd.cColorBits;
+		gl_config.bitDepth = pfd.cColorBits;*/
 	}
 
 	

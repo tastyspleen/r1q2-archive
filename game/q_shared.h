@@ -103,8 +103,8 @@ typedef	int			INTPTR;
 #define Q_strncasecmp strncasecmp
 #define EXPORT
 #define IMPORT
-int Q_vsnprintf (char *buff, size_t len, char *fmt, va_list va);
-int Q_snprintf (char *buff, size_t len, char *fmt, ...);
+int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
+int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
 #ifdef LINUX
 #define DEBUGBREAKPOINT asm ("int $3")
 #else
@@ -361,7 +361,7 @@ void COM_DefaultExtension (char *path, char *extension);
 char *COM_Parse (char **data_p);
 // data is an in/out parm, returns a parsed out token
 
-int Com_sprintf (char /*@out@*/*dest, int size, char *fmt, ...);
+int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 
 void Com_PageInMemory (byte *buffer, int size);
 
@@ -385,7 +385,7 @@ float	LittleFloat (float l);
 #endif
 
 void	Swap_Init (void);
-char	*va(char *format, ...);
+char	*va(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 
 //=============================================
 
@@ -461,8 +461,8 @@ void Sys_Sleep (int msec);
 #define	LOG_GAMEDEBUG	0x8000
 
 // this is only here so the functions in q_shared.c and q_shwin.c can link
-void Sys_Error (char *error, ...);
-void Com_Printf (char *fmt, int level, ...);
+void Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
+void Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
 
 
 /*
