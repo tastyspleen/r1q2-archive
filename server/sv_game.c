@@ -55,7 +55,7 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 	//r1: trap bad writes from game dll
 	if (client->state <= cs_connected)
 	{
-		Com_Printf ("GAME ERROR: Attempted to write %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, svc_strings[MSG_GetType()], p-1);
+		Com_Printf ("GAME ERROR: Attempted to write %d byte %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, MSG_GetLength(), svc_strings[MSG_GetType()], p-1);
 		
 		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;

@@ -39,6 +39,7 @@ cvar_t			uninitialized_cvar = {0};
 
 cvar_t			*z_debug;
 cvar_t			*z_buggygame;
+cvar_t			*z_allowcorruption;
 
 static int		com_argc;
 static char	*com_argv[MAX_NUM_ARGVS+1];
@@ -1637,11 +1638,21 @@ void EXPORT Z_FreeDebug (const void *ptr)
 
 	//size sanity test
 	if (z->size <= 0 || z->size > 0x40000000)
-		Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+	{
+		if (z_allowcorruption->intvalue)
+			Com_Printf ("Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+		else
+			Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+	}
 
 	//we could segfault here if size is invalid :(
 	if (z->magic == Z_MAGIC_DEBUG && (*(byte **)&z)[z->size-1] != 0xCC)
-		Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+	{
+		if (z_allowcorruption->intvalue)
+			Com_Printf ("Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+		else
+			Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+	}
 
 	z->prev->next = z->next;
 	z->next->prev = z->prev;
@@ -1766,15 +1777,28 @@ void Z_Verify (const char *format, ...)
 			{
 				//size sanity test
 				if (z->size <= 0 || z->size > 0x40000000)
-					Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+				{
+					if (z_allowcorruption->intvalue)
+						Com_Printf ("Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+					else
+						Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+				}
 
 				//we could segfault here if size is invalid :(
 				if ((*(byte **)&z)[z->size-1] != 0xCC)
-					Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+				{
+					if (z_allowcorruption->intvalue)
+						Com_Printf ("Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+					else
+						Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+				}
 			}
 			else
 			{
-				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p", string, (void *)(z+1));
+				if (z_allowcorruption->intvalue)
+					Com_Printf ("Z_Verify: memory corruption detected during '%s' in block %p", LOG_ERROR, string, (void *)(z+1));
+				else
+					Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p", string, (void *)(z+1));
 			}
 		}
 
@@ -2238,6 +2262,7 @@ void Qcommon_Init (int argc, char **argv)
 
 	z_debug = Cvar_Get ("z_debug", "0", 0);
 	z_buggygame = Cvar_Get ("z_buggygame", "0", 0);
+	z_allowcorruption = Cvar_Get ("z_allowcorruption", "0", 0);
 
 	z_debug->changed = _z_debug_changed;
 	if (z_debug->intvalue)

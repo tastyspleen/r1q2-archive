@@ -75,7 +75,7 @@ cvar_t	*cl_stereo;
 cvar_t	*rcon_client_password;
 cvar_t	*rcon_address;
 
-//cvar_t	*cl_noskins;
+cvar_t	*cl_noskins;
 //cvar_t	*cl_autoskins;
 cvar_t	*cl_footsteps;
 cvar_t	*cl_timeout;
@@ -219,12 +219,17 @@ qboolean CL_BeginRecording (char *name)
 
 	// send the serverdata
 	MSG_BeginWriting (svc_serverdata);
-	MSG_WriteLong (ORIGINAL_PROTOCOL_VERSION);
+	MSG_WriteLong (cls.serverProtocol);
 	MSG_WriteLong (0x10000 + cl.servercount);
 	MSG_WriteByte (1);	// demos are always attract loops
 	MSG_WriteString (cl.gamedir);
 	MSG_WriteShort (cl.playernum);
 	MSG_WriteString (cl.configstrings[CS_NAME]);
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_WriteByte (0);
+		MSG_WriteShort (CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+	}
 	MSG_EndWriting (&buf);
 
 	// configstrings
@@ -636,6 +641,7 @@ void CL_SendConnectPacket (void)
 {
 	netadr_t	adr;
 	int			port;
+	unsigned	msglen;
 
 #ifdef CLIENT_DLL
 	if (!cllib_active) {
@@ -661,13 +667,20 @@ void CL_SendConnectPacket (void)
 	userinfo_modified = false;
 
 	if (Com_ServerState() == ss_demo)
-		cls.serverProtocol = 34;
+	{
+		msglen = MAX_USABLEMSG;
+		cls.serverProtocol = 35;
+	}
+	else
+	{
+		msglen = Cvar_IntValue ("net_maxmsglen");
 
-	if (!cls.serverProtocol && cl_protocol->intvalue)
-		cls.serverProtocol = cl_protocol->intvalue;
+		if (!cls.serverProtocol && cl_protocol->intvalue)
+			cls.serverProtocol = cl_protocol->intvalue;
 
-	if (!cls.serverProtocol)
-		cls.serverProtocol = ENHANCED_PROTOCOL_VERSION;
+		if (!cls.serverProtocol)
+			cls.serverProtocol = ENHANCED_PROTOCOL_VERSION;
+	}
 
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 		port &= 0xFF;
@@ -681,7 +694,7 @@ void CL_SendConnectPacket (void)
 
 
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\" %u\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), Cvar_IntValue ("net_maxmsglen"));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\" %u\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), msglen);
 	else
 		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 }
@@ -2867,7 +2880,7 @@ void CL_InitLocal (void)
 	cl_add_entities = Cvar_Get ("cl_entities", "1", 0);
 	cl_gun = Cvar_Get ("cl_gun", "1", CVAR_ARCHIVE);
 	cl_footsteps = Cvar_Get ("cl_footsteps", "1", 0);
-	//cl_noskins = Cvar_Get ("cl_noskins", "0", CVAR_NOSET);
+	cl_noskins = Cvar_Get ("cl_noskins", "0", 0);
 //	cl_autoskins = Cvar_Get ("cl_autoskins", "0", 0);
 	cl_predict = Cvar_Get ("cl_predict", "1", 0);
 	cl_backlerp = Cvar_Get ("cl_backlerp", "1", 0);

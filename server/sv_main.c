@@ -866,7 +866,7 @@ void SVC_DirectConnect (void)
 
 			i = Cvar_IntValue ("net_maxmsglen");
 
-			if (msglen && msglen > i)
+			if (i && msglen > i)
 				msglen = i;
 		}
 		else
@@ -1176,6 +1176,8 @@ gotnewcl:
 
 	if (reconnected)
 	{
+		//if (!ge->edicts[0].client)
+		//	Com_Error (ERR_DROP, "Missed a call to InitGame");
 		// get the game a chance to reject this connection or modify the userinfo
 		allowed = ge->ClientConnect (ent, userinfo);
 

@@ -564,6 +564,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	}
 	else if (l > 4 && !strcmp (level+l-4, ".dm2") )
 	{
+		if (!attractloop)
+			Com_Error (ERR_DROP, "Demos should be replayed using the 'demomap' command");
 #ifndef DEDICATED_ONLY
 		SCR_BeginLoadingPlaque ();			// for local system
 #endif

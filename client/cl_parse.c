@@ -601,22 +601,23 @@ qboolean CL_ParseServerData (void)
 	// get the full level name
 	str = MSG_ReadString (&net_message);
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && !cl.attractloop)
-		cl.enhancedServer = MSG_ReadByte (&net_message);
-	else
-		cl.enhancedServer = 0;
-
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 	{
+		cl.enhancedServer = MSG_ReadByte (&net_message);
+
 		newVersion = MSG_ReadShort (&net_message);
 		if (newVersion != CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
 		{
-			Com_Printf ("Protocol 35 version mismatch, falling back to 34.\n", LOG_CLIENT);
+			Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", LOG_CLIENT, newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
 			CL_Disconnect(false);
 			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 			CL_Reconnect_f ();
 			return false;
 		}
+	}
+	else
+	{
+		cl.enhancedServer = 0;
 	}
 
 	Com_DPrintf ("Serverdata packet received. protocol=%d, servercount=%d, attractloop=%d, clnum=%d, game=%s, map=%s, enhanced=%d\n", cls.serverProtocol, cl.servercount, cl.attractloop, cl.playernum, cl.gamedir, str, cl.enhancedServer);
@@ -743,7 +744,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		t++;
 	}
 
-	if (s[0] == 0 || i == -1)
+	if (cl_noskins->intvalue || s[0] == 0 || i == -1)
 	{
 badskin:
 		//strcpy (model_filename, "players/male/tris.md2");

@@ -962,9 +962,10 @@ SV_BeginDownload_f
 */
 static void SV_BeginDownload_f(void)
 {
-	char	*name, *p;
-	int		offset = 0;
-	size_t	length;
+	char		*name, *p;
+	int			offset = 0;
+	size_t		length;
+	qboolean	valid;
 
 	name = Cmd_Argv(1);
 
@@ -1079,14 +1080,44 @@ static void SV_BeginDownload_f(void)
 		SV_AddMessage (sv_client, true);
 		return;		
 	}
-	else if	(!allow_download->intvalue
-			|| (strncmp(name, "players/", 8) == 0 && !(allow_download_players->intvalue & DL_UDP))
-			|| (strncmp(name, "models/", 7) == 0 && !(allow_download_models->intvalue & DL_UDP))
-			|| (strncmp(name, "sound/", 6) == 0 && !(allow_download_sounds->intvalue & DL_UDP))
-			|| (strncmp(name, "maps/", 5) == 0 && !(allow_download_maps->intvalue & DL_UDP))
-			|| ((strncmp(name, "env/", 4) == 0 || strncmp(name, "textures/", 9) == 0) && !(allow_download_textures->intvalue & DL_UDP))
-			|| !allow_download_others->intvalue
-			)
+
+	valid = true;
+
+	if	(!allow_download->intvalue)
+	{
+		valid = false;
+	}
+	else if (strncmp(name, "players/", 8) == 0) 
+	{
+		if (!(allow_download_players->intvalue & DL_UDP))
+			valid = false;
+	}
+	else if (strncmp(name, "models/", 7) == 0)
+	{
+		if (!(allow_download_models->intvalue & DL_UDP))
+			valid = false;
+	}
+	else if (strncmp(name, "sound/", 6) == 0)
+	{
+		if (!(allow_download_sounds->intvalue & DL_UDP))
+			valid = false;
+	}
+	else if (strncmp(name, "maps/", 5) == 0)
+	{
+		if (!(allow_download_maps->intvalue & DL_UDP))
+			valid = false;
+	}
+	else if ((strncmp(name, "env/", 4) == 0 || strncmp(name, "textures/", 9) == 0))
+	{
+		if (!(allow_download_textures->intvalue & DL_UDP))
+			valid = false;
+	}
+	else if (!allow_download_others->intvalue)
+	{
+		valid = false;
+	}
+
+	if (!valid)
 	{
 		Com_DPrintf ("Refusing to download %s to %s\n", name, sv_client->name);
 		if (strncmp(name, "maps/", 5) == 0 && !(allow_download_maps->intvalue & DL_UDP))

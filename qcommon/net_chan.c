@@ -279,7 +279,7 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 	else
 	{
 		//Com_Printf ("Netchan_Transmit: dumped unreliable to %s (max %d - cur %d >= un %d (r=%d))\n", LOG_NET, NET_AdrToString(&chan->remote_address), send.maxsize, send.cursize, length, chan->reliable_length);
-		Com_Error (ERR_DROP, "Netchan_Transmit: reliable %d + unreliable %d > MAX_MSGLEN %d", send.cursize, length, MAX_MSGLEN);
+		Com_Error (ERR_DROP, "Netchan_Transmit: reliable %d + unreliable %d > maxsize %d", send.cursize, length, send.maxsize);
 	}
 
 // send the datagram
