@@ -441,7 +441,7 @@ void CL_PrepRefresh (void)
 	cl.refdef.particles = NULL;
 	cl.refdef.num_dlights = 0;
 	cl.refdef.dlights = NULL;
-	cl.refdef.lightstyles = 0;
+	//cl.refdef.lightstyles = 0;
 
 	S_StopAllSounds ();
 
