@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-
 /*
 ===================
 CL_CheckPredictionError
@@ -311,12 +310,14 @@ void CL_PredictMovement (void)
 	step = pm.s.origin[2] - oldz;
 
 	//r1ch: don't overwrite existing stair moves
-	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame)
+	if (cl_smoothsteps->value && step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) && current != last_step_frame)
 	{
 		last_step_frame = current;
 		cl.predicted_step = step * 0.125;
 		cl.predicted_step_time = cls.realtime - cls.frametime * 500;
-		//Com_Printf ("***step: %f, time: %d, cur: %d, old: %d\n", cl.predicted_step, cl.predicted_step_time, current, oldframe);
+#ifdef _DEBUG
+		Com_Printf ("***step: %d [%f], time: %d, cur: %d, old: %d\n", step, cl.predicted_step, cl.predicted_step_time, current, oldframe);
+#endif
 	}
 
 	// copy results out for rendering

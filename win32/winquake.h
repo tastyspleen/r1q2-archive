@@ -35,11 +35,6 @@ extern LPDIRECTINPUTDEVICE8 g_pMouse;
 
 extern	HINSTANCE	global_hInstance;
 
-#ifdef DIRECTINPUT_MOUSE_SUPPORT
-extern LPDIRECTSOUND8 pDS;
-extern LPDIRECTSOUNDBUFFER8 pDSBuf;
-#endif
-
 extern DWORD gSndBufSize;
 
 extern HWND			cl_hwnd;

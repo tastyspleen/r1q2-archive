@@ -21,6 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
+#ifndef __TIMESTAMP__
+#define __TIMESTAMP__ __DATE__ " " __TIME__
+#endif
+
 cvar_t	*freelook;
 
 cvar_t	*adr0;
@@ -49,6 +53,8 @@ cvar_t	*cl_predict;
 cvar_t	*cl_backlerp;
 cvar_t	*r_maxfps;
 cvar_t	*cl_maxfps;
+cvar_t	*cl_async;
+cvar_t	*cl_smoothsteps;
 
 cvar_t	*cl_gun;
 
@@ -2089,6 +2095,7 @@ void CL_InitLocal (void)
 //	cl_minfps = Cvar_Get ("cl_minfps", "5", 0);
 	r_maxfps = Cvar_Get ("r_maxfps", "1000", 0);
 	cl_maxfps = Cvar_Get ("cl_maxfps", "30", CVAR_ARCHIVE);
+	cl_async = Cvar_Get ("cl_async", "1", 0);
 
 	cl_upspeed = Cvar_Get ("cl_upspeed", "200", 0);
 	cl_forwardspeed = Cvar_Get ("cl_forwardspeed", "200", 0);
@@ -2150,7 +2157,7 @@ void CL_InitLocal (void)
 #endif
 
 	cl_defertimer = Cvar_Get ("cl_defertimer", "1", CVAR_ARCHIVE);
-
+	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "1", 0);
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "0", CVAR_ARCHIVE);
@@ -2527,8 +2534,8 @@ void CL_Frame (int msec)
 //CL_RefreshInputs
 //jec - updates all input events
 
-void CL_RefreshCmd (void);
-void CL_RefreshInputs (void)
+int CL_RefreshCmd (void);
+int CL_RefreshInputs (void)
 {
 	// process new key events
 	Sys_SendKeyEvents ();
@@ -2544,11 +2551,13 @@ void CL_RefreshInputs (void)
 	// process packets from server
 	CL_ReadPackets();
 
+	CL_RunDownloadQueue ();
+
 	//jec - update usercmd state
 	if (cls.state > ca_connecting)
-		CL_RefreshCmd();
+		return CL_RefreshCmd();
 
-	CL_RunDownloadQueue ();
+	return 0;
 }
 
 //CL_SendCommand
@@ -2615,10 +2624,6 @@ void CL_Frame (int msec)
 	//jec - determine what all should be done...
 	if (!cl_timedemo->value)
 	{
-		// don't flood packets out while connecting
-		if (cls.state == ca_connected && packet_delta < 100)
-			packet_frame = false;
-		
 		// packet transmission rate is too high
 		if (packet_delta < 1000/cl_maxfps->value)
 			packet_frame = false;
@@ -2632,8 +2637,16 @@ void CL_Frame (int msec)
 			return;
 	}
 
+	if (!cl_async->value)
+		packet_frame = true;
+
+	// don't flood packets out while connecting
+	if (cls.state == ca_connected && packet_delta < 100)
+		packet_frame = false;
+
 	//jec - update the inputs (keybd, mouse, server, etc)
-	CL_RefreshInputs ();
+	if (CL_RefreshInputs ())
+		packet_frame = true;
 
 	//jec- send commands to the server
 	//if (++inputCount >= cl_snaps->value && packet_frame)

@@ -317,6 +317,7 @@ extern	cvar_t	*cl_add_entities;
 extern	cvar_t	*cl_predict;
 extern	cvar_t	*cl_backlerp;
 extern	cvar_t	*cl_footsteps;
+extern	cvar_t	*cl_smoothsteps;
 //extern	cvar_t	*cl_noskins;
 //extern	cvar_t	*cl_autoskins;
 

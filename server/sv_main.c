@@ -1770,7 +1770,7 @@ void SV_Init (void)
 	sv_hideplayers = Cvar_Get ("sv_hideplayers", "0", 0);
 
 	//r1: kick high fps users flooding packets
-	sv_fpsflood = Cvar_Get ("sv_fpsflood", "110", 0);
+	sv_fpsflood = Cvar_Get ("sv_fpsflood", "0", 0);
 
 	//r1: randomize starting framenum to thwart map timers
 	sv_randomframe = Cvar_Get ("sv_randomframe", "0", 0);

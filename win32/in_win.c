@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern	unsigned	sys_msg_time;
 
 cvar_t	*in_mouse;
+cvar_t	*m_directinput;
 
 #ifdef JOYSTICK
 // joystick defines and variables
@@ -187,7 +188,7 @@ int IN_InitDInputMouse (void)
     // Detrimine where the buffer would like to be allocated 
     bExclusive         = 1;//( IsDlgButtonChecked( hDlg, IDC_EXCLUSIVE  ) == BST_CHECKED );
     bForeground        = 1;//( IsDlgButtonChecked( hDlg, IDC_FOREGROUND ) == BST_CHECKED );
-    bImmediate         = 1;//( IsDlgButtonChecked( hDlg, IDC_IMMEDIATE  ) == BST_CHECKED );
+    bImmediate         = 0;//( IsDlgButtonChecked( hDlg, IDC_IMMEDIATE  ) == BST_CHECKED );
 
     if( bExclusive )
         dwCoopFlags = DISCL_EXCLUSIVE;
@@ -312,6 +313,7 @@ int IN_ReadImmediateData (usercmd_t *cmd)
         // interrupted.  We aren't tracking any state between polls, so
         // we don't have any special reset that needs to be done.
         // We just re-acquire and try again.
+		Com_Printf ("Lost Mouse!\n");
         
         // If input is lost then acquire and keep trying 
 		//Com_Printf ("Acquire() from readdata\n");
@@ -384,8 +386,6 @@ int IN_ReadImmediateData (usercmd_t *cmd)
 		if (cmd)
 			cmd->forwardmove -= m_forward->value * my;
 	}
-
-	SCR_UpdateScreen ();
 
 	return 0;
 }
@@ -511,10 +511,12 @@ void IN_StartupMouse (void)
 		return;
 
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
-	if (in_mouse->value == 2) {
-		if (IN_InitDInputMouse()) {
+	if (m_directinput->value)
+	{
+		if (IN_InitDInputMouse())
+		{
 			Com_Printf ("Falling back to standard mouse support.\n");
-			Cvar_Set ("in_mouse", "1");
+			Cvar_ForceSet ("m_directinput", "0");
 		}
 	}
 #endif
@@ -668,7 +670,8 @@ void IN_Init (void)
 	m_filter				= Cvar_Get ("m_filter",					"0",		0);
 	m_winxp_fix				= Cvar_Get ("m_fixaccel",				"0",		0);
 	m_show					= Cvar_Get ("m_show",					"0",		0);
-    in_mouse				= Cvar_Get ("in_mouse",					"1",		CVAR_ARCHIVE);
+	m_directinput			= Cvar_Get ("m_directinput",			"0",		0);
+    in_mouse				= Cvar_Get ("in_mouse",					"1",		0);
 
 #ifdef JOYSTICK
 	// joystick variables

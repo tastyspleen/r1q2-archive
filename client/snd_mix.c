@@ -28,12 +28,12 @@ int		snd_scaletable[32][256];
 int 	*snd_p, snd_linear_count, snd_vol;
 short	*snd_out;
 
-void _cdecl S_WriteLinearBlastStereo16 (void);
+void __cdecl S_WriteLinearBlastStereo16 (void);
 
 #if !(defined __linux__ && defined __i386__)
 #if	!id386
 
-void _cdecl S_WriteLinearBlastStereo16 (void)
+void __cdecl S_WriteLinearBlastStereo16 (void)
 {
 	int		i;
 	int		val;
@@ -58,7 +58,7 @@ void _cdecl S_WriteLinearBlastStereo16 (void)
 	}
 }
 #else
-__declspec ( naked ) void _cdecl S_WriteLinearBlastStereo16 (void)
+__declspec ( naked ) void __cdecl S_WriteLinearBlastStereo16 (void)
 {
 	__asm {
 
@@ -218,8 +218,8 @@ CHANNEL MIXING
 ===============================================================================
 */
 
-void _cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
-void _cdecl S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
+void __cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
+void __cdecl S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
 
 void S_PaintChannels(int endtime)
 {
@@ -365,7 +365,7 @@ void S_InitScaletable (void)
 #if !(defined __linux__ && defined __i386__)
 #if	!id386
 
-void _cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
+void __cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	int 	data;
 	int		*lscale, *rscale;
@@ -398,7 +398,7 @@ void _cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int o
 
 #else
 
-__declspec( naked ) void _cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
+__declspec( naked ) void __cdecl S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	__asm {
  push esi
@@ -472,7 +472,7 @@ LDone:
 #endif
 #endif
 
-void _cdecl S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
+void __cdecl S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	int data;
 	int left, right;

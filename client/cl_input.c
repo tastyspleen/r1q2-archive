@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 
 cvar_t	*cl_nodelta;
+cvar_t	*cl_instantpacket;
 
 extern	unsigned	sys_frame_time;
 unsigned	frame_msec;
@@ -249,12 +250,11 @@ Applies keyboard input to usercmd
 */
 //jec - rearranged this function to work with altered usercmd code
 
-float	mspeed;
-
 void CL_BaseMove (usercmd_t *cmd)
 {	
 	int i;
 	float	tspeed;
+	float	mspeed;
 	
 	//adjust for turning speed
 	if (in_speed.state & 1)
@@ -361,7 +361,7 @@ CL_CreateCmd
 
 // CL_InitCmd
 //jec - initialize the pending usercmd structure for use
-_inline void CL_InitCmd (void)
+__inline void CL_InitCmd (void)
 {
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
 
@@ -372,7 +372,7 @@ _inline void CL_InitCmd (void)
 // CL_RefreshCmd
 //jec - adds any new input changes to usercmd
 //	that occurred since last Init or RefreshCmd
-void CL_RefreshCmd (void)
+int CL_RefreshCmd (void)
 {	
 	int i, ms;
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
@@ -382,7 +382,7 @@ void CL_RefreshCmd (void)
 
 	// bounds checking
 	if (frame_msec < 1)
-		return;
+		return 0;
 
 	if (frame_msec > 1000)
 		frame_msec = 500;
@@ -410,6 +410,12 @@ void CL_RefreshCmd (void)
 
 	//update counter
 	old_sys_frame_time = sys_frame_time;
+
+	//r1: send packet immediately on important events
+	if (cl_instantpacket->value && ((in_attack.state & 3) || (in_use.state & 3)))
+		return 1;
+
+	return 0;
 }
 
 // CL_FinalizeCmd
@@ -422,10 +428,12 @@ void CL_FinalizeCmd (void)
 	//set any button hits that occured since last frame
 	if ( in_attack.state & 3 )
 		cmd->buttons |= BUTTON_ATTACK;
+
 	in_attack.state &= ~2;
 
 	if (in_use.state & 3)
 		cmd->buttons |= BUTTON_USE;
+
 	in_use.state &= ~2;
 
 	if (anykeydown && cls.key_dest == key_game)
@@ -487,11 +495,11 @@ void CL_InitInput (void)
 	Cmd_AddCommand ("-klook", IN_KLookUp);
 
 	cl_nodelta = Cvar_Get ("cl_nodelta", "0", 0);
+	cl_instantpacket = Cvar_Get ("cl_instantpacket", "0", 0);
 }
 
 
-extern qboolean cmd_wait;
-
+extern	qboolean	cmd_wait;
 /*
 =================
 CL_SendCmd

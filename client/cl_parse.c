@@ -1127,14 +1127,16 @@ void CL_ParseServerMessage (void)
 			if (i == PRINT_CHAT)
 			{
 				S_StartLocalSound ("misc/talk.wav");
-				if (cl_filterchat->value) {
+				if (cl_filterchat->value)
+				{
 					strcpy (s, StripHighBits(s, (int)cl_filterchat->value == 2));
 					strcat (s, "\n");
 				}
 				con.ormask = 128;
 
+				//r1: change !p_version to !version since p is for proxies
 				if (strstr (s, ": !r1q2_version") ||
-					strstr (s, ": !p_version") &&
+					strstr (s, ": !version") &&
 					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
 					cls.spamTime = cls.realtime + random() * 1500; 
 			}

@@ -35,7 +35,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 //#define ENHANCED_SERVER 1
-//#define	DIRECTINPUT_MOUSE_SUPPORT	1
+#define	DIRECTINPUT_MOUSE_SUPPORT	1
 // q_shared.h -- included first by ALL program modules
 
 #ifdef _WIN32
@@ -191,7 +191,7 @@ extern vec3_t vec3_origin;
 //float Q_fabs (float f);
 //#define	fabs(f) Q_fabs(f)
 #if !defined C_ONLY && !defined __linux__ && !defined __sgi && !defined SSE2
-extern long _cdecl Q_ftol( float f );
+extern long __cdecl Q_ftol( float f );
 #else
 #define Q_ftol( f ) ( long ) (f)
 #endif

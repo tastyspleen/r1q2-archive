@@ -261,7 +261,7 @@ float Q_fabs (float f)
 
 #if defined _M_IX86 && !defined C_ONLY && !defined linux && !defined SSE2
 #pragma warning (disable:4035)
-__declspec( naked ) long _cdecl Q_ftol( float f )
+__declspec( naked ) long __cdecl Q_ftol( float f )
 {
 	static int tmp;
 	__asm fld dword ptr [esp+4]
@@ -412,7 +412,7 @@ dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
 #else
 //#pragma warning( disable: 4035 )
 
-__declspec( naked ) int _cdecl BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
+__declspec( naked ) int __cdecl BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
 	static int bops_initialized;
 	static int Ljmptab[8];

@@ -1618,7 +1618,9 @@ void CL_CalcViewValues (void)
 		delta = cls.realtime - cl.predicted_step_time;
 		if (delta < 100)
 		{
-			//Com_Printf ("delta = %d\n", delta);
+#ifdef _DEBUG
+			Com_Printf ("delta = %d\n", delta);
+#endif
 			cl.refdef.vieworg[2] -= cl.predicted_step * (100 - delta) * 0.01;
 		}
 	}

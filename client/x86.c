@@ -27,7 +27,7 @@ static unsigned long *histogram;
 static unsigned long start, range;
 static unsigned long bias;
 
-__declspec( naked ) void _cdecl x86_TimerStart( void )
+__declspec( naked ) void __cdecl x86_TimerStart( void )
 {
 	__asm _emit 0fh
 	__asm _emit 31h
@@ -35,7 +35,7 @@ __declspec( naked ) void _cdecl x86_TimerStart( void )
 	__asm ret
 }
 
-__declspec( naked ) void _cdecl x86_TimerStop( void )
+__declspec( naked ) void __cdecl x86_TimerStop( void )
 {
 	__asm push edi
 	__asm mov edi, histogram
@@ -54,7 +54,7 @@ discard:
 }
 
 #pragma warning( disable: 4035 )
-static __declspec( naked ) unsigned long _cdecl x86_TimerStopBias( void )
+static __declspec( naked ) unsigned long __cdecl x86_TimerStopBias( void )
 {
 	__asm push edi
 	__asm mov edi, histogram
