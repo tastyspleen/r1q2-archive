@@ -108,12 +108,30 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 {
 	char		msg[1024];
 	va_list		argptr;
-	int			n, len;
-	client_t	*client;
+	int			len;
+
+	va_start (argptr,fmt);
+	len = Q_vsnprintf (msg, sizeof (msg)-1, fmt, argptr);
+	va_end (argptr);
+
+	msg[sizeof(msg)-1] = 0;
+
+	if (len < 0)
+	{
+		Com_Printf ("GAME ERROR: cprintf: message overflow.\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG);
+
+		if (sv_gamedebug->intvalue >= 2)
+			Q_DEBUGBREAKPOINT;
+		return;
+	}
 
 	if (ent)
 	{
+		int			n;
+		client_t	*client;
+
 		n = NUM_FOR_EDICT(ent);
+
 		if (n < 1 || n > maxclients->intvalue)
 		{
 			if (sv_gamedebug->intvalue)
@@ -125,6 +143,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 		}
 
 		client = svs.clients + (n-1);
+
 		if (client->state != cs_spawned)
 		{
 			Com_Printf ("GAME ERROR: cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
@@ -133,26 +152,8 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 				Q_DEBUGBREAKPOINT;
 			return;
 		}
-	}
 
-	va_start (argptr,fmt);
-	len = Q_vsnprintf (msg, sizeof (msg)-1, fmt, argptr);
-	va_end (argptr);
-
-	msg[sizeof(msg)-1] = 0;
-
-	if (len < 0)
-	{
-		Com_Printf ("GAME ERROR: cprintf: message overflow.\n", LOG_SERVER|LOG_ERROR);
-
-		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
-		return;
-	}
-
-	if (ent)
-	{
-		SV_ClientPrintf (svs.clients+(n-1), level, "%s", msg);
+		SV_ClientPrintf (client, level, "%s", msg);
 	}
 	else
 	{
@@ -181,7 +182,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 	if (!ent)
 	{
 		if (sv_gamedebug->intvalue)
-			Com_Printf ("GAME WARNING: PF_centerprintf to NULL ent, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+			Com_Printf ("GAME WARNING: centerprintf to NULL ent, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 3)
 			Q_DEBUGBREAKPOINT;
@@ -194,7 +195,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 	if (n < 1 || n > maxclients->intvalue)
 	{
 		if (sv_gamedebug->intvalue)
-			Com_Printf ("GAME WARNING: PF_centerprintf to non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
+			Com_Printf ("GAME WARNING: centerprintf to non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
 
 		if (sv_gamedebug->intvalue >= 3)
 			Q_DEBUGBREAKPOINT;
@@ -204,7 +205,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 	client = svs.clients + (n-1);
 	if (client->state != cs_spawned)
 	{
-		Com_Printf ("GAME ERROR: PF_centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+		Com_Printf ("GAME ERROR: centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
 
 		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;
@@ -215,7 +216,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 	{
 		if (sv_gamedebug->intvalue)
-			Com_Printf ("GAME WARNING: PF_centerprintf message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+			Com_Printf ("GAME WARNING: centerprintf message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 3)
 			Q_DEBUGBREAKPOINT;
@@ -400,7 +401,7 @@ fixed:
 		//this results in overwrite of CS_PLAYERSKINS subscripts.
 		if (length > sizeof(sv.configstrings[index])-1)
 		{
-			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val));
+			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val));
 			Q_strncpy (safestring, val, sizeof(safestring)-1);
 			val = safestring;
 		}
@@ -417,12 +418,12 @@ fixed:
 		{
 			//max allowed for statusbar space
 			if (length > (sizeof(sv.configstrings[0]) * (CS_AIRACCEL-CS_STATUSBAR))-1)
-				Com_Error (ERR_DROP, "CS_STATUSBAR configstring %d length %d exceeds maximum allowed length", index, length);
+				Com_Error (ERR_DROP, "CS_STATUSBAR configstring %d length %d exceeds maximum allowed length", index, (int)length);
 		}
 		else if (index > CS_STATUSBAR && index < CS_AIRACCEL)
 		{
 			//game dll is trying to set status bar one by one, WTF? just error out completely here.
-			Com_Error (ERR_DROP, "CS_STATUSBAR configstring %d length %d exceeds maximum allowed length", index, length);
+			Com_Error (ERR_DROP, "CS_STATUSBAR configstring %d length %d exceeds maximum allowed length", index, (int)length);
 		}
 		else if (index == CS_NAME)
 		{
@@ -474,8 +475,8 @@ fixed:
 	else if (index == CS_SKYROTATE)
 	{
 		//optimize to save space
-		val = safestring;
 		sprintf (safestring, "%g", atof(val));
+		val = safestring;
 	}
 	else if (index == CS_SKYAXIS)
 	{
@@ -483,7 +484,7 @@ fixed:
 		vec3_t	axis;
 		if (sscanf (val, "%f %f %f", &axis[0], &axis[1], &axis[2]) != 3)
 		{
-			Com_Printf ("GAME ERROR: Invalid CS_SKYAXIS configstring '%s'!\n", LOG_SERVER|LOG_WARNING, val);
+			Com_Printf ("GAME ERROR: Invalid CS_SKYAXIS configstring '%s'!\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, val);
 			VectorClear (axis);
 		}
 		val = safestring;
@@ -558,7 +559,7 @@ void EXPORT PF_WriteFloat (float f) {
 	MSG_WriteFloat (f);
 }
 
-void EXPORT PF_WriteString (char *s) {
+void EXPORT PF_WriteString (const char *s) {
 	MSG_WriteString (s);
 }
 

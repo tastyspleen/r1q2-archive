@@ -958,7 +958,7 @@ void CL_ParseTEnt (void)
 				CL_ParseLaser (0xe0e1e2e3, pos, pos2);
 				break;
 			default:
-				CL_RailTrail (pos, pos2, cl_railtrail->intvalue - 6);
+				CL_RailTrail (pos, pos2, (byte)(cl_railtrail->intvalue - 6));
 				break;
 
 		}

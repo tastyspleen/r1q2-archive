@@ -34,7 +34,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	BASEDIRNAME	"baseq2"
 
-#ifdef WIN32
+#ifdef _WIN32
 #ifdef _WIN64
 #ifdef NDEBUG
 #define BUILDSTRING "Win64 RELEASE"
@@ -66,6 +66,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define CPUSTRING "i386"
 #elif defined __alpha__
 #define CPUSTRING "axp"
+#elif defined __x86_64__
+#define CPUSTRING "x86_64"
 #else
 #define CPUSTRING "Unknown"
 #endif
@@ -86,6 +88,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef __i386__
 #define CPUSTRING "i386"
+#elif defined __x86_64__
+#define CPUSTRING "x86_64"
 #else
 #define CPUSTRING "Unknown"
 #endif
@@ -95,6 +99,25 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define BUILDSTRING "NON-WIN32"
 #define	CPUSTRING	"NON-WIN32"
 
+#endif
+
+//Please don't define this on your own builds, it's used
+//in the SIGSEGV handler to help me determine build info
+//from crash reports. Users will never see this.
+#ifdef R1RELEASE
+#define RELEASESTRING "Binary Build (" __DATE__ ")"
+#if R1RELEASE == 1
+#define R1BINARY "r1q2ded"
+#elif R1RELEASE == 2
+#define R1BINARY "r1q2ded-old"
+#elif R1RELEASE == 3
+#define R1BINARY "r1q2ded-x86_64"
+#else
+#error What the hell is going on here
+#endif
+#else
+#define R1BINARY "R1Q2"
+#define RELEASESTRING "Source Build"
 #endif
 
 //============================================================================
@@ -130,7 +153,7 @@ typedef struct messagelist_s
 	struct messagelist_s	*next;
 
 	//message length
-	short					cursize;
+	int16					cursize;
 
 	//is it reliable?
 	byte					reliable;
@@ -186,7 +209,6 @@ void MSG_WriteDir (vec3_t vector);
 
 
 void	MSG_BeginReading (sizebuf_t *sb);
-
 int		MSG_ReadChar (sizebuf_t *sb);
 int		MSG_ReadByte (sizebuf_t *sb);
 int		MSG_ReadShort (sizebuf_t *sb);
@@ -212,8 +234,8 @@ void Q_NullFunc(void);
 #if YOU_HAVE_A_BROKEN_COMPUTER
 extern	qboolean		bigendien;
 
-extern	short	LittleShort (short l);
-extern	int		LittleLong (int l);
+extern	int16	LittleShort (int16 l);
+extern	int32		LittleLong (int32 l);
 extern	float	LittleFloat (float l);
 #endif
 //============================================================================
@@ -232,7 +254,7 @@ char *CopyString (const char *in, int tag);
 
 void StripHighBits (char *string, int highbits);
 void ExpandNewLines (char *string);
-char *MakePrintable (const byte *s);
+const char *MakePrintable (const byte *s);
 qboolean isvalidchar (int c);
 
 //============================================================================
@@ -242,10 +264,10 @@ void Info_Print (const char *s);
 
 /* crc.h */
 
-void CRC_Init(unsigned short /*@out@*/*crcvalue);
-void CRC_ProcessByte(unsigned short *crcvalue, byte data);
-unsigned short CRC_Value(unsigned short crcvalue);
-unsigned short CRC_Block (byte *start, int count);
+void CRC_Init(uint16 /*@out@*/*crcvalue);
+void CRC_ProcessByte(uint16 *crcvalue, byte data);
+uint16 CRC_Value(uint16 crcvalue);
+uint16 CRC_Block (byte *start, int count);
 
 
 /*
@@ -260,6 +282,8 @@ PROTOCOL
 
 #define	ORIGINAL_PROTOCOL_VERSION	34
 #define	ENHANCED_PROTOCOL_VERSION	35
+
+#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1901
 
 //=========================================
 
@@ -359,6 +383,15 @@ enum clc_ops_e
 #define	PS_RDFLAGS			(1<<14)
 #define	PS_BBOX				(1<<15)
 
+//r1 extra hacky bits that are hijacked for more bandwidth goodness. 4 bits in surpresscount
+//and 3 in the server message byte (!!!!!!!!)
+#define	EPS_GUNOFFSET		(1<<0)
+#define	EPS_GUNANGLES		(1<<1)
+#define	EPS_PMOVE_VELOCITY2	(1<<2)
+#define	EPS_PMOVE_ORIGIN2	(1<<3)
+#define	EPS_VIEWANGLE2		(1<<4)
+#define	EPS_STATS			(1<<5)
+
 //==============================================
 
 // user_cmd_t communication
@@ -382,8 +415,8 @@ enum clc_ops_e
 #define	SND_ENT			(1<<3)		// a short 0-2: channel, 3-12: entity
 #define	SND_OFFSET		(1<<4)		// a byte, msec offset from frame start
 
-#define DEFAULT_SOUND_PACKET_VOLUME	1.0
-#define DEFAULT_SOUND_PACKET_ATTENUATION 1.0
+#define DEFAULT_SOUND_PACKET_VOLUME	1.0f
+#define DEFAULT_SOUND_PACKET_ATTENUATION 1.0f
 
 //==============================================
 
@@ -639,7 +672,8 @@ NET
 
 #define	PORT_ANY	-1
 
-#define	MAX_MSGLEN		1400		// max length of a message
+//#define	MAX_MSGLEN		1400	// max length of a message
+#define	MAX_MSGLEN		4096		// udp fragmentation isn't so bad these days
 #define	PACKET_HEADER	10			// two ints and a short
 #define	MAX_USABLEMSG	MAX_MSGLEN - PACKET_HEADER
 
@@ -654,7 +688,7 @@ typedef struct
 	byte	ip[4];
 	//byte	ipx[10];
 
-	unsigned short	port;
+	uint16	port;
 } netadr_t;
 
 void		NET_Init (void);
@@ -666,7 +700,7 @@ int			NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
 int			NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to);
 
 int NET_Accept (int s, netadr_t *address);
-int NET_Listen (unsigned short port);
+int NET_Listen (uint16 port);
 int NET_Select (int s, int msec);
 void NET_CloseSocket (int s);
 int NET_SendTCP (int s, byte *data, int len);
@@ -681,19 +715,19 @@ int NET_Connect (netadr_t *to, int port);
 	((x)->ip[0] == 127)
 
 #define NET_IsLANAddress(x) \
-	(((x)->ip[0] == 127) || ((x)->ip[0] == 10) || (*(unsigned short *)(x)->ip == 0xA8C0) || (*(unsigned short *)(x)->ip == 0x10AC))
+	(((x)->ip[0] == 127) || ((x)->ip[0] == 10) || (*(uint16 *)(x)->ip == 0xA8C0) || (*(uint16 *)(x)->ip == 0x10AC))
 //		127.x.x.x				10.x.x.x					192.168.x.x									172.16.x.x
 
 #define NET_IsLocalHost(x) \
 	((x)->type == NA_LOOPBACK)
 
 #define NET_CompareAdr(a,b) \
-	((*(unsigned long *)(a)->ip == *(unsigned long *)(b)->ip) && (a)->port == (b)->port)
+	((*(uint32 *)(a)->ip == *(uint32 *)(b)->ip) && (a)->port == (b)->port)
 
 #define NET_CompareBaseAdr(a,b) \
-	(*(unsigned long *)(a)->ip == *(unsigned long *)(b)->ip)
+	(*(uint32 *)(a)->ip == *(uint32 *)(b)->ip)
 
-char		*NET_inet_ntoa (unsigned long ip);
+char		*NET_inet_ntoa (uint32 ip);
 char		*NET_AdrToString (netadr_t *a);
 qboolean	NET_StringToAdr (const char *s, netadr_t *a);
 #ifndef NO_SERVER
@@ -719,8 +753,8 @@ typedef struct
 
 	netadr_t	remote_address;
 
-	unsigned short	qport;				// qport value to write when transmitting
-	unsigned short	protocol;
+	uint16		qport;				// qport value to write when transmitting
+	uint16		protocol;
 
 // sequencing variables
 	int			incoming_sequence;
@@ -748,7 +782,7 @@ extern	byte		net_message_buffer[MAX_MSGLEN];
 
 
 void Netchan_Init (void);
-void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport);
+void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport, unsigned msglen);
 
 qboolean Netchan_NeedReliable (netchan_t *chan);
 int	 Netchan_Transmit (netchan_t *chan, int length, const byte /*@null@*/*data);
@@ -770,7 +804,7 @@ CMODEL
 
 #include "../qcommon/qfiles.h"
 
-cmodel_t	*CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum);
+cmodel_t	*CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum);
 cmodel_t	*CM_InlineModel (const char *name);	// *1, *2, etc
 
 //extern int			CM_NumClusters (void);
@@ -826,8 +860,8 @@ typedef struct
 	int			contents;
 	int			cluster;
 	int			area;
-	unsigned short	firstleafbrush;
-	unsigned short	numleafbrushes;
+	uint16		firstleafbrush;
+	uint16		numleafbrushes;
 } cleaf_t;
 
 extern	int			numclusters;
@@ -931,8 +965,8 @@ extern	int	server_state;
 #define	Com_SetServerState(state) (server_state = state)
 #define	Com_ServerState()	(server_state)
 
-unsigned	Com_BlockChecksum (void *buffer, int length);
-byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
+uint32	Com_BlockChecksum (void *buffer, int length);
+byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
 
 //float	frand(void);	// 0 ti 1
 //float	crand(void);	// -1 to 1
@@ -958,9 +992,9 @@ extern	int		time_after_ref;
 
 typedef struct tagmalloc_tag_s
 {
-	short		value;
+	int16		value;
 	char		*name;
-	unsigned int allocs;
+	uint32		 allocs;
 } tagmalloc_tag_t;
 
 //r1: tagmalloc defines
@@ -1016,7 +1050,7 @@ void Qcommon_Init (int argc, char **argv);
 void Qcommon_Frame (int msec);
 void Qcommon_Shutdown (void);
 
-#ifdef WIN32
+#ifdef _WIN32
 size_t __cdecl fast_strlen(const char *s);
 void __cdecl fast_strlwr(char *s);
 int __cdecl fast_tolower(int c);
@@ -1027,7 +1061,7 @@ int __cdecl fast_tolower(int c);
 #endif
 char *StripQuotes (char *string);
 
-#ifdef WIN32
+#ifdef _WIN32
 #ifdef _DEBUG
 void _STOP_PERFORMANCE_TIMER (void);
 void _START_PERFORMANCE_TIMER (void);
@@ -1089,7 +1123,7 @@ CLIENT / SERVER SYSTEMS
 */
 
 void CL_Init (void);
-void CL_Drop (qboolean skipdisconnect);
+void CL_Drop (qboolean skipdisconnect, qboolean nonerror);
 void CL_Shutdown (void);
 void CL_Frame (int msec);
 void Con_Print (char *text);

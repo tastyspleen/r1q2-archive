@@ -148,12 +148,12 @@ const char *Cvar_GetMetaVar (const char *var_name)
 		}
 		else if (!strcmp (var_name, "$random"))
 		{
-			return va ("%lu", randomMT());
+			return va ("%u", randomMT());
 		}
 		else if (!strcmp (var_name, "$inc"))
 		{
-			static unsigned int incNum = 0;
-			return va ("%u", ++incNum);
+			static unsigned long incNum = 0;
+			return va ("%lu", ++incNum);
 		}
 		else if (!strcmp (var_name, "$loc_here"))
 		{
@@ -355,7 +355,11 @@ cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
 
 	if (!force)
 	{
+#ifdef _DEBUG
 		if (var->flags & CVAR_NOSET && !Cvar_IntValue ("developer"))
+#else
+		if (var->flags & CVAR_NOSET)
+#endif
 		{
 			Com_Printf ("%s is write protected.\n", LOG_GENERAL, var_name);
 			return var;

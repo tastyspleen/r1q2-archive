@@ -42,8 +42,8 @@ typedef struct bannedcommands_s
 {
 	struct bannedcommands_s *next;
 	char					*name;
-	short					kickmethod;
-	short					logmethod;
+	int16					kickmethod;
+	int16					logmethod;
 } bannedcommands_t;
 
 extern bannedcommands_t bannedcommands;
@@ -52,7 +52,7 @@ typedef struct ratelimit_s
 {
 	int			count;
 	int			period;
-	unsigned	time;
+	uint32		time;
 } ratelimit_t;
 
 typedef struct linkednamelist_s
@@ -85,7 +85,7 @@ typedef struct
 	qboolean	attractloop;		// running cinematics and demos for the local system only
 	qboolean	loadgame;			// client begins should reuse existing entity
 
-	unsigned	time;				// always sv.framenum * 100 msec
+	uint32		time;				// always sv.framenum * 100 msec
 	int			framenum;
 
 	char		name[MAX_QPATH];			// map name, or cinematic name
@@ -105,14 +105,14 @@ typedef struct
 	// demo server information
 	FILE		*demofile;
 
-	unsigned	randomframe;
+	uint32		randomframe;
 } server_t;
 
 qboolean RateLimited (ratelimit_t *limit, int maxCount);
 void RateSample (ratelimit_t *limit);
 
 #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
-#define NUM_FOR_EDICT(e) ( ((byte *)(e)-(byte *)ge->edicts ) / ge->edict_size)
+#define NUM_FOR_EDICT(e) (int)(( ((byte *)(e)-(byte *)ge->edicts ) / ge->edict_size))
 
 
 typedef enum
@@ -157,21 +157,11 @@ typedef struct
 
 #define	DL_REASON_CUSTOMMSG	0xFF	//A custom message.
 
-typedef struct message_queue_s
-{
-	struct message_queue_s	*next;
-	byte					type;
-	byte					*data;
-	sizebuf_t				buf;
-	//int						queued_frame;
-	int						len;
-} message_queue_t;
-
 typedef struct download_queue_s
 {
 	struct download_queue_s	*next;
 	char					path[MAX_QPATH];
-	unsigned int			downloadID;
+	uint32					downloadID;
 } download_queue_t;
 
 typedef struct download_state_s
@@ -180,7 +170,7 @@ typedef struct download_state_s
 	FILE				*fileHandle;
 	size_t				fileOffset;
 	size_t				fileLength;
-	int					compMethod;
+	int32				compMethod;
 	MD4_CTX				MD4Context;
 	z_stream			zlibStream;
 } download_state_t;
@@ -224,33 +214,30 @@ typedef struct client_s
 
 	char			*downloadFileName;
 
-	//unsigned short	downloadport;
-
 	int				lastmessage;		// sv.framenum when packet was last received
-	//int				lastconnect;
 
-	unsigned 		challenge;			// challenge of this user, randomly generated
+	uint32	 		challenge;			// challenge of this user, randomly generated
 
 	netchan_t		netchan;
 	
 	//r1: client protocol
-	unsigned 		protocol;
+	uint32	 		protocol;
 
 	//r1: number of times they've commandMsec underflowed (if this gets excessive then
 	//they can be dropped)
-	float						commandMsecOverflowCount;
+	float			commandMsecOverflowCount;
 
 	//r1: number of consecutive nodelta frames
-	unsigned int				nodeltaframes;
+	uint32			nodeltaframes;
 
 	//r1: don't send game data to this client (bots etc)
-	qboolean					nodata;
+	qboolean		nodata;
 
 	//r1: client-specific last deltas (kind of like dynamic baselines)
-	entity_state_t				*lastlines;
+	entity_state_t	*lastlines;
 
 	//r1: misc flags
-	unsigned int				notes;
+	uint32			notes;
 
 	//r1: number of packets received over last 5 seconds
 	int							packetCount;
@@ -298,8 +285,8 @@ typedef struct client_s
 typedef struct
 {
 	netadr_t	adr;
-	int			challenge;
-	unsigned 	time;
+	int32		challenge;
+	uint32	 	time;
 } challenge_t;
 
 
@@ -314,8 +301,8 @@ typedef struct
 											// used to check late spawns
 
 	client_t	*clients;					// [maxclients->value];
-	unsigned 	num_client_entities;		// maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES
-	unsigned 	next_client_entities;		// next client_entity to use
+	uint32 		num_client_entities;		// maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES
+	uint32 		next_client_entities;		// next client_entity to use
 	entity_state_t	*client_entities;		// [num_client_entities]
 
 	int			last_heartbeat;
@@ -330,6 +317,10 @@ typedef struct
 	// rate limit status requests
 	ratelimit_t	ratelimit_status;
 	ratelimit_t	ratelimit_badrcon;
+
+	//crazy stats :)
+	unsigned long		proto35BytesSaved;
+	unsigned long		proto35CompressionBytes;
 } server_static_t;
 
 extern	cvar_t	*sv_ratelimit_status;
@@ -393,6 +384,7 @@ extern	cvar_t		*sv_download_drop_message;
 extern	cvar_t		*sv_msecs;
 
 extern	cvar_t		*sv_blackhole_mask;
+extern	cvar_t		*sv_badcvarcheck;
 
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
@@ -402,6 +394,8 @@ extern	cvar_t	*allow_download_players;
 extern	cvar_t	*allow_download_models;
 extern	cvar_t	*allow_download_sounds;
 extern	cvar_t	*allow_download_maps;
+extern	cvar_t	*allow_download_textures;
+extern	cvar_t	*allow_download_others;
 
 //===========================================================
 
@@ -456,16 +450,18 @@ qboolean CheckUserInfoFields (char *userinfo);
 extern cvar_t *hostname;
 extern int server_port;
 
-#ifdef WIN32
+#ifdef _WIN32
 void Sys_UpdateConsoleBuffer (void);
+#ifdef DEDICATED_ONLY
 void Sys_InstallService(char *servername, char *cmdline);
 void Sys_DeleteService (char *servername);
+#endif
 void Sys_EnableTray (void);
 void Sys_DisableTray (void);
 void Sys_Minimize (void);
 #endif
 
-void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...) __attribute__ ((format (printf, 5, 6)));;
+void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...) __attribute__ ((format (printf, 5, 6)));
 
 //
 // sv_phys.c
@@ -603,8 +599,8 @@ typedef struct blackhole_s blackhole_t;
 struct blackhole_s
 {
 	blackhole_t		*next;
-	unsigned long	ip;
-	unsigned long	mask;
+	uint32			ip;
+	uint32			mask;
 	int				method;
 	char			reason[128];
 	ratelimit_t		ratelimit;
@@ -615,6 +611,7 @@ struct blackhole_s
 
 #define CVARBAN_KICK		1
 #define CVARBAN_BLACKHOLE	2
+#define	CVARBAN_LOGONLY		3
 
 extern blackhole_t blackholes;
 

@@ -79,7 +79,7 @@ idnewt:28000
 		if (*colon == ':')
 		{
 			*colon = 0;
-			((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));	
+			((struct sockaddr_in *)sadr)->sin_port = htons((int16)atoi(colon+1));	
 		}
 	
 	if (isip)
@@ -155,7 +155,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 {
 	int 	ret;
 	struct sockaddr_in	from;
-	unsigned int		fromlen;
+	uint32	fromlen;
 	int		net_socket;
 	int		err;
 
@@ -308,7 +308,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if (port == PORT_ANY)
 		address.sin_port = 0;
 	else
-		address.sin_port = htons((short)port);
+		address.sin_port = htons((uint16)port);
 
 	address.sin_family = AF_INET;
 

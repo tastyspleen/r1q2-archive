@@ -32,7 +32,7 @@ FIXME: this use of "area" is different from the bsp file use
 // (type *)STRUCT_FROM_LINK(link_t *link, type, member)
 // ent = STRUCT_FROM_LINK(link,entity_t,order)
 // FIXME: remove this mess!
-#define	STRUCT_FROM_LINK(l,t,m) ((t *)((byte *)l - (INTPTR)&(((t *)0)->m)))
+#define	STRUCT_FROM_LINK(l,t,m) ((t *)((byte *)l - (ptrdiff_t)&(((t *)0)->m)))
 
 #define	EDICT_FROM_AREA(l) STRUCT_FROM_LINK(l,edict_t,area)
 
@@ -208,7 +208,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	VectorSubtract (ent->maxs, ent->mins, ent->size);
 	
 	// encode the size into the entity_state for client prediction
-	if (ent->solid == SOLID_BBOX && !(ent->svflags & SVF_DEADMONSTER) && !(sv_new_entflags->intvalue && ent->svflags & SVF_NOPREDICTION))
+	if (ent->solid == SOLID_BBOX && !(ent->svflags & SVF_DEADMONSTER) && !(sv_new_entflags->intvalue && (ent->svflags & SVF_NOPREDICTION)))
 	{	// assume that x/y are equal and symetric
 		i = (int)(ent->maxs[0]/8);
 		if (i<1)

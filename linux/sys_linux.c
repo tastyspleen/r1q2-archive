@@ -16,8 +16,21 @@
 #include <sys/wait.h>
 #include <sys/mman.h>
 #include <errno.h>
+#include <execinfo.h>
+#include <sys/utsname.h>
+#define __USE_GNU 1
+#define _GNU_SOURCE
+#include <link.h>
+#include <sys/ucontext.h>
 
-//#include <mntent.h>
+//for old headers
+#ifndef REG_EIP
+#ifndef EIP
+#define EIP 12 //aiee
+#endif
+#define REG_EIP EIP
+#endif
+
 
 #include <dlfcn.h>
 
@@ -151,11 +164,129 @@ void Sys_KillServer (int sig)
 	Com_Quit();
 }
 
+//gcc 2.7.2 has trouble understanding this unfortunately at compile time
+//and 2.95.3 won't find it at link time. blah.
+#define GCC_VERSION (__GNUC__ * 10000 \
+                     + __GNUC_MINOR__ * 100 \
+                     + __GNUC_PATCHLEVEL__)
+
+#if GCC_VERSION > 30000
+static int dlcallback (struct dl_phdr_info *info, size_t size, void *data)
+{
+	int		j;
+	int		end;
+	
+	end = 0;
+
+	if (!info->dlpi_name || !info->dlpi_name[0])
+		return 0;
+	
+	for (j = 0; j < info->dlpi_phnum; j++)
+	{
+		end += info->dlpi_phdr[j].p_memsz;
+	}
+
+	//this is terrible.
+#if __WORDSIZE == 64
+	fprintf (stderr, "[0x%lux-0x%lux] %s\n", info->dlpi_addr, info->dlpi_addr + end, info->dlpi_name);
+#else
+	fprintf (stderr, "[0x%ux-0x%ux] %s\n", info->dlpi_addr, info->dlpi_addr + end, info->dlpi_name);
+#endif
+	return 0;
+}
+#endif
+
+/* Obtain a backtrace and print it to stderr. 
+ * Adapted from http://www.delorie.com/gnu/docs/glibc/libc_665.html
+ */
+#ifdef __x86_64__
+void Sys_Backtrace (int sig)
+#else
+void Sys_Backtrace (int sig, siginfo_t *siginfo, void *secret)
+#endif
+{
+	void		*array[32];
+	struct utsname	info;
+	size_t		size;
+	size_t		i;
+	char		**strings;
+#ifndef __x86_64__
+	ucontext_t 	*uc = (ucontext_t *)secret;
+#endif
+
+	signal (SIGSEGV, SIG_DFL);
+	
+	fprintf (stderr, "=====================================================\n"
+			 "Segmentation Fault\n"
+			 "=====================================================\n"
+			 "A crash has occured within R1Q2 or the Game DLL (mod)\n"
+			 "that you are running.  This is most  likely caused by\n"
+			 "using the wrong server binary (eg, r1q2ded instead of\n"
+			 "r1q2ded-old) for the mod you are running.  The server\n"
+			 "README on the  R1Q2 forums has more information about\n"
+			 "which binaries you should be using.\n"
+			 "\n"
+			 "If possible, try re-building R1Q2 and the mod you are\n"
+			 "running from source code to ensure it isn't a compile\n"
+			 "problem. If the crash still persists, please post the\n"
+			 "following  debug info on the R1Q2 forums with details\n"
+			 "including the mod name,  version,  Linux distribution\n"
+			 "and any other pertinent information.\n"
+			 "\n");
+
+	size = backtrace (array, sizeof(array)/sizeof(void*));
+
+#ifndef __x86_64__
+	array[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+#endif
+	
+	strings = backtrace_symbols (array, size);
+
+	fprintf (stderr, "Stack dump (%zd frames):\n", size);
+
+	for (i = 0; i < size; i++)
+		fprintf (stderr, "%.2zd: %s\n", i, strings[i]);
+
+	fprintf (stderr, "\nVersion: " R1BINARY " " VERSION " (" BUILDSTRING " " CPUSTRING ") " RELEASESTRING "\n");
+
+	uname (&info);
+	fprintf (stderr, "OS Info: %s %s %s %s %s\n\n", info.sysname, info.nodename, info.release, info.version, info.machine);
+
+#if GCC_VERSION > 30000
+	fprintf (stderr, "Loaded libraries:\n");
+	dl_iterate_phdr(dlcallback, NULL);
+#endif
+	
+	free (strings);
+
+	raise (SIGSEGV);
+}
+
 void Sys_Init(void)
 {
 #if id386
 //	Sys_SetFPCW();
 #endif
+  /* Install our signal handler */
+#ifndef __x86_64__
+	struct sigaction sa;
+
+	if (sizeof(uint32) != 4)
+		Sys_Error ("uint32 != 32 bits");
+	else if (sizeof(uint64) != 8)
+		Sys_Error ("uint64 != 64 bits");
+	else if (sizeof(uint16) != 2)
+		Sys_Error ("uint16 != 16 bits");
+
+	sa.sa_sigaction = (void *)Sys_Backtrace;
+	sigemptyset (&sa.sa_mask);
+	sa.sa_flags = SA_RESTART | SA_SIGINFO;
+
+	sigaction(SIGSEGV, &sa, NULL);
+#else
+	signal (SIGSEGV, Sys_Backtrace);
+#endif
+	
 	signal (SIGTERM, Sys_KillServer);
 	signal (SIGINT, Sys_KillServer);
 }
@@ -290,12 +421,11 @@ void *Sys_GetGameAPI (void *parms, int baseq2)
 	const char *gamename = "gamei386.so";
 #elif defined __alpha__
 	const char *gamename = "gameaxp.so";
+#elif defined __x86_64__
+	const char *gamename = "gamex86_64.so";
 #else
 #error "Don't know what kind of dynamic objects to use for this architecture."
 #endif
-
-	//setreuid(getuid(), getuid());
-	//setegid(getgid());
 
 	if (game_library)
 		Com_Error (ERR_FATAL, "Sys_GetGameAPI without Sys_UnloadingGame");
@@ -333,7 +463,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2)
 				if (game_library)
 				{
 					Com_Printf ("ok\n", LOG_SERVER);
-					return NULL;
+					break;
 				}
 				else
 				{
@@ -451,3 +581,5 @@ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
 }
 
 #endif
+
+

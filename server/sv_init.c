@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <process.h>
 #endif
 
@@ -195,7 +195,7 @@ clients along with it.
 void SV_SpawnServer (const char *server, const char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
 {
 	int			i;
-	unsigned	checksum;
+	uint32		checksum;
 
 	//r1: get latched vars
 	if (Cvar_GetNumLatchedVars())
@@ -376,7 +376,7 @@ void SV_InitGame (void)
 	else
 	{
 		// make sure the client is down
-		CL_Drop (false);
+		CL_Drop (false, true);
 		SCR_BeginLoadingPlaque ();
 	}
 #endif
@@ -446,7 +446,7 @@ void SV_InitGame (void)
 	// heartbeats will always be sent to the id master
 	svs.last_heartbeat = -295000;		// send immediately (r1: give few secs for configs to run)
 
-	NET_StringToAdr ("192.246.40.37:27900", &master_adr[0]);
+	//NET_StringToAdr ("192.246.40.37:27900", &master_adr[0]);
 
 	//r1: tcp download port (off in release)
 #ifdef _DEBUG
@@ -458,7 +458,7 @@ void SV_InitGame (void)
 #ifdef _DEBUG
 	if (sv_downloadport->intvalue)
 	{
-		sv_download_socket = NET_Listen ((unsigned short)sv_downloadport->intvalue);
+		sv_download_socket = NET_Listen ((uint16)sv_downloadport->intvalue);
 		if (sv_download_socket == -1)
 		{
 			Com_Printf ("SV_InitGame: couldn't listen on TCP %d!\n", LOG_SERVER, (int)sv_downloadport->intvalue);

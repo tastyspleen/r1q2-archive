@@ -18,7 +18,7 @@ idnewt:28000
 void NET_OpenIP (int flags);
 int NET_IPSocket (char *net_interface, int port);
 
-#ifndef WIN32
+#ifndef _WIN32
 #define closesocket close
 #define ioctlsocket ioctl
 #endif
@@ -76,7 +76,7 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 		if (*colon == ':')
 		{
 			*colon = 0;
-			((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));
+			((struct sockaddr_in *)sadr)->sin_port = htons((int16)atoi(colon+1));
 			break;
 		}
 	}
@@ -150,7 +150,7 @@ void NetadrToSockadr (netadr_t *a, struct sockaddr_in *s)
 	}
 }
 
-char	*NET_inet_ntoa (unsigned long ip)
+char	*NET_inet_ntoa (uint32 ip)
 {
 	return inet_ntoa (*(struct in_addr *)&ip);
 }
@@ -405,7 +405,7 @@ void NET_CloseSocket (int s)
 	closesocket (s);
 }
 
-int NET_Listen (unsigned short port)
+int NET_Listen (uint16 port)
 {
 	struct sockaddr_in addr;
 	int s;
@@ -467,9 +467,9 @@ int NET_Connect (netadr_t *to, int port)
 		return s;
 
 	memset (&addr.sin_zero, 0, sizeof(addr.sin_zero));
-	addr.sin_port = htons ((unsigned short)port);
+	addr.sin_port = htons ((uint16)port);
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = *(unsigned long *)to->ip;
+	addr.sin_addr.s_addr = *(uint32 *)to->ip;
 
 	if (ioctlsocket (s, FIONBIO, (u_long *)&_true) == -1)
 	{

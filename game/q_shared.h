@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
@@ -42,16 +43,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#define ENHANCED_SERVER 1
 
 // q_shared.h -- included first by ALL program modules
-
-#if _WIN64 || __x64
-#ifdef _WIN64
-typedef __int64		INTPTR;
-#else
-typedef long long	INTPTR;
-#endif
-#else
-typedef	int			INTPTR;
-#endif
 
 #ifdef _WIN32
 // unknown pragmas are SUPPOSED to be ignored, but....
@@ -72,10 +63,8 @@ typedef	int			INTPTR;
 #pragma warning(3 : 4056)
 #pragma warning(3 : 4191)
 #pragma warning(3 : 4254)
-
-#if _MSC_VER >= 1400
 #pragma warning(disable: 4996)		// deprecated functions
-#endif
+
 #define alloca _alloca
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -85,7 +74,9 @@ typedef	int			INTPTR;
 #define Q_strncasecmp strnicmp
 #define Q_stricmp _strcmpi
 #define strdup _strdup
+#ifndef fileno
 #define fileno _fileno
+#endif
 #define strlwr _strlwr
 #define filelength _filelength
 #define stricmp _stricmp
@@ -95,8 +86,22 @@ typedef	int			INTPTR;
 #define DEBUGBREAKPOINT _asm int 3
 #define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
 #define __attribute__(x) 
-
+#define PACKED_STRUCT
+typedef __int32 int32;
+typedef __int16 int16;
+typedef __int64 int64;
+typedef unsigned __int32 uint32;
+typedef unsigned __int16 uint16;
+typedef unsigned __int64 uint64;
 #else /* NON-WIN32 */
+#include <stdint.h>
+typedef int32_t int32;
+typedef int16_t int16;
+typedef int64_t int64;
+typedef uint32_t uint32;
+typedef uint16_t uint16;
+typedef uint64_t uint64;
+#define PACKED_STRUCT __attribute__((packed))
 //XXX: are these portable enough on non-win32?
 #define Q_stricmp strcasecmp
 #define Q_strncasecmp strncasecmp
@@ -130,7 +135,7 @@ int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
 #ifdef  NDEBUG
 #define Q_assert(exp)     ((void)0)
 #else
-void _Q_assert (char *expression, char *function, unsigned line);
+void _Q_assert (char *expression, char *function, uint32 line);
 #define Q_assert(exp) (void)( (exp) || (_Q_assert(#exp, __FILE__, __LINE__), 0) )
 #endif
 
@@ -153,9 +158,9 @@ typedef enum {false, true}	qboolean;
 #define NULL ((void *)0)
 #endif
 
-#ifdef WIN32
-#define FLOAT2INTCAST(f)(*((int *)(&f)))
-#define FLOAT2UINTCAST(f)(*((unsigned int *)(&f)))
+#ifdef _WIN32
+#define FLOAT2INTCAST(f)(*((int32 *)(&f)))
+#define FLOAT2UINTCAST(f)(*((uint32 *)(&f)))
 #define FLOAT_LT_ZERO(f) (FLOAT2UINTCAST(f) > 0x80000000U)
 #define FLOAT_LE_ZERO(f) (FLOAT2INTCAST(f) <= 0)
 #define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
@@ -233,7 +238,8 @@ MULTICAST_PHS_R,
 MULTICAST_PVS_R
 } multicast_t;
 
-short   ShortSwap (short l);
+int16   ShortSwap (int16 l);
+
 #if !YOU_HAVE_A_BROKEN_COMPUTER
 #define LittleShort(l) (l)
 #define LittleLong(l) (l)
@@ -278,12 +284,12 @@ extern vec3_t vec3_origin;
 #if !defined C_ONLY && !defined __linux__ && !defined __sgi && !defined SSE2 && !defined __FreeBSD__
 //extern void __cdecl Q_sseinit (void);
 void __cdecl Q_ftol2( float f, int *out );
-long __cdecl Q_ftol( float f );
+uint32 __cdecl Q_ftol( float f );
 extern void __cdecl Q_fastfloats (float *f, int *out);
 //extern void __cdecl Q_ftolsse( float f, int *out );
 //the overhead of using function pointer offsets any savings of using sse2 :/
 #else
-#define Q_ftol( f ) ( long ) (f)
+#define Q_ftol( f ) ( uint32 ) (f)
 void Q_ftol2( float f, int *out );
 #endif
 
@@ -298,6 +304,7 @@ void _Q_DEBUGBREAKPOINT (void);
 #define VectorClear(a)			(a[0]=a[1]=a[2]=0)
 #define VectorNegate(a,b)		(b[0]=-a[0],b[1]=-a[1],b[2]=-a[2])
 #define VectorSet(v, x, y, z)	(v[0]=(x), v[1]=(y), v[2]=(z))
+#define VectorAverage(a,b,o)	((o)[0]=((a)[0]+(b)[0])*0.5f,(o)[1]=((a)[1]+(b)[1])*0.5f,(o)[2]=((a)[2]+(b)[2])*0.5f)
 
 //r1: macorize
 #define VectorCompare(v1,v2)	(v1[0]==v2[0] && v1[1]==v2[1] && v1[2]== v2[2])
@@ -392,8 +399,8 @@ int Q_strncasecmp (char *s1, char *s2, int n);
 //=============================================
 
 #if YOU_HAVE_A_BROKEN_COMPUTER
-short	LittleShort(short l);
-int		LittleLong (int l);
+int16	LittleShort(int16 l);
+int32		LittleLong (int32 l);
 float	LittleFloat (float l);
 #endif
 
@@ -416,8 +423,8 @@ void Info_SetValueForKey (char *s, char *key, char *value);
 qboolean Info_Validate (char *s);
 qboolean Info_CheckBytes (char *s);
 
-void seedMT(unsigned long seed);
-unsigned long randomMT (void);
+void seedMT (uint32 seed);
+uint32 randomMT (void);
 
 /*
 ==============================================================
@@ -448,8 +455,8 @@ int		Hunk_End (void);
 /*
 ** pass in an attribute mask of things you wish to REJECT
 */
-char	*Sys_FindFirst (char *path, unsigned musthave, unsigned canthave );
-char	*Sys_FindNext ( unsigned musthave, unsigned canthave );
+char	*Sys_FindFirst (char *path, uint32 musthave, uint32 canthave );
+char	*Sys_FindNext ( uint32 musthave, uint32 canthave );
 void	Sys_FindClose (void);
 
 
@@ -693,12 +700,12 @@ typedef struct
 {
 	pmtype_t	pm_type;
 
-	short		origin[3];		// 12.3
-	short		velocity[3];	// 12.3
+	int16		origin[3];		// 12.3
+	int16		velocity[3];	// 12.3
 	byte		pm_flags;		// ducked, jump_held, etc
 	byte		pm_time;		// each unit = 8 ms
-	short		gravity;
-	short		delta_angles[3];	// add to command angles to get view direction
+	int16		gravity;
+	int16		delta_angles[3];	// add to command angles to get view direction
 									// changed by spawns, rotating objects, and teleporters
 } pmove_state_t;
 
@@ -716,8 +723,8 @@ typedef struct usercmd_s
 {
 	byte	msec;
 	byte	buttons;
-	short	angles[3];
-	short	forwardmove, sidemove, upmove;
+	int16	angles[3];
+	int16	forwardmove, sidemove, upmove;
 	byte	impulse;		// remove?
 	byte	lightlevel;		// light level the player is standing on
 } usercmd_t;
@@ -1356,7 +1363,7 @@ ROGUE - VERSIONS
 // All muzzle flashes really should be converted to events...
 typedef enum
 {
-	EV_NONE,
+	EVENT_NONE,
 	EV_ITEM_RESPAWN,
 	EV_FOOTSTEP,
 	EV_FALLSHORT,
@@ -1377,17 +1384,17 @@ typedef struct entity_state_s
 	vec3_t	origin;
 	vec3_t	angles;
 	vec3_t	old_origin;		// for lerping
-	int		modelindex;
-	int		modelindex2, modelindex3, modelindex4;	// weapons, CTF flags, etc
-	int		frame;
-	int		skinnum;
-	unsigned int		effects;		// PGM - we're filling it, so it needs to be unsigned
-	int		renderfx;
-	int		solid;			// for client side prediction, 8*(bits 0-4) is x/y radius
+	int32		modelindex;
+	int32		modelindex2, modelindex3, modelindex4;	// weapons, CTF flags, etc
+	int32		frame;
+	int32		skinnum;
+	uint32	effects;		// PGM - we're filling it, so it needs to be unsigned
+	int32		renderfx;
+	int32		solid;		// for client side prediction, 8*(bits 0-4) is x/y radius
 							// 8*(bits 5-9) is z down distance, 8(bits10-15) is z up
 							// gi.linkentity sets this properly
-	int		sound;			// for looping sounds, to guarantee shutoff
-	int		event;			// impulse events -- muzzle flashes, footsteps, etc
+	int32		sound;		// for looping sounds, to guarantee shutoff
+	int32		event;		// impulse events -- muzzle flashes, footsteps, etc
 							// events only go out for a single frame, they
 							// are automatically cleared each frame
 } entity_state_t;
@@ -1417,7 +1424,7 @@ typedef struct
 
 	int			rdflags;		// refdef flags
 
-	short		stats[MAX_STATS];		// fast status bar updates
+	int16		stats[MAX_STATS];		// fast status bar updates
 
 	vec3_t		mins;
 	vec3_t		maxs;
@@ -1446,7 +1453,7 @@ typedef struct
 
 	int			rdflags;		// refdef flags
 
-	short		stats[MAX_STATS];		// fast status bar updates
+	int16		stats[MAX_STATS];		// fast status bar updates
 } player_state_old;
 
 /*typedef struct
@@ -1472,7 +1479,7 @@ typedef struct
 
 	int			rdflags;		// refdef flags
 
-	short		stats[MAX_STATS];		// fast status bar updates
+	int16		stats[MAX_STATS];		// fast status bar updates
 
 	vec3_t		mins;
 	vec3_t		maxs;
@@ -1514,7 +1521,7 @@ typedef struct
 
 	int			rdflags;		// refdef flags
 
-	short		stats[MAX_STATS];		// fast status bar updates
+	int16		stats[MAX_STATS];		// fast status bar updates
 } player_state_old_t;*/
 
 // ==================

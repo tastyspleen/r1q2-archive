@@ -1,6 +1,5 @@
 /* GLOBAL.H - RSAREF types and constants */
 #ifndef USE_OPENSSL
-#include <string.h>
 #include "../qcommon/qcommon.h"
 #include "../qcommon/md4.h"
   
@@ -32,9 +31,9 @@ These notices must be retained in any copies of any part of this documentation a
 #define S33 11
 #define S34 15
 
-static void MD4Transform (UINT4 [4], unsigned char [64]);
-static void Encode (unsigned char *, UINT4 *, unsigned int);
-static void Decode (UINT4 *, unsigned char *, unsigned int);
+static void MD4Transform (uint32 [4], unsigned char [64]);
+static void Encode (unsigned char *, uint32 *, uint32);
+static void Decode (uint32 *, unsigned char *, uint32);
 
 static unsigned char PADDING[64] = {
 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -52,9 +51,9 @@ static unsigned char PADDING[64] = {
 /* Rotation is separate from addition to prevent recomputation */
 #define FF(a, b, c, d, x, s) {(a) += F ((b), (c), (d)) + (x); (a) = ROTATE_LEFT ((a), (s));}
 
-#define GG(a, b, c, d, x, s) {(a) += G ((b), (c), (d)) + (x) + (UINT4)0x5a827999; (a) = ROTATE_LEFT ((a), (s));}
+#define GG(a, b, c, d, x, s) {(a) += G ((b), (c), (d)) + (x) + (uint32)0x5a827999; (a) = ROTATE_LEFT ((a), (s));}
 
-#define HH(a, b, c, d, x, s) {(a) += H ((b), (c), (d)) + (x) + (UINT4)0x6ed9eba1; (a) = ROTATE_LEFT ((a), (s));}
+#define HH(a, b, c, d, x, s) {(a) += H ((b), (c), (d)) + (x) + (uint32)0x6ed9eba1; (a) = ROTATE_LEFT ((a), (s));}
 
 
 /* MD4 initialization. Begins an MD4 operation, writing a new context. */
@@ -62,26 +61,26 @@ void MD4_Init (MD4_CTX *context)
 {
 	context->count[0] = context->count[1] = 0;
 
-/* Load magic initialization constants.*/
-context->state[0] = 0x67452301;
-context->state[1] = 0xefcdab89;
-context->state[2] = 0x98badcfe;
-context->state[3] = 0x10325476;
+	/* Load magic initialization constants.*/
+	context->state[0] = 0x67452301;
+	context->state[1] = 0xefcdab89;
+	context->state[2] = 0x98badcfe;
+	context->state[3] = 0x10325476;
 }
 
 /* MD4 block update operation. Continues an MD4 message-digest operation, processing another message block, and updating the context. */
-void MD4_Update (MD4_CTX *context, unsigned char *input, unsigned int inputLen)
+void MD4_Update (MD4_CTX *context, byte *input, uint32 inputLen)
 {
-	unsigned int i, index, partLen;
+	uint32 i, index, partLen;
 
 	/* Compute number of bytes mod 64 */
-	index = (unsigned int)((context->count[0] >> 3) & 0x3F);
+	index = (uint32)((context->count[0] >> 3) & 0x3F);
 
 	/* Update number of bits */
-	if ((context->count[0] += ((UINT4)inputLen << 3))< ((UINT4)inputLen << 3))
+	if ((context->count[0] += ((uint32)inputLen << 3))< ((uint32)inputLen << 3))
 		context->count[1]++;
 
-	context->count[1] += ((UINT4)inputLen >> 29);
+	context->count[1] += ((uint32)inputLen >> 29);
 
 	partLen = 64 - index;
 
@@ -105,16 +104,16 @@ void MD4_Update (MD4_CTX *context, unsigned char *input, unsigned int inputLen)
 
 
 /* MD4 finalization. Ends an MD4 message-digest operation, writing the the message digest and zeroizing the context. */
-void MD4_Final (unsigned char digest[16], MD4_CTX *context)
+void MD4_Final (byte digest[16], MD4_CTX *context)
 {
-	unsigned char bits[8];
-	unsigned int index, padLen;
+	byte		bits[8];
+	uint32		index, padLen;
 
 	/* Save number of bits */
 	Encode (bits, context->count, 8);
 
 	/* Pad out to 56 mod 64.*/
-	index = (unsigned int)((context->count[0] >> 3) & 0x3f);
+	index = (uint32)((context->count[0] >> 3) & 0x3f);
 	padLen = (index < 56) ? (56 - index) : (120 - index);
 	MD4_Update (context, PADDING, padLen);
 
@@ -130,9 +129,9 @@ void MD4_Final (unsigned char digest[16], MD4_CTX *context)
 
 
 /* MD4 basic transformation. Transforms state based on block. */
-static void MD4Transform (UINT4 state[4], unsigned char block[64])
+static void MD4Transform (uint32 state[4], byte block[64])
 {
-	UINT4 a = state[0], b = state[1], c = state[2], d = state[3], x[16];
+	uint32 a = state[0], b = state[1], c = state[2], d = state[3], x[16];
 
 	Decode (x, block, 64);
 
@@ -201,9 +200,9 @@ state[3] += d;
 
 
 /* Encodes input (UINT4) into output (unsigned char). Assumes len is a multiple of 4. */
-static void Encode (unsigned char *output, UINT4 *input, unsigned int len)
+static void Encode (byte *output, uint32 *input, uint32 len)
 {
-	unsigned int i, j;
+	uint32 i, j;
 
 	for (i = 0, j = 0; j < len; i++, j += 4) {
  		output[j] = (unsigned char)(input[i] & 0xff);
@@ -215,23 +214,23 @@ static void Encode (unsigned char *output, UINT4 *input, unsigned int len)
 
 
 /* Decodes input (unsigned char) into output (UINT4). Assumes len is a multiple of 4. */
-static void Decode (UINT4 *output, unsigned char *input, unsigned int len)
+static void Decode (uint32 *output, byte *input, uint32 len)
 {
-unsigned int i, j;
+	uint32 i, j;
 
-for (i = 0, j = 0; j < len; i++, j += 4)
- 	output[i] = ((UINT4)input[j]) | (((UINT4)input[j+1]) << 8) | (((UINT4)input[j+2]) << 16) | (((UINT4)input[j+3]) << 24);
+	for (i = 0, j = 0; j < len; i++, j += 4)
+ 		output[i] = ((uint32)input[j]) | (((uint32)input[j+1]) << 8) | (((uint32)input[j+2]) << 16) | (((uint32)input[j+3]) << 24);
 }
 
-unsigned Com_BlockChecksum (void *buffer, int length)
+uint32 Com_BlockChecksum (void *buffer, int length)
 {
-	int			digest[4];
-	unsigned	val;
+	int32		digest[4];
+	uint32		val;
 	MD4_CTX		ctx;
 
 	MD4_Init (&ctx);
-	MD4_Update (&ctx, (unsigned char *)buffer, length);
-	MD4_Final ( (unsigned char *)digest, &ctx);
+	MD4_Update (&ctx, (byte *)buffer, length);
+	MD4_Final ( (byte *)digest, &ctx);
 	
 	val = digest[0] ^ digest[1] ^ digest[2] ^ digest[3];
 

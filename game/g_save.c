@@ -205,9 +205,7 @@ void InitGame (void)
 	// items
 	InitItems ();
 
-	Com_sprintf (game.helpmessage1, sizeof(game.helpmessage1), "");
-
-	Com_sprintf (game.helpmessage2, sizeof(game.helpmessage2), "");
+	game.helpmessage1[0] = game.helpmessage2[0] = 0;
 
 	// initialize all entities for this game
 	game.maxentities = maxentities->value;
@@ -716,7 +714,7 @@ void ReadLevel (const char *filename)
 		gi.error ("ReadLevel: function pointers have moved");
 	}
 #else
-	gi.dprintf("Function offsets %d\n", ((byte *)base) - ((byte *)InitGame));
+	gi.dprintf("Function offsets %td\n", ((byte *)base) - ((byte *)InitGame));
 #endif
 
 	// load the level locals

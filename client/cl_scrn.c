@@ -220,7 +220,7 @@ CENTER PRINTING
 
 char		scr_centerstring[1024];
 //float		scr_centertime_start;	// for slow victory printing
-unsigned	scr_centertime_off;
+uint32		scr_centertime_off;
 int			scr_center_lines;
 int			scr_erase_center;
 
@@ -696,11 +696,11 @@ int EXPORT entitycmpfnc( const entity_t *a, const entity_t *b )
 	*/
 	if ( a->model == b->model )
 	{
-		return ( ( INTPTR ) a->skin - ( INTPTR ) b->skin );
+		return ( ( ptrdiff_t ) a->skin - ( ptrdiff_t ) b->skin );
 	}
 	else
 	{
-		return ( ( INTPTR ) a->model - ( INTPTR ) b->model );
+		return ( ( ptrdiff_t ) a->model - ( ptrdiff_t ) b->model );
 	}
 }
 

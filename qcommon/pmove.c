@@ -39,7 +39,7 @@ typedef struct
 	cplane_t	groundplane;
 	int			groundcontents;
 
-	short		previous_origin[3];
+	int16		previous_origin[3];
 	qboolean	ladder;
 } pml_t;
 
@@ -1120,7 +1120,7 @@ void PM_SnapPosition (void)
 {
 	int		sign[3];
 	int		i, j, bits;
-	short	base[3];
+	int16	base[3];
 	// try all single bits first
 	static int jitterbits[8] = {0,4,1,2,3,5,6,7};
 
@@ -1171,7 +1171,7 @@ PM_InitialSnapPosition
 void PM_InitialSnapPosition (void)
 {
 	int		x, y, z;
-	short	base[3];
+	int16	base[3];
 
 	VectorCopy (pm->s.origin, base);
 
@@ -1208,7 +1208,7 @@ PM_InitialSnapPosition
 void PM_InitialSnapPosition(void)
 {
 	int        x, y, z;
-	short      base[3];
+	int16      base[3];
 	static int offset[3] = { 0, -1, 1 };
 
 	VectorCopy (pm->s.origin, base);
@@ -1243,7 +1243,7 @@ PM_ClampAngles
 */
 void PM_ClampAngles (void)
 {
-	short	temp;
+	int16	temp;
 	int		i;
 
 	if (pm->s.pm_flags & PMF_TIME_TELEPORT)

@@ -49,20 +49,20 @@ static void SV_SetMaster_f (void)
 	// make sure the server is listed public
 	Cvar_Set ("public", "1");
 
-	for (i=1 ; i<MAX_MASTERS ; i++)
-		memset (&master_adr[i], 0, sizeof(master_adr[i]));
+	memset (&master_adr, 0, sizeof(master_adr));
 
-	slot = 1;		// slot 0 will always contain the id master
+	slot = 0;		// slot 0 will not always contain the id master
 	for (i=1 ; i<Cmd_Argc() ; i++)
 	{
 		if (slot == MAX_MASTERS)
 			break;
 
-		if (!NET_StringToAdr (Cmd_Argv(i), &master_adr[i]))
+		if (!NET_StringToAdr (Cmd_Argv(i), &master_adr[slot]))
 		{
 			Com_Printf ("Bad address: %s\n", LOG_GENERAL, Cmd_Argv(i));
 			continue;
 		}
+
 		if (master_adr[slot].port == 0)
 			master_adr[slot].port = ShortSwap (PORT_MASTER);
 
@@ -229,11 +229,8 @@ static void qCopyFile (char *src, char *dst)
 		l = fread (buffer, 1, sizeof(buffer), f1);
 		if (!l)
 		{
-			break;
-		}
-		else if (l == -1)
-		{
-			Com_Printf ("WARNING: qCopyFile: fread() failed.\n", LOG_GENERAL|LOG_WARNING);
+			if (ferror (f1))
+				Com_Printf ("WARNING: qCopyFile: fread() failed.\n", LOG_GENERAL|LOG_WARNING);
 			break;
 		}
 
@@ -963,13 +960,22 @@ static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *if
 		}
 	}
 
-	blocktype = Cmd_Argv(2);
+	//blocktype = Cmd_Argv(2);
 
-	if (!Q_stricmp (iffound, "kick")) {
+	if (!Q_stricmp (iffound, "kick"))
+	{
 		blockmethod = CVARBAN_KICK;
-	} else if (!Q_stricmp (iffound, "blackhole")) {
+	}
+	else if (!Q_stricmp (iffound, "blackhole"))
+	{
 		blockmethod = CVARBAN_BLACKHOLE;
-	} else {
+	}
+	else if (!Q_stricmp (iffound, "log"))
+	{
+		blockmethod = CVARBAN_LOGONLY;
+	}
+	else
+	{
 		Com_Printf ("Error: Unknown match action '%s'\n", LOG_GENERAL, iffound);
 		return false;
 	}
@@ -1067,7 +1073,7 @@ static void SV_AddUserinfoBan_f (void)
 		Com_Printf ("userinfoban for '%s %s' added.\n", LOG_GENERAL, cvar, blocktype);
 }
 
-static int MaskBits (unsigned long mask)
+static int MaskBits (uint32 mask)
 {
 	int		i;
 	int		bits;
@@ -1124,7 +1130,7 @@ static void SV_Delhole_f (void)
 		{
 			temp = temp->next;
 
-			if (*(unsigned long *)adr.ip == temp->ip)
+			if (*(uint32 *)adr.ip == temp->ip)
 				goto remove;
 
 			x++;
@@ -1161,8 +1167,8 @@ static char *cmdbanmethodnames[] =
 
 static void SV_AddCommandBan_f (void)
 {
-	short				logmethod;
-	short				method;
+	int16				logmethod;
+	int16				method;
 	bannedcommands_t	*x;
 
 	if (Cmd_Argc() < 2)
@@ -1445,7 +1451,7 @@ static void SV_Kick_f (void)
 		return;
 
 	//r1: ignore kick message on connecting players (and those with no name)
-	if (sv_client->state == cs_spawned && *sv_client->name)
+	if (sv_client->state == cs_spawned && sv_client->name[0])
 		SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked\n", sv_client->name);
 	// print directly, because the dropped client won't get the
 	// SV_BroadcastPrintf message
@@ -1829,6 +1835,11 @@ static void SV_Status_f (void)
 		Com_Printf (" # name            file                                  position done z\n", LOG_GENERAL);
 		Com_Printf ("-- --------------- ------------------------------------- -------- ---- -\n", LOG_GENERAL);
 	}
+	else if (statusMethod == 3)
+	{
+		Com_Printf (" # name            msglen overflow\n", LOG_GENERAL);
+		Com_Printf ("-- --------------- ------ --------\n", LOG_GENERAL);
+	}
 	else
 	{
 		Com_Printf ("num score ping name            lastmsg ip address            rate/pps ver\n", LOG_GENERAL);
@@ -1854,6 +1865,9 @@ static void SV_Status_f (void)
 			case 2:
 				if (cl->download)
 					Com_Printf ("%2i %-15s %-37s %8d %3d%% %d\n", LOG_GENERAL, i, cl->name, cl->downloadFileName, cl->downloadcount, (int)(((float)cl->downloadcount / (float)cl->downloadsize)*100), cl->downloadCompressed);
+				continue;
+			case 3:
+				Com_Printf ("%2i %-15s %-6d %.3f\n", LOG_GENERAL, i, cl->name, cl->netchan.message.buffsize, cl->commandMsecOverflowCount);
 				continue;
 			default:
 				break;
@@ -1897,6 +1911,12 @@ static void SV_Status_f (void)
 		Com_Printf ("%3i %3i\n", LOG_GENERAL, cl->fps, cl->protocol);
 	}
 	Com_Printf ("\n", LOG_GENERAL);
+
+	if (statusMethod == 1)
+	{
+		Com_Printf ("Protocol 35 netcode has saved %lu bytes.\n", LOG_GENERAL, svs.proto35BytesSaved);
+		Com_Printf ("Protocol 35 compression has saved %lu bytes.\n", LOG_GENERAL, svs.proto35CompressionBytes);
+	}
 }
 
 /*
@@ -1937,7 +1957,8 @@ static void SV_ConSay_f(void)
 	}
 }
 
-#ifdef WIN32
+#ifdef _WIN32
+#ifdef DEDICATED_ONLY
 static void SV_InstallService_f (void)
 {
 
@@ -1965,6 +1986,7 @@ static void SV_DeleteService_f (void)
 
 	Sys_DeleteService (Cmd_Args());
 }
+#endif
 
 static void SV_Trayicon_f (void)
 {
@@ -2351,9 +2373,11 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("dellrconcmd", SV_DelLrconCmd_f);
 
 	//r1: service support
-#ifdef WIN32
+#ifdef _WIN32
+#ifdef DEDICATED_ONLY
 	Cmd_AddCommand ("installservice", SV_InstallService_f);
 	Cmd_AddCommand ("deleteservice", SV_DeleteService_f);
+#endif
 
 	Cmd_AddCommand ("tray", SV_Trayicon_f);
 	Cmd_AddCommand ("minimize", SV_Minimize_f);

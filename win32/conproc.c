@@ -86,7 +86,7 @@ int CCheckParm (char *parm)
 
 void InitConProc (int argc, char **argv)
 {
-	unsigned	threadAddr;
+	DWORD       threadAddr;
 	HANDLE		hFile = NULL;
 	HANDLE		heventParent = NULL;
 	HANDLE		heventChild = NULL;

@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // common.c -- misc functions used in client and server
 #include "qcommon.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #define OPENSSLEXPORT __cdecl
 #endif
 #ifdef USE_OPENSSL
@@ -241,7 +241,7 @@ void Com_Printf (const char *fmt, int level, ...)
 
 	// also echo to debugging console
 #ifndef NO_SERVER
-	Sys_ConsoleOutput (msg);
+		Sys_ConsoleOutput (msg);
 #endif
 	}
 
@@ -286,7 +286,7 @@ void Com_Printf (const char *fmt, int level, ...)
 
 				time_t	tm;
 				time(&tm);
-				strftime(timestamp, sizeof(timestamp)-1, logfile_timestamp_format->string, localtime(&tm));
+				strftime (timestamp, sizeof(timestamp)-1, logfile_timestamp_format->string, localtime(&tm));
 
 				msgptr = msg;
 				line = strchr (msgptr, '\n');
@@ -398,7 +398,7 @@ void Com_Error (int code, const char *fmt, ...)
 	{
 		Com_Printf ("Disconnected by server!\n", LOG_CLIENT);
 #ifndef DEDICATED_ONLY
-		CL_Drop (false);
+		CL_Drop (false, true);
 #endif
 		recursive = false;
 		longjmp (abortframe, -1);
@@ -410,7 +410,7 @@ void Com_Error (int code, const char *fmt, ...)
 		SV_Shutdown (va("Server exited: %s\n", msg), false, false);
 #endif
 #ifndef DEDICATED_ONLY
-		CL_Drop (code == ERR_NET);
+		CL_Drop (code == ERR_NET, false);
 #endif
 		recursive = false;
 
@@ -580,11 +580,11 @@ void MSG_WriteShort (int c)
 	byte	*buf;
 	
 /*#ifdef PARANOID
-	if (c < ((short)0x8000) || c > (short)0x7fff)
+	if (c < ((int16)0x8000) || c > (int16)0x7fff)
 		Com_Error (ERR_FATAL, "MSG_WriteShort: range error");
 #endif*/
 	//XXX: unsigned shorts are written here too...
-	//Q_assert (!(c < ((short)0x8000) || c > (short)0x7fff));
+	//Q_assert (!(c < ((int16)0x8000) || c > (int16)0x7fff));
 
 	buf = SZ_GetSpace (&msgbuff, 2);
 	buf[0] = c&0xff;
@@ -903,9 +903,9 @@ void MSG_WriteDeltaEntity (entity_state_t *from, entity_state_t *to, qboolean fo
 		
 	if ( to->skinnum != from->skinnum )
 	{
-		if ((unsigned)to->skinnum < 256)
+		if ((uint32)to->skinnum < 256)
 			bits |= U_SKIN8;
-		else if ((unsigned)to->skinnum < 0x10000)
+		else if ((uint32)to->skinnum < 0x10000)
 			bits |= U_SKIN16;
 		else
 			bits |= (U_SKIN8|U_SKIN16);
@@ -1108,7 +1108,8 @@ void MSG_WriteDeltaEntity (entity_state_t *from, entity_state_t *to, qboolean fo
 		MSG_WriteShort (to->solid);
 
 #ifdef ENHANCED_SERVER
-	if (bits & U_VELOCITY) {
+	if (bits & U_VELOCITY)
+	{
 		MSG_WriteCoord (to->velocity[0]);
 		MSG_WriteCoord (to->velocity[1]);
 		MSG_WriteCoord (to->velocity[2]);
@@ -1162,7 +1163,7 @@ int MSG_ReadShort (sizebuf_t *msg_read)
 	if (msg_read->readcount+2 > msg_read->cursize)
 		c = -1;
 	else		
-		c = (short)(msg_read->data[msg_read->readcount]
+		c = (int16)(msg_read->data[msg_read->readcount]
 		+ (msg_read->data[msg_read->readcount+1]<<8));
 	
 	msg_read->readcount += 2;
@@ -1331,10 +1332,12 @@ void MSG_ReadData (sizebuf_t *msg_read, void *data, int len)
 
 void SZ_Init (sizebuf_t /*@out@*/*buf, byte /*@out@*/*data, int length)
 {
+	Q_assert (length > 0);
+
 	memset (buf, 0, sizeof(*buf));
 	buf->data = data;
 	buf->maxsize = length;
-	buf->buffsize = length;
+	buf->buffsize = length;	//should never change this
 }
 
 void SZ_Clear (sizebuf_t /*@out@*/*buf)
@@ -1569,16 +1572,16 @@ just cleared malloc with counters now...
 typedef struct zhead_s
 {
 	struct zhead_s	*prev, *next;
-	short	magic;
-	short	tag;			// for group free
+	int16	magic;
+	int16	tag;			// for group free
 	int		size;
 } zhead_t;
 
 typedef struct z_memloc_s
 {
 	void				*address;
-	unsigned int		time;
-	unsigned int		size;
+	uint32				time;
+	uint32				size;
 	struct	z_memloc_s	*next;
 } z_memloc_t;
 
@@ -1843,7 +1846,7 @@ void *Z_TagMallocRelease (int size, int tag)
 
 	z_count++;
 
-	if ((unsigned)tag < TAGMALLOC_MAX_TAGS)
+	if ((uint32)tag < TAGMALLOC_MAX_TAGS)
 		tagmalloc_tags[tag].allocs++;
 
 	z_bytes += size;
@@ -2061,7 +2064,7 @@ byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 	int				x;
 	byte			*p;
 	byte			chkb[60 + 4];
-	unsigned short	crc;
+	uint16			crc;
 	byte			r;
 
 
@@ -2092,10 +2095,10 @@ byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 }
 
 #ifdef USE_OPENSSL
-unsigned Com_BlockChecksum (void *buffer, int length)
+uint32 Com_BlockChecksum (void *buffer, int length)
 {
 	int			digest[4];
-	unsigned	val;
+	uint32		val;
 	MD4_CTX		ctx;
 
 	MD4_Init (&ctx);
@@ -2200,7 +2203,10 @@ void _logfile_changed (cvar_t *cvar, char *o, char *n)
 	if (cvar->intvalue == 0)
 	{
 		if (logfile)
+		{
 			fclose (logfile);
+			logfile = NULL;
+		}
 	}
 }
 
@@ -2211,7 +2217,7 @@ void Qcommon_Init (int argc, char **argv)
 	if (setjmp (abortframe) )
 		Sys_Error ("Error during initialization");
 
-	seedMT((unsigned long)time(0));
+	seedMT((uint32)time(0));
 
 	SZ_Init (&msgbuff, message_buff, sizeof(message_buff));
 
@@ -2283,7 +2289,6 @@ void Qcommon_Init (int argc, char **argv)
 	logfile_timestamp_format = Cvar_Get ("logfile_timestamp_format", "[%Y-%m-%d %H:%M]", 0);
 	logfile_name = Cvar_Get ("logfile_name", "qconsole.log", 0);
 	logfile_filterlevel = Cvar_Get ("logfile_filterlevel", "0", 0);
-
 	logfile_active->changed = _logfile_changed;
 
 	con_filterlevel = Cvar_Get ("con_filterlevel", "0", 0);
@@ -2351,6 +2356,9 @@ void Qcommon_Init (int argc, char **argv)
 #endif
 
 	Cbuf_Execute ();
+
+	//ugly
+	logfile_timestamp_format->flags |= CVAR_NOSET;
 }
 
 /*
@@ -2399,7 +2407,7 @@ void Qcommon_Frame (int msec)
 	{
 		msec = fixedtime->intvalue;
 	}
-	else if (timescale->intvalue)
+	else
 	{
 		msec = (int)(msec * timescale->value);
 
@@ -2623,7 +2631,7 @@ char *StripQuotes (char *string)
 	return string;
 }
 
-char *MakePrintable (const byte *s)
+const char *MakePrintable (const byte *s)
 {
 	int len;
 	static char printable[4096];

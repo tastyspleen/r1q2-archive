@@ -1225,7 +1225,7 @@ CL_BlasterParticles2
 Wall impact puffs (Green)
 ===============
 */
-void CL_BlasterParticles2 (vec3_t org, vec3_t dir, unsigned int color)
+void CL_BlasterParticles2 (vec3_t org, vec3_t dir, uint32 color)
 {
 	int			i, j;
 	cparticle_t	*p;

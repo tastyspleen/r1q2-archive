@@ -430,7 +430,7 @@ void Menu_DrawStatusBar( const char *string )
 
 void Menu_DrawString( int x, int y, const char *string )
 {
-	unsigned i;
+	uint32 i;
 
 	for ( i = 0; i < strlen( string ); i++ )
 	{
@@ -440,7 +440,7 @@ void Menu_DrawString( int x, int y, const char *string )
 
 void Menu_DrawStringDark( int x, int y, const char *string )
 {
-	unsigned i;
+	uint32 i;
 
 	for ( i = 0; i < strlen( string ); i++ )
 	{
@@ -450,7 +450,7 @@ void Menu_DrawStringDark( int x, int y, const char *string )
 
 void Menu_DrawStringR2L( int x, int y, const char *string )
 {
-	unsigned i;
+	uint32 i;
 
 	for ( i = 0; i < strlen( string ); i++ )
 	{
@@ -460,7 +460,7 @@ void Menu_DrawStringR2L( int x, int y, const char *string )
 
 void Menu_DrawStringR2LDark( int x, int y, const char *string )
 {
-	unsigned i;
+	uint32 i;
 
 	for ( i = 0; i < strlen( string ); i++ )
 	{

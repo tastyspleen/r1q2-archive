@@ -71,8 +71,7 @@ FONT 10, "Courier New", 0, 0, 0x0
 BEGIN
     EDITTEXT        IDC_COMMAND,0,209,305,12,ES_AUTOHSCROLL
     DEFPUSHBUTTON   "Send",IDOK,307,209,50,12
-    EDITTEXT        IDC_CONSOLE,0,0,354,207,ES_MULTILINE | ES_AUTOHSCROLL | 
-                    WS_VSCROLL
+    EDITTEXT        IDC_CONSOLE,0,0,354,207,ES_MULTILINE | WS_VSCROLL
 END
 
 
@@ -113,8 +112,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 4,8,1,2
- PRODUCTVERSION 4,8,1,2
+ FILEVERSION 5,1,8,3
+ PRODUCTVERSION 5,1,8,3
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x3L
@@ -132,7 +131,7 @@ BEGIN
             VALUE "Comments", "http://www.r1ch.net/stuff/r1q2/"
             VALUE "CompanyName", "r1ch.net"
             VALUE "FileDescription", "R1Q2 - Enhanced Quake II Client/Server"
-            VALUE "FileVersion", "4, 8, 1, 2"
+            VALUE "FileVersion", "5, 1, 8, 3"
             VALUE "InternalName", "r1q2"
             VALUE "LegalCopyright", "Copyright (C) 2002-2004"
             VALUE "OriginalFilename", "r1q2.exe"

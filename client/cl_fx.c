@@ -93,7 +93,7 @@ void CL_RunLightStyles (void)
 
 	lastofs = ofs;
 
-	for (i=0,ls=cl_lightstyle ; i<numLightStyles ; i++, ls++)
+	for (i=0,ls=cl_lightstyle ; i<=numLightStyles ; i++, ls++)
 	{
 		if (!ls->length)
 		{
@@ -136,7 +136,7 @@ void CL_AddLightStyles (void)
 	int		i;
 	clightstyle_t	*ls;
 
-	for (i=0,ls=cl_lightstyle ; i<numLightStyles; i++, ls++)
+	for (i=0,ls=cl_lightstyle ; i<=numLightStyles; i++, ls++)
 		V_AddLightStyle (i, ls->value[0], ls->value[1], ls->value[2]);
 }
 

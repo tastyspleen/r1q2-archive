@@ -42,7 +42,9 @@ int SV_CountPlayers (void);
 
 //#define DEMO
 
+#ifdef DEDICATED_ONLY
 qboolean	 global_Service = false;
+#endif
 
 HMODULE hSh32 = NULL;
 FARPROC procShell_NotifyIcon = NULL;
@@ -64,8 +66,8 @@ static HANDLE		hinput, houtput;
 BOOL	oldStyleConsole = FALSE;
 #endif
 
-unsigned	sys_msg_time;
-unsigned	sys_frame_time;
+uint32	sys_msg_time;
+uint32	sys_frame_time;
 
 #ifdef USE_PYROADMIN
 extern		cvar_t	*pyroadminport;
@@ -87,8 +89,10 @@ int consoleBufferPointer = 0;
 byte consoleFullBuffer[16384] = {0};
 
 //r1: service support
+#ifdef DEDICATED_ONLY
 SERVICE_STATUS          MyServiceStatus; 
 SERVICE_STATUS_HANDLE   MyServiceStatusHandle; 
+#endif
 
 //original game command line
 char	cmdline[4096];
@@ -128,7 +132,7 @@ int Sys_FileLength (const char *path)
 }
 
 void VID_Restart_f (void);
-void S_Init (qboolean fullInit);
+void S_Init (int fullInit);
 void Sys_Error (const char *error, ...)
 {
 	va_list		argptr;
@@ -189,7 +193,9 @@ void Sys_Quit (void)
 	if (hSh32)
 		FreeLibrary (hSh32);
 
+#ifdef DEDICATED_ONLY
 	if (!global_Service)
+#endif
 		//exit (0);
 		ExitProcess (0);
 }
@@ -214,6 +220,8 @@ void WinError (void)
 	// Free the buffer.
 	LocalFree( lpMsgBuf );
 }
+
+#ifdef DEDICATED_ONLY
 
 void Sys_ServiceCtrlHandler (DWORD Opcode) 
 {
@@ -374,6 +382,7 @@ void Sys_DeleteService (char *servername)
 
 	CloseServiceHandle (schSCManager);
 }
+#endif
 
 void Sys_EnableTray (void)
 {
@@ -416,7 +425,9 @@ void Sys_Minimize (void)
 #ifndef NO_SERVER
 void Sys_SetWindowText (char *buff)
 {
+#ifdef DEDICATED_ONLY
 	if (!global_Service)
+#endif
 		SetWindowText (hwnd_Server, buff);
 }
 
@@ -430,7 +441,7 @@ void ServerWindowProcCommandExecute (void)
 	ret = SendDlgItemMessage (hwnd_Server, IDC_COMMAND, EM_GETLINE, 1, (LPARAM)buff);
 	if (!ret)
 		return;
-	//strcat (buff, "\n");
+
 	buff[ret] = '\n';
 	buff[ret+1] = '\0';
 	Sys_ConsoleOutput (buff);
@@ -441,8 +452,10 @@ void ServerWindowProcCommandExecute (void)
 
 void Sys_UpdateConsoleBuffer (void)
 {
+#ifdef DEDICATED_ONLY
 	if (global_Service)
 		return;
+#endif
 
 	if (console_buffer.cursize) {
 		int len, buflen;
@@ -505,10 +518,15 @@ LRESULT CALLBACK ServerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 			Cbuf_AddText ("quit exiting due to Windows shutdown.\n");
 			return TRUE;
 		case WM_CLOSE:
-			if (!global_Service && SV_CountPlayers()) {
-				int ays = MessageBox (hwnd_Server, "There are still players on the server! Really shut it down?", "WARNING!", MB_YESNO + MB_ICONEXCLAMATION);
-				if (ays == IDNO)
-					return TRUE;
+#ifdef DEDICATED_ONLY
+			if (!global_Service)
+#endif
+			{
+				if (SV_CountPlayers()) {
+					int ays = MessageBox (hwnd_Server, "There are still players on the server! Really shut it down?", "WARNING!", MB_YESNO + MB_ICONEXCLAMATION);
+					if (ays == IDNO)
+						return TRUE;
+				}
 			}
 			Cbuf_AddText ("quit terminated by local request.\n");
 			break;
@@ -578,26 +596,26 @@ void Sys_SetQ2Priority (void)
 	}
 }
 
-CRITICAL_SECTION consoleCrit;
+//CRITICAL_SECTION consoleCrit;
 
 void Sys_AcquireConsoleMutex (void)
 {
-	EnterCriticalSection (&consoleCrit);
+	//EnterCriticalSection (&consoleCrit);
 }
 
 void Sys_ReleaseConsoleMutex (void)
 {
-	LeaveCriticalSection (&consoleCrit);
+	//LeaveCriticalSection (&consoleCrit);
 }
 
 void Sys_InitConsoleMutex (void)
 {
-	InitializeCriticalSection (&consoleCrit);
+	//InitializeCriticalSection (&consoleCrit);
 }
 
 void Sys_FreeConsoleMutex (void)
 {
-	DeleteCriticalSection (&consoleCrit);
+	//DeleteCriticalSection (&consoleCrit);
 }
 
 
@@ -648,8 +666,10 @@ void Sys_Init (void)
 			}
 			else if (!strcmp (argv[i], "-oldconsole"))
 			{
+#ifdef DEDICATED_ONLY
 				if (global_Service)
 					Sys_Error ("-oldconsole and service mode are incompatible");
+#endif
 				oldStyleConsole = TRUE;
 				break;
 			}
@@ -672,7 +692,9 @@ void Sys_Init (void)
 		}
 		else
 		{
+#ifdef DEDICATED_ONLY
 			if (!global_Service)
+#endif
 			{
 				hwnd_Server = CreateDialog (global_hInstance, MAKEINTRESOURCE(IDD_SERVER_GUI), NULL, (DLGPROC)ServerWindowProc);
 
@@ -845,8 +867,13 @@ void Sys_ConsoleOutput (const char *string)
 		return;
 	}
 
+#ifdef DEDICATED_ONLY
+	if (global_Service)
+		return;
+#endif
+
 	//r1: no output for services, non dedicated and not before buffer is initialized.
-	if (global_Service || !console_buffer.maxsize)
+	if (!console_buffer.maxsize)
 		return;
 
 	Sys_AcquireConsoleMutex();
@@ -1044,7 +1071,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 
 #elif defined _WIN64
 
-	const char gamename[] = "gamex64.dll";
+	const char gamename[] = "gamex86_64.dll";
 
 #ifdef NDEBUG
 	const char debugdir[] = "release";
@@ -1267,6 +1294,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	FixWorkingDirectory ();
 
 	//hInstance is empty when we are back here with service code
+#ifdef DEDICATED_ONLY
 	if (hInstance && argc > 1)
 	{
 		if (!strcmp(argv[1], "-service"))
@@ -1275,6 +1303,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			return main ();
 		}
 	}
+#endif
 
 	Qcommon_Init (argc, argv);
 

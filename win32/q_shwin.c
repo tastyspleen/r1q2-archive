@@ -188,7 +188,7 @@ char	findbase[MAX_OSPATH];
 char	findpath[MAX_OSPATH];
 HANDLE	findhandle;
 
-static qboolean CompareAttributes( DWORD found, unsigned musthave, unsigned canthave )
+static qboolean CompareAttributes( DWORD found, uint32 musthave, uint32 canthave )
 {
 	if ( ( found & FILE_ATTRIBUTE_READONLY ) && ( canthave & SFF_RDONLY ) )
 		return false;
@@ -215,7 +215,7 @@ static qboolean CompareAttributes( DWORD found, unsigned musthave, unsigned cant
 	return true;
 }
 
-char *Sys_FindFirst (char *path, unsigned musthave, unsigned canthave )
+char *Sys_FindFirst (char *path, uint32 musthave, uint32 canthave )
 {
 	WIN32_FIND_DATA	findinfo;
 
@@ -235,7 +235,7 @@ char *Sys_FindFirst (char *path, unsigned musthave, unsigned canthave )
 	return findpath;
 }
 
-char *Sys_FindNext ( unsigned musthave, unsigned canthave )
+char *Sys_FindNext ( uint32 musthave, uint32 canthave )
 {
 	WIN32_FIND_DATA	findinfo;
 
@@ -260,7 +260,7 @@ void Sys_FindClose (void)
 	findhandle = 0;
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 #ifdef _DEBUG
 #include <windows.h>
 LARGE_INTEGER start;

@@ -33,15 +33,6 @@ typedef struct
 	mapsurface_t	*surface;
 } cbrushside_t;
 
-/*typedef struct
-{
-	int			contents;
-	int			cluster;
-	int			area;
-	unsigned short	firstleafbrush;
-	unsigned short	numleafbrushes;
-} cleaf_t;*/
-
 typedef struct
 {
 	int			contents;
@@ -78,8 +69,8 @@ static int			numleafs = 1;	// allow leaf funcs to be called without a map
 cleaf_t		map_leafs[MAX_MAP_LEAFS];
 static int			emptyleaf, solidleaf;
 
-static int				numleafbrushes;
-static unsigned short	map_leafbrushes[MAX_MAP_LEAFBRUSHES];
+static int			numleafbrushes;
+static uint16		map_leafbrushes[MAX_MAP_LEAFBRUSHES];
 
 int			numcmodels;
 static cmodel_t	map_cmodels[MAX_MAP_MODELS];
@@ -368,7 +359,9 @@ void CMod_LoadPlanes (lump_t *l)
 		}
 
 		out->dist = LittleFloat (in->dist);
-		out->type = LittleLong (in->type);
+		if (in->type > 5)
+			Com_Error (ERR_DROP, "CMod_LoadPlanes: bad plane type %d", in->type);
+		out->type = (byte)LittleLong (in->type);
 		out->signbits = bits;
 	}
 }
@@ -381,8 +374,8 @@ CMod_LoadLeafBrushes
 void CMod_LoadLeafBrushes (lump_t *l)
 {
 	int			i;
-	unsigned short	*out;
-	unsigned short 	*in;
+	uint16		*out;
+	uint16		*in;
 	int			count;
 	
 	in = (void *)(cmod_base + l->fileofs);
@@ -577,7 +570,7 @@ CM_LoadMap
 Loads in the map and all submodels
 ==================
 */
-cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
+cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 {
 	char			newname[MAX_QPATH];
 	byte			*buf;
@@ -585,9 +578,9 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 	int				i;
 #endif
 	dheader_t		header;
-	unsigned long	length;
-	static unsigned	last_checksum;
-	unsigned long	override_bits;
+	uint32			length;
+	uint32			override_bits;
+	static uint32	last_checksum;
 	map_noareas = Cvar_Get ("map_noareas", "0", 0);
 
 	if (!strcmp (map_name, name) && (clientload || !Cvar_IntValue ("flushmap")) )
@@ -618,6 +611,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 		numleafs = 1;
 		numclusters = 1;
 		numareas = 1;
+		last_checksum = 0;
 		*checksum = 0;
 		return &map_cmodels[0];			// cinematic servers won't have anything at all
 	}
@@ -654,7 +648,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 				if (!length || length >= MAX_MAP_ENTSTRING)
 				{
 					FS_FCloseFile (script);
-					Com_Error (ERR_DROP, "CM_LoadMap: bad entity string size %lu", length);
+					Com_Error (ERR_DROP, "CM_LoadMap: bad entity string size %u", length);
 				}
 				FS_Read (map_entitystring, length, script);
 			}
@@ -679,6 +673,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 			numleafs = 1;
 			numclusters = 1;
 			numareas = 1;
+			last_checksum = 0;
 			*checksum = 0;
 			return &map_cmodels[0];
 		}

@@ -312,7 +312,7 @@ void CL_Download_f (void)
 {
 	char	name[MAX_OSPATH];
 	FILE	*fp;
-	char	*p;
+//	char	*p;
 	char	*filename;
 
 	if (Cmd_Argc() != 2) {
@@ -344,9 +344,9 @@ void CL_Download_f (void)
 	strncpy (cls.downloadname, filename, sizeof(cls.downloadname)-1);
 
 	//r1: fix \ to /
-	p = cls.downloadname;
+	/*p = cls.downloadname;
 	while ((p = strchr(p, '\\')))
-		*p = '/';
+		*p = '/';*/
 
 	// download to a temp name, and only rename
 	// to the real name when done, so if interrupted
@@ -500,8 +500,8 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	//r1: if we're stuck with udp, may as well make best use of the bandwidth...
 	if (dataIsCompressed)
 	{
-		unsigned short	uncompressedLen;
-		byte			uncompressed[0xFFFF];
+		uint16		uncompressedLen;
+		byte		uncompressed[0xFFFF];
 
 		uncompressedLen = MSG_ReadShort (&net_message);
 
@@ -551,11 +551,12 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 CL_ParseServerData
 ==================
 */
-void CL_ParseServerData (void)
+qboolean CL_ParseServerData (void)
 {
 	char	*str;
 	int		i;
-	
+	int		newVersion;
+
 //
 // wipe the client_state_t struct
 //
@@ -605,6 +606,19 @@ void CL_ParseServerData (void)
 	else
 		cl.enhancedServer = 0;
 
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		newVersion = MSG_ReadShort (&net_message);
+		if (newVersion != CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
+		{
+			Com_Printf ("Protocol 35 version mismatch, falling back to 34.\n", LOG_CLIENT);
+			CL_Disconnect(false);
+			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+			CL_Reconnect_f ();
+			return false;
+		}
+	}
+
 	Com_DPrintf ("Serverdata packet received. protocol=%d, servercount=%d, attractloop=%d, clnum=%d, game=%s, map=%s, enhanced=%d\n", cls.serverProtocol, cl.servercount, cl.attractloop, cl.playernum, cl.gamedir, str, cl.enhancedServer);
 
 	if (cl.playernum == -1)
@@ -624,6 +638,9 @@ void CL_ParseServerData (void)
 		// need to prep refresh at next oportunity
 		cl.refresh_prepped = false;
 	}
+
+	CL_FixCvarCheats();
+	return true;
 }
 /*
 ==================
@@ -633,7 +650,7 @@ CL_ParseBaseline
 void CL_ParseBaseline (void)
 {
 	entity_state_t	*es;
-	unsigned int	bits;
+	uint32			bits;
 	int				newnum;
 
 	newnum = CL_ParseEntityBits (&bits);
@@ -648,8 +665,8 @@ void CL_ParseZPacket (void)
 
 	sizebuf_t sb, old;
 
-	short compressed_len = MSG_ReadShort (&net_message);
-	short uncompressed_len = MSG_ReadShort (&net_message);
+	int16 compressed_len = MSG_ReadShort (&net_message);
+	int16 uncompressed_len = MSG_ReadShort (&net_message);
 	
 	if (uncompressed_len <= 0)
 		Com_Error (ERR_DROP, "CL_ParseZPacket: uncompressed_len <= 0");
@@ -728,6 +745,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 
 	if (s[0] == 0 || i == -1)
 	{
+badskin:
 		//strcpy (model_filename, "players/male/tris.md2");
 		//strcpy (weapon_filename, "players/male/weapon.md2");
 		//strcpy (skin_filename, "players/male/grunt.pcx");
@@ -741,6 +759,9 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	}
 	else
 	{
+		int		length;
+		int		j;
+
 		Q_strncpy (model_name, s, sizeof(model_name)-1);
 
 		t = strchr(model_name, '/');
@@ -762,6 +783,26 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		// isolate the skin name
 		Q_strncpy (skin_name, s + strlen(model_name) + 1, sizeof(skin_name)-1);
 		//strcpy (original_skin_name, s + strlen(model_name) + 1);
+
+		length = (int)strlen (model_name);
+		for (j = 0; j < length; j++)
+		{
+			if (!isvalidchar(model_name[j]))
+			{
+				Com_DPrintf ("Bad character '%c' in playermodel '%s'\n", model_name[j], model_name);
+				goto badskin;
+			}
+		}
+
+		length = (int)strlen (skin_name);
+		for (j = 0; j < length; j++)
+		{
+			if (!isvalidchar(skin_name[j]))
+			{
+				Com_DPrintf ("Bad character '%c' in playerskin '%s'\n", skin_name[j], skin_name);
+				goto badskin;
+			}
+		}
 
 		// model file
 		Com_sprintf (model_filename, sizeof(model_filename), "players/%s/tris.md2", model_name);
@@ -888,8 +929,8 @@ CL_ParseConfigString
 */
 void CL_ParseConfigString (void)
 {
+	size_t	length;
 	int		i;
-	int		length;
 	char	*s;
 	char	olds[MAX_QPATH];
 
@@ -909,7 +950,7 @@ void CL_ParseConfigString (void)
 		Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);*/
 
 	//r1: overflow may be desired by some mods in stats programs for example. who knows.
-	length = (int)strlen(s);
+	length = strlen(s);
 
 	if (length >= (sizeof(cl.configstrings[0]) * (MAX_CONFIGSTRINGS-i)) - 1)
 		Com_Error (ERR_DROP, "CL_ParseConfigString: configstring %d exceeds available space", i);
@@ -1087,10 +1128,11 @@ CL_ParseServerMessage
 */
 void CL_ParseServerMessage (void)
 {
-	int			cmd;
+	int			cmd, extrabits;
 	char		*s;
 	int			i;
 	qboolean	gotFrame;
+
 //
 // if recording demos, copy the message out
 //
@@ -1120,6 +1162,10 @@ void CL_ParseServerMessage (void)
 			SHOWNET("END OF MESSAGE");
 			break;
 		}
+
+		//r1: more hacky bit stealing in the name of bandwidth
+		extrabits = cmd & 0xE0;
+		cmd &= 0x1F;
 
 		if (cl_shownet->intvalue>=2)
 		{
@@ -1160,7 +1206,7 @@ void CL_ParseServerMessage (void)
 			//uuuuugly...
 			if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
 			{
-				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\n", LOG_CLIENT);
+				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT);
 				CL_Disconnect(false);
 				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 				CL_Reconnect_f ();
@@ -1238,7 +1284,8 @@ void CL_ParseServerMessage (void)
 			
 		case svc_serverdata:
 			Cbuf_Execute ();		// make sure any stuffed commands are done
-			CL_ParseServerData ();
+			if (!CL_ParseServerData ())
+				return;
 			break;
 			
 		case svc_configstring:
@@ -1264,7 +1311,7 @@ void CL_ParseServerMessage (void)
 			break;
 
 		case svc_frame:
-			CL_ParseFrame ();
+			CL_ParseFrame (extrabits);
 			gotFrame = true;
 			break;
 
@@ -1287,7 +1334,7 @@ void CL_ParseServerMessage (void)
 			{
 				if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
 				{
-					Com_Printf ("Unknown command byte %d, assuming protocol mismatch. Reconnecting with protocol 34.\n", LOG_CLIENT, cmd);
+					Com_Printf ("Unknown command byte %d, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT, cmd);
 					CL_Disconnect(false);
 					cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 					CL_Reconnect_f ();

@@ -689,7 +689,7 @@ void Key_Console (int key)
 		if (length >= MAXCMDLINE-1)
 			return;
 
-		last = key_lines[edit_line][key_linepos];
+		last = key_lines[edit_line][length];
 
 		memmove (key_lines[edit_line] + key_linepos+1, key_lines[edit_line] + key_linepos, length - key_linepos);
 
@@ -697,7 +697,7 @@ void Key_Console (int key)
 		key_linepos++;
 
 		if (!last)
-			key_lines[edit_line][key_linepos] = 0;
+			key_lines[edit_line][length+1] = 0;
 	}
 }
 
@@ -1166,7 +1166,7 @@ Called by the system between frames for both key up and key down events
 Should NOT be called during an interrupt!
 ===================
 */
-void Key_Event (int key, qboolean down, unsigned time)
+void Key_Event (int key, qboolean down, uint32 time)
 {
 	char		*kb;
 	char		cmd[1024];

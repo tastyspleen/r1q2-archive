@@ -67,8 +67,28 @@ void Cmd_Wait_f (void)
 
 sizebuf_t	cmd_text;
 byte		cmd_text_buf[COMMAND_BUFFER_SIZE];
+//byte		defer_text_buf[COMMAND_BUFFER_SIZE];
 
-byte		defer_text_buf[COMMAND_BUFFER_SIZE];
+//r1: packetize commands for security.
+/*#define		MAX_PENDING_BUFFERS	16
+
+typedef enum
+{
+	CMDSRC_UNKNOWN,
+	CMDSRC_CONSOLE,
+	CMDSRC_MENU,
+	CMDSRC_STUFFTEXT
+} cmdsource_t;
+
+typedef struct pendingcmd_s
+{
+	sizebuf_t	buffer;
+	cmdsource_t	source;
+} pendingcmd_t;
+
+static pendingcmd_t	pendingcommands[MAX_PENDING_BUFFERS];
+static int			pendingcommandindex;
+/*
 
 /*
 ============
@@ -95,6 +115,18 @@ void EXPORT Cbuf_AddText (const char *text)
 		return;
 	
 	l = (int)strlen (text);
+
+/*	if (commandsource == pendingcommands[pendingcommandindex].source)
+		cmd_text = pendingcommands[pendingcommandindex].buffer;
+	else
+		pendingcommandindex++;
+
+		if (pendingcommandindex == MAX_PENDING_BUFFERS-1)
+		{
+			Com_Printf ("Cbuf_AddText: no free buffers\n", LOG_GENERAL);
+			return;
+		}
+*/
 
 	if (cmd_text.cursize + l >= cmd_text.maxsize)
 	{
@@ -414,7 +446,7 @@ void Cmd_Exec_f (void)
 
 	if (Cmd_Argc () != 2)
 	{
-		Com_Printf ("exec <filename> : execute a script file\n", LOG_GENERAL);
+		Com_Printf ("exec <filename> : execute a config file\n", LOG_GENERAL);
 		return;
 	}
 
@@ -632,7 +664,7 @@ Cmd_Argv
 */
 char	* EXPORT Cmd_Argv (int arg)
 {
-	if ( (unsigned)arg >= cmd_argc )
+	if (arg >= cmd_argc)
 		return cmd_null_string;
 	return cmd_argv[arg];	
 }
@@ -1057,25 +1089,6 @@ void	Cmd_ExecuteString (char *text)
 	}
 
 	// check functions
-	/*for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-	{
-		if (!Q_stricmp (cmd_argv[0],cmd->name))
-		{
-			if (!cmd->function)
-			{	// forward to server command
-				Cmd_ExecuteString (va("cmd %s", text));
-				Com_DPrintf ("Cmd_ExecuteString: no function '%s' for '%s', using 'cmd'\n", cmd->name, text);
-			}
-			else
-			{
-				//Com_DPrintf ("Cmd_ExecuteString: function '%s' called for '%s'\n", cmd->name, text);
-				cmd->function ();
-			}
-			return;
-		}
-	}*/
-
-
 	data = rbfind (cmd_argv[0], cmdtree);
 	if (data)
 	{

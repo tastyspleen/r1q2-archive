@@ -148,7 +148,7 @@ void Sys_Error (const char *error, ...)
 	vsnprintf (text, sizeof(text)-1, error, argptr);
 	va_end (argptr);
 
-	gi.error (ERR_FATAL, "%s", text);
+	gi.error ("%s", text);
 }
 
 void Com_Printf (const char *msg, int level, ...)

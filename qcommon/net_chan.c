@@ -77,6 +77,7 @@ unacknowledged reliable
 cvar_t		*showpackets;
 cvar_t		*showdrop;
 cvar_t		*qport;
+cvar_t		*net_maxmsglen;
 
 netadr_t	net_from;
 sizebuf_t	net_message;
@@ -99,6 +100,8 @@ void Netchan_Init (void)
 	showdrop = Cvar_Get ("showdrop", "0", 0);
 
 	qport = Cvar_Get ("qport", va("%i", port), 0);
+
+	net_maxmsglen = Cvar_Get ("net_maxmsglen", "1390", 0);
 }
 
 /*
@@ -152,14 +155,30 @@ Netchan_Setup
 called to open a channel to a remote system
 ==============
 */
-void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport)
+void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport, unsigned msglen)
 {
 	memset (chan, 0, sizeof(*chan));
 	
 	chan->sock = sock;
 	chan->remote_address = *adr;
 
-	SZ_Init (&chan->message, chan->message_buf, MAX_USABLEMSG);		
+	if (protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		if (msglen)
+		{
+			if (msglen > MAX_USABLEMSG)
+				Com_Error (ERR_DROP, "msglen > MAX_USABLEMSG");
+			SZ_Init (&chan->message, chan->message_buf, msglen);
+		}
+		else
+		{
+			SZ_Init (&chan->message, chan->message_buf, MAX_USABLEMSG);	//fragmentation allows this
+		}
+	}
+	else
+	{
+		SZ_Init (&chan->message, chan->message_buf, 1390);			//traditional limit
+	}
 
 	chan->qport = qport;
 	chan->protocol = protocol;
@@ -184,10 +203,10 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 	sizebuf_t	send;
 	byte		send_buf[MAX_MSGLEN];
 	qboolean	send_reliable;
-	unsigned	w1, w2;
+	uint32		w1, w2;
 
 	// check for message overflow (this is only for client now ?)
-	if (chan->message.overflowed || chan->message.cursize >= MAX_MSGLEN)
+	if (chan->message.overflowed)
 	{
 		//chan->fatal_error = true;
 		Com_Printf ("%s:Outgoing message overflow (o:%d, %d bytes)\n", LOG_NET
@@ -216,7 +235,10 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 
 
 // write the packet header
-	SZ_Init (&send, send_buf, sizeof(send_buf));
+	if (chan->protocol == ENHANCED_PROTOCOL_VERSION)
+		SZ_Init (&send, send_buf, sizeof(send_buf));
+	else
+		SZ_Init (&send, send_buf, 1400);
 
 	w1 = ( chan->outgoing_sequence & ~(1<<31) ) | (send_reliable<<31);
 	w2 = ( chan->incoming_sequence & ~(1<<31) ) | (chan->incoming_reliable_sequence<<31);
@@ -294,9 +316,9 @@ modifies net_message so that it points to the packet payload
 */
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 {
-	unsigned	sequence, sequence_ack;
-	int			reliable_ack;
-	unsigned	reliable_message;
+	uint32		sequence, sequence_ack;
+	int32		reliable_ack;
+	uint32		reliable_message;
 
 	// get sequence numbers		
 	MSG_BeginReading (msg);

@@ -586,8 +586,9 @@ void SV_Physics_Pusher (edict_t *ent)
 				break;	// move was blocked
 		}
 	}
+
 	if (pushed_p > &pushed[MAX_EDICTS])
-		gi.error (ERR_FATAL, "pushed_p > &pushed[MAX_EDICTS], memory corrupted");
+		gi.error ("pushed_p > &pushed[MAX_EDICTS], memory corrupted");
 
 	if (part)
 	{

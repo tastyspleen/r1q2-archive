@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/client.h"
 #include "winquake.h"
 
-extern	unsigned	sys_msg_time;
+extern	uint32	sys_msg_time;
 
 qboolean	input_active;
 

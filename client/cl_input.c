@@ -23,9 +23,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 cvar_t	*cl_nodelta;
 
-extern	unsigned	sys_frame_time;
-unsigned	frame_msec;
-unsigned	old_sys_frame_time;
+extern	uint32	sys_frame_time;
+uint32	frame_msec;
+uint32	old_sys_frame_time;
 
 /*
 ===============================================================================
@@ -46,7 +46,7 @@ state bit 1 is edge triggered on the up to down transition
 state bit 2 is edge triggered on the down to up transition
 
 
-Key_Event (int key, qboolean down, unsigned time);
+Key_Event (int key, qboolean down, uint32 time);
 
   +mlook src time
 
@@ -103,7 +103,7 @@ void KeyUp (kbutton_t *b)
 {
 	int		k;
 	char	*c;
-	unsigned	uptime;
+	uint32	uptime;
 
 	c = Cmd_Argv(1);
 	if (c[0])
@@ -370,8 +370,10 @@ __inline void CL_InitCmd (void)
 // CL_RefreshCmd
 //jec - adds any new input changes to usercmd
 //	that occurred since last Init or RefreshCmd
+trace_t		EXPORT CL_PMTrace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
 void CL_RefreshCmd (void)
 {	
+	static struct edict_s *found;
 	int ms;
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
 
@@ -542,9 +544,9 @@ void CL_BaseMove_Synchronous (usercmd_t *cmd)
 	
 	memset (cmd, 0, sizeof(*cmd));
 	
-	cmd->angles[0] = (short)cl.viewangles[0];
-	cmd->angles[1] = (short)cl.viewangles[1];
-	cmd->angles[2] = (short)cl.viewangles[2];
+	cmd->angles[0] = (int16)cl.viewangles[0];
+	cmd->angles[1] = (int16)cl.viewangles[1];
+	cmd->angles[2] = (int16)cl.viewangles[2];
 
 	if (in_strafe.state & 1)
 	{
@@ -583,6 +585,7 @@ void CL_FinishMove (usercmd_t *cmd)
 //
 // figure button bits
 //	
+
 	if ( in_attack.state & 3 )
 		cmd->buttons |= BUTTON_ATTACK;
 	in_attack.state &= ~2;

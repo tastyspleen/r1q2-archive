@@ -38,7 +38,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 	float	stepscale;
 	int		i;
 	int		sample;
-	unsigned int samplefrac, fracstep;
+	uint32	samplefrac, fracstep;
 	sfxcache_t	*sc;
 	
 	sc = sfx->cache;
@@ -89,11 +89,11 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 			srcsample = samplefrac >> 8;
 			samplefrac += fracstep;
 			if (inwidth == 2)
-				sample = LittleShort ( ((short *)data)[srcsample] );
+				sample = LittleShort ( ((int16 *)data)[srcsample] );
 			else
-				sample = (int)( (unsigned char)(data[srcsample]) - 128) << 8;
+				sample = (int32)( (unsigned char)(data[srcsample]) - 128) << 8;
 			if (sc->width == 2)
-				((short *)sc->data)[i] = sample;
+				((int16 *)sc->data)[i] = sample;
 			else
 				((signed char *)sc->data)[i] = sample >> 8;
 		}
@@ -101,6 +101,77 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 }
 
 //=============================================================================
+
+#ifdef USE_OPENAL
+
+static void S_OpenAL_UploadSound (byte *data, int width, int channels, sfx_t *sfx)
+{
+	int		size;
+
+	// Calculate buffer size
+	size = sfx->samples * width * channels;
+
+	// Set buffer format
+	if (width == 2)
+	{
+		if (channels == 2)
+			sfx->format = AL_FORMAT_STEREO16;
+		else
+			sfx->format = AL_FORMAT_MONO16;
+	}
+	else
+	{
+		if (channels == 2)
+			sfx->format = AL_FORMAT_STEREO8;
+		else
+			sfx->format = AL_FORMAT_MONO8;
+	}
+
+	// Upload the sound
+	qalGenBuffers(1, &sfx->bufferNum);
+	qalBufferData(sfx->bufferNum, sfx->format, data, size, sfx->rate);
+}
+
+static qboolean S_OpenAL_LoadWAV (const char *name, byte **wav, wavInfo_t *info);
+qboolean S_OpenAL_LoadSound (sfx_t *sfx)
+{
+    char		name[MAX_QPATH];
+	byte		*data;
+	wavInfo_t	info;
+
+	if (sfx->name[0] == '*')
+		return false;
+
+	// See if still in memory
+	if (sfx->loaded)
+		return true;
+
+	// Load it from disk
+	if (sfx->name[0] == '#')
+		Com_sprintf(name, sizeof(name), "%s", &sfx->name[1]);
+	else
+		Com_sprintf(name, sizeof(name), "sound/%s", sfx->name);
+
+	if (!S_OpenAL_LoadWAV(name, &data, &info))
+	{
+		Com_DPrintf ("WARNING: couldn't find sound '%s'\n", name);
+		return false;
+		//S_CreateDefaultSound(&data, &info);
+	}
+
+	// Load it in
+	sfx->loaded = true;
+	sfx->samples = info.samples;
+	sfx->rate = info.rate;
+
+	S_OpenAL_UploadSound(data, info.width, info.channels, sfx);
+
+	Z_Free(data);
+
+	return true;
+}
+
+#endif
 
 /*
 ==============
@@ -176,48 +247,13 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		return NULL;
 	}
 
-	//if (!openal_active)
-	//{
-		sc->length = info.samples;
-		sc->loopstart = info.loopstart;
-		sc->speed = info.rate;
-		sc->width = info.width;
-		sc->stereo = info.channels;
+	sc->length = info.samples;
+	sc->loopstart = info.loopstart;
+	sc->speed = info.rate;
+	sc->width = info.width;
+	sc->stereo = info.channels;
 
-		ResampleSfx (s, sc->speed, sc->width, data + info.dataofs);
-	//}
-#ifdef USE_OPENAL
-	//else
-	if (openal_active)
-	{
-		ALint buffer;
-		int format;
-		//ALvoid *wavData;
-		//ALboolean loop;
-
-		buffer = OpenAL_GetFreeBuffer();
-		if (buffer == -1)
-			Com_Error (ERR_DROP, "Out of OpenAL buffers");
-
-		//alutLoadWAVMemory (data, &format, &wavData, &sc->length, &sc->speed, &loop);
-		//OpenAL_CheckForError();
-
-		if (sc->width == 1)
-			format = AL_FORMAT_MONO8;
-		else
-			format = AL_FORMAT_MONO16;
-
-		alBufferData (g_Buffers[buffer].buffer, format, sc->data, sc->length, sc->speed);
-		OpenAL_CheckForError();
-
-		//alutUnloadWAV (format, wavData, sc->length, sc->speed);
-		//OpenAL_CheckForError();
-
-		Com_DPrintf ("OpenAL: Loaded %s into buffer %d\n", namebuffer, buffer);
-
-		sc->bufferNum = buffer;
-	}
-#endif
+	ResampleSfx (s, sc->speed, sc->width, data + info.dataofs);
 
 	FS_FreeFile (data);
 
@@ -242,18 +278,18 @@ byte 	*iff_data;
 int 	iff_chunk_len;
 
 
-short GetLittleShort(void)
+int16 GetLittleShort(void)
 {
-	short val = 0;
+	int16 val = 0;
 	val = *data_p;
 	val = val + (*(data_p+1)<<8);
 	data_p += 2;
 	return val;
 }
 
-int GetLittleLong(void)
+int32 GetLittleLong(void)
 {
-	int val = 0;
+	int32 val = 0;
 	val = *data_p;
 	val = val + (*(data_p+1)<<8);
 	val = val + (*(data_p+2)<<16);
@@ -320,6 +356,97 @@ void DumpChunks(void)
 		data_p += (iff_chunk_len + 1) & ~1;
 	} while (data_p < iff_end);
 }
+
+#ifdef USE_OPENAL
+static qboolean S_OpenAL_LoadWAV (const char *name, byte **wav, wavInfo_t *info)
+{
+	byte	*buffer, *out;
+	int		length;
+
+	length = FS_LoadFile(name, (void **)&buffer);
+	if (!buffer)
+		return false;
+
+	iff_data = buffer;
+	iff_end = buffer + length;
+
+	// Find "RIFF" chunk
+	FindChunk("RIFF");
+	if (!(data_p && !memcmp((void *)(data_p+8), "WAVE", 4)))
+	{
+		Com_DPrintf("S_LoadWAV: missing 'RIFF/WAVE' chunks (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	// Get "fmt " chunk
+	iff_data = data_p + 12;
+
+	FindChunk("fmt ");
+	if (!data_p)
+	{
+		Com_DPrintf("S_LoadWAV: missing 'fmt ' chunk (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	data_p += 8;
+
+	if (GetLittleShort() != 1)
+	{
+		Com_DPrintf("S_LoadWAV: Microsoft PCM format only (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	info->channels = GetLittleShort();
+	if (info->channels != 1)
+	{
+		Com_DPrintf("S_LoadWAV: only mono WAV files supported (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	info->rate = GetLittleLong();
+
+	data_p += 4+2;
+
+	info->width = GetLittleShort() / 8;
+	if (info->width != 1 && info->width != 2)
+	{
+		Com_DPrintf("S_LoadWAV: only 8 and 16 bit WAV files supported (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	// Find data chunk
+	FindChunk("data");
+	if (!data_p)
+	{
+		Com_DPrintf("S_LoadWAV: missing 'data' chunk (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	data_p += 4;
+	info->samples = GetLittleLong() / info->width;
+
+	if (info->samples <= 0)
+	{
+		Com_DPrintf("S_LoadWAV: file with 0 samples (%s)\n", name);
+		FS_FreeFile(buffer);
+		return false;
+	}
+
+	// Load the data
+	*wav = out = Z_TagMalloc(info->samples * info->width, TAGMALLOC_CLIENT_SOUNDCACHE);
+	memcpy(out, buffer + (data_p - buffer), info->samples * info->width);
+
+	FS_FreeFile(buffer);
+
+	return true;
+}
+#endif
 
 /*
 ============

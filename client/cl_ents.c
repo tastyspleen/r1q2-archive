@@ -199,11 +199,10 @@ Returns the entity number and the header bits
 =================
 */
 //int	bitcounts[32];	/// just for protocol profiling
-int CL_ParseEntityBits (unsigned *bits)
+int CL_ParseEntityBits (uint32 *bits)
 {
-	unsigned	b, total;
-	//int			i;
-	int			number;
+	uint32		b, total;
+	uint32		number;
 
 	total = MSG_ReadByte (&net_message);
 	if (total & U_MOREBITS1)
@@ -380,6 +379,10 @@ void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
 	}
 	else
 	{	// shuffle the last state to previous
+		//vec3_t	diff;
+		//VectorSubtract (ent->current.origin, ent->prev.origin, diff);
+		//VectorScale (diff, cl_predict->value, diff);
+		//VectorAdd (state->origin, diff, state->origin);
 		ent->prev = ent->current;
 	}
 
@@ -391,7 +394,7 @@ void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
 	//	memcpy (&cl_entities[newnum].baseline, state, sizeof(entity_state_t));
 }
 
-void ShowBits (unsigned int bits)
+void ShowBits (uint32 bits)
 {
 	if (cl_shownet->intvalue < 4 && cl_shownet->intvalue != -2)
 		return;
@@ -486,6 +489,39 @@ void ShowBits (unsigned int bits)
 	*/
 }
 
+typedef struct unpacker_s
+{
+	int		num_bits_remaining;
+	int		next_bit_to_read;
+	byte	buffer[MAX_EDICTS * sizeof(uint16)];	//worst case
+} unpacker_t;
+
+uint32 BP_unpack (unpacker_t *unpacker, uint32 num_bits_to_unpack)
+{
+	uint32 result = 0;
+
+	Q_assert(num_bits_to_unpack <= unpacker->num_bits_remaining);
+
+	while (num_bits_to_unpack)
+	{
+		uint32 byte_index = (unpacker->next_bit_to_read / 8);
+		uint32 bit_index = (unpacker->next_bit_to_read % 8);
+
+		uint32 src_mask = (1 << (7 - bit_index));
+		uint32 dest_mask = (1 << (num_bits_to_unpack - 1));
+
+		if (unpacker->buffer[byte_index] & src_mask)
+			result |= dest_mask;
+
+		num_bits_to_unpack--;
+		unpacker->next_bit_to_read++;
+	}
+
+	unpacker->num_bits_remaining -= num_bits_to_unpack;
+
+	return result;
+}
+
 /*
 ==================
 CL_ParsePacketEntities
@@ -496,10 +532,10 @@ rest of the data stream.
 */
 void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 {
-	int			newnum;
-	unsigned int			bits;
+	int				newnum;
+	uint32			bits;
 	entity_state_t	*oldstate;
-	int			oldindex, oldnum;
+	int				oldindex, oldnum;
 
 	newframe->parse_entities = cl.parse_entities;
 	newframe->num_entities = 0;
@@ -552,12 +588,14 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 		}
 
 		if (bits & U_REMOVE)
-		{	// the entity present in oldframe is not in the current frame
+		{	
+			// the entity present in oldframe is not in the current frame
 			if (!oldframe)
 				Com_Error (ERR_DROP, "CL_ParsePacketEntities: U_REMOVE with no oldframe");
 
 			if (cl_shownet->intvalue >= 3)
 				Com_Printf ("   remove: %i\n", LOG_CLIENT, newnum);
+
 			if (oldnum != newnum)
 				Com_DPrintf ("U_REMOVE: oldnum != newnum\n");
 
@@ -610,9 +648,43 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 
 	}
 
+	//suck up removed entities from packed bits in new protocol
+	/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && oldframe)
+	{
+		unpacker_t	unpacker;
+		int			byteCount;
+		int			maxEntNum;
+
+		maxEntNum = cl_parse_entities[(oldframe->parse_entities + oldframe->num_entities-1) & (MAX_PARSE_ENTITIES-1)].number + 1;
+
+		if (maxEntNum < 256)
+		{
+			for (;;)
+			{
+				bits = MSG_ReadByte (&net_message);
+				if (!bits)
+					break;
+			}
+		}
+		else
+		{
+			memset (&unpacker, 0, sizeof(unpacker));
+
+			byteCount = MSG_ReadByte (&net_message);
+
+			MSG_ReadData (&net_message, unpacker.buffer, byteCount);
+			unpacker.num_bits_remaining = byteCount * 8;
+			for (;;)
+			{
+				bits = BP_unpack (&unpacker, 10);
+			}
+		}
+	}*/
+
 	// any remaining entities in the old frame are copied over
 	while (oldnum != 99999)
-	{	// one or more entities from the old packet are unchanged
+	{	
+		// one or more entities from the old packet are unchanged
 		if (cl_shownet->intvalue >= 3)
 			Com_Printf ("   unchanged: %i\n", LOG_CLIENT, oldnum);
 		CL_DeltaEntity (newframe, oldnum, oldstate, 0);
@@ -636,14 +708,16 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 CL_ParsePlayerstate
 ===================
 */
-void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
+void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe, int extraflags)
 {
 	int			flags;
 	player_state_new	*state;
 	int			i;
 	int			statbits;
+	qboolean	enhanced;
 
 	state = &newframe->playerstate;
+	enhanced = (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION);
 
 	// clear to old value before delta parsing
 	if (oldframe)
@@ -661,17 +735,25 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 
 	if (flags & PS_M_ORIGIN)
 	{
+		if (!enhanced)
+			extraflags |= EPS_PMOVE_ORIGIN2;
 		state->pmove.origin[0] = MSG_ReadShort (&net_message);
 		state->pmove.origin[1] = MSG_ReadShort (&net_message);
-		state->pmove.origin[2] = MSG_ReadShort (&net_message);
 	}
+
+	if (extraflags & EPS_PMOVE_ORIGIN2)
+		state->pmove.origin[2] = MSG_ReadShort (&net_message);
 
 	if (flags & PS_M_VELOCITY)
 	{
+		if (!enhanced)
+			extraflags |= EPS_PMOVE_VELOCITY2;
 		state->pmove.velocity[0] = MSG_ReadShort (&net_message);
 		state->pmove.velocity[1] = MSG_ReadShort (&net_message);
-		state->pmove.velocity[2] = MSG_ReadShort (&net_message);
 	}
+
+	if (extraflags & EPS_PMOVE_VELOCITY2)
+		state->pmove.velocity[2] = MSG_ReadShort (&net_message);
 
 	if (flags & PS_M_TIME)
 		state->pmove.pm_time = MSG_ReadByte (&net_message);
@@ -704,10 +786,14 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 
 	if (flags & PS_VIEWANGLES)
 	{
+		if (!enhanced)
+			extraflags |= EPS_VIEWANGLE2;
 		state->viewangles[0] = MSG_ReadAngle16 (&net_message);
 		state->viewangles[1] = MSG_ReadAngle16 (&net_message);
-		state->viewangles[2] = MSG_ReadAngle16 (&net_message);
 	}
+
+	if (extraflags & EPS_VIEWANGLE2)
+		state->viewangles[2] = MSG_ReadAngle16 (&net_message);
 
 	if (flags & PS_KICKANGLES)
 	{
@@ -723,10 +809,20 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 
 	if (flags & PS_WEAPONFRAME)
 	{
+		if (!enhanced)
+			extraflags |= EPS_GUNOFFSET|EPS_GUNANGLES;
 		state->gunframe = MSG_ReadByte (&net_message);
+	}
+
+	if (extraflags & EPS_GUNOFFSET)
+	{
 		state->gunoffset[0] = MSG_ReadChar (&net_message)*0.25f;
 		state->gunoffset[1] = MSG_ReadChar (&net_message)*0.25f;
 		state->gunoffset[2] = MSG_ReadChar (&net_message)*0.25f;
+	}
+
+	if (extraflags & EPS_GUNANGLES)
+	{
 		state->gunangles[0] = MSG_ReadChar (&net_message)*0.25f;
 		state->gunangles[1] = MSG_ReadChar (&net_message)*0.25f;
 		state->gunangles[2] = MSG_ReadChar (&net_message)*0.25f;
@@ -747,7 +843,7 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 		state->rdflags = MSG_ReadByte (&net_message);
 
 	//r1q2 extensions
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (enhanced)
 	{
 		if (flags & PS_BBOX)
 		{
@@ -768,11 +864,21 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 		}
 	}
 
+	if (!enhanced)
+		extraflags |= EPS_STATS;
+
 	// parse stats
-	statbits = MSG_ReadLong (&net_message);
-	for (i=0 ; i<MAX_STATS ; i++)
-		if (statbits & (1<<i) )
-			state->stats[i] = MSG_ReadShort(&net_message);
+	if (extraflags & EPS_STATS)
+	{
+		statbits = MSG_ReadLong (&net_message);
+
+		if (statbits)
+		{
+			for (i=0 ; i<MAX_STATS ; i++)
+				if (statbits & (1<<i) )
+					state->stats[i] = MSG_ReadShort(&net_message);
+		}
+	}
 }
 
 
@@ -805,11 +911,12 @@ void CL_FireEntityEvents (frame_t *frame)
 CL_ParseFrame
 ================
 */
-void CL_ParseFrame (void)
+void CL_ParseFrame (int extrabits)
 {
-	//int			cmd;
 	byte		cmd;
 	int			len;
+	int			extraflags;
+	uint32		serverframe;
 	frame_t		*old;
 
 	memset (&cl.frame, 0, sizeof(cl.frame));
@@ -818,17 +925,60 @@ void CL_ParseFrame (void)
 	CL_ClearProjectiles(); // clear projectiles for new frame
 #endif
 
-	cl.frame.serverframe = MSG_ReadLong (&net_message);
-	cl.frame.deltaframe = MSG_ReadLong (&net_message);
+	//HACK: we steal last bits of this int for the offset
+	//if serverframe gets that high then the server has been on the same map
+	//for over 19 days... how often will this legitimately happen, and do we
+	//really need the possibility of the server running same map for 13 years...
+	serverframe = MSG_ReadLong (&net_message);
+
+	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
+	{
+		cl.frame.serverframe = serverframe;
+		cl.frame.deltaframe = MSG_ReadLong (&net_message);
+	}
+	else
+	{
+		uint32	offset;
+		
+		offset = serverframe & 0xF8000000;
+		offset >>= 27;
+		
+		serverframe &= 0x07FFFFFF;
+
+		cl.frame.serverframe = serverframe;
+
+		if (offset == 31)
+			cl.frame.deltaframe = -1;
+		else
+			cl.frame.deltaframe = serverframe - offset;
+	}
 
 	if (cls.state != ca_active)
 		cl.frame.servertime = 0;
 	else
 		cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) *100; //r1: fix for precision loss with high serverframes
 
+	//HACK UGLY SHIT
+	//moving the extrabits from cmd over so that the 4 that come from extraflags (surpressCount) don't conflict
+	extraflags = extrabits >> 1;
+
 	// BIG HACK to let old demos continue to work
 	if (cls.serverProtocol != 26)
-		cl.surpressCount = MSG_ReadByte (&net_message);
+	{
+		byte	data;
+		data = MSG_ReadByte (&net_message);
+
+		//r1: HACK to get extra 4 bits of otherwise unused data
+		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		{
+			cl.surpressCount = (data & 0x0F);
+			extraflags |= (data & 0xF0) >> 4;
+		}
+		else
+		{
+			cl.surpressCount = data;
+		}
+	}
 
 	if (cl_shownet->intvalue >= 3)
 		Com_Printf ("   frame:%i  delta:%i\n", LOG_CLIENT, cl.frame.serverframe,
@@ -875,17 +1025,23 @@ void CL_ParseFrame (void)
 	MSG_ReadData (&net_message, &cl.frame.areabits, len);
 
 	// read playerinfo
-	cmd = MSG_ReadByte (&net_message);
-	SHOWNET(svc_strings[cmd]);
-	if (cmd != svc_playerinfo)
-		Com_Error (ERR_DROP, "CL_ParseFrame: 0x%.2x not playerinfo", cmd);
-	CL_ParsePlayerstate (old, &cl.frame);
+	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
+	{
+		cmd = MSG_ReadByte (&net_message);
+		SHOWNET(svc_strings[cmd]);
+		if (cmd != svc_playerinfo)
+			Com_Error (ERR_DROP, "CL_ParseFrame: 0x%.2x not playerinfo", cmd);
+	}
+	CL_ParsePlayerstate (old, &cl.frame, extraflags);
 
 	// read packet entities
-	cmd = MSG_ReadByte (&net_message);
-	SHOWNET(svc_strings[cmd]);
-	if (cmd != svc_packetentities)
-		Com_Error (ERR_DROP, "CL_ParseFrame: 0x%.2x not packetentities", cmd);
+	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
+	{
+		cmd = MSG_ReadByte (&net_message);
+		SHOWNET(svc_strings[cmd]);
+		if (cmd != svc_packetentities)
+			Com_Error (ERR_DROP, "CL_ParseFrame: 0x%.2x not packetentities", cmd);
+	}
 	CL_ParsePacketEntities (old, &cl.frame);
 
 #if 0
@@ -1001,7 +1157,7 @@ void CL_AddPacketEntities (frame_t *frame)
 	centity_t			*cent;
 	int					autoanim;
 	clientinfo_t		*ci;
-	unsigned int		effects, renderfx;
+	uint32				effects, renderfx;
 	float				time;
 
 	time = (float)cl.time;
@@ -1104,12 +1260,12 @@ void CL_AddPacketEntities (frame_t *frame)
 		}
 		else
 		{	
-#ifdef _DEB4UG
+#ifdef _DEBUG
 			for (i=0 ; i<3 ; i++)
 			{
 				//cent->prev.origin[i] = cent->current.origin[i];
 			
-				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + (1 + cl.lerpfrac) * 
+				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + cl.lerpfrac * 
 					(cent->current.origin[i] - cent->prev.origin[i]);
 			}
 			//VectorCopy (cent->current.origin, cent->prev.origin);
@@ -1405,7 +1561,7 @@ void CL_AddPacketEntities (frame_t *frame)
 				else
 				{
 					//r1: protect against access violation
-					unsigned int frameindex;
+					uint32 frameindex;
 
 					frameindex = s1->frame;
 					if (frameindex > 6)
@@ -1600,7 +1756,7 @@ void CL_CalcViewValues (void)
 	// calculate the origin
 	if ((cl_predict->intvalue) && !(cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
 	{	// use predicted values
-		unsigned	delta;
+		uint32	delta;
 
 		if (cl_backlerp->intvalue)
 			backlerp = 1.0f - lerp;
@@ -1744,9 +1900,9 @@ CL_GetEntitySoundOrigin
 Called to get the sound spatialization origin
 ===============
 */
-void CL_GetEntitySoundOrigin (int ent, vec3_t org)
+void CL_GetEntitySoundOrigin (int ent, vec3_t origin, vec3_t velocity)
 {
-	centity_t	*old;
+	/*centity_t	*old;
 
 	if (ent < 0 || ent >= MAX_EDICTS)
 		Com_Error (ERR_DROP, "CL_GetEntitySoundOrigin: bad ent");
@@ -1761,5 +1917,53 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t org)
 		VectorCopy (old->lerp_origin, org);
 	}
 
-	// FIXME: bmodel issues...
+	// FIXME: bmodel issues...*/
+	centity_t	*cent;
+	cmodel_t	*cmodel;
+	vec3_t		midPoint;
+
+	if (ent < 0 || ent >= MAX_EDICTS)
+		Com_Error(ERR_DROP, "CL_GetEntitySoundSpatialization: ent = %i", ent);
+
+	cent = &cl_entities[ent];
+
+	if (cent->current.renderfx & (RF_FRAMELERP|RF_BEAM))
+	{
+		// Calculate origin
+		origin[0] = cent->current.old_origin[0] + (cent->current.origin[0] - cent->current.old_origin[0]) * cl.lerpfrac;
+		origin[1] = cent->current.old_origin[1] + (cent->current.origin[1] - cent->current.old_origin[1]) * cl.lerpfrac;
+		origin[2] = cent->current.old_origin[2] + (cent->current.origin[2] - cent->current.old_origin[2]) * cl.lerpfrac;
+
+		// Calculate velocity
+		if (velocity)
+		{
+			VectorSubtract(cent->current.origin, cent->current.old_origin, velocity);
+			VectorScale(velocity, 10, velocity);
+		}
+	}
+	else
+	{
+		// Calculate origin
+		origin[0] = cent->prev.origin[0] + (cent->current.origin[0] - cent->prev.origin[0]) * cl.lerpfrac;
+		origin[1] = cent->prev.origin[1] + (cent->current.origin[1] - cent->prev.origin[1]) * cl.lerpfrac;
+		origin[2] = cent->prev.origin[2] + (cent->current.origin[2] - cent->prev.origin[2]) * cl.lerpfrac;
+
+		// Calculate velocity
+		if (velocity)
+		{
+			VectorSubtract (cent->current.origin, cent->prev.origin, velocity);
+			VectorScale (velocity, 10, velocity);
+		}
+	}
+
+	// If a brush model, offset the origin
+	if (cent->current.solid == 31)
+	{
+		cmodel = cl.model_clip[cent->current.modelindex];
+		if (!cmodel)
+			return;
+
+		VectorAverage(cmodel->mins, cmodel->maxs, midPoint);
+		VectorAdd(origin, midPoint, origin);
+	}
 }

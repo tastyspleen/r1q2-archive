@@ -538,7 +538,7 @@ __inline void SCR_DrawCrosshair (void)
 int spc = 0;
 int fps = 0;
 int frames_this_second = 0;
-unsigned int frames_seconds = 0;
+uint32 frames_seconds = 0;
 
 static const char rateMsg[] = "RATEDROP";
 static const char frameMsg[] = "OLDFRAME";

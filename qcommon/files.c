@@ -38,8 +38,8 @@ QUAKE FILESYSTEM
 typedef struct
 {
 	char			name[56];
-	unsigned long	filepos;
-	unsigned long	filelen;
+	uint32			filepos;
+	uint32			filelen;
 } packfile_t;
 
 typedef struct pack_s
@@ -76,6 +76,8 @@ typedef struct searchpath_s
 
 static searchpath_t	*fs_searchpaths;
 static searchpath_t	*fs_base_searchpaths;	// without gamedirs
+
+static const char *current_filename;
 
 /*
 
@@ -186,9 +188,9 @@ int	Developer_searchpath (void)
 //#define MAGIC_BTREE 1
 
 #if HASH_CACHE || MAGIC_BTREE
-unsigned int hashify (char *S)
+uint32 hashify (char *S)
 {
-  unsigned int hash_PeRlHaSh = 0;
+  uint32 hash_PeRlHaSh = 0;
   char c;
   while (*S) {
 	  c = fast_tolower(*S++);
@@ -202,13 +204,13 @@ typedef struct fscache_s fscache_t;
 
 struct fscache_s
 {
-	char			filename[MAX_QPATH];
-	char			filepath[MAX_OSPATH];
-	unsigned int	filelen;
-	unsigned int	fileseek;
+	char		filename[MAX_QPATH];
+	char		filepath[MAX_OSPATH];
+	uint32		filelen;
+	uint32		fileseek;
 #ifdef HASH_CACHE
-	fscache_t		*next;
-	unsigned int	hash;
+	fscache_t	*next;
+	uint32		hash;
 #endif
 };
 
@@ -344,7 +346,7 @@ static void FS_Stats_f (void)
 }
 
 #if BTREE_SEARCH
-static void FS_AddToCache (const char *path, unsigned int filelen, unsigned int fileseek, const char *filename)
+static void FS_AddToCache (const char *path, uint32 filelen, uint32 fileseek, const char *filename)
 {
 	void		**newitem;
 	fscache_t	*cache;
@@ -373,7 +375,7 @@ typedef struct magic_s
 	fscache_t		*entry;
 } magic_t;
 
-static void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename, unsigned int hash)
+static void FS_AddToCache (char *path, uint32 filelen, uint32 fileseek, char *filename, uint32 hash)
 {
 	void		**newitem;
 	fscache_t	*cache;
@@ -413,7 +415,7 @@ static void FS_AddToCache (char *path, unsigned int filelen, unsigned int filese
 #endif
 
 #if HASH_CACHE
-static void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigned int fileseek, fscache_t *cache, char *filename)
+static void FS_AddToCache (uint32 hash, char *path, uint32 filelen, uint32 fileseek, fscache_t *cache, char *filename)
 {
 	cache->next = Z_TagMalloc (sizeof(fscache_t), TAGMALLOC_FSCACHE);
 	cache = cache->next;
@@ -495,7 +497,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 			*file = fopen (cache->filepath, "rb");
 			if (!*file)
 				Com_Error (ERR_FATAL, "Couldn't open %s (cached)", cache->filepath);	
-			if (fseek (*file, cache->fileseek, SEEK_SET))
+			if (cache->fileseek && fseek (*file, cache->fileseek, SEEK_SET))
 				Com_Error (ERR_FATAL, "Couldn't seek to offset %d in %s (cached)", cache->fileseek, cache->filepath);
 		}
 		return cache->filelen;
@@ -591,7 +593,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 					if (!*file)
 						Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
 					if (fseek (*file, entry->filepos, SEEK_SET))
-						Com_Error (ERR_FATAL, "Couldn't seek to offset %ld for %s in %s", entry->filepos, entry->name, pak->filename);
+						Com_Error (ERR_FATAL, "Couldn't seek to offset %u for %s in %s", entry->filepos, entry->name, pak->filename);
 				}
 
 				if (fs_cache->intvalue & 1)
@@ -682,7 +684,7 @@ Properly handles partial reads
 void EXPORT FS_Read (void *buffer, int len, FILE *f)
 {
 	int		block, remaining;
-	int		read;
+	size_t	read;
 	byte	*buf;
 #ifdef CD_AUDIO
 	int		tries = 0;
@@ -701,7 +703,7 @@ void EXPORT FS_Read (void *buffer, int len, FILE *f)
 		if (block > MAX_READ)
 			block = MAX_READ;
 
-		read = (int)fread (buf, block, 1, f);
+		read = fread (buf, block, 1, f);
 		if (read == 0)
 		{
 			// we might have been trying to read from a CD
@@ -713,11 +715,18 @@ void EXPORT FS_Read (void *buffer, int len, FILE *f)
 			}
 			else
 #endif
-				Com_Error (ERR_FATAL, "FS_Read: 0 bytes read. Did you forget to empty the filesystem cache after modifying a file?");
+			{
+				if (ferror (f))
+				{
+					Com_Error (ERR_FATAL, "FS_Read(%d): Read error on '%s'. Did you forget to empty the filesystem cache after modifying a file?", len, current_filename);
+				}
+				else
+				{
+					Com_Printf ("WARNING: Incomplete read of %d bytes from '%s'. Did you forget to empty the filesystem cache after modifying a file?\n", LOG_WARNING, len, current_filename);
+					return;
+				}
+			}
 		}
-
-		if (read == -1)
-			Com_Error (ERR_FATAL, "FS_Read: -1 bytes read");
 
 		// do some progress bar thing here...
 
@@ -734,9 +743,7 @@ Filename are reletive to the quake search path
 a null buffer will just return the file length without loading
 ============
 */
-int lenCount = 0;
-int buffCount = 0;
-char emptyFile = 0;
+const char emptyFile = 0;
 int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 {
 	FILE	*h;
@@ -765,13 +772,15 @@ int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 	{
 		fclose (h);
 		Com_Printf ("WARNING: 0 byte file: %s\n", LOG_GENERAL|LOG_WARNING, path);
-		*buffer = &emptyFile;
+		*buffer = CopyString (&emptyFile, TAGMALLOC_FSLOADFILE);
 		return 0;
 	}
 
 	buf = Z_TagMalloc(len, TAGMALLOC_FSLOADFILE);
 	*buffer = buf;
+	current_filename = path;
 	FS_Read (buf, len, h);
+	current_filename = "unknown";
 
 	fclose (h);
 
@@ -816,7 +825,9 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	if (!packhandle)
 		return NULL;
 
-	fread (&header, 1, sizeof(header), packhandle);
+	if (fread (&header, sizeof(header), 1, packhandle) != 1)
+		Com_Error (ERR_FATAL, "couldn't read pak header from %s", packfile);
+
 	if (LittleLong(header.ident) != IDPAKHEADER)
 		Com_Error (ERR_FATAL, "%s is not a valid packfile", packfile);
 	
@@ -826,7 +837,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 #endif
 
 	if (header.dirlen % sizeof(packfile_t))
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %ld is not a multiple of %d)", packfile, header.dirlen, sizeof(packfile_t));
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %u is not a multiple of %d)", packfile, header.dirlen, (int)sizeof(packfile_t));
 
 	numpackfiles = header.dirlen / sizeof(packfile_t);
 
@@ -844,10 +855,10 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	info = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
 
 	if (fseek (packhandle, header.dirofs, SEEK_SET))
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %ld in %s failed (corrupt packfile?)", header.dirofs, packfile);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
 
 	if ((int)fread (info, 1, header.dirlen, packhandle) != header.dirlen)
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %ld bytes at %ld)", packfile, header.dirofs, header.dirlen);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
 
 	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
 
@@ -1177,7 +1188,7 @@ static void FS_Link_f (void)
 /*
 ** FS_ListFiles
 */
-char /*@null@*/ **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave )
+char /*@null@*/ **FS_ListFiles( char *findname, int *numfiles, uint32 musthave, uint32 canthave )
 {
 	char *s;
 	int nfiles = 0;
@@ -1333,6 +1344,8 @@ FS_InitFilesystem
 */
 void FS_InitFilesystem (void)
 {
+	current_filename = "unknown";
+
 	Cmd_AddCommand ("path", FS_Path_f);
 	Cmd_AddCommand ("link", FS_Link_f);
 	Cmd_AddCommand ("dir", FS_Dir_f );

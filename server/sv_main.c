@@ -44,10 +44,12 @@ cvar_t	*rcon_password;			// password for remote server commands
 cvar_t	*lrcon_password;
 
 cvar_t	*allow_download;
-cvar_t *allow_download_players;
-cvar_t *allow_download_models;
-cvar_t *allow_download_sounds;
-cvar_t *allow_download_maps;
+cvar_t	*allow_download_players;
+cvar_t	*allow_download_models;
+cvar_t	*allow_download_sounds;
+cvar_t	*allow_download_maps;
+cvar_t	*allow_download_textures;
+cvar_t	*allow_download_others;
 
 cvar_t *sv_airaccelerate;
 
@@ -151,6 +153,7 @@ cvar_t	*sv_download_drop_file;
 cvar_t	*sv_download_drop_message;
 
 cvar_t	*sv_blackhole_mask;
+cvar_t	*sv_badcvarcheck;
 
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
@@ -264,7 +267,7 @@ void SV_DropClient (client_t *drop, qboolean notify)
 
 void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@null@*/*cprintf)
 {
-	if (reason && cl->state == cs_spawned && *cl->name)
+	if (reason && cl->state == cs_spawned && cl->name[0])
 		SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: %s\n", cl->name, reason);
 	if (cprintf)
 		SV_ClientPrintf (cl, PRINT_HIGH, "%s", cprintf);
@@ -395,7 +398,7 @@ char	*SV_StatusString (void)
 		char uptimeString[128];
 		char tmpStr[16];
 
-		unsigned int secs;
+		uint32	secs;
 
 		int days = 0;
 		int hours = 0;
@@ -403,7 +406,7 @@ char	*SV_StatusString (void)
 		int	years = 0;
 
 		uptimeString[0] = 0;
-		secs = (unsigned int)(time(NULL) - server_start_time);
+		secs = (uint32)(time(NULL) - server_start_time);
 
 		while (secs/60/60/24/365 >= 1)
 		{
@@ -698,7 +701,7 @@ void SVC_GetChallenge (void)
 {
 	int		i;
 	int		oldest = 0;
-	unsigned int		oldestTime = 0xffffffff;
+	uint32	oldestTime = 0xffffffff;
 
 	// see if we already have a challenge for this ip
 	for (i = 0 ; i < MAX_CHALLENGES ; i++)
@@ -811,7 +814,7 @@ void SVC_DirectConnect (void)
 
 	int			i;
 	int			edictnum;
-	int			version;
+	int			protocol;
 	int			challenge;
 	int			previousclients;
 
@@ -826,27 +829,48 @@ void SVC_DirectConnect (void)
 	char		key[MAX_INFO_KEY];
 
 	int			reserved;
+	unsigned	msglen;
 
-	unsigned short	qport;
+	uint16		qport;
 
 	adr = &net_from;
 
 	Com_DPrintf ("SVC_DirectConnect (%s)\n", NET_AdrToString (adr));
 
 	//r1: check version first of all
-	version = atoi(Cmd_Argv(1));
-	if (version != ORIGINAL_PROTOCOL_VERSION && version != ENHANCED_PROTOCOL_VERSION)
+	protocol= atoi(Cmd_Argv(1));
+	if (protocol != ORIGINAL_PROTOCOL_VERSION && protocol != ENHANCED_PROTOCOL_VERSION)
 	{
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nYou need Quake II 3.19 or higher to play on this server.\n");
-		Com_DPrintf ("    rejected connect from version %i\n", version);
+		Com_DPrintf ("    rejected connect from protocol %i\n", protocol);
 		return;
 	}
 
 	qport = atoi(Cmd_Argv(2));
 
 	//work around older protocol 35 clients
-	if (version == ENHANCED_PROTOCOL_VERSION && qport > 0xFF)
-		qport = 0;
+	if (protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		if (qport > 0xFF)
+			qport = 0;
+
+		msglen = atoi (Cmd_Argv(5));
+		if (msglen > MAX_USABLEMSG)
+		{
+			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nInvalid maximum message length.\n");
+			Com_DPrintf ("    rejected msglen %u\n", msglen);
+			return;
+		}
+
+		i = Cvar_IntValue ("net_maxmsglen");
+
+		if (msglen > i)
+			msglen = i;
+	}
+	else
+	{
+		msglen = 0;
+	}
 
 	challenge = atoi(Cmd_Argv(3));
 
@@ -934,7 +958,8 @@ void SVC_DirectConnect (void)
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
 	if (strchr(userinfo, '\xFF'))
 	{
-		char *ptr, *p;
+		char		*ptr;
+		const char	*p;
 		ptr = strchr (userinfo, '\xFF');
 		ptr -= 8;
 		if (ptr < userinfo)
@@ -973,11 +998,18 @@ void SVC_DirectConnect (void)
 		if (match->message[0])
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s\n", match->message);
 
-		if (match->blockmethod == CVARBAN_BLACKHOLE)
-			Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "userinfovarban: %s == %s", key, Info_ValueForKey (userinfo, key));
+		if (match->blockmethod == CVARBAN_LOGONLY)
+		{
+			Com_Printf ("LOG: %s[%s] matched userinfoban: %s == %s\n", LOG_SERVER, Info_ValueForKey (userinfo, "name"), NET_AdrToString(adr), key, Info_ValueForKey (userinfo, key));
+		}
+		else
+		{
+			if (match->blockmethod == CVARBAN_BLACKHOLE)
+				Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "userinfovarban: %s == %s", key, Info_ValueForKey (userinfo, key));
 
-		Com_DPrintf ("    userinfo ban %s matched\n", key);
-		return;
+			Com_DPrintf ("    userinfo ban %s matched\n", key);
+			return;
+		}
 	}
 
 	pass = Info_ValueForKey (userinfo, "name");
@@ -998,7 +1030,7 @@ void SVC_DirectConnect (void)
 	{
 		char	*p;
 		p = Info_ValueForKey(userinfo, "ip");
-		Com_Printf ("EXPLOIT: Client %s attempted to spoof IP address: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), p);
+		Com_Printf ("EXPLOIT: Client %s[%s] attempted to spoof IP address: %s\n", LOG_EXPLOIT|LOG_SERVER, Info_ValueForKey (userinfo, "name"), NET_AdrToString(adr), p);
 		Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "attempted to spoof ip '%s'", p);
 		return;
 	}
@@ -1160,14 +1192,14 @@ gotnewcl:
 		//did the game ruin our userinfo string?
 		if (!userinfo[0])
 		{
-			Com_Printf ("GAME ERROR: Userinfo string corrupted after ClientConnect\n", LOG_SERVER|LOG_WARNING); 
+			Com_Printf ("GAME ERROR: Userinfo string corrupted after ClientConnect\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG); 
 			if (sv_gamedebug->intvalue > 1)
 				Q_DEBUGBREAKPOINT;
 		}
 	}
 
 	//moved netchan to here so userinfo changes can see remote address
-	Netchan_Setup (NS_SERVER, &newcl->netchan, adr, version, qport);
+	Netchan_Setup (NS_SERVER, &newcl->netchan, adr, protocol, qport, msglen);
 
 	// parse some info from the info strings
 	strcpy (newcl->userinfo, userinfo);
@@ -1197,7 +1229,7 @@ gotnewcl:
 	if (reconnected && sv_connectmessage->string[0])
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s\n", sv_connectmessage->string);
 
-	newcl->protocol = version;
+	newcl->protocol = protocol;
 	newcl->state = cs_connected;
 
 	newcl->messageListData = Z_TagMalloc (sizeof(messagelist_t) * MAX_MESSAGES_PER_LIST, TAGMALLOC_CL_MESSAGES);
@@ -1235,10 +1267,10 @@ int Rcon_Validate (void)
 	return 0;
 }
 
-unsigned long CalcMask (int bits)
+uint32 CalcMask (int32 bits)
 {
 	int				i;
-	unsigned long	mask;
+	uint32			mask;
 
 	mask = -1;
 
@@ -1269,7 +1301,7 @@ void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, cons
 
 	temp->next = NULL;
 
-	temp->ip = *(unsigned long *)from->ip;
+	temp->ip = *(uint32 *)from->ip;
 	temp->mask = CalcMask(mask);
 	temp->method = method;
 
@@ -1509,7 +1541,7 @@ void SV_ConnectionlessPacket (void)
 	while (blackhole->next)
 	{
 		blackhole = blackhole->next;
-		if ((*(unsigned long *)net_from.ip & blackhole->mask) == (blackhole->ip & blackhole->mask))
+		if ((*(uint32 *)net_from.ip & blackhole->mask) == (blackhole->ip & blackhole->mask))
 		{
 			//do rate limiting in case there is some long-ish reason
 			if (blackhole->method == BLACKHOLE_MESSAGE)
@@ -1723,7 +1755,7 @@ void SV_ReadPackets (void)
 {
 	int			i, j;
 	client_t	*cl;
-	unsigned short	qport;
+	uint16		qport;
 
 	//Com_Printf ("ReadPackets\n");
 	for (;;)
@@ -1764,7 +1796,7 @@ void SV_ReadPackets (void)
 		
 		//MSG_ReadShort (&net_message);
 
-		qport = *(unsigned short *)(net_message_buffer + 8);
+		qport = *(uint16 *)(net_message_buffer + 8);
 
 		// check for packets from connected clients
 		for (i=0, cl=svs.clients ; i<maxclients->intvalue ; i++,cl++)
@@ -1792,7 +1824,7 @@ void SV_ReadPackets (void)
 
 			if (cl->netchan.remote_address.port != net_from.port)
 			{
-				Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, (unsigned short)(ShortSwap(cl->netchan.remote_address.port)), (unsigned short)(ShortSwap(net_from.port)));
+				Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
 				cl->netchan.remote_address.port = net_from.port;
 			}
 
@@ -1809,7 +1841,7 @@ void SV_ReadPackets (void)
 					//r1: send a reply immediately if the client is connecting
 					if ((cl->state == cs_connected || cl->state == cs_spawning) && cl->msgListStart->next)
 					{
-						SV_WriteReliableMessages (cl, MAX_USABLEMSG);
+						SV_WriteReliableMessages (cl, cl->netchan.message.buffsize);
 						Netchan_Transmit (&cl->netchan, 0, NULL);
 					}
 				}
@@ -1900,7 +1932,7 @@ void SV_CheckTimeouts (void)
 			if (cl->lastmessage < droppoint)
 			{
 				//r1: only message if they spawned (less spam plz)
-				if (cl->state == cs_spawned && *cl->name)
+				if (cl->state == cs_spawned && cl->name[0])
 					SV_BroadcastPrintf (PRINT_HIGH, "%s timed out\n", cl->name);
 				Com_Printf ("Dropping %s, timed out.\n", LOG_SERVER|LOG_DROP, cl->name);
 				SV_DropClient (cl, false); 
@@ -2227,7 +2259,7 @@ static void UserinfoBanDrop (char *key, banmatch_t *ban, char *result)
 	if (ban->blockmethod == CVARBAN_BLACKHOLE)
 		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "userinfovarban: %s == %s", key, result);
 
-	Com_Printf ("Dropped client %s, userinfovarban: %s == %s\n", LOG_SERVER|LOG_DROP, sv_client->name, key, result);
+	Com_Printf ("Dropped client %s, userinfoban: %s == %s\n", LOG_SERVER|LOG_DROP, sv_client->name, key, result);
 
 	SV_DropClient (sv_client, (ban->blockmethod != CVARBAN_BLACKHOLE));
 }
@@ -2255,7 +2287,8 @@ void SV_UserinfoChanged (client_t *cl)
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
 	if (strchr (cl->userinfo, '\xFF'))
 	{
-		char *ptr, *p;
+		char		*ptr;
+		const char	*p;
 		ptr = strchr (cl->userinfo, '\xFF');
 		ptr -= 8;
 		if (ptr < cl->userinfo)
@@ -2324,8 +2357,15 @@ void SV_UserinfoChanged (client_t *cl)
 	match = SV_CheckUserinfoBans (cl->userinfo, key);
 	if (match)
 	{
-		UserinfoBanDrop (key, match, Info_ValueForKey (cl->userinfo, key));
-		return;
+		if (CVARBAN_LOGONLY)
+		{
+			Com_Printf ("LOG: %s[%s] matched userinfoban: %s == %s\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), key, Info_ValueForKey (cl->userinfo, key));
+		}
+		else
+		{
+			UserinfoBanDrop (key, match, Info_ValueForKey (cl->userinfo, key));
+			return;
+		}
 	}
 
 	//this actually fills in the client fields
@@ -2406,10 +2446,12 @@ void SV_Init (void)
 
 #ifndef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "0", CVAR_ARCHIVE);
-	allow_download_players  = Cvar_Get ("allow_download_players", "3", CVAR_ARCHIVE);
-	allow_download_models = Cvar_Get ("allow_download_models", "3", CVAR_ARCHIVE);
-	allow_download_sounds = Cvar_Get ("allow_download_sounds", "3", CVAR_ARCHIVE);
-	allow_download_maps	  = Cvar_Get ("allow_download_maps", "3", CVAR_ARCHIVE);
+	allow_download_players  = Cvar_Get ("allow_download_players", "1", CVAR_ARCHIVE);
+	allow_download_models = Cvar_Get ("allow_download_models", "1", CVAR_ARCHIVE);
+	allow_download_sounds = Cvar_Get ("allow_download_sounds", "1", CVAR_ARCHIVE);
+	allow_download_maps	  = Cvar_Get ("allow_download_maps", "1", CVAR_ARCHIVE);
+	allow_download_textures = Cvar_Get ("allow_download_textures", "1", 0);
+	allow_download_others = Cvar_Get ("allow_download_others", "0", 0);
 #endif
 
 	sv_noreload = Cvar_Get ("sv_noreload", "0", 0);
@@ -2564,6 +2606,9 @@ void SV_Init (void)
 	//r1: default blackhole mask
 	sv_blackhole_mask = Cvar_Get ("sv_blackhole_mask", "32", 0);
 
+	//r1: what to do on unrequested cvars
+	sv_badcvarcheck = Cvar_Get ("sv_blackhole_badcvarcheck", "1", 0);
+
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN
 	if (pyroadminport->intvalue)
@@ -2572,7 +2617,7 @@ void SV_Init (void)
 		int len;
 
 		NET_StringToAdr ("127.0.0.1", &netaddress_pyroadmin);
-		netaddress_pyroadmin.port = ShortSwap((short)pyroadminport->intvalue);
+		netaddress_pyroadmin.port = ShortSwap((uint16)pyroadminport->intvalue);
 
 		pyroadminid = Sys_Milliseconds() & 0xFFFF;
 

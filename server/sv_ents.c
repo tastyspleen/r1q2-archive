@@ -114,6 +114,82 @@ void SV_EmitProjectileUpdate (sizebuf_t *msg)
 }
 #endif
 
+#define PACKER_BUFFER_SIZE	256
+#define BITS_PER_WORD		32
+
+typedef struct packer_s
+{
+	int		next_bit_to_write;
+	byte	buffer[MAX_EDICTS * sizeof(uint16)];	//worst case
+} packer_t;
+
+void BP_pack (packer_t *packer, uint32 value, uint32 num_bits_to_pack)
+{
+	int		byte_index;
+	int		bit_index;
+	int		empty_space_this_byte;
+	byte	*dest;
+
+	Q_assert(num_bits_to_pack <= 32);
+	Q_assert((value & ((1 << num_bits_to_pack) - 1)) == value);
+
+	// Scoot the value bits up to the top of the word; this makes
+	// them easier to work with.
+
+	value <<= (BITS_PER_WORD - num_bits_to_pack);
+
+	// First we do the hard part: pack bits into the first u8,
+	// which may already have bits in it.
+
+	byte_index = (packer->next_bit_to_write / 8);
+	bit_index = (packer->next_bit_to_write % 8);
+	empty_space_this_byte = (8 - bit_index) & 0x7;
+
+	// Update next_bit_to_write for the next call; we don't need 
+	// the old value any more.
+
+	packer->next_bit_to_write += num_bits_to_pack;
+
+	dest = packer->buffer + byte_index;
+
+	if (empty_space_this_byte)
+	{
+		int	fill_bits;
+		int to_copy = empty_space_this_byte;
+		int align = 0;
+
+		if (to_copy > num_bits_to_pack)
+		{
+			// We don't have enough bits to fill up this u8.
+			align = to_copy - num_bits_to_pack;
+			to_copy = num_bits_to_pack;
+		}
+
+		fill_bits = value >> (BITS_PER_WORD - empty_space_this_byte);
+		*dest |= fill_bits;
+
+		num_bits_to_pack -= to_copy;
+		dest++;
+		value <<= to_copy;
+	}
+
+	// Now we do the fast and easy part for what is hopefully
+	// the bulk of the data.
+
+	while (value)
+	{
+		*dest++ = value >> (BITS_PER_WORD - 8);
+		value <<= 8;
+	}
+}
+
+int BP_get_length (packer_t *packer)
+{
+	int len_in_bytes = (packer->next_bit_to_write + 7) / 8;
+	Q_assert(len_in_bytes <= PACKER_BUFFER_SIZE);
+	return len_in_bytes;
+}
+
 /*
 =============
 SV_EmitPacketEntities
@@ -126,6 +202,8 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 	entity_state_t	*oldent;
 	entity_state_t 	*newent;
 
+//	int				removed[MAX_EDICTS];
+//	int				removedindex;
 	int				oldindex, newindex;
 	int				oldnum, newnum;
 	int				from_num_entities;
@@ -137,7 +215,11 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 	else
 #endif
 
-	MSG_BeginWriting (svc_packetentities);
+//	removedindex = 0;
+
+	//r1: pointless waste of byte since this is already inside an svc_frame
+	if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
+		MSG_BeginWriting (svc_packetentities);
 
 	if (!from)
 		from_num_entities = 0;
@@ -208,18 +290,25 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 		if (newnum > oldnum)
 		{	// the old entity isn't present in the new message
 			//Com_Printf ("server: remove!!!\n");
-			bits = U_REMOVE;
-			if (oldnum >= 256)
-				bits |= U_NUMBER16 | U_MOREBITS1;
+			/*if (cl->protocol == ENHANCED_PROTOCOL_VERSION)
+			{
+				removed[removedindex++] = oldnum;
+			}
+			else*/
+			{
+				bits = U_REMOVE;
+				if (oldnum >= 256)
+					bits |= U_NUMBER16 | U_MOREBITS1;
 
-			MSG_WriteByte (bits&255 );
-			if (bits & 0x0000ff00)
-				MSG_WriteByte ((bits>>8)&255 );
+				MSG_WriteByte (bits&255 );
+				if (bits & 0x0000ff00)
+					MSG_WriteByte ((bits>>8)&255 );
 
-			if (bits & U_NUMBER16)
-				MSG_WriteShort (oldnum);
-			else
-				MSG_WriteByte (oldnum);
+				if (bits & U_NUMBER16)
+					MSG_WriteShort (oldnum);
+				else
+					MSG_WriteByte (oldnum);
+			}
 
 			oldindex++;
 			continue;
@@ -227,6 +316,71 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 	}
 
 	MSG_WriteShort (0);	// end of packetentities
+
+	//pack all the removed entities as efficiently as possible using a packer
+	//reference: http://number-none.com/product/Packing%20Integers/
+#if 0
+	if (cl->protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+ 		if (removedindex)
+		{
+			int		i;
+			int		maxEntNum;
+
+			maxEntNum = svs.client_entities[(from->first_entity + from->num_entities-1) %svs.num_client_entities ].number + 1;
+
+			if (maxEntNum < 256)
+			{
+				for (i = 0; i < removedindex; i++)
+					MSG_WriteByte (removed[i]);
+
+				MSG_WriteByte (0);
+			}
+			else
+			{
+				packer_t	bitpacker;
+				int			byteCount;
+
+				memset (&bitpacker, 0, sizeof(bitpacker));
+
+				for (i = 0; i < removedindex; i++)
+				{
+					BP_pack (&bitpacker, removed[i], 10);
+				}
+
+				byteCount = BP_get_length(&bitpacker);
+
+				MSG_WriteByte (byteCount);
+				MSG_Write (bitpacker.buffer, byteCount);
+			}
+
+			/*for (i = 0; i < removedindex; i++)
+			{
+				//check for overflow
+				if (i && i % flushNum == 0)
+				{
+					MSG_WriteLong (accumulator);
+					accumulator = 0;
+				}
+				accumulator = (maxEntNum * accumulator) + removed[i];
+			}
+
+			for (i = 0; i < removedindex; i++)
+			{
+				quotient = accumulator / maxEntNum;
+				remainder = accumulator % maxEntNum;
+
+				accumulator = quotient;
+				Com_Printf ("packed: %d\n", LOG_GENERAL, remainder);
+			}*/
+		}
+		else
+		{
+			if (from)
+				MSG_WriteByte (0);
+		}
+	}
+#endif
 
 	MSG_EndWriting (msg);
 #if 0
@@ -236,12 +390,17 @@ static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from,
 }
 
 #define Vec_RangeCap(x,minv,maxv) \
-{ \
+do { \
 	if ((x)[0] > (maxv)) (x)[0] = (maxv); else if ((x)[0] < (minv)) x[0] = (minv); \
 	if ((x)[1] > (maxv)) (x)[1] = (maxv); else if ((x)[1] < (minv)) x[1] = (minv); \
 	if ((x)[2] > (maxv)) (x)[2] = (maxv); else if ((x)[2] < (minv)) x[2] = (minv); \
-}
+} while(0)
 
+//performs comparison on encoded byte differences - pointless sending 0.00 -> 0.01 if both end up as 0 on net.
+#define Vec_ByteCompare(v1,v2) \
+	((int)(v1[0]*4)==(int)(v2[0]*4) && \
+	(int)(v1[1]*4)==(int)(v2[1]*4) && \
+	(int)(v1[2]*4) == (int)(v2[2]*4))
 
 /*
 =============
@@ -249,16 +408,20 @@ SV_WritePlayerstateToClient
 
 =============
 */
-static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg)//, client_t *client)
+static int SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg, client_t *client)
 {
 	int							i;
 	int							pflags;
 	static player_state_new		null_playerstate;
 	int							statbits;
-
+	int							extraflags;
+	qboolean					enhanced;
 	player_state_new			*ps, *ops;
 
 	ps = &to->ps;
+
+	extraflags = 0;
+	enhanced = (client->protocol == ENHANCED_PROTOCOL_VERSION);
 
 	if (!from)
 		ops = &null_playerstate;
@@ -294,15 +457,37 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	if (ps->pmove.pm_type != ops->pmove.pm_type)
 		pflags |= PS_M_TYPE;
 
-	if (ps->pmove.origin[0] != ops->pmove.origin[0]
-		|| ps->pmove.origin[1] != ops->pmove.origin[1]
-		|| ps->pmove.origin[2] != ops->pmove.origin[2] )
-		pflags |= PS_M_ORIGIN;
+	//r1
+	if (ps->pmove.origin[0] != ops->pmove.origin[0] || ps->pmove.origin[1] != ops->pmove.origin[1])
+	{
+		if (!enhanced)
+			extraflags |= EPS_PMOVE_ORIGIN2;
 
-	if (ps->pmove.velocity[0] != ops->pmove.velocity[0]
-		|| ps->pmove.velocity[1] != ops->pmove.velocity[1]
-		|| ps->pmove.velocity[2] != ops->pmove.velocity[2] )
+		pflags |= PS_M_ORIGIN;
+	}
+
+	if (ps->pmove.origin[2] != ops->pmove.origin[2])
+	{
+		if (!enhanced)
+			pflags |= PS_M_ORIGIN;
+		extraflags |= EPS_PMOVE_ORIGIN2;
+	}
+
+	//r1
+	if (ps->pmove.velocity[0] != ops->pmove.velocity[0] || ps->pmove.velocity[1] != ops->pmove.velocity[1])
+	{
+		if (!enhanced)
+			extraflags |= EPS_PMOVE_VELOCITY2;
+
 		pflags |= PS_M_VELOCITY;
+	}
+
+	if (ps->pmove.velocity[2] != ops->pmove.velocity[2])
+	{
+		if (!enhanced)
+			pflags |= PS_M_VELOCITY;
+		extraflags |= EPS_PMOVE_VELOCITY2;
+	}
 
 	if (ps->pmove.pm_time != ops->pmove.pm_time)
 		pflags |= PS_M_TIME;
@@ -319,35 +504,64 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 		pflags |= PS_M_DELTA_ANGLES;
 
 
-	if (ps->viewoffset[0] != ops->viewoffset[0]
+	/*if (ps->viewoffset[0] != ops->viewoffset[0]
 		|| ps->viewoffset[1] != ops->viewoffset[1]
-		|| ps->viewoffset[2] != ops->viewoffset[2] )
+		|| ps->viewoffset[2] != ops->viewoffset[2] )*/
+
+	if (!Vec_ByteCompare (ps->viewoffset, ops->viewoffset))
 		pflags |= PS_VIEWOFFSET;
 
-	if (ps->viewangles[0] != ops->viewangles[0]
-		|| ps->viewangles[1] != ops->viewangles[1]
-		|| ps->viewangles[2] != ops->viewangles[2] )
+	if (ps->viewangles[0] != ops->viewangles[0] || ps->viewangles[1] != ops->viewangles[1])
+	{
+		if (!enhanced)
+			extraflags |= EPS_VIEWANGLE2;
 		pflags |= PS_VIEWANGLES;
+	}
+	
+	if (ps->viewangles[2] != ops->viewangles[2])
+	{
+		if (!enhanced)
+			pflags |= PS_VIEWANGLES;
 
-	if (ps->kick_angles[0] != ops->kick_angles[0]
+		extraflags |= EPS_VIEWANGLE2;
+	}
+
+	/*if (ps->kick_angles[0] != ops->kick_angles[0]
 		|| ps->kick_angles[1] != ops->kick_angles[1]
-		|| ps->kick_angles[2] != ops->kick_angles[2] )
+		|| ps->kick_angles[2] != ops->kick_angles[2] )*/
+
+	if (!Vec_ByteCompare (ps->kick_angles, ops->kick_angles))
 		pflags |= PS_KICKANGLES;
 
-	if (ps->blend[0] != ops->blend[0]
+	/*if (ps->blend[0] != ops->blend[0]
 		|| ps->blend[1] != ops->blend[1]
 		|| ps->blend[2] != ops->blend[2]
-		|| ps->blend[3] != ops->blend[3] )
+		|| ps->blend[3] != ops->blend[3] )*/
+	if (!Vec_ByteCompare (ps->blend, ops->blend) || (int)(ps->blend[3]*4) != (int)(ops->blend[3]*4))
 		pflags |= PS_BLEND;
 
-	if (ps->fov != ops->fov)
+	if ((int)ps->fov != (int)ops->fov)
 		pflags |= PS_FOV;
 
 	if (ps->rdflags != ops->rdflags)
 		pflags |= PS_RDFLAGS;
 
 	if (ps->gunframe != ops->gunframe)
+	{
 		pflags |= PS_WEAPONFRAME;
+		if (!enhanced)
+		{
+			extraflags |= EPS_GUNANGLES|EPS_GUNOFFSET;
+		}
+		else
+		{
+			if (!Vec_ByteCompare (ps->gunangles, ops->gunangles))
+				extraflags |= EPS_GUNANGLES;
+
+			if (!Vec_ByteCompare (ps->gunoffset, ops->gunoffset))
+				extraflags |= EPS_GUNOFFSET;
+		}
+	}
 
 	//only possibly send bbox if the client supports it AND the game is supposed to send it
 #ifdef ENHANCED_SERVER
@@ -361,7 +575,11 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	//
 	// write it
 	//
-	MSG_BeginWriting (svc_playerinfo);
+
+	//r1: pointless waste of byte since this is already inside an svc_frame
+	if (!enhanced)
+		MSG_BeginWriting (svc_playerinfo);
+
 	MSG_WriteShort (pflags);
 
 	//
@@ -374,15 +592,25 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	{
 		MSG_WriteShort (ps->pmove.origin[0]);
 		MSG_WriteShort (ps->pmove.origin[1]);
-		MSG_WriteShort (ps->pmove.origin[2]);
 	}
+
+	//r1
+	if (extraflags & EPS_PMOVE_ORIGIN2)
+		MSG_WriteShort (ps->pmove.origin[2]);
+	else if (pflags & PS_M_ORIGIN)
+		svs.proto35BytesSaved += 2;
 
 	if (pflags & PS_M_VELOCITY)
 	{
 		MSG_WriteShort (ps->pmove.velocity[0]);
 		MSG_WriteShort (ps->pmove.velocity[1]);
-		MSG_WriteShort (ps->pmove.velocity[2]);
 	}
+
+	//r1
+	if (extraflags & EPS_PMOVE_VELOCITY2)
+		MSG_WriteShort (ps->pmove.velocity[2]);
+	else if (pflags & PS_M_VELOCITY)
+		svs.proto35BytesSaved += 2;
 
 	if (pflags & PS_M_TIME)
 		MSG_WriteByte (ps->pmove.pm_time);
@@ -414,8 +642,13 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	{
 		MSG_WriteAngle16 (ps->viewangles[0]);
 		MSG_WriteAngle16 (ps->viewangles[1]);
-		MSG_WriteAngle16 (ps->viewangles[2]);
 	}
+
+	//r1
+	if (extraflags & EPS_VIEWANGLE2)
+		MSG_WriteAngle16 (ps->viewangles[2]);	//this one rarely changes
+	else if (pflags & PS_VIEWANGLES)
+		svs.proto35BytesSaved += 2;
 
 	if (pflags & PS_KICKANGLES)
 	{
@@ -433,14 +666,30 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	if (pflags & PS_WEAPONFRAME)
 	{
 		MSG_WriteByte (ps->gunframe);
-
+	}
+	
+	//r1
+	if (extraflags & EPS_GUNOFFSET)
+	{
 		MSG_WriteChar ((int)(ps->gunoffset[0]*4));
 		MSG_WriteChar ((int)(ps->gunoffset[1]*4));
 		MSG_WriteChar ((int)(ps->gunoffset[2]*4));
+	}
+	else if (pflags & PS_WEAPONFRAME)
+	{
+		svs.proto35BytesSaved += 3;
+	}
 
+	//r1
+	if (extraflags & EPS_GUNANGLES)
+	{
 		MSG_WriteChar ((int)(ps->gunangles[0]*4));
 		MSG_WriteChar ((int)(ps->gunangles[1]*4));
 		MSG_WriteChar ((int)(ps->gunangles[2]*4));
+	}
+	else if (pflags & PS_WEAPONFRAME)
+	{
+		svs.proto35BytesSaved += 3;
 	}
 
 	if (pflags & PS_BLEND)
@@ -458,7 +707,8 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 	if (pflags & PS_RDFLAGS)
 		MSG_WriteByte (ps->rdflags);
 
-	if (pflags & PS_BBOX) {
+	if (pflags & PS_BBOX)
+	{
 		int j, k;
 		int solid;
 
@@ -493,12 +743,24 @@ static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_
 		if (ps->stats[i] != ops->stats[i])
 			statbits |= 1<<i;
 
-	MSG_WriteLong (statbits);
-	for (i=0 ; i<MAX_STATS ; i++)
-		if (statbits & (1<<i) )
-			MSG_WriteShort (ps->stats[i]);
+	if (!enhanced || statbits)
+		extraflags |= EPS_STATS;
+
+	if (extraflags & EPS_STATS)
+	{
+		MSG_WriteLong (statbits);
+		for (i=0 ; i<MAX_STATS ; i++)
+			if (statbits & (1<<i) )
+				MSG_WriteShort (ps->stats[i]);
+	}
+	else
+	{
+		svs.proto35BytesSaved += 4;
+	}
 
 	MSG_EndWriting (msg);
+
+	return extraflags;
 }
 
 
@@ -511,6 +773,7 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 {
 	client_frame_t		*frame, *oldframe;
 	int					lastframe, framenum;
+	int					extraDataIndex, extraflags, serverByteIndex;
 
 	framenum = sv.framenum + sv.randomframe;
 
@@ -523,7 +786,7 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 		oldframe = NULL;
 		lastframe = -1;
 	}
-	else if (framenum - client->lastframe >= (UPDATE_BACKUP - 3) )
+	else if (framenum - client->lastframe >= (UPDATE_BACKUP - 2) )
 	{	// client hasn't gotten a good message through in a long time
 //		Com_Printf ("%s: Delta request from out-of-date packet.\n", client->name);
 		oldframe = NULL;
@@ -535,10 +798,38 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 		lastframe = client->lastframe;
 	}
 
-	SZ_WriteByte (msg, svc_frame);
-	SZ_WriteLong (msg, framenum);
-	SZ_WriteLong (msg, lastframe);	// what we are delta'ing from
-	SZ_WriteByte (msg, client->surpressCount);	// rate dropped packets
+	serverByteIndex = msg->cursize;
+	SZ_WriteByte (msg, 0);
+
+	//pack pack pack....
+	if (client->protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		uint32		offset;
+		uint32		encodedFrame;
+
+		//we don't need full 32bits for framenum - 27 gives enough for 155 days on the same map :)
+		//could even go lower if we need more bits later
+		encodedFrame = framenum & 0x07FFFFFF;
+
+		if (lastframe == -1)
+			offset = 31;		//special case
+		else
+			offset = framenum - lastframe;
+
+		//first 5 bits of framenum = offset for delta
+		encodedFrame += (offset << 27);
+
+		SZ_WriteLong (msg, encodedFrame);
+		svs.proto35BytesSaved += 4;
+	}
+	else
+	{
+		SZ_WriteLong (msg, framenum);
+		SZ_WriteLong (msg, lastframe);	// what we are delta'ing from
+	}
+	extraDataIndex = msg->cursize;
+	SZ_WriteByte (msg, 0);
+	//SZ_WriteByte (msg, client->surpressCount);	// rate dropped packets
 	client->surpressCount = 0;
 
 	// send over the areabits
@@ -546,7 +837,19 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	SZ_Write (msg, frame->areabits, frame->areabytes);
 
 	// delta encode the playerstate
-	SV_WritePlayerstateToClient (oldframe, frame, msg);//, client);
+	extraflags = SV_WritePlayerstateToClient (oldframe, frame, msg, client);
+
+	//HOLY CHRIST
+	if (client->protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		msg->data[serverByteIndex] = svc_frame + ((extraflags & 0xF0) << 1);
+		msg->data[extraDataIndex] = client->surpressCount + ((extraflags & 0x0F) << 4);
+	}
+	else
+	{
+		msg->data[serverByteIndex] = svc_frame;
+		msg->data[extraDataIndex] = client->surpressCount;
+	}
 
 	// delta encode the entities
 	SV_EmitPacketEntities (client, oldframe, frame, msg);
@@ -606,7 +909,7 @@ static void SV_FatPVS (vec3_t org)
 			continue;		// already have the cluster we want
 		src = CM_ClusterPVS(leafs[i]);
 		for (j=0 ; j<longs ; j++)
-			((long *)fatpvs)[j] |= ((long *)src)[j];
+			((int32 *)fatpvs)[j] |= ((int32 *)src)[j];
 	}
 }
 
@@ -812,6 +1115,10 @@ void SV_BuildClientFrame (client_t *client)
 			{
 				// FIXME: if an ent has a model and a sound, but isn't
 				// in the PVS, only the PHS, clear the model
+
+				//r1: will this even happen? ent->s.sound attenuates rapidly, it's very unlikely
+				//something with a sound and not in PVS would still be hearable...
+
 				/*if (ent->s.sound)
 				{
 					bitvector = fatpvs;	//clientphs;
@@ -837,19 +1144,16 @@ void SV_BuildClientFrame (client_t *client)
 						continue;		// not visible
 				}
 
-				if (!ent->s.modelindex)
+				if (ent->s.sound && !ent->s.modelindex && !ent->s.effects && !ent->s.event)
 				{	
-					if (ent->s.sound && !ent->s.effects)
-					{
-						// don't send sounds if they will be attenuated away
-						vec3_t	delta;
-						float	len;
+					// don't send sounds if they will be attenuated away
+					vec3_t	delta;
+					float	len;
 
-						VectorSubtract (org, ent->s.origin, delta);
-						len = VectorLength (delta);
-						if (len > 400)
-							continue;
-					}
+					VectorSubtract (org, ent->s.origin, delta);
+					len = VectorLength (delta);
+					if (len > 400)
+						continue;
 				}
 			}
 		}
@@ -859,7 +1163,7 @@ void SV_BuildClientFrame (client_t *client)
 			continue; // added as a special projectile
 #endif
 
-		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP)
+		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP && ent->solid != SOLID_TRIGGER)
 		{
 			// *********** NiceAss Start ************
 			VectorCopy(org, start);

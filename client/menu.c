@@ -1029,7 +1029,7 @@ static menuframework_s	s_r1q2_options_menu;
 static menuseparator_s	s_r1q2_warning;
 static menuseparator_s	s_r1q2_warning2;
 
-#ifdef WIN32
+#ifdef _WIN32
 static menulist_s		s_r1q2_dinput;
 static menulist_s		s_r1q2_winxp;
 #endif
@@ -1077,7 +1077,7 @@ static void CustomizeControlsFunc( void *unused )
 	M_Menu_Keys_f();
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 static void DirectInputFunc (void *unused)
 {
 	Cvar_SetValue ("m_directinput", (float)s_r1q2_dinput.curvalue);
@@ -1132,7 +1132,7 @@ static void R1Q2_MenuInit (void)
 		0
 	};
 
-#ifdef WIN32
+#ifdef _WIN32
 	static const char *dinputnames[] = 
 	{
 		"disabled",
@@ -1160,7 +1160,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_warning2.generic.x    = 160;
 	s_r1q2_warning2.generic.y	 = 10;
 
-#ifdef WIN32
+#ifdef _WIN32
 	s_r1q2_dinput.generic.type = MTYPE_SPINCONTROL;
 	s_r1q2_dinput.generic.x	= 0;
 	s_r1q2_dinput.generic.y	= 30;
@@ -1250,7 +1250,7 @@ static void R1Q2_MenuInit (void)
 	Menu_AddItem (&s_r1q2_options_menu, (void *)&s_r1q2_warning);
 	Menu_AddItem (&s_r1q2_options_menu, (void *)&s_r1q2_warning2);
 
-#ifdef WIN32
+#ifdef _WIN32
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_dinput );
 	Menu_AddItem( &s_r1q2_options_menu, ( void * ) &s_r1q2_winxp );
 #endif

@@ -153,7 +153,7 @@ extern	int	chat_cursorpos;
 extern	qboolean	chat_team;
 
 void Key_GenerateRepeats (void);
-void Key_Event (int key, qboolean down, unsigned time);
+void Key_Event (int key, qboolean down, uint32 time);
 void Key_Init (void);
 void Key_WriteBindings (FILE *f);
 void Key_SetBinding (int keynum, char *binding);

@@ -13,7 +13,7 @@ ALLSRC:=$(r1q2ded_SRC)
 default: r1q2ded
 
 r1q2ded: $(r1q2ded_OBJ)
-	gcc -g -o $@ $^ -lm -lz -ldl
+	gcc -o $@ $^ -lm -lz -ldl -rdynamic
 
 TARGETS:=r1q2ded
 

@@ -185,7 +185,7 @@ void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 
 	if (cl->state <= cs_zombie)
 	{
-		Com_Printf ("Warning, SV_AddMessage to zombie/free client %d.\n", LOG_SERVER|LOG_WARNING, cl - svs.clients);
+		Com_Printf ("Warning, SV_AddMessage to zombie/free client %d.\n", LOG_SERVER|LOG_WARNING, (int)(cl - svs.clients));
 		return;
 	}
 
@@ -371,9 +371,12 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 	//r1: check we have data in the multicast buffer
 	if (!MSG_GetLength())
 	{
-		Com_Printf ("GAME ERROR: SV_Multicast called with no data in multicast buffer, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
-		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+		if (sv_gamedebug->intvalue)
+		{
+			Com_Printf ("GAME WARNING: SV_Multicast called with no data in multicast buffer, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+			if (sv_gamedebug->intvalue >= 2)
+				Q_DEBUGBREAKPOINT;
+		}
 		return;
 	}
 
@@ -713,7 +716,7 @@ static qboolean SV_SendClientDatagram (client_t *client)
 #endif
 
 	//init unreliable portion
-	SZ_Init (&msg, msg_buf, sizeof(msg_buf));
+	SZ_Init (&msg, msg_buf, client->netchan.message.buffsize);
 
 	msg.allowoverflow = true;
 
@@ -721,7 +724,7 @@ static qboolean SV_SendClientDatagram (client_t *client)
 	{
 		//fix up maxsize for how much space we can fill up safely.
 		//reliable is full, so we can fill up remainder of the packet.
-		msg.maxsize = sizeof(msg_buf) - client->netchan.reliable_length;
+		msg.maxsize -= client->netchan.reliable_length;
 	}
 	else
 	{
@@ -740,7 +743,7 @@ static qboolean SV_SendClientDatagram (client_t *client)
 				//for debugging, keep track of this message so we can ensure it was delivered. if not, error out.
 				wanted = message->data;
 #endif
-				msg.maxsize = sizeof(msg_buf) - message->cursize;
+				msg.maxsize -= message->cursize;
 				//Com_Printf ("SV_SendClientDatagram: Reserving %d bytes of buffer space for %s. Have %d for unreliable.\n", LOG_GENERAL, message->cursize, client->name, msg.maxsize);
 				break;
 			}
@@ -772,7 +775,8 @@ retryframe:
 		//if frame overflowed, we're screwed either way :)
 		if (!frame.overflowed)
 		{
-			if (frame.cursize > msg.maxsize)
+			//try to fit it into one udp packet if at all possible
+			if (frame.cursize > msg.maxsize || frame.cursize > 1490)
 			{
 				//r1q2 clients get compressed frame, normal clients get nothing
 				byte	compressed_frame[4096];
@@ -787,6 +791,7 @@ retryframe:
 					SZ_WriteShort (&msg, compressed_frame_len);
 					SZ_WriteShort (&msg, frame.cursize);
 					SZ_Write (&msg, compressed_frame, compressed_frame_len);
+					svs.proto35CompressionBytes += frame.cursize - compressed_frame_len;
 				}
 				else
 				{
@@ -961,7 +966,7 @@ retryframe:
 	//fit an svc_frame so we measure using hacks and frameSize. however we must commit to delivering
 	//one reliable message at least to avoid getting stuck on never sending large messages.
 
-	SV_WriteReliableMessages (client, sizeof(msg_buf) - msg.cursize);
+	SV_WriteReliableMessages (client, client->netchan.message.buffsize - msg.cursize);
 
 #ifndef NDEBUG
 	if (!client->netchan.reliable_length)
@@ -1104,7 +1109,7 @@ void SV_SendClientMessages (void)
 
 		if (sv.state == ss_cinematic || sv.state == ss_demo || sv.state == ss_pic)
 		{
-			SV_WriteReliableMessages (c, MAX_USABLEMSG);
+			SV_WriteReliableMessages (c, c->netchan.message.buffsize);
 			Netchan_Transmit (&c->netchan, msglen, msgbuf);
 		}
 		else if (c->state == cs_spawned)
@@ -1117,7 +1122,7 @@ void SV_SendClientMessages (void)
 		}
 		else
 		{
-			SV_WriteReliableMessages (c, MAX_USABLEMSG);
+			SV_WriteReliableMessages (c, c->netchan.message.buffsize);
 			// just update reliable	if needed
 			if (c->netchan.reliable_length || curtime - c->netchan.last_sent > 100)
 				Netchan_Transmit (&c->netchan, 0, NULL);

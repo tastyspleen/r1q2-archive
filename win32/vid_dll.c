@@ -60,7 +60,7 @@ LONG WINAPI MainWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
 
 static qboolean s_alttab_disabled;
 
-extern	unsigned	sys_msg_time;
+extern	uint32	sys_msg_time;
 
 /*
 ** WIN32 helper functions
@@ -357,7 +357,7 @@ LONG WINAPI MainWndProc (
 		return DefWindowProc( hWnd, uMsg, wParam, lParam );
 	}
 
-	if ( uMsg == MSH_MOUSEWHEEL && !g_pMouse)
+	if ( uMsg == MSH_MOUSEWHEEL)
 	{
 		if ( ( ( int ) wParam ) > 0 )
 		{
@@ -395,10 +395,10 @@ LONG WINAPI MainWndProc (
 		** this chunk of code theoretically only works under NT4 and Win98
 		** since this message doesn't exist under Win95
 		*/
-		if (g_pMouse)
-			break;
+		if (ActiveApp && g_pMouse)
+			return TRUE;
 
-		if ( ( short ) HIWORD( wParam ) > 0 )
+		if ( ( int16 ) HIWORD( wParam ) > 0 )
 		{
 			if (cls.key_dest == key_console || cls.state <= ca_connected) {
 				int i;
@@ -500,8 +500,8 @@ LONG WINAPI MainWndProc (
 
 			if (!vid_fullscreen->intvalue)
 			{
-				xPos = (short) LOWORD(lParam);    // horizontal position 
-				yPos = (short) HIWORD(lParam);    // vertical position 
+				xPos = (int16) LOWORD(lParam);    // horizontal position 
+				yPos = (int16) HIWORD(lParam);    // vertical position 
 
 				r.left   = 0;
 				r.top    = 0;
@@ -888,8 +888,7 @@ void VID_ReloadRefresh (void)
 	cl.force_refdef = true;		// can't use a paused refdef
 
 	//not needed with openal
-	if (!openal_active)
-		S_StopAllSounds();
+	S_StopAllSounds();
 
 	//MessageBox (cl_hwnd, "video restarts!", "what", MB_OK);
 
@@ -903,6 +902,10 @@ void VID_ReloadRefresh (void)
 		//r1: nuke local entities
 		Le_Reset ();
 
+		//security: prevent loading of external renderer dll that could be supplied by server
+		if (strstr (vid_ref->string, "..") || strchr (vid_ref->string, '/') || strchr (vid_ref->string, '\\'))
+			Com_Error (ERR_FATAL, "Bad vid_ref '%s'", vid_ref->string);
+
 		Com_sprintf( name, sizeof(name), "ref_%s.dll", vid_ref->string );
 		if ( !VID_LoadRefresh( name, errMessage ) )
 		{
@@ -914,7 +917,7 @@ void VID_ReloadRefresh (void)
 			strcat (attempted, ")");
 
 			if ( strcmp (vid_ref->string, "soft") == 0 )
-				Com_Error (ERR_FATAL, 	"No video output available!\n\n"
+				Com_Error (ERR_FATAL, 	"Unable to load a renderer! Please check you are running R1Q2 from your Quake II directory.\n\n"
 										"The following DLLs failed to load:\n\n"
 										"%s",
 										attempted);
@@ -976,7 +979,7 @@ VID_Init
 void VID_Init (void)
 {
 	/* Create the video variables so we know how to start the graphics drivers */
-	vid_ref = Cvar_Get ("vid_ref", "soft", CVAR_ARCHIVE);
+	vid_ref = Cvar_Get ("vid_ref", "gl", CVAR_ARCHIVE);
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);

@@ -26,10 +26,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static int net_inittime;
 
-static unsigned __int64 net_total_in;
-static unsigned __int64 net_total_out;
-static unsigned __int64 net_packets_in;
-static unsigned __int64 net_packets_out;
+static uint64 net_total_in;
+static uint64 net_total_out;
+static uint64 net_packets_in;
+static uint64 net_packets_out;
 
 //cvar_t		*net_shownet;
 //static cvar_t	*noudp;
@@ -294,7 +294,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if (port == PORT_ANY)
 		address.sin_port = 0;
 	else
-		address.sin_port = htons((short)port);
+		address.sin_port = htons((uint16)port);
 
 	address.sin_family = AF_INET;
 

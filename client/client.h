@@ -154,7 +154,7 @@ typedef struct client_state_s
 	usercmd_t	cmd;
 	usercmd_t	cmds[CMD_BACKUP];	// each mesage will send several old cmds
 	int			cmd_time[CMD_BACKUP];	// time sent, for calculating pings
-	short		predicted_origins[CMD_BACKUP][3];	// for debug comparing against server
+	int16		predicted_origins[CMD_BACKUP][3];	// for debug comparing against server
 
 	float		predicted_step;				// for stair up smoothing
 	unsigned	predicted_step_time;
@@ -261,13 +261,13 @@ typedef struct client_static_s
 	keydest_t	key_dest;
 
 	//unsigned int	framecount;
-	unsigned int	lastSpamTime;
-	unsigned int	spamTime;
-	unsigned int	realtime;			// always increasing, no clamping, etc
+	uint32			lastSpamTime;
+	uint32			spamTime;
+	uint32			realtime;			// always increasing, no clamping, etc
 	float			frametime;			// seconds since last frame
 
 // screen rendering information
-	unsigned		disable_screen;		// showing loading plaque between levels
+	uint32			disable_screen;		// showing loading plaque between levels
 									// or changing rendering dlls
 									// if time gets > 30 seconds ahead, break it
 	int				disable_servercount;	// when we receive a frame and cl.servercount
@@ -276,7 +276,7 @@ typedef struct client_static_s
 // connection information
 	char			servername[MAX_OSPATH];	// name of server from original connect
 	char			lastservername[MAX_OSPATH];	// name of server from original connect
-	unsigned int	connect_time;		// for connection retransmits
+	uint32			connect_time;		// for connection retransmits
 
 	int			quakePort;			// a 16 bit value that allows quake servers
 									// to work around address translating routers
@@ -301,8 +301,7 @@ typedef struct client_static_s
 	FILE		*demofile;
 
 	//r1: defer rendering when realtime < this
-	unsigned int	defer_rendering;
-	//unsigned short	dlserverport;
+	uint32		defer_rendering;
 } client_static_t;
 
 extern client_static_t	cls;
@@ -376,9 +375,15 @@ extern	cvar_t	*cl_nolerp;
 extern	cvar_t	*cl_railtrail;
 extern	cvar_t	*cl_async;
 
+extern	cvar_t	*cl_protocol;
+extern	cvar_t	*cl_test;
+extern	cvar_t	*cl_test2;
+
 extern cvar_t *vid_fullscreen;
 
+#ifdef USE_OPENAL
 extern int openal_active;
+#endif
 
 #ifndef DEDICATED_ONLY
 extern	qboolean send_packet_now;
@@ -489,7 +494,7 @@ void CL_IonripperTrail (vec3_t start, vec3_t end);
 
 // ========
 // PGM
-void CL_BlasterParticles2 (vec3_t org, vec3_t dir, unsigned int color);
+void CL_BlasterParticles2 (vec3_t org, vec3_t dir, uint32 color);
 void CL_BlasterTrail2 (vec3_t start, vec3_t end);
 void CL_DebugTrail (vec3_t start, vec3_t end);
 void CL_SmokeTrail (vec3_t start, vec3_t end, int colorStart, int colorRun, int spacing);
@@ -518,9 +523,9 @@ void CL_WidowSplash (vec3_t org);
 localent_t *Le_Alloc (void);
 void Le_Free (localent_t *lent);
 
-int CL_ParseEntityBits (unsigned *bits);
+int CL_ParseEntityBits (uint32 *bits);
 void CL_ParseDelta (entity_state_t *from, entity_state_t *to, int number, int bits);
-void CL_ParseFrame (void);
+void CL_ParseFrame (int extrabits);
 
 void CL_ParseTEnt (void);
 void CL_ParseConfigString (void);
@@ -577,10 +582,10 @@ void CL_ClDLL_Restart_f (void);
 //
 typedef struct
 {
-	int			down[2];		// key nums holding it down
-	unsigned	downtime;		// msec timestamp
-	unsigned	msec;			// msec down this frame
-	int			state;
+	int32	down[2];		// key nums holding it down
+	uint32	downtime;		// msec timestamp
+	uint32	msec;			// msec down this frame
+	int32	state;
 } kbutton_t;
 
 extern	kbutton_t	in_mlook, in_klook;
@@ -697,12 +702,7 @@ void IN_Restart_f (void);
 //
 void CL_PredictMovement (void);
 
-#if id386
-void EXPORT x86_TimerStart( void );
-void EXPORT x86_TimerStop( void );
-void x86_TimerInit( unsigned long smallest, unsigned longest );
-unsigned long *x86_TimerGetHistogram( void );
-#endif
+void CL_FixCvarCheats (void);
 
 #ifdef CLIENT_DLL
 typedef struct

@@ -98,7 +98,7 @@ void _Q_DEBUGBREAKPOINT (void)
 	DEBUGBREAKPOINT;
 }
 
-void _Q_assert (char *expression, char *function, unsigned line)
+void _Q_assert (char *expression, char *function, uint32 line)
 {
 	Com_Printf ("Q_assert: Assertion '%s' failed on %s:%u\n", LOG_GENERAL, expression, function, line);
 	Q_DEBUGBREAKPOINT;
@@ -1019,7 +1019,7 @@ void COM_DefaultExtension (char *path, char *extension)
 //calls for everything.
 
 //need this for network ports
-short   ShortSwap (short l)
+int16 ShortSwap (int16 l)
 {
 	byte    b1,b2;
 
@@ -1029,6 +1029,7 @@ short   ShortSwap (short l)
 	return (b1<<8) + b2;
 }
 
+
 #if YOU_HAVE_A_BROKEN_COMPUTER
 
 qboolean	bigendien;
@@ -1036,20 +1037,20 @@ qboolean	bigendien;
 // can't just use function pointers, or dll linkage can
 // mess up when qcommon is included in multiple places
 
-short	(*_LittleShort) (short l);
-int		(*_LittleLong) (int l);
+int16	(*_LittleShort) (int16 l);
+int32		(*_LittleLong) (int32 l);
 float	(*_LittleFloat) (float l);
 
-short	LittleShort(short l) {return _LittleShort(l);}
-int		LittleLong (int l) {return _LittleLong(l);}
+int16	LittleShort(int16 l) {return _LittleShort(l);}
+int32		LittleLong (int32 l) {return _LittleLong(l);}
 float	LittleFloat (float l) {return _LittleFloat(l);}
 
-short	ShortNoSwap (short l)
+int16	ShortNoSwap (int16 l)
 {
 	return l;
 }
 
-int    LongSwap (int l)
+int32    LongSwap (int32 l)
 {
 	byte    b1,b2,b3,b4;
 
@@ -1061,7 +1062,7 @@ int    LongSwap (int l)
 	return ((int)b1<<24) + ((int)b2<<16) + ((int)b3<<8) + b4;
 }
 
-int	LongNoSwap (int l)
+int32	LongNoSwap (int32 l)
 {
 	return l;
 }
@@ -1098,7 +1099,7 @@ void Swap_Init (void)
 	byte	swaptest[2] = {1,0};
 
 // set the byte swapping variables in a portable manner	
-	if ( *(short *)swaptest == 1)
+	if ( *(int16 *)swaptest == 1)
 	{
 		bigendien = false;
 		_LittleShort = ShortNoSwap;
@@ -1549,7 +1550,7 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 
 //====================================================================
 
-#ifndef WIN32
+#ifndef _WIN32
 int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va)
 {
 	int ret;

@@ -1,14 +1,46 @@
+============================================================================
 R1Q2 Source Code
-================
+============================================================================
 Hello!
-I ask that if you copy any code into your own engine
-that you please credit me and include a link to the
-R1Q2 homepage. Where possible, please be specific
-about which features you have used from R1Q2.
+I ask that if you copy any code into your own engine that you please  credit
+me  and include  a link  to the  R1Q2 homepage.  Where possible,  please be
+specific about which features you have used from R1Q2.
 
-If you fork R1Q2 in any way please modify the build
-string to clearly indicate that it is a fork. I would
-appreciate notification before you release any public
-forks of R1Q2 so I can check them out. Thanks.
+If  you fork  R1Q2 in  any way  please modify  the build  string to  clearly
+indicate  that it  is a  fork. I  would appreciate  notification before  you
+release any public forks of R1Q2 so I can check them out. Thanks.
+
+============================================================================
+Building
+============================================================================
+Supported Platforms
+-------------------
+Win32 x86
+Linux x86, x86_64
+BSD x86 (requires gmake, rarely tested)
+
+It may compile on other platforms/architectures but I have not tried this.
+
+Pre-requisites
+--------------
+All: zlib
+R1GL: libpng, libjpeg
+Win32 Client: DirectX 8 SDK or higher
+
+Linux
+-----
+Linux Makefiles are included in the binaries directory:
+
+binaries/r1q2ded/Makefile is for the R1Q2 server.
+binaries/client/Makefile is for the R1Q2 client (buggy).
+binaries/game/Makefile is for the baseq2 Game DLL.
+
+Windows
+-------
+Windows Visual Studio 6.0 project files are included. All build output  will
+be in a directory "build" under the quake2, game or ref_gl directories.
+
+Don't forget to stop by the R1Q2 Forums!
+http://www.r1ch.net/forum/index.php?board=8.0
 
 Rich.

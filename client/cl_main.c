@@ -34,7 +34,7 @@ typedef struct incoming_s
 {
 	netadr_t	remote;
 	int			type;
-	unsigned	time;
+	uint32		time;
 } incoming_t;
 
 #define	CL_UNDEF				0
@@ -145,6 +145,8 @@ cvar_t	*cl_instantack;
 cvar_t	*cl_autorecord;
 
 cvar_t	*cl_railtrail;
+cvar_t	*cl_test;
+cvar_t	*cl_test2;
 
 #ifdef NO_SERVER
 cvar_t	*allow_download;
@@ -603,10 +605,11 @@ CL_Drop
 Called after an ERR_DROP was thrown
 ================
 */
-void CL_Drop (qboolean skipdisconnect)
+void CL_Drop (qboolean skipdisconnect, qboolean nonerror)
 {
 	if (cls.state == ca_uninitialized)
 		return;
+
 	if (cls.state == ca_disconnected)
 		return;
 
@@ -615,6 +618,9 @@ void CL_Drop (qboolean skipdisconnect)
 	// drop loading plaque unless this is the initial game start
 	if (cls.disable_servercount != -1)
 		SCR_EndLoadingPlaque ();	// get rid of loading plaque
+
+	if (!nonerror)
+		cls.serverProtocol = 0;
 }
 
 
@@ -672,15 +678,12 @@ void CL_SendConnectPacket (void)
 
 	//r1: only send enhanced connect string on new protocol in order to avoid confusing
 	//    other engine mods which may or may not extend this.
-	/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
-			cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
-	} else {
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
-			cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
-	}*/
-	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n",
-		cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
+
+
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\" %u\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), Cvar_IntValue ("net_maxmsglen"));
+	else
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 }
 
 /*
@@ -1191,6 +1194,8 @@ drop to full console
 */
 void CL_Changing_f (void)
 {
+	char	*cmd;
+
 	//ZOID
 	//if we are downloading, we don't change!  This so we don't suddenly stop downloading a map
 	if (cls.download)
@@ -1199,7 +1204,11 @@ void CL_Changing_f (void)
 	if (cls.demofile)
 		CL_EndRecording();
 
-	Cmd_ExecuteString (Cmd_MacroExpandString("$endmapcmd"));
+	cmd = Cmd_MacroExpandString("$endmapcmd");
+	if (cmd)
+		Cmd_ExecuteString (cmd);
+	else
+		Com_Printf ("WARNING: Error expanding $endmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
 
 	//r1: prevent manual issuing crashing game
 	if (cls.state < ca_connected)
@@ -1412,7 +1421,7 @@ safe:
 
 		Com_DPrintf ("client_connect: new\n");
 
-		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort);
+		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort, 0);
 
 		MSG_WriteByte (clc_stringcmd);
 		MSG_WriteString ("new");
@@ -1420,6 +1429,7 @@ safe:
 
 		cls.key_dest = key_game;
 
+		CL_FixCvarCheats();
 		send_packet_now = true;
 		cls.state = ca_connected;
 		return;
@@ -1768,7 +1778,12 @@ new parameters and flush all sounds
 void CL_Snd_Restart_f (void)
 {
 	S_Shutdown ();
-	S_Init (atoi(Cmd_Argv(1)));
+
+	if (Cmd_Argc() == 1)
+		S_Init (-1);
+	else
+		S_Init (atoi(Cmd_Argv(1)));
+
 	memset (cl.sound_precache, 0, sizeof(cl.sound_precache));
 	CL_RegisterSounds ();
 }
@@ -1777,7 +1792,7 @@ int precache_check; // for autodownload of precache items
 int precache_spawncount;
 int precache_tex;
 int precache_model_skin;
-unsigned int precache_start_time;
+uint32 precache_start_time;
 
 static byte *precache_model; // used for skin checking in alias models
 
@@ -1959,13 +1974,13 @@ qboolean CL_LoadLoc (const char *filename)
 		loc->name = CopyString (name, TAGMALLOC_CLIENT_LOC);
 		VectorSet (loc->location, (float)atoi(x)/8.0f, (float)atoi(y)/8.0f, (float)atoi(z)/8.0f);
 
-		Com_DPrintf ("CL_AddLoc: adding location '%s'\n", name);
+		//Com_DPrintf ("CL_AddLoc: adding location '%s'\n", name);
 
 		//advance past \0
 		line++;
 	}
 
-	Com_DPrintf ("CL_AddLoc: read %d locations from '%s'\n", linenum, filename);
+	Com_Printf ("Read %d map locations from '%s'\n", LOG_CLIENT, linenum, filename);
 
 	Z_Free (locBuffer);
 	return true;
@@ -1974,7 +1989,7 @@ qboolean CL_LoadLoc (const char *filename)
 const char *CL_Loc_Get (vec3_t org)
 {
 	vec3_t			distance;
-	unsigned int	length, bestlength = 0xFFFFFFFF;
+	uint32			length, bestlength = 0xFFFFFFFF;
 	cl_location_t	*loc = &cl_locations, *best;
 
 	Q_assert (cl_locations.next);
@@ -2137,11 +2152,11 @@ const char *CL_Get_Loc_Here (void)
 	Cmd_ForwardToServer ();
 }*/
 
-const char *colortext(char *text)
+const char *colortext(const char *text)
 {
 	static char ctext[2][80];
 	static int c=0;
-	char *p;
+	const char *p;
 	char *cp;
 	c^=1;
 	if (!*text)
@@ -2158,9 +2173,10 @@ void CL_RequestNextDownload (void)
 {
 	int			PLAYER_MULT;
 	char		*sexedSounds[MAX_SOUNDS];
-	unsigned	map_checksum;		// for detecting cheater maps
+	uint32		map_checksum;		// for detecting cheater maps
 	char		fn[MAX_OSPATH];
 
+	char		*cmd;
 	dmdl_t		*pheader;
 	dsprite_t	*spriteheader;
 
@@ -2227,10 +2243,10 @@ void CL_RequestNextDownload (void)
 					}
 					
 					//is it an alias model
-					if (LittleLong(*(unsigned *)precache_model) != IDALIASHEADER)
+					if (LittleLong(*(uint32 *)precache_model) != IDALIASHEADER)
 					{
 						//is it a sprite
-						if (LittleLong(*(unsigned *)precache_model) != IDSPRITEHEADER)
+						if (LittleLong(*(uint32 *)precache_model) != IDSPRITEHEADER)
 						{
 							//no, free and move onto next model
 							FS_FreeFile(precache_model);
@@ -2271,7 +2287,7 @@ void CL_RequestNextDownload (void)
 				}
 
 				//if its an alias model
-				if (LittleLong(*(unsigned *)precache_model) == IDALIASHEADER)
+				if (LittleLong(*(uint32 *)precache_model) == IDALIASHEADER)
 				{
 					pheader = (dmdl_t *)precache_model;
 
@@ -2473,9 +2489,9 @@ void CL_RequestNextDownload (void)
 				{
 					if (!isvalidchar(model[j]))
 					{
-						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
+						Com_Printf ("Bad character '%c' in playermodel '%s'\n", LOG_CLIENT|LOG_WARNING, model[j], model);
 						precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
-						continue;
+						goto skipplayer;
 					}
 				}
 
@@ -2484,14 +2500,16 @@ void CL_RequestNextDownload (void)
 				{
 					if (!isvalidchar(skin[j]))
 					{
-						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], cl.configstrings[CS_PLAYERSKINS+i]);
+						Com_Printf ("Bad character '%c' in playerskin '%s'\n", LOG_CLIENT|LOG_WARNING, skin[j], skin);
 						precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
-						continue;
+						goto skipplayer;
 					}
 				}
 
 				switch (n) 
 				{
+					case -1:
+						continue;
 					case 0: // model
 						cls.failed_download = false;
 						Com_sprintf(fn, sizeof(fn), "players/%s/tris.md2", model);
@@ -2551,6 +2569,8 @@ void CL_RequestNextDownload (void)
 				
 				// move on to next model
 				precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+
+skipplayer:;
 			}
 		}
 		// precache phase completed
@@ -2662,7 +2682,11 @@ void CL_RequestNextDownload (void)
 	MSG_WriteString (va("begin %i\n", precache_spawncount) );
 	MSG_EndWriting (&cls.netchan.message);
 
-	Cmd_ExecuteString (Cmd_MacroExpandString("$beginmapcmd"));
+	cmd = Cmd_MacroExpandString("$beginmapcmd");
+	if (cmd)
+		Cmd_ExecuteString (cmd);
+	else
+		Com_Printf ("WARNING: Error expanding $beginmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
 
 	send_packet_now = true;
 }
@@ -2681,7 +2705,7 @@ void CL_Precache_f (void)
 	//the old precache sequence
 	if (Cmd_Argc() < 2)
 	{
-		unsigned	map_checksum;		// for detecting cheater maps
+		uint32		map_checksum;		// for detecting cheater maps
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 		CL_RegisterSounds ();
 		CL_PrepRefresh ();
@@ -2798,6 +2822,13 @@ void _railtrail_changed (cvar_t *var, char *oldValue, char *newValue)
 		Cvar_Set (var->name, "0");
 }
 
+void _protocol_changed (cvar_t *var, char *oldValue, char *newValue)
+{
+	//force reparsing of cl_protocol
+	if (cls.state == ca_disconnected)
+		cls.serverProtocol = 0;
+}
+
 /*
 =================
 CL_InitLocal
@@ -2903,10 +2934,12 @@ void CL_InitLocal (void)
 
 	//r1: only use experimental protocol in debug (not)
 #ifdef _DEBUG
-	cl_protocol = Cvar_Get ("cl_protocol", "35", 0);
+	cl_protocol = Cvar_Get ("cl_protocol", "0", 0);
 #else
-	cl_protocol = Cvar_Get ("cl_protocol", "35", 0);
+	cl_protocol = Cvar_Get ("cl_protocol", "0", 0);
 #endif
+
+	cl_protocol->changed = _protocol_changed;
 
 	cl_defertimer = Cvar_Get ("cl_defertimer", "1", 0);
 	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "3", 0);
@@ -2918,6 +2951,10 @@ void CL_InitLocal (void)
 
 	cl_railtrail = Cvar_Get ("cl_railtrail", "0", 0);
 	cl_railtrail->changed = _railtrail_changed;
+
+	//misc for testing
+	cl_test = Cvar_Get ("cl_test", "0", 0);
+	cl_test2 = Cvar_Get ("cl_test2", "0", 0);
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "1", CVAR_ARCHIVE);
@@ -2940,6 +2977,8 @@ void CL_InitLocal (void)
 	//cl_snaps = Cvar_Get ("cl_snaps", "1", 0);
 	//cl_snaps->modified = false;
 	//cl_snaps->changed = CL_SnapsMessage;
+
+	CL_FixCvarCheats ();
 
 	//
 	// register our commands
@@ -3098,13 +3137,29 @@ cheatvar_t	cheatvars[] = {
 
 int		numcheatvars;
 
-void CL_FixCvarCheats (void)
+void _cheatcvar_changed (cvar_t *cvar, char *oldValue, char *newValue)
 {
 	int			i;
 	cheatvar_t	*var;
 
 	if (cls.state == ca_disconnected || cl.attractloop || Com_ServerState() == ss_demo || cl.maxclients == 1)
 		return;		// single player can cheat
+
+	for (i=0, var = cheatvars ; i<numcheatvars ; i++, var++)
+	{
+		if (var->var == cvar && var->value != cvar->value)
+		{
+			Com_Printf ("%s is cheat protected.\n", LOG_GENERAL, var->name);
+			Cvar_SetValue (var->name, var->setval);
+			return;
+		}
+	}
+}
+
+void CL_FixCvarCheats (void)
+{
+	int			i;
+	cheatvar_t	*var;
 
 	// find all the cvars if we haven't done it yet
 	if (!numcheatvars)
@@ -3113,6 +3168,7 @@ void CL_FixCvarCheats (void)
 		{
 			cheatvars[numcheatvars].var = Cvar_Get (cheatvars[numcheatvars].name,
 					va("%d", cheatvars[numcheatvars].value), 0);
+			cheatvars[numcheatvars].var->changed = _cheatcvar_changed;
 			numcheatvars++;
 		}
 	}
@@ -3138,7 +3194,7 @@ CL_Frame
 ==================
 */
 
-#ifdef WIN32
+#ifdef _WIN32
 extern qboolean	ActiveApp;
 #endif
 
@@ -3222,7 +3278,7 @@ void CL_SendCommand_Synchronous (void)
 	Cbuf_Execute ();
 
 	// fix any cheating cvars
-	CL_FixCvarCheats ();
+	//CL_FixCvarCheats ();
 
 	// send intentions now
 	CL_SendCmd_Synchronous ();
@@ -3338,7 +3394,7 @@ void CL_Synchronous_Frame (int msec)
 void CL_SendCommand (void)
 {
 	// fix any cheating cvars
-	CL_FixCvarCheats ();
+	//CL_FixCvarCheats ();
 
 	// send client packet to server
 	CL_SendCmd ();
@@ -3373,7 +3429,7 @@ void CL_Frame (int msec)
 	if (dbg_framesleep->intvalue)
 		Sys_Sleep (dbg_framesleep->intvalue);
 #else
-#ifdef WIN32
+#ifdef _WIN32
 	if (!ActiveApp && !Com_ServerState())
 		NET_Client_Sleep (100);
 #endif

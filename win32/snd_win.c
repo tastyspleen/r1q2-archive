@@ -634,11 +634,12 @@ Try to find a sound device to mix for.
 Returns false if nothing is found.
 ==================
 */
-int SNDDMA_Init (qboolean fullInit)
+int SNDDMA_Init (int fullInit)
 {
 	sndinitstat	stat;
 
-	snd_firsttime = fullInit;
+	if (fullInit != -1)
+		snd_firsttime = fullInit;
 
 	memset ((void *)&dma, 0, sizeof (dma));
 

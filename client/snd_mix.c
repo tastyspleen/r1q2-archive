@@ -26,11 +26,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
 int		snd_scaletable[32][256];
 int 	*snd_p, snd_linear_count, snd_vol;
-short	*snd_out;
+int16	*snd_out;
 
 void EXPORT S_WriteLinearBlastStereo16 (void);
 
-#ifndef WIN32
+#ifndef _WIN32
 void EXPORT S_WriteLinearBlastStereo16 (void)
 {
 	int		i;
@@ -41,16 +41,16 @@ void EXPORT S_WriteLinearBlastStereo16 (void)
 		val = snd_p[i]>>8;
 		if (val > 0x7fff)
 			snd_out[i] = 0x7fff;
-		else if (val < (short)0x8000)
-			snd_out[i] = (short)0x8000;
+		else if (val < (int16)0x8000)
+			snd_out[i] = (int16)0x8000;
 		else
 			snd_out[i] = val;
 
 		val = snd_p[i+1]>>8;
 		if (val > 0x7fff)
 			snd_out[i+1] = 0x7fff;
-		else if (val < (short)0x8000)
-			snd_out[i+1] = (short)0x8000;
+		else if (val < (int16)0x8000)
+			snd_out[i+1] = (int16)0x8000;
 		else
 			snd_out[i+1] = val;
 	}
@@ -102,7 +102,7 @@ LClampDone2:
 
 #endif
 
-void S_TransferStereo16 (unsigned long *pbuf, int endtime)
+void S_TransferStereo16 (uint32 *pbuf, int endtime)
 {
 	int		lpos;
 	int		lpaintedtime;
@@ -115,7 +115,7 @@ void S_TransferStereo16 (unsigned long *pbuf, int endtime)
 	// handle recirculating buffer issues
 		lpos = lpaintedtime & ((dma.samples>>1)-1);
 
-		snd_out = (short *) pbuf + (lpos<<1);
+		snd_out = (int16 *) pbuf + (lpos<<1);
 
 		snd_linear_count = (dma.samples>>1) - lpos;
 		if (lpaintedtime + snd_linear_count > endtime)
@@ -145,9 +145,9 @@ void S_TransferPaintBuffer(int endtime)
 	int 	*p;
 	int 	step;
 	int		val;
-	unsigned long *pbuf;
+	uint32	*pbuf;
 
-	pbuf = (unsigned long *)dma.buffer;
+	pbuf = (uint32 *)dma.buffer;
 
 	if (s_testsound->intvalue)
 	{
@@ -175,15 +175,15 @@ void S_TransferPaintBuffer(int endtime)
 
 		if (dma.samplebits == 16)
 		{
-			short *out = (short *) pbuf;
+			int16 *out = (int16 *) pbuf;
 			while (count--)
 			{
 				val = *p >> 8;
 				p+= step;
 				if (val > 0x7fff)
 					val = 0x7fff;
-				else if (val < (short)0x8000)
-					val = (short)0x8000;
+				else if (val < (int16)0x8000)
+					val = (int16)0x8000;
 				out[out_idx] = val;
 				out_idx = (out_idx + 1) & out_mask;
 			}
@@ -197,8 +197,8 @@ void S_TransferPaintBuffer(int endtime)
 				p+= step;
 				if (val > 0x7fff)
 					val = 0x7fff;
-				else if (val < (short)0x8000)
-					val = (short)0x8000;
+				else if (val < (int16)0x8000)
+					val = (int16)0x8000;
 				out[out_idx] = (val>>8) + 128;
 				out_idx = (out_idx + 1) & out_mask;
 			}
@@ -364,7 +364,7 @@ void S_InitScaletable (void)
 }
 
 
-#ifndef WIN32
+#ifndef _WIN32
 void EXPORT S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	int 	data;
@@ -476,13 +476,13 @@ void __cdecl S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int
 	int data;
 	int left, right;
 	int leftvol, rightvol;
-	signed short *sfx;
+	int16 *sfx;
 	int	i;
 	portable_samplepair_t	*samp;
 
 	leftvol = ch->leftvol*snd_vol;
 	rightvol = ch->rightvol*snd_vol;
-	sfx = (signed short *)sc->data + ch->pos;
+	sfx = (int16 *)sc->data + ch->pos;
 
 	samp = &paintbuffer[offset];
 	for (i=0 ; i<count ; i++, samp++)

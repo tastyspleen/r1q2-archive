@@ -196,7 +196,7 @@ typedef struct
 	void	(EXPORT *WriteShort) (int c);
 	void	(EXPORT *WriteLong) (int c);
 	void	(EXPORT *WriteFloat) (float f);
-	void	(EXPORT *WriteString) (char *s);
+	void	(EXPORT *WriteString) (const char *s);
 	void	(EXPORT *WritePosition) (vec3_t pos);	// some fractional bits
 	void	(EXPORT *WriteDir) (vec3_t pos);		// single byte encoded, very coarse
 	void	(EXPORT *WriteAngle) (float f);
@@ -237,7 +237,7 @@ typedef struct
 	void		(IMPORT *Shutdown) (void);
 
 	// each new level entered will cause a call to SpawnEntities
-	void		(IMPORT *SpawnEntities) (const char *mapname, char *entstring, const char *spawnpoint);
+	void		(IMPORT *SpawnEntities) (const char *mapname, const char *entstring, const char *spawnpoint);
 
 	// Read/Write Game is for storing persistant cross level information
 	// about the world state and the clients.

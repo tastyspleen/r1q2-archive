@@ -15,7 +15,7 @@ game_SRC:=g_ai.c g_chase.c g_cmds.c g_combat.c g_func.c g_items.c g_main.c\
 	  p_client.c p_hud.c p_trail.c p_view.c p_weapon.c q_shared.c
 
 game_OBJ:=$(game_SRC:.c=.o)
-ALL_SRC:=$(game_SRC)
+ALLSRC:=$(game_SRC)
 
 default: game$(ARCH).so
 
