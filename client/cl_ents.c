@@ -1081,7 +1081,7 @@ void CL_AddPacketEntities (frame_t *frame)
 		}
 		else
 		{	
-			int i;
+			//int i;
 
 			//r1: prediction tests.
 #ifdef _DEBUG
@@ -1564,6 +1564,7 @@ void CL_AddViewWeapon (player_state_new *ps, player_state_new *ops)
 	V_AddEntity (&gun);
 }
 
+extern int keydown[];
 
 /*
 ===============
@@ -1595,7 +1596,10 @@ void CL_CalcViewValues (void)
 		ops = ps;		// don't interpolate
 
 	//ent = &cl_entities[cl.playernum+1];
-	lerp = cl.lerpfrac;
+	if (cl_nolerp->value)
+		lerp = 1.0;
+	else
+		lerp = cl.lerpfrac;
 
 	// calculate the origin
 	if ((cl_predict->value) && !(cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
@@ -1633,7 +1637,20 @@ void CL_CalcViewValues (void)
 	}
 
 	// if not running a demo or on a locked frame, add the local angle movement
-	if ( cl.frame.playerstate.pmove.pm_type < PM_DEAD )
+	if (Com_ServerState() == ss_demo)
+	{
+		if (!keydown[K_SHIFT])
+		{
+			for (i=0 ; i<3 ; i++)
+				cl.refdef.viewangles[i] = LerpAngle (ops->viewangles[i], ps->viewangles[i], lerp);
+		}
+		else
+		{
+			for (i=0 ; i<3 ; i++)
+				cl.refdef.viewangles[i] = cl.predicted_angles[i];
+		}
+	}
+	else if ( cl.frame.playerstate.pmove.pm_type < PM_DEAD)
 	{	// use predicted values
 		for (i=0 ; i<3 ; i++)
 			cl.refdef.viewangles[i] = cl.predicted_angles[i];

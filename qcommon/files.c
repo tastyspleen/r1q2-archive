@@ -216,14 +216,14 @@ struct fscache_s {
 
 struct rbtree *rb;
 
-static int _compare(const void *pa, const void *pb, const void *config)
+/*static int _compare(const void *pa, const void *pb)
 {
-	return strcmp ((const char *)pa, (const char *)pb);
-}
+	return strcmp ((const char *)pa, (c.onst char *)pb);
+}*/
 
 void FS_InitCache (void)
 {
-	rb = rbinit (_compare, NULL);
+	rb = rbinit (strcmp);
 
 	if (!rb)
 		Sys_Error (ERR_FATAL, "FS_InitCache: rbinit failed"); 
@@ -291,9 +291,11 @@ void FS_Stats_f (void)
 
 	Com_Printf ("%d entries in linked list hash cache.\n", i);
 }
-#define BTREE_SEARCH 1
 
-#ifdef BTREE_SEARCH
+#define BTREE_SEARCH 1
+//#define HASH_CACHE 1
+
+#if BTREE_SEARCH
 void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, char *filename)
 {
 	void		**newitem;
@@ -365,11 +367,11 @@ int FS_FOpenFile (char *filename, FILE **file)
 	pack_t			*pak;
 	int				i;
 	filelink_t		*link;
-#ifndef BTREE_SEARCH
+//#ifndef BTREE_SEARCH
 	unsigned int	hash;
-#endif
+//#endif
 
-	// check for links first
+	// check for links firstal
 	if (!fs_noextern->value)
 	{
 		for (link = fs_links ; link ; link=link->next)
@@ -406,6 +408,7 @@ int FS_FOpenFile (char *filename, FILE **file)
 		return cache->filelen;
 	}
 	//Com_Printf (" (not cached)\n");
+	hash = hashify (filename);
 #else
 	hash = hashify (filename);
 
@@ -434,9 +437,9 @@ int FS_FOpenFile (char *filename, FILE **file)
 			// look through all the pak file elements
 			pak = search->pack;
 			for (i=0 ; i<pak->numfiles ; i++) {
-#ifndef BTREE_SEARCH
+//#ifndef BTREE_SEARCH
 				if (pak->files[i].hash == hash)
-#endif
+//#endif
 				if (!Q_stricmp (pak->files[i].name, filename))
 				{	// found it!
 					Com_DPrintf ("PackFile: %s : %s\n",pak->filename, filename);
@@ -611,6 +614,30 @@ void FS_Read (void *buffer, int len, FILE *f)
 	}
 }
 
+#ifdef WIN32
+#ifdef _DEBUG
+#include <windows.h>
+LARGE_INTEGER start;
+#define START_PERFORMANCE_TIMER _START_PERFORMANCE_TIMER()
+#define STOP_PERFORMANCE_TIMER _STOP_PERFORMANCE_TIMER()
+void _START_PERFORMANCE_TIMER (void)
+{
+	QueryPerformanceCounter (&start);
+}
+void _STOP_PERFORMANCE_TIMER (void)
+{
+	LARGE_INTEGER stop;
+	__int64 diff;
+	QueryPerformanceCounter (&stop);
+	diff = stop.QuadPart - start.QuadPart;
+	Com_Printf ("Function executed in %I64u ticks.\n", diff);
+}
+#else
+#define START_PERFORMANCE_TIMER
+#define STOP_PERFORMANCE_TIMER
+#endif
+#endif
+
 /*
 ============
 FS_LoadFile
@@ -620,7 +647,7 @@ a null buffer will just return the file length without loading
 ============
 */
 char emptyFile = 0;
-int EXPORT FS_LoadFile (char *path, void **buffer)
+int EXPORT FS_LoadFile (char *path, void /*@out@*/ /*@null@*/**buffer)
 {
 	FILE	*h;
 	byte	*buf;
@@ -631,7 +658,11 @@ int EXPORT FS_LoadFile (char *path, void **buffer)
 	buf = NULL;	// quiet compiler warning
 
 // look for it in the filesystem or pack files
+	//START_PERFORMANCE_TIMER;
+	//Com_Printf ("%s... ", path);
 	len = FS_FOpenFile (path, &h);
+	//STOP_PERFORMANCE_TIMER;
+
 	if (!h)
 	{
 		if (buffer)
@@ -683,7 +714,7 @@ Loads the header and directory, adding the files at the beginning
 of the list so they override previous pack files.
 =================
 */
-pack_t *FS_LoadPackFile (char *packfile)
+pack_t /*@null@*/ *FS_LoadPackFile (char *packfile)
 {
 	dpackheader_t	header;
 	int				i;
@@ -935,7 +966,7 @@ void FS_Link_f (void)
 /*
 ** FS_ListFiles
 */
-char **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave )
+char /*@null@*/ **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave )
 {
 	char *s;
 	int nfiles = 0;
@@ -1062,7 +1093,7 @@ FS_NextPath
 Allows enumerating all of the directories in the search path
 ================
 */
-char *FS_NextPath (char *prevpath)
+char /*@null@*/ *FS_NextPath (char *prevpath)
 {
 	searchpath_t	*s;
 	char			*prev;

@@ -121,7 +121,7 @@ SV_EmitPacketEntities
 Writes a delta update of an entity_state_t list to the message.
 =============
 */
-void SV_EmitPacketEntities (client_t *cl, client_frame_t *from, client_frame_t *to, sizebuf_t *msg)
+static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg)
 {
 	entity_state_t	*oldent, *newent;
 	int		oldindex, newindex;
@@ -144,6 +144,8 @@ void SV_EmitPacketEntities (client_t *cl, client_frame_t *from, client_frame_t *
 
 	newindex = 0;
 	oldindex = 0;
+	newent = NULL;
+	oldent = NULL;
 	while (newindex < to->num_entities || oldindex < from_num_entities)
 	{
 		//r1: anti-packet overflow
@@ -184,11 +186,7 @@ void SV_EmitPacketEntities (client_t *cl, client_frame_t *from, client_frame_t *
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
 
-			//if (cl->protocol == ENHANCED_PROTOCOL_VERSION) {
-			//	MSG_WriteDeltaEntity (&cl->lastlines[newnum], oldent, newent, msg, false, newent->number <= maxclients->value, 0, cl->protocol);
-			//} else {
-				MSG_WriteDeltaEntity (NULL, oldent, newent, msg, false, newent->number <= maxclients->value, 0, cl->protocol);
-			//}
+			MSG_WriteDeltaEntity (NULL, oldent, newent, msg, false, newent->number <= maxclients->value, 0, cl->protocol);
 
 			oldindex++;
 			newindex++;
@@ -243,7 +241,7 @@ SV_WritePlayerstateToClient
 
 =============
 */
-void SV_WritePlayerstateToClient (client_frame_t *from, client_frame_t *to, sizebuf_t *msg)//, client_t *client)
+static void SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg)//, client_t *client)
 {
 	int						i;
 	int						pflags;
@@ -254,11 +252,7 @@ void SV_WritePlayerstateToClient (client_frame_t *from, client_frame_t *to, size
 
 	player_state_new		*ps, *ops;
 
-	//if (ge->apiversion == GAME_API_VERSION_ENHANCED)
-		ps = &to->ps;
-	//else
-	//	ps = (player_state_new *)&to->ps.old_ps;*/
-
+	ps = &to->ps;
 
 	if (!from) {
 		memset (&dummy, 0, sizeof(dummy));
@@ -443,7 +437,7 @@ void SV_WritePlayerstateToClient (client_frame_t *from, client_frame_t *to, size
 		MSG_WriteByte (msg, ps->rdflags);
 
 	if (pflags & PS_BBOX) {
-		int i, j, k;
+		int j, k;
 		int solid;
 
 		i = ps->maxs[0]/8;
@@ -540,7 +534,7 @@ Build a client frame structure
 =============================================================================
 */
 
-byte		fatpvs[65536/8];	// 32767 is MAX_MAP_LEAFS
+static byte		fatpvs[65536/8];	// 32767 is MAX_MAP_LEAFS
 
 /*
 ============
@@ -550,7 +544,7 @@ The client will interpolate the view position,
 so we can't use a single PVS point
 ===========
 */
-void SV_FatPVS (vec3_t org)
+static void SV_FatPVS (vec3_t org)
 {
 	int		leafs[64];
 	int		i, j, count;
@@ -588,7 +582,7 @@ void SV_FatPVS (vec3_t org)
 	}
 }
 
-qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, edict_t *ent, qboolean fullCheck, qboolean predictEnt) {
+static qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, edict_t *ent, qboolean fullCheck, qboolean predictEnt) {
 	int		i;
 	vec3_t	ends[9];
 	vec3_t	entOrigin;
@@ -685,10 +679,10 @@ void SV_BuildClientFrame (client_t *client)
 	byte	*clientphs;
 	byte	*bitvector;
 
-	//*********** NiceAss Start ************
+	// *********** NiceAss Start ************
 	qboolean	visible;
 	vec3_t		start;
-	//***********  NiceAss End  ************
+	// ***********  NiceAss End  ************
 
 	//union player_state_t	*hax;
 	//player_state_new		*ps;
@@ -825,7 +819,7 @@ void SV_BuildClientFrame (client_t *client)
 #endif
 
 		if (sv_nc_visibilitycheck->value && !(sv_nc_clientsonly->value && !ent->client)) {
-			//*********** NiceAss Start ************
+			// *********** NiceAss Start ************
 			VectorCopy(org, start);
 #ifdef ENHANCED_SERVER
 			visible = SV_CheckPlayerVisible(((struct gclient_new_s *)(clent->client))->ps.viewangles, start, ent, true, false);
@@ -880,7 +874,7 @@ void SV_BuildClientFrame (client_t *client)
 		} else {
 			visible = true;
 		}
-		//***********  NiceAss End  ************
+		// ***********  NiceAss End  ************
 
 
 		// add it to the circular client_entities array
@@ -892,7 +886,7 @@ void SV_BuildClientFrame (client_t *client)
 		}
 		*state = ent->s;
 
-		//*********** NiceAss Start ************
+		// *********** NiceAss Start ************
 		// Send the entity, but don't associate a model with it. Less secure than sv_nc_visibilitycheck 2
 		// but you can hear footsteps. Default functionality.
 		if (!visible && sv_nc_visibilitycheck->value == 1) {
@@ -902,7 +896,7 @@ void SV_BuildClientFrame (client_t *client)
 			// I think this holds the weapon for VWEP
 			state->skinnum = 0;
 		}
-		//***********  NiceAss End  ************
+		// ***********  NiceAss End  ************
 
 		// don't mark players missiles as solid
 		if (ent->owner == client->edict)

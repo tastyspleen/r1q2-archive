@@ -20,8 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "qcommon.h"
 
-
-
 #define	STEPSIZE	18
 
 // all of the locals will be zeroed before each
@@ -715,8 +713,9 @@ void PM_CatagorizePosition (void)
 			{	// just hit the ground
 				pm->s.pm_flags |= PMF_ON_GROUND;
 				// don't do landing time if we were just going down a slope
-				if (pml.velocity[2] < -200)
+				if (pml.velocity[2] < -200 && !pm->strafehack)
 				{
+					///Com_Printf ("Zoink! ms=%d\n", pm->cmd.msec);
 					pm->s.pm_flags |= PMF_TIME_LAND;
 					// don't allow another jump for a little while
 					if (pml.velocity[2] < -400)
@@ -1302,9 +1301,6 @@ Can be called by either the server or the client
 void Pmove (pmove_new_t *pmove)
 {
 	pm = pmove;
-
-	/*if (!pm->multiplier)
-		pm->multiplier = 1;*/
 
 	// clear results
 	pm->numtouch = 0;

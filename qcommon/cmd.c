@@ -359,7 +359,7 @@ qboolean Cbuf_AddLateCommands (void)
 		{
 			i++;
 
-			for (j=i ; (text[j] != '+') && (text[j] != '-') && (text[j] != 0) ; j++)
+			for (j=i ; (text[j] != '+') && (text[j] != 0) ; j++)
 				;
 
 			c = text[j];
@@ -454,7 +454,7 @@ void Cmd_Echo_f (void)
 	Com_Printf ("\n");
 }
 
-static int __cdecl aliassort( const void *_a, const void *_b )
+static int EXPORT aliassort( const void *_a, const void *_b )
 {
 	const cmdalias_t	*a = (const cmdalias_t *)_a;
 	const cmdalias_t	*b = (const cmdalias_t *)_b;
@@ -483,7 +483,7 @@ void Cmd_Aliaslist_f (void)
 		sortedList[i] = *a;
 	}
 
-	qsort (sortedList, num, sizeof(sortedList[0]), (int (__cdecl *)(const void *, const void *))aliassort);
+	qsort (sortedList, num, sizeof(sortedList[0]), (int (EXPORT *)(const void *, const void *))aliassort);
 
 	//for (a = cmd_alias ; a ; a=a->next)
 	for (j = 0; j < num; j++)
@@ -705,7 +705,7 @@ char *Cmd_MacroExpandString (char *text)
 
 	if (inquote)
 	{
-		Com_Printf ("Line has unmatched quote, discarded.\n");
+		Com_Printf ("Line '%s' has unmatched quote, discarded.\n", text);
 		return NULL;
 	}
 
@@ -1011,7 +1011,7 @@ void	Cmd_ExecuteString (char *text)
 Cmd_List_f
 ============
 */
-static int __cdecl cmdsort( const void *_a, const void *_b )
+static int EXPORT cmdsort( const void *_a, const void *_b )
 {
 	const cmd_function_t	*a = (const cmd_function_t *)_a;
 	const cmd_function_t	*b = (const cmd_function_t *)_b;
@@ -1040,7 +1040,7 @@ void Cmd_List_f (void)
 		sortedList[i] = *cmd;
 	}
 
-	qsort (sortedList, num, sizeof(sortedList[0]), (int (__cdecl *)(const void *, const void *))cmdsort);
+	qsort (sortedList, num, sizeof(sortedList[0]), (int (EXPORT *)(const void *, const void *))cmdsort);
 
 	//for (cmd=cmd_functions ; cmd ; cmd=cmd->next, i++)
 	for (j = 0; j < num; j++)

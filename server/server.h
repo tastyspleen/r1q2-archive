@@ -29,14 +29,20 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	MAX_MASTERS	8				// max recipients for heartbeat packets
 
-typedef enum {
-	ss_dead,			// no map loaded
-	ss_loading,			// spawning level edicts
-	ss_game,			// actively running
-	ss_cinematic,
-	ss_demo,
-	ss_pic
-} server_state_t;
+typedef struct bannedcommands_s
+{
+	struct bannedcommands_s *next;
+	char					*name;
+} bannedcommands_t;
+
+extern bannedcommands_t bannedcommands;
+
+typedef struct ratelimit_s
+{
+	netadr_t	from;
+	int			time;
+} ratelimit_t;
+
 // some qc commands are only valid before the server has finished
 // initializing (precache commands, static sounds / objects, etc)
 
@@ -66,7 +72,8 @@ typedef struct
 
 	// demo server information
 	FILE		*demofile;
-	qboolean	timedemo;		// don't time sync
+	//qboolean	timedemo;		// don't time sync
+	ratelimit_t	status;
 } server_t;
 
 #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
@@ -164,9 +171,6 @@ typedef struct client_s
 
 	//r1: client-specificlast deltas (kind of like dynamic baselines)
 	entity_state_t				*lastlines;
-
-	//r1: zlib packets (any benefit?)
-	int							zlevel;
 
 	//r1: misc flags
 	unsigned int				notes;
@@ -268,10 +272,19 @@ extern	cvar_t		*sv_nc_announce;
 extern	cvar_t		*sv_filter_nocheat_spam;
 
 extern	cvar_t		*sv_recycle;
+extern	cvar_t		*sv_strafejump_hack;
+
+extern	cvar_t		*sv_allow_map;
+extern	cvar_t		*sv_allow_unconnected_cmds;
 
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
 
+extern	cvar_t	*allow_download;
+extern	cvar_t	*allow_download_players;
+extern	cvar_t	*allow_download_models;
+extern	cvar_t	*allow_download_sounds;
+extern	cvar_t	*allow_download_maps;
 
 //===========================================================
 
@@ -282,7 +295,7 @@ extern	edict_t		*sv_player;
 //
 void SV_FinalMessage (char *message, qboolean reconnect);
 void SV_DropClient (client_t *drop);
-void SV_KickClient (client_t *cl, char *reason, char *cprintf);
+void SV_KickClient (client_t *cl, char /*@null@*/*reason, char /*@null@*/*cprintf);
 
 int EXPORT SV_ModelIndex (char *name);
 int EXPORT SV_SoundIndex (char *name);
@@ -353,7 +366,7 @@ void SV_FlushRedirect (int sv_redirected, char *outputbuf);
 void SV_DemoCompleted (void);
 void SV_SendClientMessages (void);
 
-void EXPORT SV_Multicast (vec3_t origin, multicast_t to);
+void EXPORT SV_Multicast (vec3_t /*@null@*/origin, multicast_t to);
 void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 					int soundindex, float volume,
 					float attenuation, float timeofs);

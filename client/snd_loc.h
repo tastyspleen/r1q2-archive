@@ -180,13 +180,18 @@ void S_Spatialize(channel_t *ch);
 #define	MAX_OPENAL_BUFFERS 1024
 #define MAX_OPENAL_SOURCES 128
 
-extern int openal_active;
+#define OPENAL_SCALE_VALUE 0.010
+
+#define		SOUND_FULLVOLUME	80
+#define		SOUND_LOOPATTENUATE	0.003
+
 qboolean OpenAL_Init (void);
 
 #ifdef USE_OPENAL
 extern unsigned int openAlMaxSources;
 extern unsigned int openAlMaxBuffers;
 
+qboolean AL_Attenuated (int i);
 void OpenAL_Shutdown (void);
 
 void OpenAL_DestroyBuffers (void);
@@ -207,13 +212,16 @@ typedef struct OpenALBuffer_s
 typedef struct alindex_s
 {
 	qboolean	inuse;
+	qboolean	loopsound;
 	qboolean	fixed_origin;
 	vec3_t		origin;
 	int			entnum;
 	int			sourceIndex;
+	int			lastloopframe;
+	float		attenuation;
 } alindex_t;
 
 extern OpenALBuffer_t	g_Buffers[MAX_OPENAL_BUFFERS];
 extern ALuint			g_Sources[MAX_OPENAL_SOURCES];
-extern alindex_t		alindex[MAX_SOUNDS];
+extern alindex_t		alindex[MAX_OPENAL_SOURCES];
 #endif

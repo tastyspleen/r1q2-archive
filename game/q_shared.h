@@ -190,7 +190,7 @@ extern vec3_t vec3_origin;
 // microsoft's fabs seems to be ungodly slow...
 //float Q_fabs (float f);
 //#define	fabs(f) Q_fabs(f)
-#if !defined C_ONLY && !defined __linux__ && !defined __sgi && !defined SSE2
+#if !defined C_ONLY && !defined __linux__ && !defined __sgi && !defined SSE2 && !defined __FreeBSD__
 extern long __cdecl Q_ftol( float f );
 #else
 #define Q_ftol( f ) ( long ) (f)
@@ -230,23 +230,19 @@ void _VectorSubtract (vec3_t veca, vec3_t vecb, vec3_t out);
 void _VectorAdd (vec3_t veca, vec3_t vecb, vec3_t out);
 void _VectorCopy (vec3_t in, vec3_t out);
 
-//void ClearBounds (vec3_t mins, vec3_t maxs);
 void AddPointToBounds (vec3_t v, vec3_t mins, vec3_t maxs);
-//int VectorCompare (vec3_t v1, vec3_t v2);
-//#define VectorCompare(vec1, vec2) if (vec1[0] != vec2[0] || vec1[1] != vec2[1] || vec1[2] != vec2[2])
+
 
 vec_t VectorLength (vec3_t v);
-//void CrossProduct (vec3_t v1, vec3_t v2, vec3_t cross);
 vec_t VectorNormalize (vec3_t v);		// returns vector length
 vec_t VectorNormalize2 (vec3_t v, vec3_t /*@out@*/out);
-//void VectorInverse (vec3_t v);
-//void VectorScale (vec3_t in, vec_t scale, vec3_t /*@out@*/out);
+
 int Q_log2(int val);
 
 void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3]);
 void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4]);
 
-void AngleVectors (vec3_t angles, vec3_t /*@out@*/forward, vec3_t /*@out@*/right, vec3_t /*@out@*/up);
+void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/forward, vec3_t /*@out@*//*@null@*/right, vec3_t /*@out@*//*@null@*/up);
 int EXPORT BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *plane);
 float	anglemod(float a);
 float LerpAngle (float a1, float a2, float frac);
@@ -666,6 +662,7 @@ typedef struct
 	int			(IMPORT *pointcontents) (vec3_t point);
 
 	float		multiplier;
+	qboolean	strafehack;
 } pmove_new_t;
 
 // entity_state_t->effects

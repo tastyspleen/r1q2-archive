@@ -25,9 +25,9 @@ vec3_t vec3_origin = {0,0,0};
 
 //============================================================================
 
-#ifdef _WIN32
-#pragma optimize( "", off )
-#endif
+//#ifdef _WIN32
+//#pragma optimize( "", off )
+//#endif
 
 void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
@@ -84,11 +84,11 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	}
 }
 
-#ifdef _WIN32
-#pragma optimize( "", on )
-#endif
+//#ifdef _WIN32
+//#pragma optimize( "", on )
+//#endif
 
-void AngleVectors (vec3_t angles, vec3_t /*@out@*/forward, vec3_t /*@out@*/right, vec3_t /*@out@*/up)
+void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@out@*//*@null@*/right, vec3_t /*@out@*//*@null@*/up)
 {
 	float		angle;
 	static float		sr, sp, sy, cr, cp, cy;
@@ -302,8 +302,8 @@ float	anglemod(float a)
 	return a;
 }
 
-	int		i;
-	vec3_t	corners[2];
+//int		i;
+//vec3_t	corners[2];
 
 
 // this is the slow, general version
@@ -345,7 +345,7 @@ BoxOnPlaneSide
 Returns 1, 2, or 1 + 2
 ==================
 */
-#if !id386 || defined __linux__ 
+#if !id386 || defined __linux__ || defined __FreeBSD__
 int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
 	float	dist1, dist2;

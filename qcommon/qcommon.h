@@ -78,6 +78,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define CPUSTRING "sparc"
 #endif
 
+#elif defined __FreeBSD__
+
+#define BUILDSTRING "FreeBSD"
+
+#ifdef __i386__
+#define CPUSTRING "i386"
+#else
+#define CPUSTRING "Unknown"
+#endif
+
 #else	// !WIN32
 
 #define BUILDSTRING "NON-WIN32"
@@ -99,7 +109,7 @@ typedef struct sizebuf_s
 } sizebuf_t;
 
 
-void SZ_Init (sizebuf_t *buf, byte *data, int length);
+void SZ_Init (sizebuf_t /*@out@*/*buf, byte /*@out@*/*data, int length);
 void SZ_Clear (sizebuf_t *buf);
 void *SZ_GetSpace (sizebuf_t *buf, int length);
 void SZ_Write (sizebuf_t *buf, void *data, int length);
@@ -121,8 +131,8 @@ void MSG_WriteCoord (sizebuf_t *sb, float f);
 void MSG_WritePos (sizebuf_t *sb, vec3_t pos);
 void MSG_WriteAngle (sizebuf_t *sb, float f);
 void MSG_WriteAngle16 (sizebuf_t *sb, float f);
-void MSG_WriteDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s *cmd);
-void MSG_WriteDeltaEntity (entity_state_t *storeas, struct entity_state_s *from, struct entity_state_s *to, sizebuf_t *msg, qboolean force, qboolean newentity, int maskevent, int cl_protocol);
+void MSG_WriteDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s /*@out@*/*cmd);
+void MSG_WriteDeltaEntity (entity_state_t /*@null@*/*storeas, struct entity_state_s *from, struct entity_state_s /*@out@*/*to, sizebuf_t *msg, qboolean force, qboolean newentity, int maskevent, int cl_protocol);
 void MSG_WriteDir (sizebuf_t *sb, vec3_t vector);
 
 
@@ -144,7 +154,7 @@ void	MSG_ReadDir (sizebuf_t *sb, vec3_t vector);
 
 void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 
-void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s *cmd);
+void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s /*@out@*/ *cmd);
 
 //============================================================================
 
@@ -253,9 +263,9 @@ enum svc_ops_e
 	svc_deltapacketentities,	// [...]
 	svc_frame,
 
-	//********** r1q2 specific ***********
+	// ********** r1q2 specific ***********
 	svc_zpacket,
-	//********** end r1q2 specific *******
+	// ********** end r1q2 specific *******
 
 	svc_max_enttypes
 };
@@ -466,7 +476,7 @@ char	*Cmd_Args2 (int arg);
 // functions. Cmd_Argv () will return an empty string, not a NULL
 // if arg > argc, so string operations are always safe.
 
-char *Cmd_MacroExpandString (char *text);
+char /*@null@*/ *Cmd_MacroExpandString (char *text);
 void	Cmd_TokenizeString (char *text, qboolean macroExpand);
 // Takes a null terminated string.  Does not need to be /n terminated.
 // breaks the string up into arg tokens.
@@ -671,7 +681,7 @@ void Netchan_Init (void);
 void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t adr, int protocol, int qport);
 
 qboolean Netchan_NeedReliable (netchan_t *chan);
-int	 Netchan_Transmit (netchan_t *chan, int length, byte *data);
+int	 Netchan_Transmit (netchan_t *chan, int length, byte /*@null@*/*data);
 void Netchan_OutOfBand (int net_socket, netadr_t adr, int length, byte *data);
 void Netchan_OutOfBandPrint (int net_socket, netadr_t adr, char *format, ...);
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg);
@@ -769,7 +779,7 @@ void	FS_FCloseFile (FILE *f);
 // note: this can't be called from another DLL, due to MS libc issues
 
 void FS_FlushCache (void);
-int		EXPORT FS_LoadFile (char *path, void /*@out@*/**buffer);
+int		EXPORT FS_LoadFile (char *path, void /*@out@*/ /*@null@*/**buffer);
 // a null buffer will just return the file length without loading
 // a -1 length is not present
 
@@ -828,9 +838,7 @@ extern	cvar_t	*log_stats;
 
 extern	FILE *log_stats_file;
 
-#ifdef _DEBUG
 extern	cvar_t	*dbg_unload;
-#endif
 
 // host_speeds times
 extern	int		time_before_game;
@@ -873,6 +881,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_BLACKHOLE,
 	TAGMALLOC_CVARBANS,
 	TAGMALLOC_MSG_QUEUE,
+	TAGMALLOC_CMDBANS,
 	TAGMALLOC_MAX_TAGS
 };
 
@@ -892,6 +901,14 @@ extern	vec3_t	bytedirs[NUMVERTEXNORMALS];
 // this is in the client code, but can be used for debugging from server
 void EXPORT SCR_DebugGraph (float value, int color);
 
+typedef enum {
+	ss_dead,			// no map loaded
+	ss_loading,			// spawning level edicts
+	ss_game,			// actively running
+	ss_cinematic,
+	ss_demo,
+	ss_pic
+} server_state_t;
 
 /*
 ==============================================================

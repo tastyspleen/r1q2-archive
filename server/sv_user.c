@@ -26,6 +26,8 @@ edict_t	*sv_player;
 cvar_t	*sv_max_download_size;
 cvar_t	*sv_downloadwait;
 
+bannedcommands_t bannedcommands;
+
 /*
 ============================================================
 
@@ -35,14 +37,14 @@ sv_client and sv_player will be valid.
 ============================================================
 */
 
-void SV_BaselinesMessage (qboolean userCmd);
+static void SV_BaselinesMessage (qboolean userCmd);
 
 /*
 ==================
 SV_BeginDemoServer
 ==================
 */
-void SV_BeginDemoserver (void)
+static void SV_BeginDemoserver (void)
 {
 	char		name[MAX_OSPATH];
 
@@ -62,7 +64,7 @@ to the clients -- only the fields that differ from the
 baseline will be transmitted
 ================
 */
-void SV_CreateBaseline (client_t *cl)
+static void SV_CreateBaseline (client_t *cl)
 {
 	edict_t			*svent;
 	int				entnum;	
@@ -94,7 +96,7 @@ Sends the first message from the server to a connected client.
 This will be sent on the initial connection and upon each server load.
 ================
 */
-void SV_New_f (void)
+static void SV_New_f (void)
 {
 	char		*gamedir;
 	int			playernum;
@@ -182,7 +184,7 @@ void SV_New_f (void)
 SV_Configstrings_f
 ==================
 */
-void SV_Configstrings_f (void)
+static void SV_Configstrings_f (void)
 {
 	int		start;
 
@@ -519,7 +521,7 @@ plainLines:
 		Com_DPrintf ("SV_Baselines_f: netchan is now %d bytes.\n", sv_client->netchan.message.cursize);
 }
 
-void SV_Baselines_f (void)
+static void SV_Baselines_f (void)
 {
 	SV_BaselinesMessage (true);
 }
@@ -533,7 +535,7 @@ int SV_CountPlayers (void)
 	if (!svs.initialized)
 		return 0;
 
-	for (i=0,cl=svs.clients; i<maxclients->value ; i++,cl++)
+	for (i=0,cl=svs.clients; i < (int)maxclients->value ; i++,cl++)
 	{
 		if (cl->state != cs_spawned)
 			continue;
@@ -549,7 +551,7 @@ int SV_CountPlayers (void)
 SV_Begin_f
 ==================
 */
-void SV_Begin_f (void)
+static void SV_Begin_f (void)
 {
 	Com_DPrintf ("Begin() from %s\n", sv_client->name);
 
@@ -596,7 +598,7 @@ void SV_Begin_f (void)
 SV_NextDownload_f
 ==================
 */
-void SV_NextDownload_f (void)
+static void SV_NextDownload_f (void)
 {
 	int		r;
 	int		percent;
@@ -643,14 +645,9 @@ SV_BeginDownload_f
 ==================
 */
 //char * ZLibCompressChunk(char *Chunk, int *len, int method);
-void SV_BeginDownload_f(void)
+static void SV_BeginDownload_f(void)
 {
 	char	*name;
-	extern	cvar_t *allow_download;
-	extern	cvar_t *allow_download_players;
-	extern	cvar_t *allow_download_models;
-	extern	cvar_t *allow_download_sounds;
-	extern	cvar_t *allow_download_maps;
 	int offset = 0;
 #ifdef WIN32
 	qboolean	enhanced = (sv_client->protocol == ENHANCED_PROTOCOL_VERSION && Cmd_Argc() > 3 && !Q_stricmp (Cmd_Argv(3), "DOWNLOAD_TCP") && sv_downloadport->value);
@@ -724,7 +721,7 @@ void SV_BeginDownload_f(void)
 		return;
 	}
 
-	if (sv_max_download_size->value && sv_client->downloadsize > sv_max_download_size->value)
+	if (sv_max_download_size->value && sv_client->downloadsize > (int)sv_max_download_size->value)
 	{
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "Server refused %s, %d bytes > %d maximum allowed for auto download.\n", name, sv_client->downloadsize, (int)sv_max_download_size->value);
 
@@ -766,7 +763,7 @@ SV_Disconnect_f
 The client is going to disconnect, so remove the connection immediately
 =================
 */
-void SV_Disconnect_f (void)
+static void SV_Disconnect_f (void)
 {
 //	SV_EndRedirect ();
 	SV_DropClient (sv_client);	
@@ -780,22 +777,22 @@ SV_ShowServerinfo_f
 Dumps the serverinfo info string
 ==================
 */
-void SV_ShowServerinfo_f (void)
+static void SV_ShowServerinfo_f (void)
 {
 	Info_Print (Cvar_Serverinfo());
 }
 
-void SV_ClientServerinfo_f (void)
+static void SV_ClientServerinfo_f (void)
 {
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "You are running at protocol %d, this server supports protocols %d and %d. Running an API version %d game.\n", sv_client->protocol, ORIGINAL_PROTOCOL_VERSION, ENHANCED_PROTOCOL_VERSION, ge->apiversion);
 }
 
-void SV_NoGameData_f (void)
+static void SV_NoGameData_f (void)
 {
 	sv_client->nodata ^= 1;
 }
 
-void CvarBanDrop (cvarban_t *ban)
+static void CvarBanDrop (cvarban_t *ban)
 {
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
 	if (ban->blockmethod == CVARBAN_BLACKHOLE)
@@ -804,7 +801,7 @@ void CvarBanDrop (cvarban_t *ban)
 	SV_DropClient (sv_client);
 }
 
-void SV_CvarResult_f (void)
+static void SV_CvarResult_f (void)
 {
 	cvarban_t *bans = &cvarbans;
 
@@ -868,7 +865,7 @@ void SV_CvarResult_f (void)
 		SV_DropClient (sv_client);
 }
 
-void SV_Floodme_f (void)
+static void SV_Floodme_f (void)
 {
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 											"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -916,7 +913,7 @@ A cinematic has completed or been aborted by a client, so move
 to the next server,
 ==================
 */
-void SV_Nextserver_f (void)
+static void SV_Nextserver_f (void)
 {
 	if ( atoi(Cmd_Argv(1)) != svs.spawncount ) {
 		Com_DPrintf ("Nextserver() from wrong level, from %s\n", sv_client->name);
@@ -930,11 +927,11 @@ void SV_Nextserver_f (void)
 
 typedef struct
 {
-	char	*name;
-	void	(*func) (void);
+	char	/*@null@*/ *name;
+	void	/*@null@*/ (*func) (void);
 } ucmd_t;
 
-ucmd_t ucmds[] =
+static ucmd_t ucmds[] =
 {
 	// auto issued
 	{"new", SV_New_f},
@@ -967,8 +964,10 @@ SV_ExecuteUserCommand
 */
 void SV_ExecuteUserCommand (char *s)
 {
-	char *teststring;
-	ucmd_t	*u;
+	char				*teststring;
+
+	ucmd_t				*u;
+	bannedcommands_t	*x;
 	
 	//r1: catch attempted server exploits
 	teststring = Cmd_MacroExpandString(s);
@@ -985,7 +984,18 @@ void SV_ExecuteUserCommand (char *s)
 	Cmd_TokenizeString (s, false);
 	sv_player = sv_client->edict;
 
-	for (u=ucmds ; u->name ; u++) {
+	for (x = bannedcommands.next; x; x = x->next)
+	{
+		if (!strcmp (Cmd_Argv(0), x->name))
+		{
+			Com_Printf ("SV_ExecuteUserCommand: %s tried to use '%s'\n", sv_client->name, x->name);
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "The '%s' command has been disabled by the server administrator.\n", x->name);
+			return;
+		}
+	}
+
+	for (u=ucmds ; u->name ; u++)
+	{
 		if (!strcmp (Cmd_Argv(0), u->name) )
 		{
 			u->func ();
@@ -999,7 +1009,7 @@ void SV_ExecuteUserCommand (char *s)
 	//to the game dll at this point? doesn't sound like a good idea to me
 	//especially if the game dll does its own banning functions after connect
 	//as banned players could spam game commands (eg say) whilst connecting
-	if (sv_client->state < cs_spawned)
+	if (sv_client->state < cs_spawned && !sv_allow_unconnected_cmds->value)
 		return;
 
 	//r1: say parser (ick)
@@ -1095,7 +1105,7 @@ USER CMD EXECUTION
 
 ===========================================================================
 */
-void SV_ClientThink (client_t *cl, usercmd_t *cmd)
+static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 {
 	cl->commandMsec -= cmd->msec;
 

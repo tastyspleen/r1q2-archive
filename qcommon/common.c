@@ -58,9 +58,11 @@ cvar_t	*dedicated;
 //cvar_t	*pyroadminport;
 #endif
 
-#ifdef _DEBUG
+//r1: unload DLLs on crash?
 cvar_t	*dbg_unload;
-#endif
+
+//r1: throw int3 on ERR_FATAL?
+cvar_t	*dbg_crash_on_fatal_error;
 
 //r1: throw all err as fatal?
 cvar_t	*err_fatal;
@@ -94,7 +96,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CL_BASELINES, "CL_BASELINES"},
 
 	{TAGMALLOC_CLIENT_DOWNLOAD, "CLIENT_DOWNLOAD"},
-	{TAGMALLOC_CLIENT_KEYBIND, "CLIENT_KEYBNID"},
+	{TAGMALLOC_CLIENT_KEYBIND, "CLIENT_KEYBIND"},
 	{TAGMALLOC_CLIENT_SFX, "CLIENT_SFX"},
 	{TAGMALLOC_CLIENT_SOUNDCACHE, "CLIENT_SOUNDCACHE"},
 	{TAGMALLOC_CLIENT_DLL, "CLIENT_DLL"},
@@ -103,6 +105,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_BLACKHOLE, "BLACKHOLE"},
 	{TAGMALLOC_CVARBANS, "CVARBANS"},
 	{TAGMALLOC_MSG_QUEUE, "MSGQUEUE"},
+	{TAGMALLOC_CMDBANS, "CMDBANS"},
 	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***"}
 };
 
@@ -129,7 +132,6 @@ void Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush))
 	rd_flush = (void (*)(int, char *))flush;
 
 	*rd_buffer = 0;
-	//strcat (rd_buffer, "ÿÿÿÿprint\n");
 }
 
 void Com_EndRedirect (void)
@@ -263,7 +265,7 @@ void Com_Error (int code, char *fmt, ...)
 	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET)
 	{
 		Com_Printf ("********************\nERROR: %s\n********************\n", msg);
-		SV_Shutdown (va("Server crashed: %s\n", msg), false, false);
+		SV_Shutdown (va("Server exited: %s\n", msg), false, false);
 #ifndef DEDICATED_ONLY
 		CL_Drop (code == ERR_NET);
 #endif
@@ -279,15 +281,11 @@ void Com_Error (int code, char *fmt, ...)
 	}
 	else
 	{
-#ifdef WIN32
-
-//		_asm int 3;
-#endif
+		if (dbg_crash_on_fatal_error->value)
+			DEBUGBREAKPOINT;
 		SV_Shutdown (va("Server fatal crashed: %s\n", msg), false, true);
 #ifndef DEDICATED_ONLY
-#ifdef _DEBUG
 		if (dbg_unload->value)
-#endif
 			CL_Shutdown ();
 #endif
 	}
@@ -906,7 +904,7 @@ char *MSG_ReadString (sizebuf_t *msg_read)
 	l = 0;
 	do
 	{
-		c = MSG_ReadChar (msg_read);
+		c = MSG_ReadByte (msg_read);
 		if (c == -1 || c == 0)
 			break;
 		string[l] = c;
@@ -926,17 +924,14 @@ char *MSG_ReadStringLine (sizebuf_t *msg_read)
 	l = 0;
 	do
 	{
-		c = MSG_ReadChar (msg_read);
+		c = MSG_ReadByte (msg_read);
 		if (c == -1 || c == 0 || c == '\n')
 			break;
-		//Com_DPrintf ("0x%2X.", c);
 		string[l] = c;
 		l++;
 	} while (l < sizeof(string)-1);
 	
 	string[l] = 0;
-	//Com_DPrintf ("=%s\n", string);
-	
 	return string;
 }
 
@@ -962,7 +957,7 @@ float MSG_ReadAngle16 (sizebuf_t *msg_read)
 	return SHORT2ANGLE(MSG_ReadShort(msg_read));
 }
 
-void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t *move)
+void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t /*@out@*/*move)
 {
 	int bits;
 	int msec;
@@ -1020,7 +1015,7 @@ void MSG_ReadData (sizebuf_t *msg_read, void *data, int len)
 
 //===========================================================================
 
-void SZ_Init (sizebuf_t /*@out@*/*buf, byte *data, int length)
+void SZ_Init (sizebuf_t /*@out@*/*buf, byte /*@out@*/*data, int length)
 {
 	memset (buf, 0, sizeof(*buf));
 	buf->data = data;
@@ -1250,7 +1245,6 @@ just cleared malloc with counters now...
 
 #define	Z_MAGIC		0x1d1d
 
-
 typedef struct zhead_s
 {
 	struct zhead_s	*prev, *next;
@@ -1259,8 +1253,9 @@ typedef struct zhead_s
 	int		size;
 } zhead_t;
 
-zhead_t		z_chain;
-int		z_count, z_bytes;
+static zhead_t	z_chain;
+static int		z_count = 0;
+static int		z_bytes = 0;
 
 /*
 ========================
@@ -1473,7 +1468,12 @@ static byte chktbl[1024] = {
 0x48, 0xe5, 0x3a, 0x79, 0xc1, 0x69, 0x33, 0x53, 0x1b, 0x80, 0xb8, 0x91, 0x7d, 0xb4, 0xf6,
 0x17, 0x1a, 0x1d, 0x5a, 0x32, 0xd6, 0xcc, 0x71, 0x29, 0x3f, 0x28, 0xbb, 0xf3, 0x5e, 0x71,
 0xb8, 0x43, 0xaf, 0xf8, 0xb9, 0x64, 0xef, 0xc4, 0xa5, 0x6c, 0x08, 0x53, 0xc7, 0x00, 0x10,
-0x39, 0x4f, 0xdd, 0xe4, 0xb6, 0x19, 0x27, 0xfb, 0xb8, 0xf5, 0x32, 0x73, 0xe5, 0xcb, 0x32
+0x39, 0x4f, 0xdd, 0xe4, 0xb6, 0x19, 0x27, 0xfb, 0xb8, 0xf5, 0x32, 0x73, 0xe5, 0xcb, 0x32,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00
 };
 
 /*
@@ -1654,9 +1654,8 @@ void Qcommon_Init (int argc, char **argv)
 		Cmd_AddCommand ("quit", Com_Quit);
 #endif
 
-#ifdef _DEBUG
-	dbg_unload = Cvar_Get ("dbg_unload", "0", 0);
-#endif
+	dbg_unload = Cvar_Get ("dbg_unload", "1", 0);
+	dbg_crash_on_fatal_error = Cvar_Get ("dbg_crash_on_fatal_error", "0", 0);
 
 	Sys_Init ();
 
@@ -1702,7 +1701,7 @@ Qcommon_Frame
 */
 void Qcommon_Frame (int msec)
 {
-#ifdef __linux__
+#if __linux__ || __FreeBSD__
 	char *s;
 #endif
 
@@ -1759,7 +1758,7 @@ void Qcommon_Frame (int msec)
 	}
 #endif
 
-#ifdef __linux__
+#if __linux__ || __FreeBSD__
 	do
 	{
 		s = Sys_ConsoleInput ();

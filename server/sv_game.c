@@ -405,6 +405,8 @@ void EXPORT SV_Pmove (pmove_t *pm)
 	else
 		epm.multiplier = 1;
 
+	epm.strafehack = (qboolean)sv_strafejump_hack->value;
+
 	//pmove
 	Pmove (&epm);
 	

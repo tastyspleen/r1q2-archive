@@ -27,16 +27,18 @@ void S_SoundList(void);
 void S_Update_(void);
 void S_StopAllSounds(void);
 
+/* Factor to control attenuation of audio.
+We'll divide all coordinates by this factor each time we update
+the source positions. OpenAL does provide a cleaner way to do
+this, but it changed recently. */
+#define DISTANCE_FACTOR 50.0
+
 
 // =======================================================================
 // Internal sound data & structures
 // =======================================================================
 
 // only begin attenuating sound volumes when outside the FULLVOLUME range
-#define		SOUND_FULLVOLUME	80
-
-#define		SOUND_LOOPATTENUATE	0.003
-
 int			s_registration_sequence;
 
 channel_t   channels[MAX_CHANNELS];
@@ -70,7 +72,7 @@ playsound_t	s_freeplays;
 playsound_t	s_pendingplays;
 
 #ifdef USE_OPENAL
-alindex_t alindex[MAX_SOUNDS];
+alindex_t alindex[MAX_OPENAL_SOURCES];
 #endif
 
 int			s_beginofs;
@@ -131,10 +133,15 @@ void S_Init (qboolean fullInit)
 		Com_Printf ("not initializing.\n");
 	else
 	{
-		if ((int)cv->value == 2) {
-			if (!OpenAL_Init ()) {
+		if ((int)cv->value == 2)
+		{
+			if (!OpenAL_Init ())
+			{
 				sound_started = 1;
-			} else {
+				S_StartLocalSound ("openalinit.wav");
+			}
+			else
+			{
 				Com_Printf ("OpenAL failed to initialize; no sound available\n");
 			}
 		} else {
@@ -468,7 +475,7 @@ void S_SpatializeOrigin (vec3_t origin, float master_vol, float dist_mult, int *
 	if (dist < 0)
 		dist = 0;			// close enough to be at full volume
 	dist *= dist_mult;		// different attenuation levels
-	
+
 	dot = DotProduct(listener_right, source_vec);
 
 	if (dma.channels == 1 || !dist_mult)
@@ -716,6 +723,8 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 			return;
 		}
 
+		memset (&alindex[i], 0, sizeof(alindex_t));
+
 		sourceNum = OpenAL_GetFreeSource();
 		if (sourceNum == -1)
 		{
@@ -731,14 +740,19 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 			{
 				alindex[i].fixed_origin = true;
 				VectorCopy (origin, alindex[i].origin);
+				VectorScale (alindex[i].origin, OPENAL_SCALE_VALUE, alindex[i].origin);
 			}
 			else
 			{
 				alindex[i].fixed_origin = false;
 			}
 
+			alSourcei (g_Sources[sourceNum], AL_LOOPING, AL_FALSE);
+			OpenAL_CheckForError();
+
 			//Com_Printf ("OpenAL: Playing buffer %d through source %d\n", sfx->cache->bufferNum, sourceNum);
-			if (!attenuation) {
+			if (!attenuation)
+			{
 				Com_DPrintf ("no attn, ent = %d, fvol = %f\n", entnum, fvol);
 
 				alSourcef (g_Sources[sourceNum], AL_GAIN, 1.0f);
@@ -750,8 +764,8 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 				alSourcei (g_Sources[sourceNum], AL_SOURCE_RELATIVE, AL_TRUE);
 				OpenAL_CheckForError();
 
-				alSourcef (g_Sources[sourceNum], AL_REFERENCE_DISTANCE, 128.0f);
-				OpenAL_CheckForError();
+				/*alSourcef (g_Sources[sourceNum], AL_REFERENCE_DISTANCE, 128.0f);
+				OpenAL_CheckForError();*/
 
 				alSourcefv (g_Sources[sourceNum], AL_POSITION, vec3_origin);
 				OpenAL_CheckForError();
@@ -759,7 +773,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 				alindex[i].fixed_origin = true;
 				VectorCopy (vec3_origin, alindex[i].origin);
 
-				entnum = 0;
+				entnum = 0;//cl.playernum+1;
 			} else {
 				float gain;
 
@@ -768,18 +782,29 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 					CL_GetEntitySoundOrigin (entnum, torigin);
 					origin = torigin;
 				}
+				else
+				{
+					VectorCopy (origin, alindex[i].origin);
+					VectorScale (alindex[i].origin, OPENAL_SCALE_VALUE, alindex[i].origin);
+					alindex[i].fixed_origin = true;
+				}
+
+				VectorScale (origin, OPENAL_SCALE_VALUE, origin);
 
 				alSourcefv (g_Sources[sourceNum], AL_POSITION, origin);
 				OpenAL_CheckForError();
 
-				alSourcef (g_Sources[sourceNum], AL_ROLLOFF_FACTOR, 0.1f * attenuation);
+				/*alSourcef (g_Sources[sourceNum], AL_ROLLOFF_FACTOR, 1.0f);
+				OpenAL_CheckForError();*/
+
+				alSourcef (g_Sources[sourceNum], AL_ROLLOFF_FACTOR, 1.0f * attenuation);
 				OpenAL_CheckForError();
 
-				alSourcef (g_Sources[sourceNum], AL_REFERENCE_DISTANCE, 256.0f * fvol);
-				OpenAL_CheckForError();
+				/*alSourcef (g_Sources[sourceNum], AL_REFERENCE_DISTANCE, 256.0f * fvol);
+				OpenAL_CheckForError();*/
 
 				gain = fvol / 1.0;
-				gain *= 0.2;
+				//gain *= 0.2;
 
 				alSourcef (g_Sources[sourceNum], AL_GAIN, gain);
 				OpenAL_CheckForError();
@@ -788,11 +813,20 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 				OpenAL_CheckForError();
 			}
 
-			alSourcei (g_Sources[sourceNum], AL_BUFFER, g_Buffers[sfx->cache->bufferNum].buffer);
-			OpenAL_CheckForError();
-
 			alindex[i].sourceIndex = sourceNum;
 			alindex[i].entnum = entnum;
+			alindex[i].attenuation = attenuation;
+			alindex[i].loopsound = false;
+			alindex[i].lastloopframe = 0;
+
+			if (AL_Attenuated (i))
+			{
+				alindex[i].inuse = false;
+				return;
+			}
+
+			alSourcei (g_Sources[sourceNum], AL_BUFFER, g_Buffers[sfx->cache->bufferNum].buffer);
+			OpenAL_CheckForError();
 
 			alSourcePlay (g_Sources[sourceNum]);
 			OpenAL_CheckForError();
@@ -1001,39 +1035,118 @@ void S_AddLoopSounds (void)
 		// find the total contribution of all sounds of this type
 		S_SpatializeOrigin (ent->origin, 255.0, SOUND_LOOPATTENUATE,
 			&left_total, &right_total);
-		for (j=i+1 ; j<cl.frame.num_entities ; j++)
+		if (!openal_active)
 		{
-			if (sounds[j] != sounds[i])
-				continue;
-			sounds[j] = 0;	// don't check this again later
+			for (j=i+1 ; j<cl.frame.num_entities ; j++)
+			{
+				if (sounds[j] != sounds[i])
+					continue;
+				sounds[j] = 0;	// don't check this again later
 
-			num = (cl.frame.parse_entities + j)&(MAX_PARSE_ENTITIES-1);
-			ent = &cl_parse_entities[num];
+				num = (cl.frame.parse_entities + j)&(MAX_PARSE_ENTITIES-1);
+				ent = &cl_parse_entities[num];
 
-			S_SpatializeOrigin (ent->origin, 255.0, SOUND_LOOPATTENUATE, 
-				&left, &right);
-			left_total += left;
-			right_total += right;
+				S_SpatializeOrigin (ent->origin, 255.0, SOUND_LOOPATTENUATE, 
+					&left, &right);
+				left_total += left;
+				right_total += right;
+			}
 		}
 
 		if (left_total == 0 && right_total == 0)
 			continue;		// not audible
 
-		// allocate a channel
-		ch = S_PickChannel(0, 0);
-		if (!ch)
-			return;
+#ifdef USE_OPENAL
+		if (openal_active)
+		{
+			int		k;
+			int		sourceNum;
 
-		if (left_total > 255)
-			left_total = 255;
-		if (right_total > 255)
-			right_total = 255;
-		ch->leftvol = left_total;
-		ch->rightvol = right_total;
-		ch->autosound = true;	// remove next frame
-		ch->sfx = sfx;
-		ch->pos = paintedtime % sc->length;
-		ch->end = paintedtime + sc->length - ch->pos;
+			vec3_t	origin;
+
+			for (k = 0; k < MAX_OPENAL_SOURCES; k++)
+			{
+				if (alindex[k].inuse && alindex[k].entnum == ent->number)
+				{
+					alindex[k].lastloopframe = cl.frame.serverframe;
+					goto skipsound;
+				}
+			}
+
+			k = OpenAL_GetFreeAlIndex();
+			if (k == -1)
+			{
+				Com_Printf ("OpenAL: Loopsound: Warning: Out of alindexes!\n");
+				return;
+			}
+
+			memset (&alindex[k], 0, sizeof(alindex_t));
+
+			sourceNum = OpenAL_GetFreeSource();
+
+			if (sourceNum == -1)
+			{
+				Com_DPrintf ("OpenAL: Loopsound: Warning: Out of sources!\n");
+				continue;
+			}
+
+			VectorCopy (ent->origin, origin);
+			VectorScale (origin, OPENAL_SCALE_VALUE, origin);
+
+			alSourcefv (g_Sources[sourceNum], AL_POSITION, origin);
+			OpenAL_CheckForError();
+
+			alSourcef (g_Sources[sourceNum], AL_ROLLOFF_FACTOR, 1.0f);
+			OpenAL_CheckForError();
+
+			alSourcef (g_Sources[sourceNum], AL_GAIN, 1.0);
+			OpenAL_CheckForError();
+
+			alSourcei (g_Sources[sourceNum], AL_SOURCE_RELATIVE, AL_FALSE);
+			OpenAL_CheckForError();
+
+			alSourcef (g_Sources[sourceNum], AL_REFERENCE_DISTANCE, 0.5f);
+			OpenAL_CheckForError();
+
+			alSourcei (g_Sources[sourceNum], AL_LOOPING, AL_TRUE);
+			OpenAL_CheckForError();
+
+			alSourcei (g_Sources[sourceNum], AL_BUFFER, g_Buffers[sfx->cache->bufferNum].buffer);
+			OpenAL_CheckForError();
+
+			alindex[k].inuse = true;
+			alindex[k].loopsound = true;
+			alindex[k].fixed_origin = false;
+			alindex[k].sourceIndex = sourceNum;
+			alindex[k].entnum = ent->number;
+			alindex[k].attenuation = ATTN_STATIC;
+			alindex[k].lastloopframe = cl.frame.serverframe;
+
+			alSourcePlay (g_Sources[sourceNum]);
+			OpenAL_CheckForError();
+		}
+		else
+		{
+#endif
+			// allocate a channel
+			ch = S_PickChannel(0, 0);
+			if (!ch)
+				return;
+
+			if (left_total > 255)
+				left_total = 255;
+			if (right_total > 255)
+				right_total = 255;
+			ch->leftvol = left_total;
+			ch->rightvol = right_total;
+			ch->autosound = true;	// remove next frame
+			ch->sfx = sfx;
+			ch->pos = paintedtime % sc->length;
+			ch->end = paintedtime + sc->length - ch->pos;
+#ifdef USE_OPENAL
+		}
+skipsound:;
+#endif
 	}
 }
 
@@ -1172,34 +1285,63 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 #ifdef USE_OPENAL
 	if (openal_active)
 	{
+		ALfloat listener[3];
 		ALfloat orientation[6];
 		int i;
 
-		alListenerfv (AL_POSITION, listener_origin);
+		VectorScale (listener_origin, OPENAL_SCALE_VALUE, listener);
 
-		orientation[0] = listener_forward[0];
-		orientation[1] = listener_forward[1];
-		orientation[2] = listener_forward[2];
-		orientation[3] = listener_up[0];
-		orientation[4] = listener_up[1];
-		orientation[5] = listener_up[2];
+		alListenerfv (AL_POSITION, listener);
+
+		S_AddLoopSounds ();
+
+		orientation[0] = listener_forward[0];// * 0.02;
+		orientation[1] = listener_forward[1];// * 0.02;
+		orientation[2] = listener_forward[2];// * 0.02;
+		orientation[3] = listener_up[0];// * 0.02;
+		orientation[4] = listener_up[1];// * 0.02;
+		orientation[5] = listener_up[2];// * 0.02;
 		alListenerfv(AL_ORIENTATION, orientation);
 		OpenAL_CheckForError();
 
-		for (i = 0; i < MAX_SOUNDS; i++)
+		for (i = 0; i < MAX_OPENAL_SOURCES; i++)
 		{
 			if (alindex[i].inuse)
 			{
-				if (alindex[i].fixed_origin)
+				ALenum	state;
+
+				if (alindex[i].loopsound)
 				{
-					alSourcefv (g_Sources[alindex[i].sourceIndex], AL_POSITION, alindex[i].origin);
+					if (alindex[i].lastloopframe < cl.frame.serverframe)
+					{
+						Com_Printf ("Loopsound %d not in this frame, stopping.\n", i);
+						alindex[i].inuse = false;
+						alSourceStop (g_Sources[alindex[i].sourceIndex]);
+						OpenAL_CheckForError();
+						continue;
+					}
 				}
-				else
+
+				alGetSourcei (g_Sources[i], AL_SOURCE_STATE, &state);
+				OpenAL_CheckForError();
+
+				if (state == AL_STOPPED || state == AL_INITIAL)
 				{
-					vec3_t entOrigin;
-					CL_GetEntitySoundOrigin (alindex[i].entnum, entOrigin);
-					alSourcefv (g_Sources[alindex[i].sourceIndex], AL_POSITION, entOrigin);
+					alindex[i].inuse = false;
+					continue;
 				}
+
+				if (AL_Attenuated (i))
+				{
+					Com_DPrintf ("Dropped %ssound %d, attenuated.\n", alindex[i].loopsound ? "loop" : "", i);
+					alindex[i].inuse = false;
+					alSourceStop (g_Sources[alindex[i].sourceIndex]);
+					OpenAL_CheckForError();
+					continue;
+				}
+
+				alSourcefv (g_Sources[alindex[i].sourceIndex], AL_POSITION, alindex[i].origin);
+				OpenAL_CheckForError();
 			}
 		}
 

@@ -85,9 +85,6 @@ cvar_t	*sv_connectmessage;
 cvar_t  *sv_nc_visibilitycheck;
 cvar_t	*sv_nc_clientsonly;
 
-//r1: streaming zlib thingy
-cvar_t	*sv_min_zlibsize;
-
 //r1: max backup packets to allow from client
 cvar_t	*sv_max_netdrop;
 
@@ -110,6 +107,13 @@ cvar_t	*sv_recycle;
 
 cvar_t	*sv_uptime;
 
+cvar_t	*sv_strafejump_hack;
+cvar_t	*sv_reserved_slots;
+cvar_t	*sv_reserved_password;
+
+cvar_t	*sv_allow_map;
+cvar_t	*sv_allow_unconnected_cmds;
+
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
 
@@ -124,7 +128,7 @@ void Master_Shutdown (void);
 
 int CharVerify (char c)
 {
-	if (sv_filter_q3names->value == 2)
+	if ((int)sv_filter_q3names->value == 2)
 		return !(isalnum(c));
 	else
 		return (c == '^');
@@ -203,7 +207,7 @@ void SV_DropClient (client_t *drop)
 	drop->name[0] = 0;
 }
 
-void SV_KickClient (client_t *cl, char *reason, char *cprintf)
+void SV_KickClient (client_t *cl, char /*@null@*/*reason, char /*@null@*/*cprintf)
 {
 	if (reason && cl->state == cs_spawned && *cl->name)
 		SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: %s\n", cl->name, reason);
@@ -283,7 +287,7 @@ char	*SV_StatusString (void)
 
 		if (years)
 		{
-			if (sv_uptime->value == 1)
+			if ((int)sv_uptime->value == 1)
 			{
 				sprintf (tmpStr, "%d year%s", years, years == 1 ? "" : "s");
 				strcat (uptimeString, tmpStr);
@@ -296,7 +300,7 @@ char	*SV_StatusString (void)
 
 		if (days)
 		{
-			if (sv_uptime->value == 1)
+			if ((int)sv_uptime->value == 1)
 			{
 				sprintf (tmpStr, "%dday%s", days, days == 1 ? "" : "s");
 				if (uptimeString[0])
@@ -309,7 +313,7 @@ char	*SV_StatusString (void)
 			strcat (uptimeString, tmpStr);
 		}
 
-		if (sv_uptime->value == 1)
+		if ((int)sv_uptime->value == 1)
 		{
 			if (hours)
 			{
@@ -331,7 +335,7 @@ char	*SV_StatusString (void)
 			}
 		}
 
-		if (sv_uptime->value == 1)
+		if ((int)sv_uptime->value == 1)
 		{
 			if (mins)
 			{
@@ -368,13 +372,16 @@ char	*SV_StatusString (void)
 		Info_SetValueForKey (serverinfo, "uptime", uptimeString);
 	}
 
+	//r1: hide reserved slots
+	Info_SetValueForKey (serverinfo, "maxclients", va("%d", (int)maxclients->value - (int)sv_reserved_slots->value));
+
 	strcpy (status, serverinfo);
 	strcat (status, "\n");
 	statusLength = strlen(status);
 
 	if (!sv_hideplayers->value)
 	{
-		for (i=0 ; i<maxclients->value ; i++)
+		for (i=0 ; i<(int)maxclients->value ; i++)
 		{
 			cl = &svs.clients[i];
 			if (cl->state == cs_connected || cl->state == cs_spawned )
@@ -409,6 +416,8 @@ void SVC_Status (void)
 {
 	if (sv_hidestatus->value)
 		return;
+
+	//if (RateLimited
 
 	Netchan_OutOfBandPrint (NS_SERVER, net_from, "print\n%s", SV_StatusString());
 }
@@ -460,7 +469,7 @@ void SVC_Info (void)
 			if (svs.clients[i].state >= cs_connected)
 				count++;
 
-		Com_sprintf (string, sizeof(string), "%20s %8s %2i/%2i\n", hostname->string, sv.name, count, (int)maxclients->value);
+		Com_sprintf (string, sizeof(string), "%20s %8s %2i/%2i\n", hostname->string, sv.name, count, (int)(maxclients->value - sv_reserved_slots->value));
 	}
 
 	Netchan_OutOfBandPrint (NS_SERVER, net_from, "info\n%s", string);
@@ -556,7 +565,8 @@ void SVC_DirectConnect (void)
 	//int			qport;
 	int			challenge;
 	int			previousclients;
-	int			zcompression;
+	float		reserved;
+	char		*pass;
 
 	adr = net_from;
 
@@ -623,6 +633,21 @@ void SVC_DirectConnect (void)
 
 	strncpy (userinfo, Cmd_Argv(4), sizeof(userinfo)-1);
 
+	//r1: check it is not overflowed
+	if (strlen(userinfo) >= sizeof(userinfo)-1)
+	{
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nUserinfo string length exceeded.\n");
+		return;
+	}
+
+	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
+	if (strstr(userinfo, "\x7f"))
+	{
+		Blackhole (net_from, "MSG_ReadString exploit");
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
+		return;
+	}
+
 	//r1ch: allow filtering of stupid "fun" names etc.
 	if (sv_filter_userinfo->value)
 		strncpy (userinfo, StripHighBits(userinfo, (int)sv_filter_userinfo->value == 2), sizeof(userinfo)-1);
@@ -648,8 +673,10 @@ void SVC_DirectConnect (void)
 		return;
 	}
 
-	if (*sv_password->string && strcmp(sv_password->string, "none")) {
-		char *pass = Info_ValueForKey (userinfo, "password");
+	pass = Info_ValueForKey (userinfo, "password");
+
+	if (*sv_password->string && strcmp(sv_password->string, "none"))
+	{
 		if (!*pass) {
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPassword required.\n");
 			return;
@@ -680,7 +707,7 @@ void SVC_DirectConnect (void)
 //	memset (newcl, 0, sizeof(client_t));
 
 	// if there is already a slot for this ip, reuse it
-	for (i=0,cl=svs.clients ; i<maxclients->value ; i++,cl++)
+	for (i=0,cl=svs.clients ; i < maxclients->value; i++,cl++)
 	{
 		if (cl->state == cs_free)
 			continue;
@@ -708,9 +735,14 @@ void SVC_DirectConnect (void)
 		}
 	}
 
+	if (!strcmp (pass, sv_reserved_password->string))
+		reserved = 0;
+	else
+		reserved = sv_reserved_slots->value;
+
 	// find a client slot
 	newcl = NULL;
-	for (i=0,cl=svs.clients ; i<maxclients->value ; i++,cl++)
+	for (i=0,cl=svs.clients ; i<(maxclients->value - reserved); i++,cl++)
 	{
 		if (cl->state == cs_free)
 		{
@@ -721,7 +753,10 @@ void SVC_DirectConnect (void)
 
 	if (!newcl)
 	{
-		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer is full.\n");
+		if (reserved)
+			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer and reserved slots are full.\n");
+		else
+			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer is full.\n");
 		Com_DPrintf ("Rejected a connection.\n");
 		return;
 	}
@@ -730,7 +765,7 @@ gotnewcl:
 	// build a new connection
 	// accept the new client
 	// this is the only place a client_t is ever initialized
-	//*newcl = temp;
+	
 	sv_client = newcl;
 
 	if (newcl->lastlines)
@@ -745,26 +780,9 @@ gotnewcl:
 
 	newcl->versionString = "(unknown)";
 
-	//r1: streaming zlib protocol mode
-	if (version == ENHANCED_PROTOCOL_VERSION) {
-		zcompression = atoi (Cmd_Argv(5));
-
-		if (zcompression) {
-			if (!sv_min_zlibsize->value) {
-				Com_Printf ("refused zlib %d from %s\n", zcompression,  NET_AdrToString (adr));
-			} else {
-				if (zcompression < sv_min_zlibsize->value) {
-					Com_Printf ("capped to zlib %d (wanted %d) from %s", (int)sv_min_zlibsize->value, zcompression, NET_AdrToString (adr));
-					zcompression = sv_min_zlibsize->value;
-				}
-			}
-		}
-	} else {
-		if (Cmd_Argc() != 5)
-		{
-			Com_Printf ("Warning, unknown number of connection arguments from %s -- %d\n", NET_AdrToString (adr), Cmd_Argc());
-		}
-		zcompression = 0;
+	if (Cmd_Argc() != 5)
+	{
+		Com_Printf ("Warning, unknown number of connection arguments from %s -- %d\n", NET_AdrToString (adr), Cmd_Argc());
 	}
 
 	// get the game a chance to reject this connection or modify the userinfo
@@ -818,7 +836,6 @@ gotnewcl:
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s", sv_connectmessage->string);
 	}
 
-	newcl->zlevel = zcompression;
 	newcl->protocol = version;
 	newcl->state = cs_connected;
 
@@ -859,9 +876,9 @@ void Blackhole (netadr_t from, char *fmt, ...)
 		return;
 
 	temp = &blackholes;
-	while (temp->next) {
+	while (temp->next)
 		temp = temp->next;
-	}
+
 	temp->next = Z_TagMalloc(sizeof(blackhole_t), TAGMALLOC_BLACKHOLE);
 	temp = temp->next;
 	temp->next = NULL;
@@ -1587,18 +1604,29 @@ void SV_UserinfoChanged (client_t *cl)
 	char	*val;
 	int		i;
 
+	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
+	if (strstr(cl->userinfo, "\x7f"))
+	{
+		Blackhole (cl->netchan.remote_address, "MSG_ReadString exploit");
+		SV_KickClient (cl, "illegal userinfo", NULL);
+		return;
+	}
+
 	//r1ch: allow filtering of stupid "fun" names etc.
 	if (sv_filter_userinfo->value)
 		strncpy (cl->userinfo, StripHighBits(cl->userinfo, (int)sv_filter_userinfo->value == 2), sizeof(cl->userinfo)-1);
 
-
-	if (NameColorFilterCheck (Info_ValueForKey (cl->userinfo, "name"))) {
+	if (NameColorFilterCheck (Info_ValueForKey (cl->userinfo, "name")))
+	{
 		SV_ClientPrintf (cl, PRINT_HIGH, "Invalid name '%s'\n", Info_ValueForKey (cl->userinfo, "name"));
-		if (*cl->name) {
+		if (*cl->name)
+		{
 			MSG_BeginWriteByte (&cl->netchan.message, svc_stufftext);
 			MSG_WriteString (&cl->netchan.message, va("set name \"%s\"\n", cl->name));
 			Info_SetValueForKey (cl->userinfo, "name", cl->name);
-		} else {
+		}
+		else
+		{
 			Com_DPrintf ("dropping %s for malformed userinfo (%s)\n", cl->name, cl->userinfo);
 			SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: bad userinfo)\n", cl->name);
 			SV_DropClient (cl);
@@ -1606,20 +1634,26 @@ void SV_UserinfoChanged (client_t *cl)
 	}
 
 	//r1ch: drop clients who hack userinfo to miss required sections
-	if (cl->state >= cs_connected) {
-		if (!CheckUserInfoFields(cl->userinfo)) {
-			if (*cl->name) {
+	if (cl->state >= cs_connected)
+	{
+		if (!CheckUserInfoFields(cl->userinfo))
+		{
+			if (*cl->name)
+			{
 				MSG_BeginWriteByte (&cl->netchan.message, svc_stufftext);
 				MSG_WriteString (&cl->netchan.message, va("set name \"%s\"\n", cl->name));
 				Info_SetValueForKey (cl->userinfo, "name", cl->name);
-			} else {
+			}
+			else
+			{
 				Com_DPrintf ("dropping %s for malformed userinfo (%s)\n", cl->name, cl->userinfo);
 				SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: bad userinfo)\n", cl->name);
 				SV_DropClient (cl);
 			}
 		}
 
-		if (Info_KeyExists (cl->userinfo, "ip")) {
+		if (Info_KeyExists (cl->userinfo, "ip"))
+		{
 			Com_DPrintf ("dropping %s for attempted IP spoof (%s)\n", cl->name, cl->userinfo);
 			SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked (r1q2: bad userinfo)\n", cl->name);
 			SV_DropClient (cl);
@@ -1733,8 +1767,7 @@ void SV_Init (void)
 
 	sv_airaccelerate = Cvar_Get("sv_airaccelerate", "0", CVAR_LATCH);
 
-	//r1: default on
-	public_server = Cvar_Get ("public", "1", 0);
+	public_server = Cvar_Get ("public", "0", 0);
 
 	//r1: not needed
 	//sv_reconnect_limit = Cvar_Get ("sv_reconnect_limit", "3", CVAR_ARCHIVE);
@@ -1780,9 +1813,6 @@ void SV_Init (void)
 	sv_nc_visibilitycheck = Cvar_Get ("sv_nc_visibilitycheck", "0", 0);
 	sv_nc_clientsonly = Cvar_Get ("sv_nc_clientsonly", "1", 0);
 
-	//r1: zlib support for packets (fixme: remove this?)
-	sv_min_zlibsize = Cvar_Get ("sv_min_zlibsize", "0", 0);
-
 	//r1: delay between sending 32k download packets via dl server
 	sv_downloadwait = Cvar_Get ("sv_downloadwait", "250", 0);
 
@@ -1820,6 +1850,19 @@ void SV_Init (void)
 
 	//r1: track server uptime in serverinfo?
 	sv_uptime = Cvar_Get ("sv_uptime", "0", 0);
+
+	//r1: allow strafe jumping at high fps values (Requires hacked client (!!!))
+	sv_strafejump_hack = Cvar_Get ("sv_strafejump_hack", "0", 0);
+
+	//r1: reserved slots (set 'rp' userinfo)
+	sv_reserved_password = Cvar_Get ("sv_reserved_password", "", 0);
+	sv_reserved_slots = Cvar_Get ("sv_reserved_slots", "0", CVAR_LATCH);
+
+	//r1: allow use of 'map' command after game dll is loaded?
+	sv_allow_map = Cvar_Get ("sv_allow_map", "0", 0);
+
+	//r1: allow unconnected clients to execute game commands (default enabled in id!)
+	sv_allow_unconnected_cmds = Cvar_Get ("sv_allow_unconnected_cmds", "0", 0);
 
 	//r1: init pyroadmin
 	if (pyroadminport->value) {
@@ -1896,9 +1939,7 @@ void SV_Shutdown (char *finalmsg, qboolean reconnect, qboolean crashing)
 
 	Master_Shutdown ();
 
-#ifdef _DEBUG
-	if (crashing && dbg_unload->value)
-#endif
+	if (!crashing || dbg_unload->value)
 		SV_ShutdownGameProgs ();
 
 	if (sv_download_socket)

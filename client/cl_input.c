@@ -322,7 +322,6 @@ void CL_BaseMove (usercmd_t *cmd)
 		cmd->upmove = cl_upspeed->value * mspeed;
 	else if (cmd->upmove < -cl_upspeed->value * mspeed)
 		cmd->upmove = -cl_upspeed->value * mspeed;
-
 }
 
 void CL_ClampPitch (void)
@@ -541,8 +540,10 @@ void CL_SendCmd (void)
 	{
 		CL_FixUpGender();
 		userinfo_modified = false;
-		//Com_Printf ("userinfo update:\n");
-		//Cbuf_ExecuteText (EXEC_NOW, "userinfo\n");
+#ifdef _DEBUG
+		Com_Printf ("userinfo update:\n");
+		Cbuf_ExecuteText (EXEC_NOW, "userinfo\n");
+#endif
 		MSG_WriteByte (&cls.netchan.message, clc_userinfo);
 		MSG_WriteString (&cls.netchan.message, Cvar_Userinfo() );
 	}
@@ -560,7 +561,8 @@ void CL_SendCmd (void)
 	MSG_WriteByte (&buf, clc_move);
 
 	// save the position for a checksum byte
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION) {
+	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	{
 		checksumIndex = buf.cursize;
 		MSG_WriteByte (&buf, 0);
 	}
@@ -593,7 +595,8 @@ void CL_SendCmd (void)
 	MSG_WriteDeltaUsercmd (&buf, oldcmd, cmd);
 
 	// calculate a checksum over the move commands
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION) {
+	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	{
 		buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
 			buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
 			cls.netchan.outgoing_sequence);

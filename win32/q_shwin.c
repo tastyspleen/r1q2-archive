@@ -33,7 +33,7 @@ int		hunkcount;
 int		hunkmaxsize;
 int		cursize;
 
-#define	VIRTUAL_ALLOC 1
+//#define	VIRTUAL_ALLOC 1
 //#define CREATE_HEAP 1
 
 #if CREATE_HEAP

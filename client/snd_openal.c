@@ -111,10 +111,75 @@ void OpenAL_DestroyBuffers (void)
 	}	
 }
 
+qboolean AL_Attenuated (int i)
+{
+	vec3_t	soundOrigin;
+	vec3_t	source_vec;
+
+	float	dist_mult;
+	float	dist;
+	float	dot;
+
+	float	lscale;
+	float	rscale;
+
+	float	left_vol;
+	float	right_vol;
+	
+	if (alindex[i].fixed_origin)
+	{
+		VectorCopy (alindex[i].origin, soundOrigin);
+		VectorScale (soundOrigin, 1/OPENAL_SCALE_VALUE, soundOrigin);
+		//alSourcefv (g_Sources[alindex[i].sourceIndex], AL_POSITION, alindex[i].origin);
+	}
+	else
+	{
+		//vec3_t entOrigin;
+		CL_GetEntitySoundOrigin (alindex[i].entnum, soundOrigin);
+		//VectorScale (entOrigin, OPENAL_SCALE_VALUE, soundOrigin);
+		//alSourcefv (g_Sources[alindex[i].sourceIndex], AL_POSITION, entOrigin);
+	}
+
+	VectorSubtract (soundOrigin, listener_origin, source_vec);
+
+	dist_mult = alindex[i].attenuation * ((alindex[i].attenuation == ATTN_STATIC)?0.001:0.0005);
+
+	dist = VectorNormalize (source_vec) - SOUND_FULLVOLUME;
+
+	if (dist < 0)
+		dist = 0;	// close enough to be at full volume
+
+	dist *= dist_mult;		// different attenuation levels
+
+	//AngleVectors (client->edict->s.angles, NULL/*forward*/, listen_right, NULL/*up*/);
+	dot = DotProduct(listener_right, source_vec);
+
+	if (!dist_mult)
+	{	// no attenuation = no spatialization
+		rscale = 1.0;
+		lscale = 1.0;
+	}
+	else
+	{
+		rscale = 0.5 * (1.0 + dot);
+		lscale = 0.5 * (1.0 - dot);
+	}
+
+	// add in distance effect
+	right_vol = (255.0 * ((1.0 - dist) * rscale));
+	left_vol = (255.0 * ((1.0 - dist) * lscale));
+
+	if ((right_vol <= 0) && (left_vol <= 0))
+		return true;
+
+	VectorScale (soundOrigin, OPENAL_SCALE_VALUE, alindex[i].origin);
+	return false;
+}
+
 int OpenAL_GetFreeAlIndex (void)
 {
 	int i;
-	for (i = 0; i < MAX_SOUNDS; i++)
+	for (i = 0; i < MAX_OPENAL_SOURCES; i++)
 	{
 		if (!alindex[i].inuse)
 			return i;
@@ -127,7 +192,7 @@ void OpenAL_FreeAlIndexes (int index)
 {
 	int i;
 
-	for (i = 0; i < MAX_SOUNDS; i++)
+	for (i = 0; i < MAX_OPENAL_SOURCES; i++)
 	{
 		if (alindex[i].sourceIndex == index)
 			alindex[i].inuse = false;
@@ -145,8 +210,8 @@ ALint OpenAL_GetFreeSource (void)
 		OpenAL_CheckForError();
 		if (state == AL_STOPPED || state == AL_INITIAL)
 		{
-			//Com_Printf ("OpenAL: Source %d has finished playing.\n", i);
-			OpenAL_FreeAlIndexes (i);
+			Com_DPrintf ("OpenAL: Source %d is available.\n", i);
+			//OpenAL_FreeAlIndexes (i);
 			return i;
 		}
 	}
@@ -312,7 +377,8 @@ qboolean OpenAL_Init (void)
 		int major, minor;
 		alcGetIntegerv (Device, ALC_MAJOR_VERSION, sizeof(major), &major);
 		alcGetIntegerv (Device, ALC_MINOR_VERSION, sizeof(minor), &minor);
-		Com_Printf ("...OpenAL %d.%d on %s\n", major, minor, alcGetString (Device, ALC_DEFAULT_DEVICE_SPECIFIER));
+		Com_Printf ("...OpenAL %d.%d on %s (%s %s)\n", major, minor, alcGetString (Device, ALC_DEFAULT_DEVICE_SPECIFIER),
+			alGetString (AL_VENDOR), alGetString (AL_RENDERER));
 	}
 
 	// Generate Buffers

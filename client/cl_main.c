@@ -74,9 +74,6 @@ cvar_t	*cl_timedemo;
 //r1: filter high bits
 cvar_t	*cl_filterchat;
 
-//r1: ask for min zlib level
-cvar_t	*cl_zlibsize;
-
 cvar_t	*lookspring;
 cvar_t	*lookstrafe;
 cvar_t	*sensitivity;
@@ -110,6 +107,9 @@ cvar_t	*cl_protocol;
 
 cvar_t	*dbg_framesleep;
 //cvar_t	*cl_snaps;
+
+cvar_t	*cl_strafejump_hack;
+cvar_t	*cl_nolerp;
 
 #ifdef NO_SERVER
 cvar_t	*allow_download;
@@ -541,6 +541,9 @@ void CL_SendConnectPacket (void)
 	port = Cvar_VariableValue ("qport");
 	userinfo_modified = false;
 
+	if (Com_ServerState() == ss_demo)
+		cls.serverProtocol = 34;
+
 	if (!cls.serverProtocol && cl_protocol->value)
 		cls.serverProtocol = cl_protocol->value;
 
@@ -551,13 +554,15 @@ void CL_SendConnectPacket (void)
 
 	//r1: only send enhanced connect string on new protocol in order to avoid confusing
 	//    other engine mods which may or may not extend this.
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\" %i\n",
-			cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), (int)cl_zlibsize->value );
+	/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+		Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
+			cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 	} else {
 		Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
 			cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
-	}
+	}*/
+	Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
+		cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 }
 
 /*
@@ -1219,7 +1224,7 @@ void CL_ReadPackets (void)
 {
 	int i;
 
-	while (i = (NET_GetPacket (NS_CLIENT, &net_from, &net_message)))
+	while ((i = (NET_GetPacket (NS_CLIENT, &net_from, &net_message))))
 	{
 		//
 		// remote command packet
@@ -1419,13 +1424,14 @@ void CL_LoadLoc (char *filename)
 
 	CL_FreeLocs ();
 
-	FS_FOpenFile (filename, (FILE **)&fLoc);
+	FS_FOpenFile (filename, &fLoc);
 	if (!fLoc) {
 		Com_DPrintf ("CL_LoadLoc: %s not found\n", filename);
 		return;
 	}
 
-	while (line = (fgets (readLine, sizeof(readLine), fLoc))) {
+	while ((line = (fgets (readLine, sizeof(readLine), fLoc))))
+	{
 		x = line;
 
 		name = NULL;
@@ -1947,7 +1953,7 @@ void CL_RequestNextDownload (void)
 
 		if (allow_download->value && allow_download_maps->value) {
 			while (precache_tex < numtexinfo) {
-				char fn[MAX_OSPATH];
+				//char fn[MAX_OSPATH];
 
 				Com_sprintf(fn, sizeof(fn), "textures/%s.wal", map_surfaces[precache_tex++].rname);
 				if (!CL_CheckOrDownloadFile(fn))
@@ -2058,6 +2064,19 @@ void version_update (cvar_t *self, char *old, char *newValue)
 	}
 }*/
 
+void _name_changed (cvar_t *var, char *oldValue, char *newValue)
+{
+	if (strlen(newValue) > 16)
+	{
+		newValue[16] = 0;
+		Cvar_Set ("name", newValue);
+	}
+	else if (!*newValue)
+	{
+		Cvar_Set ("name", "unnamed");
+	}
+}
+
 /*
 =================
 CL_InitLocal
@@ -2133,8 +2152,6 @@ void CL_InitLocal (void)
 
 	cl_filterchat = Cvar_Get ("cl_filterchat", "0", 0);
 
-	cl_zlibsize = Cvar_Get ("cl_zlibsize", "0", 0);
-
 	rcon_client_password = Cvar_Get ("rcon_password", "", 0);
 	rcon_address = Cvar_Get ("rcon_address", "", 0);
 
@@ -2167,6 +2184,8 @@ void CL_InitLocal (void)
 	cl_defertimer = Cvar_Get ("cl_defertimer", "1", CVAR_ARCHIVE);
 	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "1", 0);
 	cl_instantpacket = Cvar_Get ("cl_instantpacket", "1", 0);
+	cl_strafejump_hack = Cvar_Get ("cl_strafejump_hack", "0", 0);
+	cl_nolerp = Cvar_Get ("cl_nolerp", "0", 0);
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "0", CVAR_ARCHIVE);
@@ -2179,6 +2198,8 @@ void CL_InitLocal (void)
 	//haxx
 	glVersion = Cvar_VariableString ("cl_version");
 	(Cvar_ForceSet ("cl_version", va("R1Q2 %s; %s", VERSION, *glVersion ? glVersion : "unknown renderer" )))->changed = version_update;
+
+	name->changed = _name_changed;
 
 #ifdef _DEBUG
 	dbg_framesleep = Cvar_Get ("dbg_framesleep", "0", 0);
@@ -2315,18 +2336,18 @@ typedef struct
 } cheatvar_t;
 
 cheatvar_t	cheatvars[] = {
-	{"timescale", "1"},
-	{"timedemo", "0"},
-	{"r_drawworld", "1"},
+	{"timescale", "1", NULL},
+	{"timedemo", "0", NULL},
+	{"r_drawworld", "1", NULL},
 	//{"cl_testlights", "0"},
-	{"r_fullbright", "0"},
-	{"r_drawflat", "0"},
-	{"paused", "0"},
-	{"fixedtime", "0"},
-	{"sw_draworder", "0"},
-	{"gl_lightmap", "0"},
-	{"gl_saturatelighting", "0"},
-	{NULL, NULL}
+	{"r_fullbright", "0", NULL},
+	{"r_drawflat", "0", NULL},
+	{"paused", "0", NULL},
+	{"fixedtime", "0", NULL},
+	{"sw_draworder", "0", NULL},
+	{"gl_lightmap", "0", NULL},
+	{"gl_saturatelighting", "0", NULL},
+	{NULL, NULL, NULL}
 };
 
 int		numcheatvars;
@@ -2336,8 +2357,8 @@ void CL_FixCvarCheats (void)
 	int			i;
 	cheatvar_t	*var;
 
-	if ( !strcmp(cl.configstrings[CS_MAXCLIENTS], "1") 
-		|| !cl.configstrings[CS_MAXCLIENTS][0] )
+	if (Com_ServerState() == ss_demo || (!strcmp(cl.configstrings[CS_MAXCLIENTS], "1") 
+		|| !cl.configstrings[CS_MAXCLIENTS][0] ))
 		return;		// single player can cheat
 
 	// find all the cvars if we haven't done it yet
@@ -2645,7 +2666,7 @@ void CL_Frame (int msec)
 
 		// framerate is too high
 		if (render_delta < 1000/r_maxfps->value)
-			return;
+			render_frame = false;
 	}
 
 	if (!cl_async->value)
@@ -2658,7 +2679,7 @@ void CL_Frame (int msec)
 	//jec - update the inputs (keybd, mouse, server, etc)
 	CL_RefreshInputs ();
 
-	if (cl_instantpacket->value && send_packet_now)
+	if ((send_packet_now && cl_instantpacket->value) || userinfo_modified)
 	{
 		Com_DPrintf ("*** instantpacket\n");
 		packet_frame = true;

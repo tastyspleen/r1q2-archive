@@ -35,7 +35,7 @@ SV_SetMaster_f
 Specify a list of master servers
 ====================
 */
-void SV_SetMaster_f (void)
+static void SV_SetMaster_f (void)
 {
 	int		i, slot;
 
@@ -87,7 +87,7 @@ SV_SetPlayer
 Sets sv_client and sv_player to the player with idnum Cmd_Argv(1)
 ==================
 */
-qboolean SV_SetPlayer (void)
+static qboolean SV_SetPlayer (void)
 {
 	client_t	*cl;
 	int			i;
@@ -152,7 +152,7 @@ SV_WipeSavegame
 Delete save/<XXX>/
 =====================
 */
-void SV_WipeSavegame (char *savename)
+static void SV_WipeSavegame (char *savename)
 {
 	char	name[MAX_OSPATH];
 	char	*s;
@@ -188,7 +188,7 @@ void SV_WipeSavegame (char *savename)
 qCopyFile
 ================
 */
-void qCopyFile (char *src, char *dst)
+static void qCopyFile (char *src, char *dst)
 {
 	FILE	*f1, *f2;
 	int		l;
@@ -224,7 +224,7 @@ void qCopyFile (char *src, char *dst)
 SV_CopySaveGame
 ================
 */
-void SV_CopySaveGame (char *src, char *dst)
+static void SV_CopySaveGame (char *src, char *dst)
 {
 	char	name[MAX_OSPATH], name2[MAX_OSPATH];
 	int		l, len;
@@ -274,7 +274,7 @@ SV_WriteLevelFile
 
 ==============
 */
-void SV_WriteLevelFile (void)
+static void SV_WriteLevelFile (void)
 {
 	char	name[MAX_OSPATH];
 	FILE	*f;
@@ -330,7 +330,7 @@ SV_WriteServerFile
 
 ==============
 */
-void SV_WriteServerFile (qboolean autosave)
+static void SV_WriteServerFile (qboolean autosave)
 {
 	FILE	*f;
 	cvar_t	*var;
@@ -404,7 +404,7 @@ SV_ReadServerFile
 
 ==============
 */
-void SV_ReadServerFile (void)
+static void SV_ReadServerFile (void)
 {
 	FILE	*f;
 	char	name[MAX_OSPATH], string[128];
@@ -463,11 +463,14 @@ SV_DemoMap_f
 Puts the server in demo mode on a specific map/cinematic
 ==================
 */
-void SV_DemoMap_f (void)
+static void SV_DemoMap_f (void)
 {
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("USAGE: demomap <demoname.dm2>\n");
+		Com_Printf ("Purpose: View a recorded demo.\n"
+					"Syntax : demomap <filename>\n"
+					"Example: demomap demo1.dm2\n");
+		//Com_Printf ("USAGE: demomap <demoname.dm2>\n");
 		return;
 	}
 
@@ -492,17 +495,19 @@ Clears the archived maps, plays the inter.cin cinematic, then
 goes to map jail.bsp.
 ==================
 */
-void SV_GameMap_f (void)
+static void SV_GameMap_f (void)
 {
 	char		expanded[MAX_QPATH];
 	char		*map;
 	int			i;
 	client_t	*cl;
-	qboolean	*savedInuse;
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("USAGE: gamemap <mapname>\n");
+		//Com_Printf ("USAGE: gamemap <mapname>\n");
+		Com_Printf ("Purpose: Change the level.\n"
+					"Syntax : gamemap <mapname>\n"
+					"Example: gamemap q2dm1\n");
 		return;
 	}
 
@@ -541,10 +546,11 @@ void SV_GameMap_f (void)
 		
 		if (sv.state == ss_game)
 		{
+			qboolean	savedInuse[MAX_CLIENTS];
 			// clear all the client inuse flags before saving so that
 			// when the level is re-entered, the clients will spawn
 			// at spawn points instead of occupying body shells
-			savedInuse = malloc(maxclients->value * sizeof(qboolean));
+			//savedInuse = malloc(maxclients->value * sizeof(qboolean));
 			for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
 			{
 				savedInuse[i] = cl->edict->inuse;
@@ -556,7 +562,7 @@ void SV_GameMap_f (void)
 			// we must restore these for clients to transfer over correctly
 			for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
 				cl->edict->inuse = savedInuse[i];
-			free (savedInuse);
+			//free (savedInuse);
 		}
 	}
 
@@ -582,19 +588,30 @@ Goes directly to a given map without any savegame archiving.
 For development work
 ==================
 */
-void SV_Map_f (void)
+static void SV_Map_f (void)
 {
+	static qboolean warned = false;
 	char	*map;
 	char	expanded[MAX_QPATH];
 	//extern cvar_t	*fs_gamedirvar;
 
-	if (Cmd_Argc() != 2) {
-		Com_Printf ("USAGE: map <mapname>\n");
+	if (Cmd_Argc() != 2)
+	{
+		//Com_Printf ("USAGE: map <mapname>\n");
+		Com_Printf ("Purpose: Reset game state and begin a level.\n"
+					"Syntax : map <mapname>\n"
+					"Example: map q2dm1\n");
 		return;
 	}
 
-	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0) {
-		Com_Printf ("Warning, using 'map' will reset the game. Perhaps you should use 'gamemap'.\n");
+	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0 && !sv_allow_map->value)
+	{
+		Com_Printf ("WARNING: Using 'map' will reset the game state. Use 'gamemap' to change levels.\n");
+		if (!warned)
+		{
+			Com_Printf ("(Set the cvar 'sv_allow_map 1' if you wish to disable this check)\n");
+			warned = true;
+		}
 		return;
 	}
 
@@ -640,7 +657,7 @@ SV_Loadgame_f
 
 ==============
 */
-void SV_Loadgame_f (void)
+static void SV_Loadgame_f (void)
 {
 	char	name[MAX_OSPATH];
 	FILE	*f;
@@ -687,7 +704,7 @@ SV_Savegame_f
 
 ==============
 */
-void SV_Savegame_f (void)
+static void SV_Savegame_f (void)
 {
 	char	*dir;
 
@@ -737,7 +754,7 @@ void SV_Savegame_f (void)
 	Com_Printf ("Done.\n");
 }
 
-qboolean RemoveCvarBan (int index)
+static qboolean RemoveCvarBan (int index)
 {
 	cvarban_t *temp, *last;
 	int i;
@@ -771,7 +788,7 @@ qboolean RemoveCvarBan (int index)
 	return true;
 }
 
-void SV_CheckCvarBans_f (void)
+static void SV_CheckCvarBans_f (void)
 {
 	cvarban_t *bans = &cvarbans;
 
@@ -793,7 +810,7 @@ void SV_CheckCvarBans_f (void)
 	Com_Printf ("cvar checks sent...\n");
 }
 
-void SV_DelCvarBan_f (void)
+static void SV_DelCvarBan_f (void)
 {
 	char *match;
 	cvarban_t *bans = &cvarbans;
@@ -824,7 +841,7 @@ void SV_DelCvarBan_f (void)
 	Com_Printf ("%s not found.\n", match);
 }
 
-void SV_AddCvarBan_f (void)
+static void SV_AddCvarBan_f (void)
 {
 	cvarban_t *bans = &cvarbans;
 	int blockmethod, i;
@@ -880,27 +897,24 @@ void SV_AddCvarBan_f (void)
 
 //===============================================================
 
-void SV_Listholes_f (void)
+static void SV_Listholes_f (void)
 {
 	int index = 0;
 	blackhole_t *hole = &blackholes;
+
 	Com_Printf ("Current blackhole listing:\n");
-	while (hole->next) {
+
+	while (hole->next)
+	{
 		hole = hole->next;
 		Com_Printf ("%d: %s (%s)\n", ++index, NET_AdrToString (hole->netadr), hole->reason);
 	}
 }
 
 qboolean UnBlackhole (int index);
-void SV_Delhole_f (void)
+static void SV_Delhole_f (void)
 {
 	int x;
-
-	if (!svs.initialized)
-	{
-		Com_Printf ("No server running.\n");
-		return;
-	}
 
 	if (Cmd_Argc() < 2) {
 		Com_Printf ("Usage: delhole index\n");
@@ -915,19 +929,84 @@ void SV_Delhole_f (void)
 		Com_Printf ("Error removing blackhole %d.\n", x);
 }
 
-void SV_Addhole_f (void)
+static void SV_BanCommand_f (void)
 {
-	char remaining[32];
-	netadr_t adr;
+	bannedcommands_t *x;
 
-	if (!svs.initialized)
+	if (Cmd_Argc() < 2)
 	{
-		Com_Printf ("No server running.\n");
+		Com_Printf ("Purpose: Prevents a client from executing a given command.\n"
+					"Syntax : bancommand <commandname>\n"
+					"Example: bancommand god\n");
 		return;
 	}
 
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("Usage: addhole ip reason\n");
+	x = &bannedcommands;
+
+	while (x->next)
+	{
+		x = x->next;
+
+		if (!strcmp (x->name, Cmd_Argv(1)))
+		{
+			Com_Printf ("Command '%s' is already blocked.\n");
+			return;
+		}
+	}
+
+	x->next = Z_TagMalloc (sizeof(*x), TAGMALLOC_CMDBANS);
+	x = x->next;
+
+	x->name = CopyString (Cmd_Argv(1));
+
+	Com_Printf ("Command '%s' is blocked from use.\n", x->name);
+}
+
+static void SV_UnBanCommand_f (void)
+{
+	bannedcommands_t *last, *temp;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Purpose: Allows a client to execute a previously banned command.\n"
+					"Syntax : unbancommand <commandname>\n"
+					"Example: unbancommand god\n");
+		return;
+	}
+
+
+	last = temp = &bannedcommands;
+
+	while (temp->next)
+	{
+		last = temp;
+		temp = temp->next;
+
+		if (!strcmp (temp->name, Cmd_Argv(1)))
+		{
+			// just copy the next over, don't care if it's null
+			last->next = temp->next;
+
+			Z_Free (temp->name);
+			Z_Free (temp);
+
+			Com_Printf ("Command '%s' is now allowed.\n", Cmd_Argv(1));
+			return;
+		}
+	}
+
+	Com_Printf ("Command '%s' is not blocked from use.\n", Cmd_Argv(1));
+}
+
+static void SV_Addhole_f (void)
+{
+	netadr_t adr;
+
+	if (Cmd_Argc() < 3)
+	{
+		Com_Printf ("Purpose: Prevents a given IP from communicating with the server.\n"
+					"Syntax : addhole <ip-address> <reason>\n"
+					"Example: addhole 192.168.0.1 trying to cheat\n");
 		return;
 	}
 
@@ -936,10 +1015,7 @@ void SV_Addhole_f (void)
 		return;
 	}
 
-	snprintf (remaining, sizeof(remaining)-1, "%s", Cmd_Args() + strlen(Cmd_Argv(1)) + 1);
-	remaining[31] = 0;
-
-	Blackhole (adr, remaining);
+	Blackhole (adr, "%s", Cmd_Args2(2));
 }
 
 /*
@@ -949,7 +1025,7 @@ SV_Kick_f
 Kick a user off of the server
 ==================
 */
-void SV_Kick_f (void)
+static void SV_Kick_f (void)
 {
 	if (!svs.initialized)
 	{
@@ -959,7 +1035,10 @@ void SV_Kick_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("Usage: kick <userid>\n");
+		//Com_Printf ("Usage: kick <userid>\n");
+		Com_Printf ("Purpose: Kick a given id or player name from the server.\n"
+					"Syntax : kick <userid>\n"
+					"Example: kick 3\n");
 		return;
 	}
 
@@ -1070,7 +1149,7 @@ void SV_Status_f (void)
 SV_ConSay_f
 ==================
 */
-void SV_ConSay_f(void)
+static void SV_ConSay_f(void)
 {
 	client_t *client;
 	int		j;
@@ -1114,48 +1193,58 @@ void SV_ConSay_f(void)
 }
 
 #ifdef WIN32
-void SV_InstallService_f (void)
+static void SV_InstallService_f (void)
 {
 
-	if (Cmd_Argc() < 3) {
-		Com_Printf ("Usage: installservice servername commandline\n");
+	if (Cmd_Argc() < 3)
+	{
+		//Com_Printf ("Usage: installservice servername commandline\n");
+		Com_Printf ("Purpose: Install a Win32 service for a server.\n"
+					"Syntax : installservice <servicename> <commandline>\n"
+					"Example: installservice Q2DM +set maxclients 16 +map q2dm1\n");
 		return;
 	}
 
 	Sys_InstallService (Cmd_Argv(1), Cmd_Args());
 }
 
-void SV_DeleteService_f (void)
+static void SV_DeleteService_f (void)
 {
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("Usage: deleteservice servername\n");
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Purpose: Remove a Win32 service for a server.\n"
+					"Syntax : deleteservice <servicename>\n"
+					"Example: deleteservice Q2DM\n");
 		return;
 	}
 
 	Sys_DeleteService (Cmd_Args());
 }
 
-void SV_Trayicon_f (void)
+static void SV_Trayicon_f (void)
 {
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("Usage: tray on|off\n");
+	if (Cmd_Argc() < 2)
+	{
+		//Com_Printf ("Usage: tray on|off\n");
+		Com_Printf ("Purpose: Enable or disable minimize to notifcation area.\n"
+					"Syntax : tray [on|off]\n"
+					"Example: tray on\n");
 		return;
 	}
 
-	if (!Q_stricmp (Cmd_Argv(1), "on")) {
+	if (!Q_stricmp (Cmd_Argv(1), "on"))
 		Sys_EnableTray ();
-	} else {
+	else
 		Sys_DisableTray ();
-	}
 }
 
-void SV_Minimize_f (void)
+static void SV_Minimize_f (void)
 {
 	Sys_Minimize();
 }
 #endif
 
-void SV_Broadcast_f(void)
+static void SV_Broadcast_f(void)
 {
 	client_t *client;
 	int		j;
@@ -1189,7 +1278,7 @@ void SV_Broadcast_f(void)
 SV_Heartbeat_f
 ==================
 */
-void SV_Heartbeat_f (void)
+static void SV_Heartbeat_f (void)
 {
 	svs.last_heartbeat = -9999999;
 }
@@ -1202,7 +1291,7 @@ SV_Serverinfo_f
   Examine or change the serverinfo string
 ===========
 */
-void SV_Serverinfo_f (void)
+static void SV_Serverinfo_f (void)
 {
 	Com_Printf ("Server info settings:\n");
 	Info_Print (Cvar_Serverinfo());
@@ -1216,7 +1305,7 @@ SV_DumpUser_f
 Examine all a users info strings
 ===========
 */
-void SV_DumpUser_f (void)
+static void SV_DumpUser_f (void)
 {
 	if (!svs.initialized)
 	{
@@ -1226,7 +1315,10 @@ void SV_DumpUser_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("Usage: dumpuser <userid>\n");
+		//Com_Printf ("Usage: dumpuser <userid>\n");
+		Com_Printf ("Purpose: Show a client's userinfo string and other information.\n"
+					"Syntax : dumpuser <userid>\n"
+					"Example: dumpuser 1\n");
 		return;
 	}
 
@@ -1255,7 +1347,7 @@ Begins server demo recording.  Every entity and every message will be
 recorded, but no playerinfo will be stored.  Primarily for demo merging.
 ==============
 */
-void SV_ServerRecord_f (void)
+static void SV_ServerRecord_f (void)
 {
 	char	name[MAX_OSPATH];
 	byte	buf_data[32768];
@@ -1265,7 +1357,10 @@ void SV_ServerRecord_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("serverrecord <demoname>\n");
+		Com_Printf ("Purpose: Record a serverdemo of all activity that takes place.\n"
+					"Syntax : serverrecord <demoname>\n"
+					"Example: serverrecord demo1\n");
+		//Com_Printf ("serverrecord <demoname>\n");
 		return;
 	}
 
@@ -1355,7 +1450,7 @@ SV_ServerStop_f
 Ends server demo recording
 ==============
 */
-void SV_ServerStop_f (void)
+static void SV_ServerStop_f (void)
 {
 	if (!svs.demofile)
 	{
@@ -1376,7 +1471,7 @@ Kick everyone off, possibly in preparation for a new game
 
 ===============
 */
-void SV_KillServer_f (void)
+static void SV_KillServer_f (void)
 {
 	if (!svs.initialized)
 		return;
@@ -1396,7 +1491,7 @@ SV_ServerCommand_f
 Let the game dll handle a command
 ===============
 */
-void SV_ServerCommand_f (void)
+static void SV_ServerCommand_f (void)
 {
 	if (!ge)
 	{
@@ -1407,19 +1502,30 @@ void SV_ServerCommand_f (void)
 	ge->ServerCommand();
 }
 
-void SV_PassiveConnect_f (void)
+static void SV_PassiveConnect_f (void)
 {
-	if (sv.state != ss_game) {
+	if (sv.state != ss_game)
+	{
 		Com_Printf ("No game running.\n");
-	} else {
-		if (Cmd_Argc() < 2) {
-			Com_Printf ("Usage: pc ip:port\n");
-		} else {
+	}
+	else
+	{
+		if (Cmd_Argc() < 2)
+		{
+			//Com_Printf ("Usage: pc ip:port\n");
+			Com_Printf ("Purpose: Initiate a passive connection to a listening client.\n"
+						"Syntax : pc <listening-address>\n"
+						"Example: pc 192.168.0.1:32000\n");
+		}
+		else
+		{
 			netadr_t addr;
-			if (!(NET_StringToAdr (Cmd_Argv(1), &addr))) {
+			if (!(NET_StringToAdr (Cmd_Argv(1), &addr)))
+			{
 				Com_Printf ("Bad IP: %s\n", Cmd_Argv(1));
-			} else {
-				//NET_SendPacket (NS_SERVER, 19, "ÿÿÿÿpassive_connect", addr);
+			}
+			else
+			{
 				Netchan_OutOfBand (NS_SERVER, addr, 15, (byte *)"passive_connect");
 				Com_Printf ("passive_connect request sent to %s\n", NET_AdrToString (addr));
 			}
@@ -1465,6 +1571,9 @@ void SV_InitOperatorCommands (void)
 
 	Cmd_AddCommand ("delhole", SV_Delhole_f);
 	Cmd_AddCommand ("addhole", SV_Addhole_f);
+
+	Cmd_AddCommand ("bancommand", SV_BanCommand_f);
+	Cmd_AddCommand ("unbancommand", SV_UnBanCommand_f);
 
 	//r1: service support
 #ifdef WIN32

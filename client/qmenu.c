@@ -131,10 +131,10 @@ void Field_Draw( menufield_s *f )
 	}
 }
 
+extern int keydown[];
+
 qboolean Field_Key( menufield_s *f, int key )
 {
-	extern int keydown[];
-
 	switch ( key )
 	{
 	case K_KP_SLASH:

@@ -84,9 +84,6 @@ void V_AddEntity (entity_t *ent)
 	if (r_numentities >= MAX_ENTITIES)
 		return;
 	r_entities[r_numentities++] = *ent;
-
-	//if (ent->model && ent->model->type != mod_alias && ent->model->type != mod_sprite && ent->model->type != mod_brush)
-	//	Com_Printf ("ERROR MODEL: %s\n", ent->model->name);
 }
 
 
@@ -487,6 +484,7 @@ char rateMsg[] = "RATEDROP";
 char frameMsg[] = "OLDFRAME";
 char parseMsg[] = "OLDPARSE";
 
+extern int __cdecl entitycmpfnc( const entity_t *, const entity_t * );
 
 /*
 ==================
@@ -500,8 +498,6 @@ void V_RenderView( float stereo_separation )
 void V_RenderView(void)
 #endif
 {
-	extern int __cdecl entitycmpfnc( const entity_t *, const entity_t * );
-
 	if (cls.state != ca_active)
 		return;
 

@@ -2222,6 +2222,7 @@ void CL_AddParticles (void)
 
 		if (alpha > 1.0)
 			alpha = 1;
+
 		color = p->color;
 
 		time2 = time*time;

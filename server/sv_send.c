@@ -55,7 +55,7 @@ EVENT MESSAGES
 =============================================================================
 */
 
-sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type)
+static sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type)
 {
 	message_queue_t *msg;
 
@@ -136,14 +136,14 @@ void EXPORT SV_BroadcastPrintf (int level, char *fmt, ...)
 	// echo to console
 	if (dedicated->value)
 	{
-		char	copy[1024];
-		int		i;
+		/*char	copy[1024];
+		int		j;
 		
 		// mask off high bits
-		for (i=0 ; i<1023 && string[i] ; i++)
-			copy[i] = string[i]&127;
-		copy[i] = 0;
-		Com_Printf ("%s", copy);
+		for (j=0 ; i<1023 && string[j] ; i++)
+			copy[j] = string[j]&127;
+		copy[j] = 0;*/
+		Com_Printf ("%s\n", StripHighBits(string, true));
 	}
 
 	for (i=0, cl = svs.clients ; i<maxclients->value; i++, cl++)
@@ -195,19 +195,21 @@ MULTICAST_PVS	send to clients potentially visible from org
 MULTICAST_PHS	send to clients potentially hearable from org
 =================
 */
-void EXPORT SV_Multicast (vec3_t origin, multicast_t to)
+void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 {
-	client_t	*client;
-	byte		*mask;
-	int			leafnum, cluster;
-	int			j;
-	qboolean	reliable;
-	int			area1, area2;
+	client_t		*client;
+	byte			*mask;
+	int				leafnum, cluster;
+	int				j;
+	qboolean		reliable;
+	int				area1, area2;
 
 	reliable = false;
 
 	if (to != MULTICAST_ALL_R && to != MULTICAST_ALL)
 	{
+		if (!origin)
+			Com_Error (ERR_DROP, "SV_Multicast: bad multicast_t used with NULL origin");
 		leafnum = CM_PointLeafnum (origin);
 		area1 = CM_LeafArea (leafnum);
 	}
@@ -466,7 +468,7 @@ FRAME UPDATES
 SV_SendClientDatagram
 =======================
 */
-qboolean SV_SendClientDatagram (client_t *client)
+static qboolean SV_SendClientDatagram (client_t *client)
 {
 //	qboolean	temp;
 	byte		msg_buf[MAX_MSGLEN];
@@ -554,28 +556,6 @@ qboolean SV_SendClientDatagram (client_t *client)
 			}
 		}
 
-		if (client->zlevel && msg.cursize > client->zlevel)
-		{
-			byte message[4096], buffer[4096], *p;
-			int compressedLen;
-
-			p = message;
-			*p = svc_zpacket;
-			p++;
-			compressedLen = ZLibCompressChunk (msg.data, msg.cursize, buffer, sizeof(buffer), 9, -15);
-		
-			*(short *)p = compressedLen;
-			p += sizeof(short);
-
-			*(short *)p = msg.cursize;
-			p += sizeof(short);
-
-			memcpy (p, buffer, compressedLen);
-			p += compressedLen;
-			SZ_Clear (&msg);
-			SZ_Write (&msg, message, p - message);
-		}
-
 		// send the datagram
 		ret = Netchan_Transmit (&client->netchan, msg.cursize, msg.data);
 		if (ret == -1)
@@ -622,7 +602,7 @@ Returns true if the client is over its current
 bandwidth estimation and should not be sent another packet
 =======================
 */
-qboolean SV_RateDrop (client_t *c)
+static qboolean SV_RateDrop (client_t *c)
 {
 	int		total;
 	int		i;
@@ -732,7 +712,7 @@ void SV_SendClientMessages (void)
 					*p = svc_zpacket;
 					p++;
 					compressedLen = ZLibCompressChunk (c->netchan.message.data, c->netchan.message.cursize, buffer, sizeof(buffer), Z_DEFAULT_COMPRESSION, -15);
-					if (compressedLen > MAX_USABLEMSG || !compressedLen)
+					if (compressedLen +5 > MAX_USABLEMSG || !compressedLen)
 					{
 						//r1: stop overflow spam from unconnected clients
 						if (*c->name)

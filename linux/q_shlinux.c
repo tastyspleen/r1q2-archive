@@ -18,13 +18,19 @@ byte *membase;
 int maxhunksize;
 int curhunksize;
 
+#ifdef __FreeBSD__
+#define MMAP_ANON MAP_ANON
+#else
+#define MMAP_ANON MAP_ANONYMOUS
+#endif
+
 void *Hunk_Begin (int maxsize)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
 	maxhunksize = maxsize + sizeof(int);
 	curhunksize = 0;
 	membase = mmap(0, maxhunksize, PROT_READ|PROT_WRITE, 
-		MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+		MAP_PRIVATE|MMAP_ANON, -1, 0);
 	if (membase == NULL || membase == (byte *)-1)
 		Sys_Error("unable to virtual allocate %d bytes", maxsize);
 
@@ -48,12 +54,14 @@ void *Hunk_Alloc (int size)
 
 int Hunk_End (void)
 {
+#ifndef __FreeBSD__
 	byte *n;
 
 	n = mremap(membase, maxhunksize, curhunksize + sizeof(int), 0);
 	if (n != membase)
 		Sys_Error("Hunk_End:  Could not remap virtual block (%d)", errno);
 	*((int *)membase) = curhunksize + sizeof(int);
+#endif
 	
 	return curhunksize;
 }

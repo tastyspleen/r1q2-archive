@@ -906,7 +906,7 @@ void CM_BoxLeafnums_r (int nodenum)
 	}
 }
 
-int	CM_BoxLeafnums_headnode (vec3_t mins, vec3_t maxs, int *list, int listsize, int headnode, int *topnode)
+int	CM_BoxLeafnums_headnode (vec3_t mins, vec3_t maxs, int *list, int listsize, int headnode, int /*@null@*/*topnode)
 {
 	leaf_list = list;
 	leaf_count = 0;
@@ -924,7 +924,7 @@ int	CM_BoxLeafnums_headnode (vec3_t mins, vec3_t maxs, int *list, int listsize, 
 	return leaf_count;
 }
 
-int	CM_BoxLeafnums (vec3_t mins, vec3_t maxs, int *list, int listsize, int *topnode)
+int	CM_BoxLeafnums (vec3_t mins, vec3_t maxs, int *list, int listsize, int /*@null@*/*topnode)
 {
 	return CM_BoxLeafnums_headnode (mins, maxs, list,
 		listsize, map_cmodels[0].headnode, topnode);
@@ -1475,9 +1475,9 @@ Handles offseting and rotation of the end points for moving and
 rotating entities
 ==================
 */
-#ifdef _WIN32
-#pragma optimize( "", off )
-#endif
+//#ifdef _WIN32
+//#pragma optimize( "", off )
+//#endif
 
 
 trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
@@ -1540,10 +1540,9 @@ trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
 	return trace;
 }
 
-#ifdef _WIN32
-#pragma optimize( "", on )
-#endif
-
+//#ifdef _WIN32
+//#pragma optimize( "", on )
+//#endif
 
 
 /*

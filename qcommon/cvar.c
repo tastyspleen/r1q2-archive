@@ -510,7 +510,7 @@ Cvar_List_f
 
 ============
 */
-static int __cdecl cvarsort( const void *_a, const void *_b )
+static int EXPORT cvarsort( const void *_a, const void *_b )
 {
 	const cvar_t	*a = (const cvar_t *)_a;
 	const cvar_t	*b = (const cvar_t *)_b;
@@ -539,7 +539,7 @@ void Cvar_List_f (void)
 		sortedList[i] = *var;
 	}
 
-	qsort (sortedList, num, sizeof(sortedList[0]), (int (__cdecl *)(const void *, const void *))cvarsort);
+	qsort (sortedList, num, sizeof(sortedList[0]), (int (EXPORT *)(const void *, const void *))cvarsort);
 
 	for (j = 0; j < num; j++)
 	{

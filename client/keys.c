@@ -45,7 +45,7 @@ qboolean	keydown[256];
 
 typedef struct
 {
-	char	*name;
+	char	/*@null@*/ *name;
 	int		keynum;
 } keyname_t;
 

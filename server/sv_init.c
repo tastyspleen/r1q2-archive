@@ -35,7 +35,7 @@ SV_FindIndex
 
 ================
 */
-int SV_FindIndex (char *name, int start, int max, qboolean create)
+int SV_FindIndex (char *name, int start, int maxIndex, qboolean create)
 {
 	int		i;
 	
@@ -47,16 +47,18 @@ int SV_FindIndex (char *name, int start, int max, qboolean create)
 		return 0;
 	}
 
-	for (i=1 ; i<max && sv.configstrings[start+i][0] ; i++)
+	for (i=1 ; i<maxIndex && sv.configstrings[start+i][0] ; i++)
+	{
 		if (!strcmp(sv.configstrings[start+i], name)) {
 			return i;
 		}
+	}
 
 	if (!create)
 		return 0;
 
-	if (i == max) {
-		Com_Printf ("ERROR: Ran out of configstrings while attempting to add '%s' (%d,%d)\n", name, start, max);
+	if (i == maxIndex) {
+		Com_Printf ("ERROR: Ran out of configstrings while attempting to add '%s' (%d,%d)\n", name, start, maxIndex);
 		Com_Printf ("Dumping configstrings in use to 'configstrings.txt'...");
 		{
 			FILE *cs;
@@ -212,8 +214,10 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	// wipe the entire per-level structure
 	memset (&sv, 0, sizeof(sv));
 
+	//FIXME: this breaks a bunch of things
 	if (sv_randomframe->value)
 		sv.framenum = random() * 0x00FFFFFF;
+
 	svs.realtime = 0;
 	sv.loadgame = loadgame;
 	sv.attractloop = attractloop;
@@ -376,6 +380,10 @@ void SV_InitGame (void)
 	svs.clients = Z_TagMalloc (sizeof(client_t)*maxclients->value, TAGMALLOC_CLIENTS);
 	svs.num_client_entities = maxclients->value*UPDATE_BACKUP*64;
 	svs.client_entities = Z_TagMalloc (sizeof(entity_state_t)*svs.num_client_entities, TAGMALLOC_CL_ENTS);
+
+	// r1: spam warning for those stupid servers that run 250 maxclients and 32 player slots
+	if (maxclients->value > 64)
+		Com_Printf ("WARNING: Setting maxclients higher than the maximum number of players you intend to have playing can negatively affect server performance and bandwidth use.\n");
 
 	// init network stuff
 	if (maxclients->value > 1)

@@ -123,7 +123,7 @@ void seedMT(uint32 seed)
  }
 
 
-uint32 reloadMT(void)
+static uint32 reloadMT(void)
  {
     register uint32 *p0=state, *p2=state+2, *pM=state+M, s0, s1;
     register int    j;

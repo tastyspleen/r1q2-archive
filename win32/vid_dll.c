@@ -826,7 +826,10 @@ void VID_ReloadRefresh (void)
 	attempted[0] = 0;
 
 	cl.force_refdef = true;		// can't use a paused refdef
-	S_StopAllSounds();
+
+	//not needed with openal
+	if (!openal_active)
+		S_StopAllSounds();
 
 	//MessageBox (cl_hwnd, "video restarts!", "what", MB_OK);
 

@@ -20,7 +20,9 @@ BUILD_GLX=YES		# X11 GLX driver. Works somewhat ok.
 OSTYPE := $(shell uname -s)
 
 ifneq ($(OSTYPE),Linux)
+ifneq ($(OSTYPE),FreeBSD)
 $(error OS $(OSTYPE) is currently not supported)
+endif
 endif
 
 # this nice line comes from the linux kernel makefile
@@ -83,7 +85,11 @@ BASE_CFLAGS=-Dstricmp=strcasecmp
 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g -Wall
 
+ifeq ($(OSTYPE),FreeBSD)
+LDFLAGS=-lm -lz
+else
 LDFLAGS=-lm -ldl -lz
+endif
 
 SVGALDFLAGS=-lvga
 

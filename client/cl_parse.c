@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-char *svc_strings[256] =
+char *svc_strings[] =
 {
 	"svc_bad",
 
@@ -45,7 +45,8 @@ char *svc_strings[256] =
 	"svc_playerinfo",
 	"svc_packetentities",
 	"svc_deltapacketentities",
-	"svc_frame"
+	"svc_frame",
+	"svc_zpacket"
 };
 
 typedef struct dlqueue_s
@@ -602,7 +603,6 @@ CL_ParseServerData
 */
 void CL_ParseServerData (void)
 {
-	extern cvar_t	*fs_gamedirvar;
 	char	*str;
 	int		i;
 	
@@ -1098,7 +1098,7 @@ void CL_ParseServerMessage (void)
 
 		if (cl_shownet->value>=2)
 		{
-			if (!svc_strings[cmd])
+			if (cmd >= svc_max_enttypes)
 				Com_Printf ("%3i:BAD CMD %i\n", net_message.readcount-1,cmd);
 			else
 				SHOWNET(svc_strings[cmd]);
@@ -1165,8 +1165,10 @@ void CL_ParseServerMessage (void)
 			Com_DPrintf ("stufftext: %s\n", s);
 			Cbuf_AddText (s);
 
-			//strcpy (s, StripHighBits (s, 2));
-			//Com_Printf ("stuff: %s\n", s);
+#ifdef _DEBUG
+			strcpy (s, StripHighBits (s, 2));
+			Com_Printf ("stuff: %s\n", s);
+#endif
 			break;
 			
 		case svc_serverdata:
@@ -1215,11 +1217,11 @@ void CL_ParseServerMessage (void)
 			strncpy (cl.layout, s, sizeof(cl.layout)-1);
 			break;
 
-		//************** r1q2 specific BEGIN ****************
+		// ************** r1q2 specific BEGIN ****************
 		case svc_zpacket:
 			CL_ParseZPacket();
 			break;
-		//************** r1q2 specific END ******************
+		// ************** r1q2 specific END ******************
 
 		case svc_playerinfo:
 		case svc_packetentities:

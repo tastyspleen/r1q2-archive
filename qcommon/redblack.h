@@ -1,5 +1,5 @@
 /*
- * RCS $Id: redblack.h,v 1.1 2004/10/14 09:00:04 r1ch Exp $
+ * RCS $Id: redblack.h,v 1.2 2004/11/12 00:19:43 r1ch Exp $
  */
 
 /*
@@ -40,7 +40,7 @@
  * content type is not a pointer, define INLINE to get direct access.
  */
 #define rbdata_t	void
-#define RB_CMP(s, t, e)	(*rbinfo->rb_cmp)(s, t, e)
+#define RB_CMP(s, t)	(*rbinfo->rb_cmp)(s, t)
 #undef RB_INLINE
 #define RB_ENTRY(name)	rb##name
 #endif /* RB_CUSTOMIZE */
@@ -81,17 +81,14 @@ const struct RB_ENTRY(node) *nextp;
 struct RB_ENTRY(tree) {
 #ifndef RB_CUSTOMIZE
 		/* comparison routine */
-int (*rb_cmp)(const void *, const void *, const void *);
-		/* config data to be passed to rb_cmp */
-const void *rb_config;
+int (*rb_cmp)(const void *, const void *);
 		/* root of tree */
 #endif /* RB_CUSTOMIZE */
 struct RB_ENTRY(node) *rb_root;
 };
 
 #ifndef RB_CUSTOMIZE
-RB_STATIC struct RB_ENTRY(tree) *rbinit(int (*)(const void *, const void *, const void *),
-		 const void *);
+RB_STATIC struct RB_ENTRY(tree) *rbinit(int (*)(const void *, const void *));
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void);
 #endif /* RB_CUSTOMIZE */
@@ -138,6 +135,9 @@ RB_STATIC void RB_ENTRY(closelist)(RBLIST *);
 /*
  *
  * $Log: redblack.h,v $
+ * Revision 1.2  2004/11/12 00:19:43  r1ch
+ * b1619
+ *
  * Revision 1.1  2004/10/14 09:00:04  r1ch
  * redblack binary search
  *

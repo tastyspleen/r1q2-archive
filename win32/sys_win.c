@@ -107,9 +107,7 @@ void Sys_Error (char *error, ...)
 
 #ifndef DEDICATED_ONLY
 	DestroyWindow (cl_hwnd);
-#ifdef _DEBUG
 	if (dbg_unload->value)
-#endif
 		CL_Shutdown ();
 #endif
 
@@ -1003,6 +1001,18 @@ void QuakeMain (void)
 }
 #endif
 
+void FixWorkingDirectory (void)
+{
+	char *p;
+	char curDir[MAX_OSPATH];
+
+	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
+	p = strrchr (curDir, '\\');
+	*p = 0;
+
+	SetCurrentDirectory (curDir);
+}
+
 /*
 ==================
 WinMain
@@ -1021,9 +1031,6 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	int				time, oldtime, newtime;
 #endif
 
-	char curDir[MAX_OSPATH];
-	char *p;
-
     /* previous instances do not exist in Win32 */
     if (hPrevInstance)
         return 0;
@@ -1036,15 +1043,13 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	ParseCommandLine (lpCmdLine);
 
 	//r1ch: always change to our directory (ugh)
-	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
-	p = strrchr (curDir, '\\');
-	*p = 0;
-
-	SetCurrentDirectory (curDir);
+	FixWorkingDirectory ();
 
 	//hInstace is empty when we are back here with service code
-	if (hInstance && argc > 1) {
-		if (!strcmp(argv[1], "-service")) {
+	if (hInstance && argc > 1)
+	{
+		if (!strcmp(argv[1], "-service"))
+		{
 			global_Service = true;
 			return main ();
 		}

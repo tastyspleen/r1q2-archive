@@ -361,8 +361,13 @@ extern	cvar_t	*cl_vwep;
 extern	cvar_t	*cl_defertimer;
 
 extern	cvar_t	*scr_sizegraph;
+extern	cvar_t	*fs_gamedirvar;
 
+extern	cvar_t	*cl_strafejump_hack;
+extern	cvar_t	*cl_nolerp;
 //extern	cvar_t	*cl_snaps;
+
+extern int openal_active;
 
 #ifndef DEDICATED_ONLY
 extern	qboolean send_packet_now;
@@ -595,7 +600,7 @@ void CL_Record_f (void);
 //
 // cl_parse.c
 //
-extern	char *svc_strings[256];
+extern	char *svc_strings[];
 
 void CL_ParseServerMessage (void);
 void CL_LoadClientinfo (clientinfo_t *ci, char *s);

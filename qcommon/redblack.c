@@ -1,4 +1,4 @@
-//static char rcsid[]="$Id: redblack.c,v 1.1 2004/10/14 09:00:04 r1ch Exp $";
+//static char rcsid[]="$Id: redblack.c,v 1.5 2004/11/12 00:19:43 r1ch Exp $";
 
 /*
    Redblack balanced tree algorithm
@@ -18,7 +18,10 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
+/*
+	Mercilessly hacked by R1CH to turn into a binary search for R1Q2.
+	Oct.04
+*/
 /* Implement the red/black tree structure. It is designed to emulate
 ** the standard tsearch() stuff. i.e. the calling conventions are
 ** exactly the same
@@ -27,10 +30,10 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <unistd.h>
-#include "redblack.h"
 
-#define assert(expr)
+#include "qcommon.h"
+
+#include "redblack.h"
 
 /* Uncomment this if you would rather use a raw sbrk to get memory
 ** (however the memory is never released again (only re-used). Can't
@@ -65,7 +68,15 @@ struct RB_ENTRY(node)
 ** Initialization of the last field in this initializer is left implicit
 ** because it could be of any type.  We count on the compiler to zero it.
 */
-struct RB_ENTRY(node) RB_ENTRY(_null)={&RB_ENTRY(_null), &RB_ENTRY(_null), &RB_ENTRY(_null), BLACK};
+static struct RB_ENTRY(node) RB_ENTRY(_null)={
+	&RB_ENTRY(_null),
+	&RB_ENTRY(_null),
+	&RB_ENTRY(_null),
+	BLACK,
+	NULL,
+	NULL
+};
+
 #define RBNULL (&RB_ENTRY(_null))
 
 #if defined(USE_SBRK)
@@ -75,7 +86,7 @@ static void RB_ENTRY(_free)(struct RB_ENTRY(node) *);
 
 #else
 
-static struct RB_ENTRY(node) *RB_ENTRY(_alloc)() {return (struct RB_ENTRY(node) *) malloc(sizeof(struct RB_ENTRY(node)));}
+static struct RB_ENTRY(node) /*@null@*/ *RB_ENTRY(_alloc)() {return (struct RB_ENTRY(node) *) malloc(sizeof(struct RB_ENTRY(node)));}
 static void RB_ENTRY(_free)(struct RB_ENTRY(node) *x) {free(x);}
 
 #endif
@@ -89,7 +100,7 @@ static struct RB_ENTRY(node) *RB_ENTRY(_traverse)(int, const RB_ENTRY(data_t) *,
 
 /* These functions may not be needed */
 #ifndef no_lookup
-static struct RB_ENTRY(node) *RB_ENTRY(_lookup)(int, const RB_ENTRY(data_t) * , struct RB_ENTRY(tree) *);
+static struct RB_ENTRY(node) /*@null@*/*RB_ENTRY(_lookup)(int, const RB_ENTRY(data_t) * , struct RB_ENTRY(tree) *);
 #endif
 
 #ifndef no_destroy
@@ -134,24 +145,21 @@ static void RB_ENTRY(_closelist)(RBLIST *);
  * data that must be sent to it when called.
  * Returns a pointer to the top of the tree.
  */
+
 #ifndef RB_CUSTOMIZE
 RB_STATIC struct RB_ENTRY(tree) *
-rbinit(int (*cmp)(const void *, const void *, const void *), const void *config)
+rbinit(int (*cmp)(const void *, const void *))
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void)
 #endif /* RB_CUSTOMIZE */
 {
 	struct RB_ENTRY(tree) *retval;
-	//char c;
-
-	//c=rcsid[0]; /* This does nothing but shutup the -Wall */
 
 	if ((retval=(struct RB_ENTRY(tree) *) malloc(sizeof(struct RB_ENTRY(tree))))==NULL)
 		return(NULL);
 	
 #ifndef RB_CUSTOMIZE
 	retval->rb_cmp=cmp;
-	retval->rb_config=config;
 #endif /* RB_CUSTOMIZE */
 	retval->rb_root=RBNULL;
 
@@ -211,7 +219,7 @@ RB_STATIC const RB_ENTRY(data_t) *
 RB_ENTRY(delete)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 {
 	struct RB_ENTRY(node) *x;
-	const RB_ENTRY(data_t) * y;
+	RB_ENTRY(data_t) * y;
 
 	if (rbinfo==NULL)
 		return(NULL);
@@ -224,11 +232,10 @@ RB_ENTRY(delete)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 	}
 	else
 	{
-		y=RB_GET(x, key);
-		free (x->key);
+		y = x->key;
 		RB_ENTRY(_delete)(&rbinfo->rb_root, x);
-
-		return(y);
+		free (y);
+		return(NULL);
 	}
 }
 #endif /* no_delete */
@@ -300,7 +307,7 @@ RB_ENTRY(_traverse)(int insert, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tre
 	struct RB_ENTRY(node) *x,*y,*z;
 	int cmp;
 	int found=0;
-	int cmpmods();
+	//int cmpmods();
 
 	y=RBNULL; /* points to the parent of x */
 	x=rbinfo->rb_root;
@@ -311,7 +318,7 @@ RB_ENTRY(_traverse)(int insert, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tre
 		y=x;
 		/* printf("key=%s, RB_GET(x, key)=%s\n", key, RB_GET(x, key)); */
 #ifndef RB_CUSTOMIZE
-		cmp=RB_CMP(key, RB_GET(x, key), rbinfo->rb_config);
+		cmp=RB_CMP(key, RB_GET(x, key));
 #else
 		cmp=RB_CMP(key, RB_GET(x, key));
 #endif /* RB_CUSTOMIZE */
@@ -344,7 +351,7 @@ RB_ENTRY(_traverse)(int insert, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tre
 	else
 	{
 #ifndef RB_CUSTOMIZE
-		cmp=RB_CMP(RB_GET(z, key), RB_GET(y, key), rbinfo->rb_config);
+		cmp=RB_CMP(RB_GET(z, key), RB_GET(y, key));
 #else
 		cmp=RB_CMP(RB_GET(z, key), RB_GET(y, key));
 #endif /* RB_CUSTOMIZE */
@@ -485,7 +492,7 @@ RB_ENTRY(_lookup)(int mode, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *
 		y=x;
 		/* printf("key=%s, RB_GET(x, key)=%s\n", key, RB_GET(x, key)); */
 #ifndef RB_CUSTOMIZE
-		cmp=RB_CMP(key, RB_GET(x, key), rbinfo->rb_config);
+		cmp=RB_CMP(key, RB_GET(x, key));
 #else
 		cmp=RB_CMP(key, RB_GET(x, key));
 #endif /* RB_CUSTOMIZE */
@@ -570,9 +577,6 @@ RB_ENTRY(_left_rotate)(struct RB_ENTRY(node) **rootp, struct RB_ENTRY(node) *x)
 {
 	struct RB_ENTRY(node) *y;
 
-	assert(x!=RBNULL);
-	assert(x->right!=RBNULL);
-
 	y=x->right; /* set Y */
 
 	/* Turn Y's left subtree into X's right subtree (move B)*/
@@ -614,9 +618,6 @@ static void
 RB_ENTRY(_right_rotate)(struct RB_ENTRY(node) **rootp, struct RB_ENTRY(node) *y)
 {
 	struct RB_ENTRY(node) *x;
-
-	assert(y!=RBNULL);
-	assert(y->left!=RBNULL);
 
 	x=y->left; /* set X */
 
@@ -1092,6 +1093,18 @@ RB_ENTRY(dumptree)(struct RB_ENTRY(node) *x, int n)
 
 /*
  * $Log: redblack.c,v $
+ * Revision 1.5  2004/11/12 00:19:43  r1ch
+ * b1619
+ *
+ * Revision 1.4  2004/10/29 19:35:24  r1ch
+ * rb
+ *
+ * Revision 1.3  2004/10/29 18:50:33  r1ch
+ * freebsd fixes
+ *
+ * Revision 1.2  2004/10/28 22:56:08  r1ch
+ * stuff
+ *
  * Revision 1.1  2004/10/14 09:00:04  r1ch
  * redblack binary search
  *

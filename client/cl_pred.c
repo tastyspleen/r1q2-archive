@@ -268,6 +268,8 @@ void CL_PredictMovement (void)
 		else
 			pm.multiplier = 1;
 
+		pm.strafehack = (qboolean)cl_strafejump_hack->value;
+
 		Pmove (&pm);
 
 		// save for debug checking

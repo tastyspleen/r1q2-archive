@@ -40,7 +40,7 @@ typedef struct areanode_s
 {
 	int		axis;		// -1 = leaf node
 	float	dist;
-	struct areanode_s	*children[2];
+	struct	areanode_s *children[2];
 	link_t	trigger_edicts;
 	link_t	solid_edicts;
 } areanode_t;
@@ -169,6 +169,7 @@ SV_LinkEdict
 ===============
 */
 #define MAX_TOTAL_ENT_LEAFS		128
+
 void EXPORT SV_LinkEdict (edict_t *ent)
 {
 	areanode_t	*node;
