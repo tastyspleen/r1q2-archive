@@ -165,7 +165,7 @@ void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t adr, int protocol, 
 	chan->remote_address = adr;
 	if (protocol == ENHANCED_PROTOCOL_VERSION)
 	{
-		SZ_Init (&chan->message, chan->message_buf, MAX_MSGLEN);
+		SZ_Init (&chan->message, chan->message_buf, MAX_USABLEMSG);
 		chan->message.buffsize = sizeof(chan->message_buf);
 	}
 	else

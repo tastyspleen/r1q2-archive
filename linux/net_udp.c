@@ -321,8 +321,6 @@ int NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
 	ret = sendto (net_socket, data, length, 0, (struct sockaddr *)&addr, sizeof(addr) );
 	if (ret == -1)
 	{
-		/*if (errno == ECONNREFUSED)
-			return -1;*/
 		Com_Printf ("NET_SendPacket to %s: ERROR: %s\n", NET_AdrToString(to), NET_ErrorString());
 		return 0;
 	}

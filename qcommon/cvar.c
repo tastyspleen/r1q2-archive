@@ -469,7 +469,7 @@ void Cvar_Set_f (void)
 			flags = CVAR_SERVERINFO;
 		else
 		{
-			Com_Printf ("flags can only be 'u' or 's' ('%s' given), Cmd_Argv(3)\n");
+			Com_Printf ("flags can only be 'u' or 's' ('%s' given)\n", Cmd_Argv(3));
 			return;
 		}
 		Cvar_FullSet (Cmd_Argv(1), Cmd_Argv(2), flags);
@@ -477,7 +477,6 @@ void Cvar_Set_f (void)
 	else
 		Cvar_Set (Cmd_Argv(1), Cmd_Argv(2));
 }
-
 
 /*
 ============

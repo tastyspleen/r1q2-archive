@@ -2677,7 +2677,7 @@ void CL_Frame (int msec)
 			if (cls.spamTime && cls.spamTime < cls.realtime)
 			{
 				char buff[256];
-				Com_sprintf (buff, sizeof(buff), "say \"R1Q2 %s %s %s %s [http://www.r1ch.net/]\"\n", VERSION,
+				Com_sprintf (buff, sizeof(buff), "say \"R1Q2 %s %s %s %s [http://r1ch.net/r1q2]\"\n", VERSION,
 					__TIMESTAMP__, CPUSTRING, BUILDSTRING
 				);
 				Cbuf_AddText (buff);

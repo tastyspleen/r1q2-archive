@@ -1790,7 +1790,7 @@ void SV_Init (void)
 	sv_recycle = Cvar_Get ("sv_recycle", "0", 0);
 
 	//r1: track server uptime in serverinfo?
-	sv_uptime = Cvar_Get ("sv_uptime", "1", 0);
+	sv_uptime = Cvar_Get ("sv_uptime", "0", 0);
 
 	//r1: init pyroadmin
 	if (pyroadminport->value) {

@@ -851,7 +851,10 @@ void VID_ReloadRefresh (void)
 			strcat (attempted, ")");
 
 			if ( strcmp (vid_ref->string, "soft") == 0 )
-				Com_Error (ERR_FATAL, "No video output available!\n\nThe following DLLs failed to load:\n\n%s", attempted);
+				Com_Error (ERR_FATAL, 	"No video output available!\n\n"
+										"The following DLLs failed to load:\n\n"
+										"%s",
+										attempted);
 			Cvar_Set( "vid_ref", "soft" );
 
 			/*
