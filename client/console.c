@@ -693,6 +693,7 @@ void Con_DrawConsole (float frac)
 
 	t = time (NULL);
 	today = localtime(&t);
+
 	i = strftime (version, sizeof(version), "%H:%M:%S", today);
 	for (x=0 ; x<i ; x++)
 		re.DrawChar (viddef.width-66+x*8, lines-22-offset, 128 + version[x] );

@@ -127,7 +127,10 @@ typedef enum {false, true}	qboolean;
 #define YOU_HAVE_A_BROKEN_COMPUTER 0
 
 //#define random()	(randomMT() / ((float)0xFFFFFFFFU))
-#define	random()	((randomMT() * 0.00000000023283064365386962890625f))
+
+//32 bit float precision caps this to 0.00000000023283064f which gives max result of .99999998407391880
+#define	random()	((randomMT() * 0.00000000023283064f))
+
 
 #define	frand()		(random())
 #define	crand()		(((int)randomMT() - 0x7FFFFFFF) * 0.000000000465661287307739257812f)

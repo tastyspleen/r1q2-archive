@@ -690,7 +690,6 @@ int NET_Connect (netadr_t *to, int port);
 #define NET_CompareBaseAdr(a,b) \
 	(*(int *)(a)->ip == *(int *)(b)->ip)
 
-unsigned short NET_PortToHost (netadr_t *a);
 char		*NET_AdrToString (netadr_t *a);
 qboolean	NET_StringToAdr (char *s, netadr_t *a);
 #ifndef NO_SERVER
@@ -1066,7 +1065,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL);
 // loads the game dll and calls the api init function
 
 char	*Sys_ConsoleInput (void);
-void	Sys_ConsoleOutput (char *string);
+void	Sys_ConsoleOutput (const char *string);
 #endif
 void	Sys_SendKeyEvents (void);
 void	Sys_Error (char *error, ...);

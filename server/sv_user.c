@@ -29,6 +29,8 @@ cvar_t	*sv_downloadwait;
 char	svConnectStuffString[1100] = {0};
 char	svBeginStuffString[1100] = {0};
 
+int		stringCmdCount;
+
 /*
 ============================================================
 
@@ -149,8 +151,8 @@ plainStrings:
 		int			result;
 		z_stream	z;
 		sizebuf_t	zBuff;
-		byte		tempConfigStringPacket[MAX_USABLEMSG];
-		byte		compressedStringStream[MAX_USABLEMSG];
+		byte		tempConfigStringPacket[MAX_USABLEMSG-5];
+		byte		compressedStringStream[MAX_USABLEMSG-5];
 
 		while (start < MAX_CONFIGSTRINGS)
 		{
@@ -1557,6 +1559,8 @@ static void SV_CvarResult_f (void)
 	if (match)
 		CvarBanDrop (Cmd_Argv(1), match, result);
 
+	stringCmdCount--;
+
 	/*if (strcmp (Cmd_Argv(1), "version"))
 	{
 		Com_Printf ("Dropping %s for bad cvar check result ('%s' unrequested).\n", LOG_SERVER|LOG_DROP, sv_client->name, Cmd_Argv(1));
@@ -1847,16 +1851,13 @@ The current net_message is parsed for the given client
 */
 void SV_ExecuteClientMessage (client_t *cl)
 {
-	int		c;
-	char	*s;
+	int			c;
+	char		*s;
 	usercmd_t	oldest, oldcmd, newcmd;
-	int		net_drop;
-	int		stringCmdCount;
-	int		userinfoCount;
-	//int		checksum, calculatedChecksum;
-	//int		checksumIndex;
+	int			net_drop;
+	int			userinfoCount;
 	qboolean	move_issued;
-	int		lastframe;
+	int			lastframe;
 
 	sv_client = cl;
 	sv_player = sv_client->edict;

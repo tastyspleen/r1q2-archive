@@ -795,7 +795,7 @@ char *Sys_ConsoleInput (void)
 	}
 }
 
-void Sys_ConsoleOutputOld (char *string)
+void Sys_ConsoleOutputOld (const char *string)
 {
 	int		dummy;
 	char	text[256];
@@ -822,10 +822,11 @@ Sys_ConsoleOutput
 Print text to the dedicated console
 ================
 */
-void Sys_ConsoleOutput (char *string)
+void Sys_ConsoleOutput (const char *string)
 {
 	char text[2048];
-	char *p, *s;
+	const char *p;
+	char *s;
 	//int n = 0;
 
 	if (!dedicated->intvalue)
@@ -862,7 +863,11 @@ void Sys_ConsoleOutput (char *string)
 			*s++ = '\r';
 			//console_lines++;
 		}
-		*s++ = *p++;
+
+		//r1: strip high bits here
+		*s = (*p) & 127;
+		s++;
+		p++;
 		if ((s - text) >= sizeof(text)-2) {
 			*s++ = '\n';
 		}

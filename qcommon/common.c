@@ -1604,32 +1604,35 @@ void EXPORT Z_FreeDebug (void *ptr)
 
 	z = ((zhead_t *)ptr) - 1;
 
-	Z_Verify (va ("Z_FreeDebug: START FREE FROM %s OF 0x%.8p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", ptr));
+	Z_Verify (va ("Z_FreeDebug: START FREE FROM %s OF %.8p (%d bytes tagged %d (%s))", free_from_game ? "GAME" : "EXECUTABLE", ptr, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", ptr));
 
+	//magic test
 	if (z->magic != Z_MAGIC && z->magic != Z_MAGIC_DEBUG)
-		Com_Error (ERR_DIE, "Z_Free: bad magic freeing 0x%.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
+		Com_Error (ERR_DIE, "Z_Free: bad magic freeing %.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
 
-	if (z->magic == Z_MAGIC_DEBUG && (*(byte **)&z)[z->size-1] != 0xCC)
-		Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %s) from %s at 0x%.8p", z->size, tagmalloc_tags[z->tag].name, free_from_game ? "GAME" : "EXECUTABLE", z);
-
+	//size sanity test
 	if (z->size <= 0 || z->size > 0x40000000)
-		Com_Error (ERR_DIE, "Z_Free: invalid block size %d (tagged as %s) from %s at 0x%.8p", z->size, tagmalloc_tags[z->tag].name, free_from_game ? "GAME" : "EXECUTABLE", z);
+		Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+
+	//we could segfault here if size is invalid :(
+	if (z->magic == Z_MAGIC_DEBUG && (*(byte **)&z)[z->size-1] != 0xCC)
+		Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
 
 	z->prev->next = z->next;
 	z->next->prev = z->prev;
 
 	if (z->next->magic != Z_MAGIC && z->next->magic != Z_MAGIC_DEBUG)
-		Com_Error (ERR_DIE, "Z_Free: memory corruption detected after free of block at 0x%.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
+		Com_Error (ERR_DIE, "Z_Free: memory corruption detected after free of block at %.8p from %s", z, free_from_game ? "GAME" : "EXECUTABLE");
 
 	z_count--;
 	z_bytes -= z->size;
 
 	if (z_count < 0 || z_bytes < 0)
-		Com_Error (ERR_DIE, "Z_Free: counters are screwed after free of %d bytes at 0x%.8p tagged %d (%s) from %s", z->size, z, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE");
+		Com_Error (ERR_DIE, "Z_Free: counters are screwed after free of %d bytes at %.8p tagged %d (%s) from %s", z->size, z, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE");
 
 	free (z);
 
-	Z_Verify (va ("Z_FreeDebug: END FREE OF 0x%.8p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE"));
+	Z_Verify (va ("Z_FreeDebug: END FREE OF %.8p FROM %s", ptr, free_from_game ? "GAME" : "EXECUTABLE"));
 }
 
 /*
@@ -1728,17 +1731,22 @@ void Z_Verify (const char *entry)
 		{
 			if (z->magic == Z_MAGIC_DEBUG)
 			{
+				//size sanity test
+				if (z->size <= 0 || z->size > 0x40000000)
+					Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
+
+				//we could segfault here if size is invalid :(
 				if ((*(byte **)&z)[z->size-1] != 0xCC)
-					Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %s) at 0x%.8p", z->size, tagmalloc_tags[z->tag].name, z);
+					Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %.8p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", entry, z);
 			}
 			else
 			{
-				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected at '%s' in block %.8p", entry, z);
+				Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %.8p", entry, (void *)(z+1));
 			}
 		}
 
 		if (i++ > z_count * 2)
-			Com_Error (ERR_DIE, "Z_Verify: memory chain state corrupted at '%s'", entry);
+			Com_Error (ERR_DIE, "Z_Verify: memory chain state corrupted during '%s'", entry);
 	}
 }
 
@@ -1868,7 +1876,7 @@ void EXPORT Z_FreeGame (void *buf)
 		last = loc;
 	}
 
-	Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at 0x%.8p", buf);
+	Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at %.8p", buf);
 }
 
 void EXPORT Z_FreeTagsGame (int tag)
@@ -2470,6 +2478,10 @@ void ExpandNewLines (char *string)
 {
 	char *q = string;
 	char *s = q;
+
+	if (!string[0])
+		return;
+
 	while (*(q+1))
 	{
 		if (*q == '\\' && *(q+1) == 'n')

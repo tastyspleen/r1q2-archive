@@ -150,11 +150,6 @@ void NetadrToSockadr (netadr_t *a, struct sockaddr_in *s)
 	}
 }
 
-unsigned short NET_PortToHost (netadr_t *a)
-{
-	return ntohs(a->port);
-}
-
 char	*NET_AdrToString (netadr_t *a)
 {
 	static	char	s[32];

@@ -839,7 +839,7 @@ void VID_ReloadRefresh (void)
 		vid_ref->modified = false;
 		vid_fullscreen->modified = true;
 		cl.refresh_prepped = false;
-		cls.disable_screen = true;
+		//cls.disable_screen = true;
 
 		//r1: nuke local entities
 		Le_Reset ();
@@ -882,7 +882,7 @@ void VID_ReloadRefresh (void)
 			IN_Restart_f ();
 		}
 		old_hwnd = cl_hwnd;
-		cls.disable_screen = false;
+		//cls.disable_screen = false;
 		Con_CheckResize();
 	}
 }

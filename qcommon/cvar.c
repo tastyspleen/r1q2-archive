@@ -616,15 +616,18 @@ void Cvar_WriteVariables (const char *path)
 	FILE	*f;
 
 	f = fopen (path, "a");
-	for (var = cvar_vars ; var ; var = var->next)
+	if (f)
 	{
-		if (var->flags & CVAR_ARCHIVE)
+		for (var = cvar_vars ; var ; var = var->next)
 		{
-			Com_sprintf (buffer, sizeof(buffer), "set %s \"%s\"\n", var->name, var->string);
-			fprintf (f, "%s", buffer);
+			if (var->flags & CVAR_ARCHIVE)
+			{
+				Com_sprintf (buffer, sizeof(buffer), "set %s \"%s\"\n", var->name, var->string);
+				fprintf (f, "%s", buffer);
+			}
 		}
+		fclose (f);
 	}
-	fclose (f);
 }
 
 /*

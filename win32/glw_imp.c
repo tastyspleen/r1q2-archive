@@ -1409,7 +1409,7 @@ void EXPORT GLimp_AppActivate( qboolean active )
 	}
 	else
 	{
-		if ( FLOAT_NE_ZERO(vid_fullscreen->value) )
+		if ( FLOAT_NE_ZERO(vid_fullscreen->value) && FLOAT_NE_ZERO (vid_restore_on_switch) )
 		{
 			ShowWindow( glw_state.hWnd, SW_MINIMIZE );
 			RestoreDesktopSettings();

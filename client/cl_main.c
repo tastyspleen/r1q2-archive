@@ -2481,9 +2481,9 @@ void _name_changed (cvar_t *var, char *oldValue, char *newValue)
 
 void _maxfps_changed (cvar_t *var, char *oldValue, char *newValue)
 {
-	if (var->intvalue < 10)
+	if (var->intvalue < 5)
 	{
-		Cvar_Set (var->name, "10");
+		Cvar_Set (var->name, "5");
 	}
 
 	if (cl_async->intvalue == 0)
@@ -3147,7 +3147,7 @@ void CL_Init (void)
 	M_Init ();
 	
 	SCR_Init ();
-	cls.disable_screen = true;	// don't draw yet
+	//cls.disable_screen = 0;	// don't draw yet
 
 #ifdef CD_AUDIO
 	CDAudio_Init ();
@@ -3179,7 +3179,7 @@ void CL_Shutdown(void)
 	
 	if (isdown)
 	{
-		printf ("recursive shutdown\n");
+		//printf ("recursive shutdown\n");
 		return;
 	}
 	isdown = true;

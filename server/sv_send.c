@@ -120,16 +120,10 @@ void EXPORT SV_BroadcastPrintf (int level, char *fmt, ...)
 	// echo to console
 	if (dedicated->intvalue)
 	{
-		char	copy[1024];
-		
-		// mask off high bits
-		for (i=0 ; i<sizeof(copy)-1 && string[i] ; i++)
-			copy[i] = string[i]&127;
-		copy[i] = 0;
 		if (level == PRINT_CHAT)
-			Com_Printf ("%s", LOG_SERVER|LOG_CHAT, copy);
+			Com_Printf ("%s", LOG_SERVER|LOG_CHAT, string);
 		else
-			Com_Printf ("%s", LOG_SERVER, copy);
+			Com_Printf ("%s", LOG_SERVER, string);
 	}
 
 	for (i=0, cl = svs.clients ; i<maxclients->intvalue; i++, cl++)

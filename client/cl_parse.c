@@ -488,6 +488,9 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		}
 	}
 
+	//r1: downloading something, drop to console to show status bar
+	SCR_EndLoadingPlaque();
+
 	//r1: if we're stuck with udp, may as well make best use of the bandwidth...
 	if (dataIsCompressed)
 	{

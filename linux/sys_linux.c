@@ -37,10 +37,25 @@ qboolean stdin_active = true;
 // General routines
 // =======================================================================
 #ifndef NO_SERVER
-void Sys_ConsoleOutput (char *string)
+void Sys_ConsoleOutput (const char *string)
 {
+	char	text[2048];
+	int		i;
+
 	if (nostdout && nostdout->intvalue)
 		return;
+
+	i = 0;
+
+	//strip high bits
+	while (string[i])
+	{
+		text[i] = string[i] & 127;
+		i++;
+		if (i == sizeof(text)-2)
+			break;
+	}
+	text[i] = 0;
 
 	fputs(string, stdout);
 }

@@ -182,7 +182,7 @@ void CMod_LoadSurfaces (lump_t *l)
 
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadSurfaces: funny lump size");
 	count = l->filelen / sizeof(*in);
 	if (count < 1)
 		Com_Error (ERR_DROP, "Map with no surfaces");
@@ -217,7 +217,7 @@ void CMod_LoadNodes (lump_t *l)
 	
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadNodes: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	if (count < 1)
@@ -255,7 +255,7 @@ void CMod_LoadBrushes (lump_t *l)
 	
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadBrushes: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	if (count > MAX_MAP_BRUSHES)
@@ -288,7 +288,7 @@ void CMod_LoadLeafs (lump_t *l)
 	
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadLeafs: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	if (count < 1)
@@ -345,7 +345,7 @@ void CMod_LoadPlanes (lump_t *l)
 	
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadPlanes: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	if (count < 1)
@@ -387,7 +387,7 @@ void CMod_LoadLeafBrushes (lump_t *l)
 	
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadLeafBrushes: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	if (count < 1)
@@ -418,7 +418,7 @@ void CMod_LoadBrushSides (lump_t *l)
 
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadBrushSides: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	// need to save space for box planes
@@ -455,7 +455,7 @@ void CMod_LoadAreas (lump_t *l)
 
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadAreas: funny lump size");
 	count = l->filelen / sizeof(*in);
 
 	if (count > MAX_MAP_AREAS)
@@ -487,7 +487,7 @@ void CMod_LoadAreaPortals (lump_t *l)
 
 	in = (void *)(cmod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
-		Com_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size");
+		Com_Error (ERR_DROP, "CMod_LoadAreaPortals: funny lump size");
 
 	count = l->filelen / sizeof(*in);
 
@@ -628,12 +628,17 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 		((int *)&header)[i] = LittleLong ( ((int *)&header)[i]);
 
 	if (header.version != BSPVERSION)
+	{
+		//r1: free
+		FS_FreeFile (buf);
 		Com_Error (ERR_DROP, "CMod_LoadBrushModel: %s has wrong version number (%i should be %i)"
 		, name, header.version, BSPVERSION);
+	}
 
 	cmod_base = (byte *)buf;
 
 	// load into heap
+	// FIXME: any of these functions can Com_Error, we need to free buf.
 	CMod_LoadSurfaces (&header.lumps[LUMP_TEXINFO]);
 	CMod_LoadLeafs (&header.lumps[LUMP_LEAFS]);
 	CMod_LoadLeafBrushes (&header.lumps[LUMP_LEAFBRUSHES]);
