@@ -854,18 +854,25 @@ void SVC_DirectConnect (void)
 		if (qport > 0xFF)
 			qport = 0;
 
-		msglen = atoi (Cmd_Argv(5));
-		if (msglen > MAX_USABLEMSG)
+		if (Cmd_Argv(5)[0])
 		{
-			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nInvalid maximum message length.\n");
-			Com_DPrintf ("    rejected msglen %u\n", msglen);
-			return;
+			msglen = atoi (Cmd_Argv(5));
+			if (msglen > MAX_USABLEMSG)
+			{
+				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nInvalid maximum message length.\n");
+				Com_DPrintf ("    rejected msglen %u\n", msglen);
+				return;
+			}
+
+			i = Cvar_IntValue ("net_maxmsglen");
+
+			if (msglen && msglen > i)
+				msglen = i;
 		}
-
-		i = Cvar_IntValue ("net_maxmsglen");
-
-		if (msglen > i)
-			msglen = i;
+		else
+		{
+			msglen = 1390;
+		}
 	}
 	else
 	{
@@ -2607,7 +2614,7 @@ void SV_Init (void)
 	sv_blackhole_mask = Cvar_Get ("sv_blackhole_mask", "32", 0);
 
 	//r1: what to do on unrequested cvars
-	sv_badcvarcheck = Cvar_Get ("sv_blackhole_badcvarcheck", "1", 0);
+	sv_badcvarcheck = Cvar_Get ("sv_badcvarcheck", "1", 0);
 
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN

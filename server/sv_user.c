@@ -1314,7 +1314,7 @@ static void CvarBanDrop (char *match, banmatch_t *ban, char *result)
 
 	Com_Printf ("Dropped client %s, cvarban: %s == %s\n", LOG_SERVER|LOG_DROP, sv_client->name, match, result);
 
-	SV_DropClient (sv_client, (ban->blockmethod != CVARBAN_BLACKHOLE));
+	SV_DropClient (sv_client, (ban->blockmethod == CVARBAN_BLACKHOLE) ? false : true);
 }
 
 banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result)
