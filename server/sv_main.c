@@ -1689,9 +1689,11 @@ void SV_UserinfoChanged (client_t *cl)
 	if (sv_filter_userinfo->value)
 		strncpy (cl->userinfo, StripHighBits(cl->userinfo, (int)sv_filter_userinfo->value == 2), sizeof(cl->userinfo)-1);
 
-	if (NameColorFilterCheck (Info_ValueForKey (cl->userinfo, "name")))
+	val = Info_ValueForKey (cl->userinfo, "name");
+
+	if (NameColorFilterCheck (val))
 	{
-		SV_ClientPrintf (cl, PRINT_HIGH, "Invalid name '%s'\n", Info_ValueForKey (cl->userinfo, "name"));
+		SV_ClientPrintf (cl, PRINT_HIGH, "Invalid name '%s'\n", val);
 		if (*cl->name)
 		{
 			MSG_BeginWriteByte (&cl->netchan.message, svc_stufftext);
@@ -1732,9 +1734,14 @@ void SV_UserinfoChanged (client_t *cl)
 
 	// call prog code to allow overrides
 	ge->ClientUserinfoChanged (cl->edict, cl->userinfo);
+
+	//r1: notify console
+	if (strcmp (cl->name, val))
+		Com_Printf ("%s[%s] changed name to %s.\n", cl->name, NET_AdrToString (&cl->netchan.remote_address), val);
 	
 	// name for C code
-	strncpy (cl->name, Info_ValueForKey (cl->userinfo, "name"), sizeof(cl->name)-1);
+	strncpy (cl->name, val, sizeof(cl->name)-1);
+
 	// mask off high bit
 	for (i=0 ; i<sizeof(cl->name) ; i++)
 		cl->name[i] &= 127;
@@ -1763,7 +1770,8 @@ void SV_UserinfoChanged (client_t *cl)
 
 void SV_UpdateWindowTitle (cvar_t *cvar, char *old, char *new)
 {
-	if (dedicated->value) {
+	if (dedicated->value)
+	{
 		char buff[512];
 		Com_sprintf (buff, sizeof(buff)-1, "%s - R1Q2 " VERSION " (port %d)", new, server_port);
 

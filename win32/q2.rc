@@ -113,8 +113,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,9,1,7
- PRODUCTVERSION 1,9,1,7
+ FILEVERSION 1,9,1,8
+ PRODUCTVERSION 1,9,1,8
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x3L
@@ -132,7 +132,7 @@ BEGIN
             VALUE "Comments", "http://www.r1ch.net/stuff/r1q2/"
             VALUE "CompanyName", "r1ch.net"
             VALUE "FileDescription", "R1Q2 - Enhanced Quake II Client/Server"
-            VALUE "FileVersion", "1, 9, 1, 7"
+            VALUE "FileVersion", "1, 9, 1, 8"
             VALUE "InternalName", "r1q2"
             VALUE "LegalCopyright", "Copyright (C) 2002-2004"
             VALUE "OriginalFilename", "r1q2.exe"

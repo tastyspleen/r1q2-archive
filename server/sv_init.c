@@ -332,16 +332,17 @@ void SV_InitGame (void)
 		// cause any connected clients to reconnect
 		SV_Shutdown ("Server restarted\n", true, false);
 	}
+#ifndef DEDICATED_ONLY
 	else
 	{
 		// make sure the client is down
-#ifndef DEDICATED_ONLY
 		CL_Drop (false);
 		SCR_BeginLoadingPlaque ();
-#endif
-		svs.initialized = true;
-		server_start_time = time(NULL);
 	}
+#endif
+
+	svs.initialized = true;
+	server_start_time = time(NULL);
 
 	// get any latched variable changes (maxclients, etc)
 	Cvar_GetLatchedVars ();
