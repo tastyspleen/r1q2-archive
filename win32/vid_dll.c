@@ -72,6 +72,8 @@ extern	unsigned	sys_msg_time;
 */
 extern qboolean s_win95;
 
+qboolean closing_reflib;
+
 static void WIN_DisableAltTab( void )
 {
 	if ( s_alttab_disabled )
@@ -310,6 +312,13 @@ LONG WINAPI MainWndProc (
     LPARAM  lParam)
 {
 //	LONG			lRet = 0;
+
+	//r1: ignore messages that occur during vid_restart
+	if (closing_reflib)
+	{
+		//Com_Printf ("Ignored WM_%d\n", uMsg);
+		return DefWindowProc( hWnd, uMsg, wParam, lParam );
+	}
 
 	if ( uMsg == MSH_MOUSEWHEEL )
 	{
@@ -669,9 +678,11 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 	
 	if ( reflib_active )
 	{
+		closing_reflib = true;
 		Com_DPrintf ("closing old reflib.\n");
 		re.Shutdown();
 		VID_FreeReflib ();
+		closing_reflib = false;
 	}
 
 	Com_Printf( "------- Loading %s -------\n", name );
@@ -798,7 +809,7 @@ update the rendering DLL and/or video mode to match.
 ============
 */
 
-void VID_Ref_Modified (cvar_t *cvar, char *old, char *new)
+void VID_Ref_Modified (cvar_t *cvar, char *old, char *newv)
 {
 	if (reload_video)
 		VID_ReloadRefresh();
@@ -867,7 +878,7 @@ void VID_ReloadRefresh (void)
 	}
 }
 
-void VID_AltTab_Modified (cvar_t *cvar, char *old, char *new)
+void VID_AltTab_Modified (cvar_t *cvar, char *old, char *newv)
 {
 	if ( win_noalttab->value )
 	{
@@ -880,7 +891,7 @@ void VID_AltTab_Modified (cvar_t *cvar, char *old, char *new)
 	win_noalttab->modified = false;
 }
 
-void VID_XY_Modified (cvar_t *cvar, char *old, char *new)
+void VID_XY_Modified (cvar_t *cvar, char *old, char *newv)
 {
 	if (!vid_fullscreen->value)
 		VID_UpdateWindowPosAndSize();

@@ -1103,7 +1103,7 @@ void SV_GiveMsec (void)
 			{
 #ifndef _DEBUG
 				//don't spam listen servers in release
-				if (!Com_ServerState())
+				if (!Com_ServerState() && dedicated && !dedicated->value)
 #endif
 					Com_Printf ("%s commandMsec < 0: %d (possible speed cheat?)\n", cl->name, cl->commandMsec);
 				cl->commandMsecOverflowCount++;

@@ -1450,7 +1450,7 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 
 	if (strlen(newi) + strlen(s) > MAX_INFO_STRING)
 	{
-		Com_Printf ("Info string length exceeded\n");
+		Com_Printf ("Info string length exceeded while trying to set '%s'\n", newi);
 		return;
 	}
 

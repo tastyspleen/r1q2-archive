@@ -7,7 +7,11 @@ int openal_active = 0;
 #include <float.h>
 #include "../client/client.h"
 #include "../client/snd_loc.h"
+
+#ifdef WIN32
 #include "../win32/winquake.h"
+#endif
+
 #include <memory.h>
 #include <math.h>
 

@@ -393,6 +393,7 @@ void SV_InitGame (void)
 	sv_downloadport = Cvar_Get ("sv_downloadport", "0", 0);
 #endif
 
+#ifdef _DEBUG
 	if (sv_downloadport->value)
 	{
 		sv_download_socket = NET_Listen ((unsigned short)sv_downloadport->value);
@@ -404,6 +405,7 @@ void SV_InitGame (void)
 
 		Com_Printf ("DownloadServer running on port %d, socket %d\n", (int)sv_downloadport->value, sv_download_socket);
 	}
+#endif
 
 	// init game
 	SV_InitGameProgs ();

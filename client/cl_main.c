@@ -125,6 +125,8 @@ centity_t		cl_entities[MAX_EDICTS];
 
 entity_state_t	cl_parse_entities[MAX_PARSE_ENTITIES];
 
+qboolean	send_packet_now;
+
 extern	qboolean reload_video;
 
 extern	cvar_t *allow_download;
@@ -2429,8 +2431,10 @@ void CL_Frame (int msec)
 	// let the mouse activate or deactivate
 	IN_Frame ();
 
+#ifdef WIN32
 	if (!ActiveApp && !Com_ServerState())
 		NET_Client_Sleep (500);
+#endif
 
 	// decide the simulation time
 	cls.frametime = extratime/1000.0;
@@ -2557,7 +2561,7 @@ int CL_RefreshInputs (void)
 	if (cls.state > ca_connecting)
 		return CL_RefreshCmd();
 
-	return 0;
+	return send_packet_now;
 }
 
 //CL_SendCommand
@@ -2600,8 +2604,10 @@ void CL_Frame (int msec)
 	if (dbg_framesleep->value)
 		Sys_Sleep (dbg_framesleep->value);
 #else
+#ifdef WIN32
 	if (!ActiveApp && !Com_ServerState())
 		NET_Client_Sleep (100);
+#endif
 #endif
 	//jec - set internal counters
 	packet_delta += msec;

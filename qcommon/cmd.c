@@ -30,6 +30,10 @@ qboolean	cmd_wait;
 #define	ALIAS_LOOP_COUNT	16
 int		alias_count;		// for detecting runaway loops
 
+#ifndef DEDICATED_ONLY
+extern	qboolean send_packet_now;
+#endif
+
 //=============================================================================
 
 /*
@@ -196,9 +200,9 @@ void Cbuf_Execute (void)
 	char	line[1024];
 	int		quotes;
 
-	//r1: still waiting?
-	if (cmd_wait)
-		return;
+#ifndef DEDICATED_ONLY
+	send_packet_now = false;
+#endif
 
 	alias_count = 0;		// don't allow infinite alias loops
 
@@ -266,7 +270,10 @@ void Cbuf_Execute (void)
 			// skip out while text still remains in buffer, leaving it
 			// for next frame
 			//Com_Printf ("wait: breaking\n");
-			//cmd_wait = false;
+#ifndef DEDICATED_ONLY
+			send_packet_now = true;
+#endif
+			cmd_wait = false;
 			break;
 		}
 	}

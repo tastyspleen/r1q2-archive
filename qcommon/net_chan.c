@@ -171,7 +171,7 @@ void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t adr, int protocol, 
 	else
 	{
 		chan->qport = qport;
-		SZ_Init (&chan->message, chan->message_buf, MAX_MSGLEN);		
+		SZ_Init (&chan->message, chan->message_buf, MAX_USABLEMSG);		
 	}
 	//SZ_Init (&chan->message, chan->message_buf, MAX_MSGLEN);		
 	chan->protocol = protocol;

@@ -499,7 +499,6 @@ void CL_InitInput (void)
 }
 
 
-extern	qboolean	cmd_wait;
 /*
 =================
 CL_SendCmd
@@ -513,9 +512,6 @@ void CL_SendCmd (void)
 	usercmd_t	*cmd, *oldcmd;
 	usercmd_t	nullcmd;
 	int			checksumIndex;
-
-	//r1: can send another cmd now (for wait; haxage + q2admin)
-	cmd_wait = false;
 
 	if (cls.state == ca_disconnected || cls.state == ca_connecting)
 		return;

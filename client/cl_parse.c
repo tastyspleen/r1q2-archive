@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_parse.c  -- parse a message received from the server
 
 #include "client.h"
-#include <process.h>
 
 char *svc_strings[256] =
 {
@@ -186,7 +185,7 @@ void CL_FinishDownload (void)
 	cls.download = NULL;
 	cls.downloadpercent = 0;
 }
-
+/*
 unsigned int __stdcall ClientDownloadThread (void)
 {
 	int expected = 0, buffPos = 0;
@@ -265,7 +264,7 @@ unsigned int __stdcall ClientDownloadThread (void)
 	//FIXME: should we ever get here?
 	//NET_CloseSocket (socket);
 }
-
+*/
 
 /*
 ===============
@@ -487,6 +486,9 @@ void CL_ParseDownload (void)
 	{
 		Com_Printf ("Server does not have this file.\n");
 
+		//r1: nuke the temp filename
+		*cls.downloadtempname = 0;
+
 		if (cls.download)
 		{
 			// if here, we tried to resume a file but the server said no
@@ -499,7 +501,7 @@ void CL_ParseDownload (void)
 		return;
 	}
 		
-	if (cls.dlserverport) {
+	/*if (cls.dlserverport) {
 		if (percent == 0xFF) {
 			unsigned int threadID;
 			cls.downloadsize = (size+1) * 1024;
@@ -526,11 +528,16 @@ void CL_ParseDownload (void)
 			CL_RequestNextDownload ();
 		}
 		return;
-	}
+	}*/
 
 	// open the file if not opened yet
 	if (!cls.download)
 	{
+		if (!*cls.downloadtempname)
+		{
+			Com_DPrintf ("Received download packet without request. Ignored.\n");
+			return;
+		}
 		CL_DownloadFileName(name, sizeof(name), cls.downloadtempname);
 
 		FS_CreatePath (name);

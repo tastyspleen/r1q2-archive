@@ -14,6 +14,8 @@
 
 #include "../linux/rw_linux.h"
 
+qboolean reload_video = false;
+
 // Structure containing functions exported from refresh DLL
 refexport_t	re;
 
@@ -104,6 +106,7 @@ cause the entire video mode and refresh DLL to be reset on the next frame.
 void VID_Restart_f (void)
 {
 	vid_ref->modified = true;
+	reload_video = true;
 }
 
 /*
@@ -334,7 +337,7 @@ is to check to see if any of the video mode parameters have changed, and if they
 update the rendering DLL and/or video mode to match.
 ============
 */
-void VID_CheckChanges (void)
+void VID_ReloadRefresh (void)
 {
 	char name[100];
 	cvar_t *sw_mode;
@@ -411,7 +414,8 @@ void VID_Init (void)
 	putenv("FX_GLIDE_NO_SPLASH=0");
 		
 	/* Start the graphics mode and load refresh DLL */
-	VID_CheckChanges();
+	//VID_CheckChanges();
+	VID_ReloadRefresh();
 }
 
 /*

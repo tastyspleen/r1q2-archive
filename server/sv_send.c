@@ -775,14 +775,15 @@ void SV_SendClientMessages (void)
 				//r1: stop overflow spam from unconnected clients
 				if (*c->name)
 				{
-					if (c->state == cs_spawned) {
+					if (c->state == cs_spawned)
+					{
 						SV_BroadcastPrintf (PRINT_HIGH, "%s overflowed\n", c->name);
 					} else {
 						SV_ClientPrintf (c, PRINT_HIGH, "%s overflowed\n", c->name);
 					}
 				}
 				SV_DropClient (c);
-				}
+			}
 		}
 		/*
 		else

@@ -114,17 +114,22 @@ cvar_t	*m_show;
 
 qboolean	mlooking;
 
-void IN_MLookDown (void) { mlooking = true; }
-void IN_MLookUp (void) {
-mlooking = false;
-if (!freelook->value && lookspring->value)
+void IN_MLookDown (void)
+{
+	mlooking = true;
+}
+
+void IN_MLookUp (void)
+{
+	mlooking = false;
+	if (!freelook->value && lookspring->value)
 		IN_CenterView ();
 }
 
 int			mouse_buttons;
 int			mouse_oldbuttonstate;
 POINT		current_pos;
-int			mouse_x, mouse_y, old_mouse_x, old_mouse_y, mx_accum, my_accum;
+int			mouse_x, mouse_y, old_mouse_x, old_mouse_y;//, mx_accum, my_accum;
 
 int			old_x, old_y;
 
@@ -277,11 +282,13 @@ int IN_InitDInputMouse (void)
 
     // Acquire the newly created device
     //g_pMouse->Acquire();
-	Com_Printf ("...Acquire()ing device... ");
+	/*Com_Printf ("...Acquire()ing device... ");
 	IDirectInputDevice8_Acquire (g_pMouse);
-	Com_Printf ("ok\n");
+	Com_Printf ("ok\n");*/
 
 	memset (&old_state, 0, sizeof(old_state));
+
+	//mouseactive = true;
 
 
     // Set a timer to go off 12 times a second, to read input
@@ -478,7 +485,7 @@ void IN_DeactivateMouse (void)
 	if (!mouseactive)
 		return;
 
-	//Com_Printf (" ************** IN_DeactivateMouse ***************\n");
+	//Com_Printf ("******************* IN_DeactivateMouse\n");
 
 #ifdef DIRECTINPUT_MOUSE_SUPPORT
 	if (g_pDI) {
@@ -534,9 +541,13 @@ void IN_Restart_f (void)
 {
 	IN_Shutdown ();
 
+	mouseactive = false;
+	mouseinitialized = false;
+
 #ifdef JOYSTICK
 	IN_StartupJoystick ();
 #endif
+
 	IN_StartupMouse ();
 }
 
@@ -802,12 +813,12 @@ void IN_Move (usercmd_t *cmd)
 IN_ClearStates
 ===================
 */
-void IN_ClearStates (void)
+/*void IN_ClearStates (void)
 {
 	mx_accum = 0;
 	my_accum = 0;
 	mouse_oldbuttonstate = 0;
-}
+}*/
 
 
 /*
