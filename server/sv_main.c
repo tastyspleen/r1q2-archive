@@ -20,6 +20,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 
+#define	HEARTBEAT_SECONDS	300
+
 netadr_t	master_adr[MAX_MASTERS];	// address of group servers
 netadr_t	netaddress_pyroadmin;
 
@@ -56,7 +58,10 @@ cvar_t	*sv_showclamp;
 cvar_t	*hostname;
 cvar_t	*public_server;			// should heartbeats be sent
 
+#ifdef USE_PYROADMIN
 cvar_t	*pyroadminport;
+#endif
+
 cvar_t	*sv_locked;
 cvar_t	*sv_restartmap;
 cvar_t	*sv_password;
@@ -602,7 +607,7 @@ void SVC_DirectConnect (void)
 	challenge = atoi(Cmd_Argv(3));
 
 	// see if the challenge is valid
-	if (!NET_IsLocalAddress (adr))
+	if (!NET_IsLocalHost (adr))
 	{
 		for (i=0 ; i<MAX_CHALLENGES ; i++)
 		{
@@ -810,8 +815,6 @@ gotnewcl:
 	newcl->edict = ent;
 	newcl->challenge = challenge; // save challenge for checksumming
 
-	newcl->versionString = "(unknown)";
-
 	if (Cmd_Argc() != 5)
 	{
 		Com_Printf ("Warning, unknown number of connection arguments from %s -- %d\n", NET_AdrToString (adr), Cmd_Argc());
@@ -885,7 +888,7 @@ gotnewcl:
 	//newcl->lastmessage = svs.realtime;	// don't timeout
 
 	newcl->lastmessage = svs.realtime - ((timeout->value - 5) * 1000);
-	newcl->lastconnect = svs.realtime;
+	//newcl->lastconnect = svs.realtime;
 }
 
 int Rcon_Validate (void)
@@ -1039,9 +1042,11 @@ void SVC_RemoteCommand (void)
 		Com_Error (ERR_DROP, "server killed via rcon");
 }
 
+#ifdef USE_PYROADMIN
 void SVC_PyroAdminCommand (char *s)
 {
-	if (atoi(Cmd_Argv(1)) == pyroadminid) {
+	if (pyroadminid && atoi(Cmd_Argv(1)) == pyroadminid)
+	{
 		char	*p = s;
 		char	remaining[1024];
 
@@ -1061,6 +1066,7 @@ void SVC_PyroAdminCommand (char *s)
 		Cmd_ExecuteString (p);
 	}
 }
+#endif
 
 /*
 =================
@@ -1087,15 +1093,16 @@ void SV_ConnectionlessPacket (void)
 	}
 
 	//r1: should never happen, don't even bother trying to parse it
-	if (net_message.cursize > 544) {
-		Com_DPrintf ("dropped oversized connectionless packet from %s\n", NET_AdrToString (&net_from));
+	if (net_message.cursize > 544)
+	{
+		Com_DPrintf ("dropped %d byte connectionless packet from %s\n", net_message.cursize, NET_AdrToString (&net_from));
 		return;
 	}
 
 	//r1: make sure we never talk to ourselves
-	if (NET_IsLocalAddress (&net_from) && ShortSwap(net_from.port) == server_port)
+	if (NET_IsLocalAddress (&net_from) && !NET_IsLocalHost(&net_from) && ShortSwap(net_from.port) == server_port)
 	{
-		Com_DPrintf ("dropped %d byte packet from self! (spoofing attack?)\n", net_message.cursize);
+		Com_DPrintf ("dropped %d byte connectionless packet from self! (spoofing attack?)\n", net_message.cursize);
 		return;
 	}
 
@@ -1123,8 +1130,10 @@ void SV_ConnectionlessPacket (void)
 		SVC_RemoteCommand ();
 	else if (!strcmp(c, "ack"))
 		SVC_Ack ();
+#ifdef USE_PYROADMIN
 	else if (!strcmp (c, "cmd"))
 		SVC_PyroAdminCommand (s);
+#endif
 	else
 		Com_DPrintf ("bad connectionless packet from %s:\n%s\n"
 		, NET_AdrToString (&net_from), s);
@@ -1285,7 +1294,7 @@ void SV_ReadPackets (void)
 			// check for packets from connected clients
 			for (i=0, cl=svs.clients ; i<maxclients->value ; i++,cl++)
 			{
-				if (cl->state == cs_free || cl->state == cs_zombie)
+				if (cl->state <= cs_zombie)
 					continue;
 
 				if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
@@ -1317,6 +1326,7 @@ void SV_ReadPackets (void)
 		{
 			if (cl->state == cs_free)
 				continue;
+
 			if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
 				continue;
 
@@ -1334,9 +1344,10 @@ void SV_ReadPackets (void)
 				{
 					cl->lastmessage = svs.realtime;	// don't timeout
 					SV_ExecuteClientMessage (cl);
+					cl->packetCount++;
+
 				}
 			}
-			cl->packetCount++;
 			break;
 		}
 		
@@ -1430,7 +1441,7 @@ void SV_PrepWorldFrame (void)
 	edict_t	*ent;
 	int		i;
 
-	for (i=0 ; i<ge->num_edicts ; i++, ent++)
+	for (i=0 ; i<ge->num_edicts ; i++)
 	{
 		ent = EDICT_NUM(i);
 		// events only last for a single message
@@ -1508,7 +1519,7 @@ void SV_Frame (int msec)
     svs.realtime += msec;
 
 	// keep the random time dependent
-	rand ();
+	//rand ();
 
 	// get packets from clients
 	SV_ReadPackets ();
@@ -1572,13 +1583,12 @@ Send a message to the master every few minutes to
 let it know we are alive, and log information
 ================
 */
-#define	HEARTBEAT_SECONDS	300
+
 void Master_Heartbeat (void)
 {
 	char		*string;
 	int			i;
 
-	
 	if (!dedicated->value)
 		return;		// only dedicated servers send heartbeats
 
@@ -1775,8 +1785,6 @@ void SV_Init (void)
 {
 	SV_InitOperatorCommands	();
 
-	server_start_time = time(NULL);
-
 	rcon_password = Cvar_Get ("rcon_password", "", 0);
 
 	Cvar_Get ("skill", "1", 0);
@@ -1835,7 +1843,9 @@ void SV_Init (void)
 	SZ_Init (&net_message, net_message_buffer, sizeof(net_message_buffer));
 
 	//r1: init pyroadmin support
+#ifdef USE_PYROADMIN
 	pyroadminport = Cvar_Get ("pyroadminport", "0", CVAR_NOSET);
+#endif
 
 	//r1: lock server (prevent new connections)
 	sv_locked = Cvar_Get ("sv_locked", "0", 0);
@@ -1931,7 +1941,9 @@ void SV_Init (void)
 	sv_calcpings_method = Cvar_Get ("sv_calcpings_method", "1", 0);
 
 	//r1: init pyroadmin
-	if (pyroadminport->value) {
+#ifdef USE_PYROADMIN
+	if (pyroadminport->value)
+	{
 		char buff[128];
 		int len;
 
@@ -1943,6 +1955,7 @@ void SV_Init (void)
 		len = Com_sprintf (buff, sizeof(buff), "hello %d", pyroadminid);
 		Netchan_OutOfBand (NS_SERVER, &netaddress_pyroadmin, len, (byte *)buff);
 	}
+#endif
 }
 
 /*

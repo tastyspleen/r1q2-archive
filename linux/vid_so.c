@@ -209,7 +209,7 @@ qboolean VID_LoadRefresh( char *name )
 	//regain root
 	seteuid(saved_euid);
 
-	if ((fp = fopen(SO_FILE, "r")) == NULL) {
+	/*if ((fp = fopen(SO_FILE, "r")) == NULL) {
 		Com_Printf( "LoadLibrary(\"%s\") failed: can't open " SO_FILE " (required for location of ref libraries)\n", name);
 		return false;
 	}
@@ -217,12 +217,14 @@ qboolean VID_LoadRefresh( char *name )
 	fclose(fp);
 	if (*fn && fn[strlen(fn) - 1] == '\n')
 		fn[strlen(fn) - 1] = 0;
+	*/
 
+	strcpy (fn, ".");
 	strcat(fn, "/");
 	strcat(fn, name);
 
 	// permission checking
-	if (strstr(fn, "softx") == NULL) { // softx doesn't require root
+/*	if (strstr(fn, "softx") == NULL) { // softx doesn't require root
 		if (stat(fn, &st) == -1) {
 			Com_Printf( "LoadLibrary(\"%s\") failed: %s\n", name, strerror(errno));
 			return false;
@@ -242,6 +244,7 @@ qboolean VID_LoadRefresh( char *name )
 		setreuid(getuid(), getuid());
 		setegid(getgid());
 	}
+*/
 
 	if ( ( reflib_library = dlopen( fn, RTLD_NOW ) ) == 0 )
 	{

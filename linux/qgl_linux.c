@@ -13,6 +13,15 @@
 
 static FILE *log_fp = NULL;
 
+//FIXME: make this work
+void * qwglGetProcAddress (char *procname)
+{
+	return NULL;
+}
+
+void ( APIENTRY * qglActiveTextureARB) ( GLenum );
+void ( APIENTRY * qglClientActiveTextureARB) ( GLenum );
+
 void ( APIENTRY * qglAccum )(GLenum op, GLfloat value);
 void ( APIENTRY * qglAlphaFunc )(GLenum func, GLclampf ref);
 GLboolean ( APIENTRY * qglAreTexturesResident )(GLsizei n, const GLuint *textures, GLboolean *residences);
@@ -353,8 +362,16 @@ void ( APIENTRY * qglViewport )(GLint x, GLint y, GLsizei width, GLsizei height)
 void ( APIENTRY * qglLockArraysEXT)( int, int);
 void ( APIENTRY * qglUnlockArraysEXT) ( void );
 
+//void ( APIENTRY * qglPointParameterfEXT)( GLenum param, GLfloat value );
+//void ( APIENTRY * qglPointParameterfvEXT)( GLenum param, const GLfloat *value );
+
 void ( APIENTRY * qglPointParameterfEXT)( GLenum param, GLfloat value );
 void ( APIENTRY * qglPointParameterfvEXT)( GLenum param, const GLfloat *value );
+void ( APIENTRY * qglPointParameterfARB) (GLenum, GLfloat);
+void ( APIENTRY * qglPointParameterfvARB) (GLenum, const GLfloat *);
+
+void ( APIENTRY * qglMTexCoord2fvSGIS)( GLenum, GLfloat *);
+
 void ( APIENTRY * qglColorTableEXT)( int, int, int, int, int, const void * );
 void ( APIENTRY * qglSelectTextureSGIS)( GLenum );
 void ( APIENTRY * qglMTexCoord2fSGIS)( GLenum, GLfloat, GLfloat );
@@ -3282,6 +3299,7 @@ qboolean QGL_Init( const char *dllname )
 	qglColorTableEXT = 0;
 	qglSelectTextureSGIS = 0;
 	qglMTexCoord2fSGIS = 0;
+	qglMTexCoord2fvSGIS = 0;
 
 	return true;
 }

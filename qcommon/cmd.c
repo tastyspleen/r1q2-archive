@@ -977,7 +977,7 @@ void	Cmd_ExecuteString (char *text)
 	// check functions
 	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
 	{
-		if (!Q_strcasecmp (cmd_argv[0],cmd->name))
+		if (!Q_stricmp (cmd_argv[0],cmd->name))
 		{
 			if (!cmd->function)
 			{	// forward to server command
@@ -996,7 +996,7 @@ void	Cmd_ExecuteString (char *text)
 	// check alias
 	for (a=cmd_alias ; a ; a=a->next)
 	{
-		if (!Q_strcasecmp (cmd_argv[0], a->name))
+		if (!Q_stricmp (cmd_argv[0], a->name))
 		{
 			if (++alias_count == ALIAS_LOOP_COUNT)
 			{

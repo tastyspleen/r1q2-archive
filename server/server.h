@@ -152,7 +152,7 @@ typedef struct client_s
 	unsigned short	downloadport;
 
 	int				lastmessage;		// sv.framenum when packet was last received
-	int				lastconnect;
+	//int				lastconnect;
 
 	unsigned int				challenge;			// challenge of this user, randomly generated
 

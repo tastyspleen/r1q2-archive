@@ -21,17 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include "redblack.h"
 
-// define this to dissalow any data but the demo pak file
-//#define	NO_ADDONS
-
-// if a packfile directory differs from this, it is assumed to be hacked
-// Full version
-#define	PAK0_CHECKSUM	0x40e614e0
-// Demo
-//#define	PAK0_CHECKSUM	0xb2c6d7ea
-// OEM
-//#define	PAK0_CHECKSUM	0x78e135c
-
 /*
 =============================================================================
 
@@ -39,7 +28,6 @@ QUAKE FILESYSTEM
 
 =============================================================================
 */
-
 
 //
 // in memory
@@ -85,7 +73,6 @@ typedef struct searchpath_s
 
 searchpath_t	*fs_searchpaths;
 searchpath_t	*fs_base_searchpaths;	// without gamedirs
-
 
 /*
 
@@ -306,17 +293,11 @@ void FS_AddToCache (char *path, unsigned int filelen, unsigned int fileseek, cha
 	cache->fileseek = fileseek;
 
 	if (path)
-	{
-		cache->filepath = Z_TagMalloc (strlen(path)+1, TAGMALLOC_FSCACHE);
-		strcpy (cache->filepath, path);
-	}
+		cache->filepath = CopyString (path, TAGMALLOC_FSCACHE);
 	else
-	{
 		cache->filepath = NULL;
-	}
 
-	cache->filename = Z_TagMalloc (strlen (filename)+1, TAGMALLOC_FSCACHE);
-	strcpy (cache->filename, filename);
+	cache->filename = CopyString (filename, TAGMALLOC_FSCACHE);
 
 	//Com_Printf ("Adding %s: ", filename);
 	newitem = rbsearch (filename, rb);
@@ -334,17 +315,11 @@ void FS_AddToCache (unsigned int hash, char *path, unsigned int filelen, unsigne
 	cache->fileseek = fileseek;
 
 	if (path)
-	{
-		cache->filepath = Z_TagMalloc (strlen(path)+1, TAGMALLOC_FSCACHE);
-		strcpy (cache->filepath, path);
-	}
+		cache->filepath = CopyString (path, TAGMALLOC_FSCACHE);
 	else
-	{
 		cache->filepath = NULL;
-	}
 
-	cache->filename = Z_TagMalloc (strlen (filename)+1, TAGMALLOC_FSCACHE);
-	strcpy (cache->filename, filename);
+	cache->filename = CopyString (filename, TAGMALLOC_FSCACHE);
 }
 #endif
 
@@ -358,7 +333,7 @@ Used for streaming data out of either a pak file or
 a seperate file.
 ===========
 */
-#ifndef NO_ADDONS
+
 int FS_FOpenFile (char *filename, FILE **file)
 {
 	fscache_t		*cache = &fscache;
@@ -501,63 +476,6 @@ int FS_FOpenFile (char *filename, FILE **file)
 	*file = NULL;
 	return -1;
 }
-
-#else
-
-// this is just for demos to prevent add on hacking
-
-int FS_FOpenFile (char *filename, FILE **file)
-{
-	searchpath_t	*search;
-	char			netpath[MAX_OSPATH];
-	pack_t			*pak;
-	int				i;
-
-	// get config from directory, everything else from pak
-	if (!strcmp(filename, "config.cfg") || !strncmp(filename, "players/", 8))
-	{
-		Com_sprintf (netpath, sizeof(netpath), "%s/%s",FS_Gamedir(), filename);
-		
-		*file = fopen (netpath, "rb");
-		if (!*file)
-			return -1;
-		
-		Com_DPrintf ("FindFile: %s\n",netpath);
-
-		return FS_filelength (*file);
-	}
-
-	for (search = fs_searchpaths ; search ; search = search->next)
-		if (search->pack)
-			break;
-	if (!search)
-	{
-		*file = NULL;
-		return -1;
-	}
-
-	pak = search->pack;
-	for (i=0 ; i<pak->numfiles ; i++)
-		if (!Q_strcasecmp (pak->files[i].name, filename))
-		{	// found it!
-			pak_file_compressed = pak->compressed;
-			Com_DPrintf ("PackFile: %s : %s\n",pak->filename, filename);
-		// open a new file on the pakfile
-			*file = fopen (pak->filename, "rb");
-			if (!*file)
-				Com_Error (ERR_FATAL, "Couldn't reopen %s", pak->filename);	
-			fseek (*file, pak->files[i].filepos, SEEK_SET);
-			return pak->files[i].filelen;
-		}
-	
-	Com_DPrintf ("FindFile: can't find %s\n", filename);
-	
-	*file = NULL;
-	return -1;
-}
-
-#endif
-
 
 /*
 =================

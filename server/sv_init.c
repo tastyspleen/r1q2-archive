@@ -24,6 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <process.h>
 #endif
 
+extern	time_t	server_start_time;
+
 server_static_t	svs;				// persistant server info
 server_t		sv;					// local server
 
@@ -324,25 +326,25 @@ void SV_InitGame (void)
 {
 	int		i;
 	edict_t	*ent;
-	char	idmaster[32];
 
 	if (svs.initialized)
 	{
 		// cause any connected clients to reconnect
 		SV_Shutdown ("Server restarted\n", true, false);
 	}
-#ifndef DEDICATED_ONLY
 	else
 	{
 		// make sure the client is down
+#ifndef DEDICATED_ONLY
 		CL_Drop (false);
 		SCR_BeginLoadingPlaque ();
-	}
 #endif
+		svs.initialized = true;
+		server_start_time = time(NULL);
+	}
+
 	// get any latched variable changes (maxclients, etc)
 	Cvar_GetLatchedVars ();
-
-	svs.initialized = true;
 
 	if (Cvar_VariableValue ("coop") && Cvar_VariableValue ("deathmatch"))
 	{
@@ -390,9 +392,9 @@ void SV_InitGame (void)
 		NET_Config (NET_SERVER);
 
 	// heartbeats will always be sent to the id master
-	svs.last_heartbeat = -99999;		// send immediately
-	Com_sprintf(idmaster, sizeof(idmaster), "192.246.40.37:%i", PORT_MASTER);
-	NET_StringToAdr (idmaster, &master_adr[0]);
+	svs.last_heartbeat = -295000;		// send immediately (r1: give few secs for configs to run)
+
+	NET_StringToAdr ("192.246.40.37:27900", &master_adr[0]);
 
 	//r1: tcp download port (off in release)
 #ifdef _DEBUG

@@ -620,7 +620,10 @@ int NET_Connect (netadr_t *to, int port);
 //qboolean	NET_IsLocalAddress (netadr_t adr);
 
 #define NET_IsLocalAddress(x) \
-	((x)->type == NA_LOOPBACK || (x)->ip[0] == 127)
+	((x)->ip[0] == 127)
+
+#define NET_IsLocalHost(x) \
+	((x)->type == NA_LOOPBACK)
 
 #define NET_CompareAdr(a,b) \
 	((*(int *)(a)->ip == *(int *)(b)->ip) && (a)->port == (b)->port)
@@ -889,7 +892,7 @@ enum tagmalloc_tags_e
 };
 
 void EXPORT Z_Free (void *ptr);
-#define Z_Malloc(x) Z_TagMalloc(x, 0)
+//#define Z_Malloc(x) Z_TagMalloc(x, 0)
 //void *Z_Malloc (int size);			// returns 0 filled memory
 void * EXPORT Z_TagMalloc (int size, int tag);
 void EXPORT Z_FreeTags (int tag);

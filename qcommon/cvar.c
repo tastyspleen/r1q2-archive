@@ -86,32 +86,32 @@ char *Cvar_VariableString (char *var_name)
 	if (var)
 		return var->string;
 
-	if (!Q_stricmp (var_name, "$timestamp"))
+	if (!strcmp (var_name, "$timestamp"))
 	{
 		time_t now;
 		time (&now);
 		strftime(dateBuff, sizeof(dateBuff)-1, "%Y-%m-%d_%H%M", localtime((const time_t *)&now));
 		return dateBuff;
 	}
-	else if (!Q_stricmp (var_name, "$date"))
+	else if (!strcmp (var_name, "$date"))
 	{
 		time_t now;
 		time (&now);
 		strftime(dateBuff, sizeof(dateBuff)-1, "%Y-%m-%d", localtime((const time_t *)&now));
 		return dateBuff;
 	}
-	else if (!Q_stricmp (var_name, "$time"))
+	else if (!strcmp (var_name, "$time"))
 	{
 		time_t now;
 		time (&now);
 		strftime(dateBuff, sizeof(dateBuff)-1, "%H%M", localtime((const time_t *)&now));
 		return dateBuff;
 	}
-	else if (!Q_stricmp (var_name, "$random"))
+	else if (!strcmp (var_name, "$random"))
 	{
 		return va ("%u", randomMT());
 	}
-	else if (!Q_stricmp (var_name, "$inc"))
+	else if (!strcmp (var_name, "$inc"))
 	{
 		static unsigned int incNum = 0;
 		return va ("%u", ++incNum);

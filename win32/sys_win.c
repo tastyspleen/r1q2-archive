@@ -59,14 +59,18 @@ qboolean	Minimized;
 HWND		hwnd_Server;
 
 #ifndef NO_SERVER
+#ifdef USE_PYROADMIN
 extern netadr_t netaddress_pyroadmin;
+#endif
 static HANDLE		hinput, houtput;
 #endif
 
 unsigned	sys_msg_time;
 unsigned	sys_frame_time;
 
+#ifdef USE_PYROADMIN
 extern		cvar_t	*pyroadminport;
+#endif
 
 //static HANDLE		qwclsemaphore;
 
@@ -159,7 +163,6 @@ void Sys_Quit (void)
 		//exit (0);
 		ExitProcess (0);
 }
-
 
 void WinError (void)
 {
@@ -672,12 +675,15 @@ void Sys_ConsoleOutput (char *string)
 
 	Sys_AcquireConsoleMutex();
 
-	if (pyroadminport && pyroadminport->value) {
+#ifdef USE_PYROADMIN
+	if (pyroadminport && pyroadminport->value)
+	{
 		int len;
 		char buff[1152];
 		len = Com_sprintf (buff, sizeof(buff), "line\n%s", string);
 		Netchan_OutOfBand (NS_SERVER, &netaddress_pyroadmin, len, (byte *)buff);
 	}
+#endif
 
 	p = string;
 	s = text;

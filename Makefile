@@ -12,9 +12,10 @@
 # (Note: not all options are available for all platforms).
 # quake2 (uses OSS for sound, cdrom ioctls for cd audio) is automatically built.
 # gamei386.so is automatically built.
-BUILD_SVGA=YES		# SVGAlib driver. Seems to work fine.
-BUILD_X11=YES		# X11 software driver. Works somewhat ok.
+BUILD_SVGA=NO		# SVGAlib driver. Seems to work fine.
+BUILD_X11=NO		# X11 software driver. Works somewhat ok.
 BUILD_GLX=YES		# X11 GLX driver. Works somewhat ok.
+BUILD_FXGL=NO
 
 # Check OS type.
 OSTYPE := $(shell uname -s)
@@ -100,8 +101,11 @@ FXGLCFLAGS=
 FXGLLDFLAGS=-L/usr/local/glide/lib -L/usr/X11/lib -L/usr/local/lib \
 	-L/usr/X11R6/lib -lX11 -lXext -lGL -lvga
 
-GLXCFLAGS=-DWITH_EVDEV
-GLXLDFLAGS=-L/usr/X11R6/lib -ljpeg -lX11 -lXext -lXxf86dga -lXxf86vm
+GLXCFLAGS=-I/usr/X11R6/include -DOPENGL
+GLXLDFLAGS=-L/usr/X11R6/lib -ljpeg -lpng -lX11 -lXext -lXxf86dga -lXxf86vm -lGL
+
+#GLXCFLAGS=-DWITH_EVDEV
+#GLXLDFLAGS=-L/usr/X11R6/lib -ljpeg -lX11 -lXext -lXxf86dga -lXxf86vm
 
 SHLIBEXT=so
 
@@ -123,7 +127,7 @@ DO_SHLIB_AS=$(CC) $(CFLAGS) $(SHLIBCFLAGS) -DELF -x assembler-with-cpp -o $@ -c 
 
 .PHONY : targets build_debug build_release clean clean-debug clean-release clean2
 
-CL_TARGETS=$(BUILDDIR)/r1q2 $(BUILDDIR)/game$(ARCH).$(SHLIBEXT)
+CL_TARGETS=$(BUILDDIR)/r1q2
 SV_TARGETS=$(BUILDDIR)/r1q2ded
 
 ifeq ($(ARCH),axp)
@@ -404,7 +408,9 @@ QUAKE2_OBJS = \
 	$(BUILDDIR)/client/snd_openal.o \
 	$(BUILDDIR)/client/mersennetwister.o \
 	$(BUILDDIR)/client/le_util.o \
-	$(BUILDDIR)/client/le_physics.o
+	$(BUILDDIR)/client/le_physics.o \
+	$(BUILDDIR)/client/redblack.o
+		
 
 QUAKE2_LNX_OBJS = \
 	$(BUILDDIR)/client/cd_linux.o \
@@ -575,6 +581,9 @@ $(BUILDDIR)/client/mersennetwister.o : $(COMMON_DIR)/mersennetwister.c
 	$(DO_CC)
 
 $(BUILDDIR)/client/snd_openal.o : $(CLIENT_DIR)/snd_openal.c
+	$(DO_CC)
+
+$(BUILDDIR)/client/redblack.o : $(COMMON_DIR)/redblack.c
 	$(DO_CC)
 
 #############################################################################
@@ -958,7 +967,8 @@ REF_GL_OBJS = \
 	$(BUILDDIR)/ref_gl/qgl_linux.o \
 	$(BUILDDIR)/ref_gl/q_shared.o \
 	$(BUILDDIR)/ref_gl/q_shlinux.o \
-	$(BUILDDIR)/ref_gl/glob.o
+	$(BUILDDIR)/ref_gl/glob.o \
+	$(BUILDDIR)/ref_gl/redblack.o
 
 REF_GLX_OBJS = \
 	$(BUILDDIR)/ref_gl/gl_glx.o
@@ -1019,6 +1029,9 @@ $(BUILDDIR)/ref_gl/gl_fxmesa.o :      $(LINUX_DIR)/gl_fxmesa.c
 	$(DO_GL_SHLIB_CC) $(FXGLCFLAGS)
 
 $(BUILDDIR)/ref_gl/rw_in_svgalib.o :  $(LINUX_DIR)/rw_in_svgalib.c
+	$(DO_GL_SHLIB_CC)
+
+$(BUILDDIR)/ref_gl/redblack.o : $(COMMON_DIR)/redblack.c
 	$(DO_GL_SHLIB_CC)
 
 #############################################################################

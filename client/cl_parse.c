@@ -682,8 +682,8 @@ void CL_ParseBaseline (void)
 
 void CL_ParseZPacket (void)
 {
-	byte *buff_in;
-	byte *buff_out;
+	byte buff_in[MAX_MSGLEN];
+	byte buff_out[0xFFFF];
 
 	sizebuf_t sb, old;
 
@@ -696,8 +696,8 @@ void CL_ParseZPacket (void)
 	if (compressed_len <= 0)
 		Com_Error (ERR_DROP, "CL_ParseZPacket: compressed_len <= 0");
 
-	buff_in = Z_Malloc (compressed_len);
-	buff_out = Z_Malloc (uncompressed_len);
+	//buff_in = Z_Malloc (compressed_len);
+	//buff_out = Z_Malloc (uncompressed_len);
 
 	MSG_ReadData (&net_message, buff_in, compressed_len);
 
@@ -731,8 +731,8 @@ void CL_ParseZPacket (void)
 
 	net_message = old;
 
-	Z_Free (buff_in);
-	Z_Free (buff_out);
+	//Z_Free (buff_in);
+	//Z_Free (buff_out);
 
 	Com_DPrintf ("Got a ZPacket, %d->%d\n", uncompressed_len + 4, compressed_len);
 }

@@ -1254,7 +1254,10 @@ typedef struct zhead_s
 static zhead_t	z_chain = {0};
 static int		z_count = 0;
 static int		z_bytes = 0;
+
 unsigned long	z_allocs = 0;
+unsigned long	z_level_allocs = 0;
+unsigned long	z_game_allocs = 0;
 
 /*
 ========================
@@ -1335,10 +1338,10 @@ void Z_Stats_f (void)
 	bignum += game_count;
 	bignum += level_count;
 
-	Com_Printf ("%14.14s: %8i bytes %5i blocks\n", "DLL_LEVEL", level_size, level_count);
-	Com_Printf ("%14.14s: %8i bytes %5i blocks\n\n", "DLL_GAME", game_size, game_count);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", "DLL_LEVEL", level_size, level_count, z_level_allocs);
+	Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n\n", "DLL_GAME", game_size, game_count, z_game_allocs);
 	
-	Com_Printf ("%i miscellaneous allocations\n", z_allocs);
+	Com_Printf ("%i unaccounted allocations\n", z_allocs);
 
 	Com_Printf ("  CALCED_TOTAL: %i bytes in %i blocks\n", bigtotal, bignum);
 	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", z_bytes, z_count);
@@ -1388,6 +1391,10 @@ void * EXPORT Z_TagMalloc (int size, int tag)
 
 	if (tag < TAGMALLOC_MAX_TAGS)
 		tagmalloc_tags[tag].allocs++;
+	else if (tag == TAG_LEVEL)
+		z_level_allocs++;
+	else if (tag == TAG_GAME)
+		z_game_allocs++;
 	else
 		z_allocs++;
 

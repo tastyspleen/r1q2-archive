@@ -56,6 +56,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define vsnprintf _vsnprintf
 #define Q_snprintf snprintf
 #define Q_vsnprintf vsnprintf
+#define Q_strncasecmp strnicmp
+#define Q_stricmp _strcmpi
 #define strdup _strdup
 #define fileno _fileno
 #define strlwr _strlwr
@@ -65,10 +67,20 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define EXPORT __cdecl
 #define IMPORT __cdecl
 #define DEBUGBREAKPOINT _asm int 3
-#else
+
+#else /* NON-WIN32 */
+//XXX: are these portable enough on non-win32?
+#define Q_stricmp strcasecmp
+#define Q_strncasecmp strncasecmp
 #define EXPORT
 #define IMPORT
+
+#ifdef LINUX
 #define DEBUGBREAKPOINT asm ("int $3")
+#else
+#define DEBUGBREAKPOINT if (0){}
+#endif
+
 #endif
 
 #if (defined _M_IX86 || defined __i386__) && !defined C_ONLY && !defined __sun__
@@ -283,9 +295,13 @@ void Com_PageInMemory (byte *buffer, int size);
 //=============================================
 
 // portable case insensitive compare
+#ifndef Q_stricmp
 int Q_stricmp (char *s1, char *s2);
-int Q_strcasecmp (char *s1, char *s2);
+#endif
+
+#ifndef Q_strncasecmp
 int Q_strncasecmp (char *s1, char *s2, int n);
+#endif
 
 //=============================================
 
