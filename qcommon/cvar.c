@@ -29,8 +29,8 @@ static struct rbtree	*cvartree;
 
 //UGLY HACK for client locations
 #ifdef DEDICATED_ONLY
-const char *CL_Get_Loc_There (void) { return ""; }
-const char *CL_Get_Loc_Here (void) { return ""; }
+static const char *CL_Get_Loc_There (void) { return ""; }
+static const char *CL_Get_Loc_Here (void) { return ""; }
 #else
 const char *CL_Get_Loc_There (void);
 const char *CL_Get_Loc_Here (void);
@@ -87,7 +87,7 @@ Cvar_VariableValue
 */
 float Cvar_VariableValue (const char *var_name)
 {
-	cvar_t	*var;
+	const cvar_t	*var;
 
 	Q_assert (var_name != NULL);
 	
@@ -101,7 +101,7 @@ float Cvar_VariableValue (const char *var_name)
 
 int Cvar_IntValue (const char *var_name)
 {
-	cvar_t	*var;
+	const cvar_t	*var;
 
 	Q_assert (var_name != NULL);
 	
@@ -113,17 +113,17 @@ int Cvar_IntValue (const char *var_name)
 	return var->intvalue;
 }
 
-const char *Cvar_GetMetaVar (const char *var_name)
+static const char *Cvar_GetMetaVar (const char *var_name)
 {
 	static char dateBuff[32];
 
 	if (var_name[0] == '$')
 	{
-		const char	*varstring;
+		/*const char	*varstring;
 
 		varstring = Cvar_VariableString (var_name + 1);
 		if (varstring[0])
-			return varstring;
+			return varstring;*/
 
 		if (!strcmp (var_name, "$timestamp"))
 		{
@@ -177,8 +177,8 @@ Cvar_VariableString
 */
 const char *Cvar_VariableString (const char *var_name)
 {
-	const char	*metavar;
-	cvar_t		*var;
+	const char		*metavar;
+	const cvar_t	*var;
 
 	Q_assert (var_name != NULL);
 
@@ -200,9 +200,9 @@ const char *Cvar_VariableString (const char *var_name)
 Cvar_CompleteVariable
 ============
 */
-char *Cvar_CompleteVariable (const char *partial)
+const char *Cvar_CompleteVariable (const char *partial)
 {
-	cvar_t		*cvar;
+	const cvar_t		*cvar;
 	int			len;
 
 	Q_assert (partial != NULL);
@@ -225,7 +225,7 @@ char *Cvar_CompleteVariable (const char *partial)
 	return NULL;
 }
 
-cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
+static cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
 {
 	cvar_t		*var;
 	const void	**data;
@@ -324,7 +324,7 @@ cvar_t * EXPORT Cvar_GameGet (const char *var_name, const char *var_value, int f
 Cvar_Set2
 ============
 */
-cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
+static cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force)
 {
 	cvar_t	*var;
 	char *old_string;
@@ -549,7 +549,7 @@ void Cvar_GetLatchedVars (void)
 int Cvar_GetNumLatchedVars (void)
 {
 	int latched = 0;
-	cvar_t	*var;
+	const cvar_t	*var;
 
 	for (var = cvar_vars ; var ; var = var->next)
 	{
@@ -569,7 +569,7 @@ Handles variable inspection and changing from the console
 */
 qboolean Cvar_Command (void)
 {
-	cvar_t			*v;
+	const cvar_t			*v;
 
 // check variables
 	v = Cvar_FindVar (Cmd_Argv(0));
@@ -595,7 +595,7 @@ Cvar_Set_f
 Allows setting and defining of arbitrary cvars from console
 ============
 */
-void Cvar_Set_f (void)
+static void Cvar_Set_f (void)
 {
 	int		c;
 	int		flags;
@@ -656,7 +656,7 @@ with the archive flag set to true.
 */
 void Cvar_WriteVariables (const char *path)
 {
-	cvar_t	*var;
+	const cvar_t	*var;
 	char	buffer[1024];
 	FILE	*f;
 
@@ -689,9 +689,9 @@ static int EXPORT cvarsort( const void *_a, const void *_b )
 	return strcmp (a->name, b->name);
 }
 
-void Cvar_List_f (void)
+static void Cvar_List_f (void)
 {
-	cvar_t	*var;
+	const cvar_t	*var;
 	int		i, j;
 	int		len, num;
 	cvar_t	*sortedList;
@@ -756,10 +756,10 @@ void Cvar_List_f (void)
 qboolean userinfo_modified;
 
 
-char	*Cvar_BitInfo (int bit)
+static char *Cvar_BitInfo (int bit)
 {
-	static char	info[MAX_INFO_STRING];
-	cvar_t	*var;
+	static char		info[MAX_INFO_STRING];
+	const cvar_t	*var;
 
 	info[0] = 0;
 
@@ -773,13 +773,13 @@ char	*Cvar_BitInfo (int bit)
 }
 
 // returns an info string containing all the CVAR_USERINFO cvars
-char	*Cvar_Userinfo (void)
+char *Cvar_Userinfo (void)
 {
 	return Cvar_BitInfo (CVAR_USERINFO);
 }
 
 // returns an info string containing all the CVAR_SERVERINFO cvars
-char	*Cvar_Serverinfo (void)
+char *Cvar_Serverinfo (void)
 {
 	return Cvar_BitInfo (CVAR_SERVERINFO);
 }

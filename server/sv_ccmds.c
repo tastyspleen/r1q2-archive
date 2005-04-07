@@ -837,6 +837,7 @@ static void SV_CheckCvarBans_f (void)
 static void ShowVarBans (varban_t *bans)
 {
 	banmatch_t	*match;
+	const char	*mtype;
 
 	while (bans->next)
 	{
@@ -845,7 +846,30 @@ static void ShowVarBans (varban_t *bans)
 		while (match->next)
 		{
 			match = match->next;
-			Com_Printf ("%s: %s (%s:%s)\n", LOG_GENERAL, bans->varname, match->matchvalue, match->blockmethod == CVARBAN_KICK ? "KICK" : "BLACKHOLE", match->message);
+
+			switch (match->blockmethod)
+			{
+				case CVARBAN_LOGONLY:
+					mtype = "LOG";
+					break;
+				case CVARBAN_BLACKHOLE:
+					mtype = "BLACKHOLE";
+					break;
+				case CVARBAN_KICK:
+					mtype = "KICK";
+					break;
+				case CVARBAN_MESSAGE:
+					mtype = "MESSAGE";
+					break;
+				case CVARBAN_STUFF:
+					mtype = "STUFF";
+					break;
+				default:
+					mtype = "???";
+					break;
+			}
+
+			Com_Printf ("%s: %s (%s:%s)\n", LOG_GENERAL, bans->varname, match->matchvalue, mtype, match->message);
 		}
 	}
 }
@@ -939,6 +963,9 @@ static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *if
 	banmatch_t	*match = NULL;
 	varban_t	*bans = list;
 	int			blockmethod;
+	char		*bt;
+
+	bt = blocktype;
 
 	if (blocktype[0] == '!')
 		blocktype++;
@@ -974,6 +1001,14 @@ static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *if
 	{
 		blockmethod = CVARBAN_LOGONLY;
 	}
+	else if (!Q_stricmp (iffound, "message"))
+	{
+		blockmethod = CVARBAN_MESSAGE;
+	}
+	else if (!Q_stricmp (iffound, "stuff"))
+	{
+		blockmethod = CVARBAN_STUFF;
+	}
 	else
 	{
 		Com_Printf ("Error: Unknown match action '%s'\n", LOG_GENERAL, iffound);
@@ -1008,7 +1043,7 @@ static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *if
 	match = match->next;
 
 	match->next = NULL;
-	match->matchvalue = CopyString (blocktype, TAGMALLOC_CVARBANS);
+	match->matchvalue = CopyString (bt, TAGMALLOC_CVARBANS);
 	match->message = CopyString (Cmd_Args2 (4), TAGMALLOC_CVARBANS);
 	match->blockmethod = blockmethod;
 
@@ -1022,11 +1057,12 @@ static void SV_AddCvarBan_f (void)
 	if (Cmd_Argc() < 4)
 	{
 		Com_Printf ("Purpose: Add a simple check for a client cvar.\n"
-					"Syntax : addcvarban <cvarname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE> message\n"
+					"Syntax : addcvarban <cvarname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE|LOG|MESSAGE|STUFF> message\n"
 					"Example: addcvarban gl_modulate >2 KICK Use a lower gl_modulate\n"
 					"Example: addcvarban frkq2_bot * BLACKHOLE\n"
 					"Example: addcvarban vid_ref sw KICK Software mode is not allowed\n"
 					"Example: addcvarban timescale !=1 KICK Illegal timescale value!\n"
+					"Example: addcvarban rate <5000 STUFF set rate 5000\n"
 					"Example: addcvarban version ~R1Q2 KICK R1Q2 is an evil hacked client!\n"
 					"Example: addcvarban version \"Q2 3.20 PPC\" KICK That version is not allowed\n"
 					"WARNING: If the match string requires quotes it can not be added via rcon.\n", LOG_GENERAL);
@@ -1051,7 +1087,7 @@ static void SV_AddUserinfoBan_f (void)
 	if (Cmd_Argc() < 4)
 	{
 		Com_Printf ("Purpose: Add a simple check for a userinfo variable.\n"
-					"Syntax : adduserinfoban <varname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE> message\n"
+			"Syntax : adduserinfoban <varname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE|LOG|MESSAGE|STUFF> message\n"
 					"Example: adduserinfoban rate >15000 KICK Your rate value is too high!\n"
 					"Example: adduserinfoban name ~lamer KICK Lamers aren't welcome here.\n"
 					"Example: adduserinfoban name !~[R1Q2] KICK This server is for R1Q2 clan members only!\n"

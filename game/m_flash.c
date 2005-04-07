@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // this file is included in both the game dll and quake2,
 // the game needs it to source shot locationsf, the client
 // needs it to position muzzle flashes
-vec3_t monster_flash_offset [] =
+const vec3_t monster_flash_offset [] =
 {
 // flash 0 is not used
 	{0.0f, 0.0f, 0.0f},

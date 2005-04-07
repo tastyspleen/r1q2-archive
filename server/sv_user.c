@@ -500,7 +500,7 @@ static void SV_New_f (void)
 SV_Baselines_f
 ==================
 */
-void SV_BaselinesMessage (qboolean userCmd)
+static void SV_BaselinesMessage (qboolean userCmd)
 {
 	int				startPos;
 	int				start;
@@ -1335,7 +1335,7 @@ static void SV_NoGameData_f (void)
 	sv_client->nodata ^= 1;
 }
 
-static void CvarBanDrop (char *match, banmatch_t *ban, char *result)
+static void CvarBanDrop (const char *match, const banmatch_t *ban, const char *result)
 {
 	if (ban->message[0])
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
@@ -1348,7 +1348,7 @@ static void CvarBanDrop (char *match, banmatch_t *ban, char *result)
 	SV_DropClient (sv_client, (ban->blockmethod == CVARBAN_BLACKHOLE) ? false : true);
 }
 
-banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result)
+const banmatch_t *VarBanMatch (varban_t *bans, const char *var, const char *result)
 {
 	banmatch_t			*match;
 	char				*matchvalue;
@@ -1439,8 +1439,8 @@ banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result)
 
 static void SV_CvarResult_f (void)
 {
-	banmatch_t	*match;
-	char		*result;
+	const banmatch_t	*match;
+	const char			*result;
 
 	result = Cmd_Args2(2);
 
@@ -1465,10 +1465,22 @@ static void SV_CvarResult_f (void)
 
 	if (match)
 	{
-		if (match->blockmethod == CVARBAN_LOGONLY)
-			Com_Printf ("LOG: %s[%s] matched cvarban: %s == %s\n", LOG_SERVER, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address), Cmd_Argv(1), result);
-		else
-			CvarBanDrop (Cmd_Argv(1), match, result);
+		switch (match->blockmethod)
+		{
+			case CVARBAN_LOGONLY:
+				Com_Printf ("LOG: %s[%s] matched cvarban: %s == %s\n", LOG_SERVER, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address), Cmd_Argv(1), result);
+				break;
+			case CVARBAN_MESSAGE:
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", match->message);
+				break;
+			case CVARBAN_STUFF:
+				MSG_BeginWriting (svc_stufftext);
+				MSG_WriteString (va ("%s\n",match->message));
+				SV_AddMessage (sv_client, true);
+				break;
+			default:
+				CvarBanDrop (Cmd_Argv(1), match, result);
+		}
 	}
 	else
 	{
@@ -1581,9 +1593,9 @@ static ucmd_t ucmds[] =
 SV_ExecuteUserCommand
 ==================
 */
-void SV_ExecuteUserCommand (char *s)
+static void SV_ExecuteUserCommand (char *s)
 {
-	char				*teststring;
+	const char			*teststring;
 
 	ucmd_t				*u;
 	bannedcommands_t	*x;
@@ -1611,7 +1623,7 @@ void SV_ExecuteUserCommand (char *s)
 	//r1: catch end-of-message exploit
 	if (strchr (s, '\xFF'))
 	{
-		char		*ptr;
+		const char	*ptr;
 		const char	*p;
 		ptr = strchr (s, '\xFF');
 		ptr -= 8;

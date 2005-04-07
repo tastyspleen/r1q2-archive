@@ -103,7 +103,7 @@ malicious server instruct clients to write files over areas they shouldn't.
 FS_filelength
 ================
 */
-int FS_filelength (FILE *f)
+static int FS_filelength (FILE *f)
 {
 	int		pos;
 	int		end;
@@ -126,7 +126,7 @@ Creates any directories needed to store the given filename
 void	FS_CreatePath (char *path)
 {
 	char	*ofs;
-	
+
 	for (ofs = path+1 ; *ofs ; ofs++)
 	{
 		if (*ofs == '/')
@@ -247,7 +247,7 @@ void FS_InitCache (void)
 static fscache_t fscache;
 #endif
 
-void RB_Purge (struct rbtree *r)
+static void RB_Purge (const struct rbtree *r)
 {
 	RBLIST *rblist;
 	const void *val;
@@ -743,7 +743,6 @@ Filename are reletive to the quake search path
 a null buffer will just return the file length without loading
 ============
 */
-const char emptyFile = 0;
 int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 {
 	FILE	*h;
@@ -772,7 +771,7 @@ int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 	{
 		fclose (h);
 		Com_Printf ("WARNING: 0 byte file: %s\n", LOG_GENERAL|LOG_WARNING, path);
-		*buffer = CopyString (&emptyFile, TAGMALLOC_FSLOADFILE);
+		*buffer = CopyString ("", TAGMALLOC_FSLOADFILE);
 		return 0;
 	}
 
@@ -891,7 +890,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	return pack;
 }
 
-int pakcmp (const void *a, const void *b)
+static int pakcmp (const void *a, const void *b)
 {
 	if (*(int *)a > *(int *)b)
 		return 1;

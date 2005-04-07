@@ -108,8 +108,8 @@ typedef struct
 	uint32		randomframe;
 } server_t;
 
-qboolean RateLimited (ratelimit_t *limit, int maxCount);
-void RateSample (ratelimit_t *limit);
+//qboolean RateLimited (ratelimit_t *limit, int maxCount);
+//void RateSample (ratelimit_t *limit);
 
 #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
 #define NUM_FOR_EDICT(e) (int)(( ((byte *)(e)-(byte *)ge->edicts ) / ge->edict_size))
@@ -409,7 +409,7 @@ extern	cvar_t	*allow_download_others;
 //
 // sv_main.c
 //
-void SV_FinalMessage (const char *message, qboolean reconnect);
+//void SV_FinalMessage (const char *message, qboolean reconnect);
 void SV_DropClient (client_t *drop, qboolean notify);
 void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@null@*/*cprintf);
 
@@ -419,12 +419,12 @@ int EXPORT SV_ImageIndex (const char *name);
 
 void SV_WriteClientdataToMessage (client_t *client, sizebuf_t *msg);
 
-void SV_ExecuteUserCommand (char *s);
+//void SV_ExecuteUserCommand (char *s);
 void SV_InitOperatorCommands (void);
 
 void SV_SendServerinfo (client_t *client);
 void SV_UserinfoChanged (client_t *cl);
-void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame);
+//void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame);
 
 extern cvar_t	*sv_filter_q3names;
 extern cvar_t	*sv_filter_userinfo;
@@ -436,8 +436,8 @@ extern cvar_t	*sv_deny_q2ace;
 extern cvar_t	*sv_gamedebug;
 extern cvar_t	*sv_packetentities_hack;
 
-void Master_Heartbeat (void);
-void Master_Packet (void);
+//void Master_Heartbeat (void);
+//void Master_Packet (void);
 
 //
 // sv_init.c
@@ -445,7 +445,7 @@ void Master_Packet (void);
 void SV_InitGame (void);
 void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame);
 
-qboolean CheckUserInfoFields (char *userinfo);
+//qboolean CheckUserInfoFields (char *userinfo);
 
 extern cvar_t *hostname;
 extern int server_port;
@@ -466,7 +466,7 @@ void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, cons
 //
 // sv_phys.c
 //
-void SV_PrepWorldFrame (void);
+//void SV_PrepWorldFrame (void);
 
 //
 // sv_send.c
@@ -482,7 +482,7 @@ extern	char	sv_outputbuf[SV_OUTPUTBUF_LENGTH];
 
 void SV_FlushRedirect (int sv_redirected, char *outputbuf);
 
-void SV_DemoCompleted (void);
+//void SV_DemoCompleted (void);
 void SV_SendClientMessages (void);
 
 void EXPORT SV_Multicast (vec3_t /*@null@*/origin, multicast_t to);
@@ -497,7 +497,7 @@ void SV_BroadcastCommand (const char *fmt, ...) __attribute__ ((format (printf, 
 //sizebuf_t *MSGQueueAlloc (client_t *cl, int size, byte type);
 //void SV_AddMessageQueue (client_t *client, int extrabytes);
 void SV_AddMessage (client_t *cl, qboolean reliable);
-void SV_AddMessageSingle (client_t *cl, qboolean reliable);
+//void SV_AddMessageSingle (client_t *cl, qboolean reliable);
 
 void SV_WriteReliableMessages (client_t *client, int buffSize);
 
@@ -612,6 +612,8 @@ struct blackhole_s
 #define CVARBAN_KICK		1
 #define CVARBAN_BLACKHOLE	2
 #define	CVARBAN_LOGONLY		3
+#define	CVARBAN_MESSAGE		4
+#define	CVARBAN_STUFF		5
 
 extern blackhole_t blackholes;
 
@@ -638,7 +640,7 @@ extern	varban_t	cvarbans;
 extern	varban_t	userinfobans;
 
 
-banmatch_t *VarBanMatch (varban_t *bans, char *var, char *result);
+const banmatch_t *VarBanMatch (varban_t *bans, const char *var, const char *result);
 
 extern	cvar_t	*sv_max_traces_per_frame;
-extern	int		sv_tracecount;
+extern	unsigned long		sv_tracecount;

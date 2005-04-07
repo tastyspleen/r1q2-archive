@@ -48,17 +48,17 @@ typedef struct areanode_s
 #define	AREA_DEPTH	4
 #define	AREA_NODES	32
 
-int	sv_tracecount;
+unsigned long		sv_tracecount;
 
 static areanode_t	sv_areanodes[AREA_NODES];
 static int			sv_numareanodes;
 
-static float	*area_mins, *area_maxs;
+static const float		*area_mins, *area_maxs;
 static edict_t	**area_list;
 static int		area_count, area_maxcount;
 static int		area_type;
 
-int SV_HullForEntity (edict_t *ent);
+static int SV_HullForEntity (const edict_t *ent);
 
 
 // ClearLink is used for new headnodes
@@ -88,7 +88,7 @@ SV_CreateAreaNode
 Builds a uniformly subdivided tree for the given world size
 ===============
 */
-areanode_t *SV_CreateAreaNode (int depth, vec3_t mins, vec3_t maxs)
+static areanode_t *SV_CreateAreaNode (int depth, const vec3_t mins, const vec3_t maxs)
 {
 	areanode_t	*anode;
 	vec3_t		size;
@@ -375,22 +375,17 @@ SV_AreaEdicts_r
 
 ====================
 */
-void SV_AreaEdicts_r (areanode_t *node)
+const void SV_AreaEdicts_r (const areanode_t *node)
 {
-	link_t		*l, *next, *start;
-	edict_t		*check;
-//	int			count;
-
-//	count = 0;
+	link_t			*l, *next;
+	const link_t	*start;
+	edict_t			*check;
 
 	// touch linked edicts
 	if (area_type == AREA_SOLID)
 		start = &node->solid_edicts;
 	else
 		start = &node->trigger_edicts;
-
-	//if (++area_recursions == 512)
-	//	Com_Error (ERR_DROP, "SV_AreaEdicts: area_recursions overflow!");
 
 	for (l=start->next  ; l != start ; l = next)
 	{
@@ -513,7 +508,7 @@ Offset is filled in to contain the adjustment that must be added to the
 testing object's origin to get a point to use with the returned hull.
 ================
 */
-int SV_HullForEntity (edict_t *ent)
+static int SV_HullForEntity (const edict_t *ent)
 {
 	cmodel_t	*model;
 
@@ -542,7 +537,7 @@ SV_ClipMoveToEntities
 
 ====================
 */
-void SV_ClipMoveToEntities ( moveclip_t *clip )
+static void SV_ClipMoveToEntities (moveclip_t *clip )
 {
 	int			i, num;
 	edict_t		*touchlist[MAX_EDICTS], *touch;
@@ -614,7 +609,7 @@ void SV_ClipMoveToEntities ( moveclip_t *clip )
 SV_TraceBounds
 ==================
 */
-void SV_TraceBounds (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, vec3_t boxmins, vec3_t boxmaxs)
+static void SV_TraceBounds (const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, vec3_t boxmins, vec3_t boxmaxs)
 {
 	if (end[0] > start[0])
 	{
@@ -675,7 +670,7 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	//r1: server-side hax for bad looping traces
 	if (++sv_tracecount >= sv_max_traces_per_frame->intvalue)
 	{
-		Com_Printf ("GAME ERROR: Bad SV_Trace: %d calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
+		Com_Printf ("GAME ERROR: Bad SV_Trace: %lu calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
 		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;
 

@@ -774,7 +774,7 @@ void MSG_WriteAngle16 (float f)
 }
 
 
-void MSG_WriteDeltaUsercmd (usercmd_t *from, usercmd_t *cmd)
+void MSG_WriteDeltaUsercmd (const usercmd_t *from, const usercmd_t *cmd)
 {
 	int		bits;
 
@@ -872,7 +872,7 @@ Writes part of a packetentities message.
 Can delta from either a baseline or a previous packet_entity
 ==================
 */
-void MSG_WriteDeltaEntity (entity_state_t *from, entity_state_t *to, qboolean force, qboolean newentity, int cl_protocol)
+void MSG_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to, qboolean force, qboolean newentity, int cl_protocol)
 {
 	int		bits;
 

@@ -293,7 +293,7 @@ void CL_PrepRefresh (void)
 	Q_strncpy (mapname, cl.configstrings[CS_MODELS+1] + 5, sizeof(mapname)-1);	// skip "maps/"
 	mapname[strlen(mapname)-4] = 0;		// cut off ".bsp"
 
-	Cvar_ForceSet ("$$mapname", mapname);
+	Cvar_ForceSet ("$mapname", mapname);
 
 	// register models, pics, and skins
 	Com_Printf ("Map: %s\r", LOG_CLIENT, mapname); 

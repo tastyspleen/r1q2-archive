@@ -1075,8 +1075,8 @@ void CL_Disconnect (qboolean skipdisconnect)
 	cls.state = ca_disconnected;
 	cls.servername[0] = '\0';
 
-	Cvar_ForceSet ("$$mapname", "");
-	Cvar_ForceSet ("$$game", "");
+	Cvar_ForceSet ("$mapname", "");
+	Cvar_ForceSet ("$game", "");
 
 	//r1: swap games if needed
 	Cvar_GetLatchedVars();

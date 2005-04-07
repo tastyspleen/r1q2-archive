@@ -141,7 +141,7 @@ void Con_ToggleChat_f (void)
 Con_Clear_f
 ================
 */
-void Con_Clear_f (void)
+static void Con_Clear_f (void)
 {
 	memset (con.text, ' ', CON_TEXTSIZE);
 }
@@ -154,7 +154,7 @@ Con_Dump_f
 Save the console contents out to a file
 ================
 */
-void Con_Dump_f (void)
+static void Con_Dump_f (void)
 {
 	int		l, x;
 	char	*line;
@@ -248,7 +248,7 @@ void Con_ClearNotify (void)
 Con_MessageMode_f
 ================
 */
-void Con_MessageMode_f (void)
+static void Con_MessageMode_f (void)
 {
 	chat_team = false;
 
@@ -271,7 +271,7 @@ void Con_MessageMode_f (void)
 Con_MessageMode2_f
 ================
 */
-void Con_MessageMode2_f (void)
+static void Con_MessageMode2_f (void)
 {
 	chat_team = true;
 
@@ -289,7 +289,7 @@ void Con_MessageMode2_f (void)
 	cls.key_dest = key_message;
 }
 
-void Con_Resize (int width)
+static void Con_Resize (int width)
 {
 	char	tbuf[CON_TEXTSIZE];
 	int		i, j, oldwidth, oldtotallines, numlines, numchars;
@@ -390,7 +390,7 @@ void Con_Init (void)
 Con_Linefeed
 ===============
 */
-void Con_Linefeed (void)
+static void Con_Linefeed (void)
 {
 	con.x = 0;
 	if (con.display == con.current)
@@ -409,7 +409,7 @@ All console printing must go through this in order to be logged to disk
 If no console is visible, the text will appear at the top of the game window
 ================
 */
-void Con_Print (char *txt)
+void Con_Print (const char *txt)
 {
 	int		y;
 	int		c, l;
@@ -516,7 +516,7 @@ Con_DrawInput
 The input line scrolls horizontally if typing goes beyond the right edge
 ================
 */
-void Con_DrawInput (void)
+static void Con_DrawInput (void)
 {
 	int		linepos;
 	int		length;
@@ -574,7 +574,7 @@ Draws the last few lines of output transparently over the game top
 void Con_DrawNotify (void)
 {
 	int		x, v;
-	char	*text;
+	const char	*text;
 	int		i;
 	int		time;
 	char	*s;

@@ -524,7 +524,7 @@ localent_t *Le_Alloc (void);
 void Le_Free (localent_t *lent);
 
 int CL_ParseEntityBits (uint32 *bits);
-void CL_ParseDelta (entity_state_t *from, entity_state_t *to, int number, int bits);
+void CL_ParseDelta (const entity_state_t *from, entity_state_t *to, int number, int bits);
 void CL_ParseFrame (int extrabits);
 
 void CL_ParseTEnt (void);

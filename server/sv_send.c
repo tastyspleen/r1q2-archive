@@ -48,7 +48,7 @@ EVENT MESSAGES
 =============================================================================
 */
 
-void SV_MSGListIntegrityCheck (client_t *cl)
+static void SV_MSGListIntegrityCheck (client_t *cl)
 {
 #ifndef NDEBUG
 	messagelist_t	*msg;
@@ -141,7 +141,7 @@ void EXPORT SV_BroadcastPrintf (int level, const char *fmt, ...)
 	}
 }
 
-messagelist_t * SV_DeleteMessage (client_t *cl, messagelist_t *message, messagelist_t *last)
+static messagelist_t * SV_DeleteMessage (client_t *cl, messagelist_t *message, messagelist_t *last)
 {
 	//only free if it was malloced
 	if (message->cursize > MSG_MAX_SIZE_BEFORE_MALLOC)
@@ -178,7 +178,7 @@ void SV_ClearMessageList (client_t *client)
 	}
 }
 
-void SV_AddMessageSingle (client_t *cl, qboolean reliable)
+static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 {
 	int				index;
 	messagelist_t	*next;
@@ -245,7 +245,7 @@ void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 	next->reliable = reliable;
 }
 
-void SV_CheckForOverflow (void)
+static void SV_CheckForOverflow (void)
 {
 	int				i;
 	client_t		*cl;
@@ -284,7 +284,7 @@ void SV_AddMessage (client_t *cl, qboolean reliable)
 	SV_CheckForOverflow ();
 }
 
-void SV_AddMessageAll (qboolean reliable)
+/*void SV_AddMessageAll (qboolean reliable)
 {
 	int				i;
 	client_t		*cl;
@@ -298,7 +298,7 @@ void SV_AddMessageAll (qboolean reliable)
 	}
 	MSG_FreeData();
 	SV_CheckForOverflow ();
-}
+}*/
 
 /*
 =================
@@ -1009,7 +1009,7 @@ retryframe:
 SV_DemoCompleted
 ==================
 */
-void SV_DemoCompleted (void)
+static void SV_DemoCompleted (void)
 {
 	if (sv.demofile)
 	{

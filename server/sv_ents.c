@@ -114,6 +114,7 @@ void SV_EmitProjectileUpdate (sizebuf_t *msg)
 }
 #endif
 
+/*
 #define PACKER_BUFFER_SIZE	256
 #define BITS_PER_WORD		32
 
@@ -188,7 +189,7 @@ int BP_get_length (packer_t *packer)
 	int len_in_bytes = (packer->next_bit_to_write + 7) / 8;
 	Q_assert(len_in_bytes <= PACKER_BUFFER_SIZE);
 	return len_in_bytes;
-}
+}*/
 
 /*
 =============
@@ -197,10 +198,10 @@ SV_EmitPacketEntities
 Writes a delta update of an entity_state_t list to the message.
 =============
 */
-static void SV_EmitPacketEntities (client_t *cl, client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg)
+static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@null@*/*from, const client_frame_t *to, sizebuf_t *msg)
 {
-	entity_state_t	*oldent;
-	entity_state_t 	*newent;
+	const entity_state_t	*oldent;
+	const entity_state_t	*newent;
 
 //	int				removed[MAX_EDICTS];
 //	int				removedindex;
@@ -408,7 +409,7 @@ SV_WritePlayerstateToClient
 
 =============
 */
-static int SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg, client_t *client)
+static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, client_frame_t *to, sizebuf_t *msg, const client_t *client)
 {
 	int							i;
 	int							pflags;
@@ -416,7 +417,8 @@ static int SV_WritePlayerstateToClient (client_frame_t /*@null@*/*from, client_f
 	int							statbits;
 	int							extraflags;
 	qboolean					enhanced;
-	player_state_new			*ps, *ops;
+	player_state_new			*ps;
+	const player_state_new		*ops;
 
 	ps = &to->ps;
 
@@ -913,7 +915,8 @@ static void SV_FatPVS (vec3_t org)
 	}
 }
 
-static qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, edict_t *ent, qboolean fullCheck, qboolean predictEnt) {
+static qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, const edict_t *ent, qboolean fullCheck, qboolean predictEnt)
+{
 	int		i;
 	vec3_t	ends[9];
 	vec3_t	entOrigin;
@@ -997,18 +1000,19 @@ copies off the playerstat and areabits.
 */
 void SV_BuildClientFrame (client_t *client)
 {
-	int		e, i;
-	vec3_t	org;
-	edict_t	*ent;
-	edict_t	*clent;
-	client_frame_t	*frame;
-	entity_state_t	*state;
-	int		l;
-	int		clientarea, clientcluster;
-	int		leafnum;
-	int		c_fullsend;
-	byte	*clientphs;
-	byte	*bitvector;
+	int						e, i;
+	vec3_t					org;
+	edict_t					*ent;
+	const edict_t			*clent;
+	client_frame_t			*frame;
+	entity_state_t			*state;
+
+	int						l;
+	int						clientarea, clientcluster;
+	int						leafnum;
+	int						c_fullsend;
+	const byte				*clientphs;
+	const byte				*bitvector;
 
 	// *********** NiceAss Start ************
 	qboolean	visible;
@@ -1227,7 +1231,11 @@ void SV_BuildClientFrame (client_t *client)
 		state = &svs.client_entities[svs.next_client_entities%svs.num_client_entities];
 		if (ent->s.number != e)
 		{
-			Com_DPrintf ("FIXING ENT->S.NUMBER!!!\n");
+			//Com_DPrintf ("FIXING ENT->S.NUMBER!!!\n");
+			//Com_Error (ERR_DROP, "Bad entity state on entity %d", e);
+			if (sv_gamedebug->intvalue)
+				Com_Printf ("GAME WARNING: Entity state on entity %d corrupted (bad ent->s.number %d)\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_WARNING, e, ent->s.number);
+
 			ent->s.number = e;
 		}
 		*state = ent->s;

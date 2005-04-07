@@ -140,7 +140,7 @@ int EXPORT SV_ImageIndex (const char *name)
 SV_CheckForSavegame
 =================
 */
-void SV_CheckForSavegame (void)
+static void SV_CheckForSavegame (void)
 {
 	char		name[MAX_OSPATH];
 	FILE		*f;
@@ -192,7 +192,7 @@ clients along with it.
 
 ================
 */
-void SV_SpawnServer (const char *server, const char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
+static void SV_SpawnServer (const char *server, const char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
 {
 	int			i;
 	uint32		checksum;

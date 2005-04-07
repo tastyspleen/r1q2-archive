@@ -243,7 +243,7 @@ CL_ParseDelta
 Can go from either a baseline or a previous packet_entity
 ==================
 */
-void CL_ParseDelta (entity_state_t *from, entity_state_t *to, int number, int bits)
+void CL_ParseDelta (const entity_state_t *from, entity_state_t *to, int number, int bits)
 {
 	// set everything to the state we are delta'ing from
 	*to = *from;
@@ -333,7 +333,7 @@ Parses deltas from the given base and adds the resulting entity
 to the current frame
 ==================
 */
-void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
+static void CL_DeltaEntity (frame_t *frame, int newnum, const entity_state_t *old, int bits)
 {
 	centity_t	*ent;
 	entity_state_t	*state;
@@ -394,7 +394,7 @@ void CL_DeltaEntity (frame_t *frame, int newnum, entity_state_t *old, int bits)
 	//	memcpy (&cl_entities[newnum].baseline, state, sizeof(entity_state_t));
 }
 
-void ShowBits (uint32 bits)
+static void ShowBits (uint32 bits)
 {
 	if (cl_shownet->intvalue < 4 && cl_shownet->intvalue != -2)
 		return;
@@ -530,7 +530,7 @@ An svc_packetentities has just been parsed, deal with the
 rest of the data stream.
 ==================
 */
-void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
+static void CL_ParsePacketEntities (const frame_t *oldframe, frame_t *newframe)
 {
 	int				newnum;
 	uint32			bits;
@@ -708,7 +708,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 CL_ParsePlayerstate
 ===================
 */
-void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe, int extraflags)
+static void CL_ParsePlayerstate (const frame_t *oldframe, frame_t *newframe, int extraflags)
 {
 	int			flags;
 	player_state_new	*state;
@@ -888,7 +888,7 @@ CL_FireEntityEvents
 
 ==================
 */
-void CL_FireEntityEvents (frame_t *frame)
+static void CL_FireEntityEvents (const frame_t *frame)
 {
 	entity_state_t		*s1;
 	int					pnum, num;
@@ -1147,19 +1147,19 @@ CL_AddPacketEntities
 
 ===============
 */
-void CL_AddPacketEntities (frame_t *frame)
+static void CL_AddPacketEntities (const frame_t *frame)
 {
-	entity_t			ent = {0};
-	entity_state_t		*s1;
-	float				autorotate;
-	int					i;
-	int					pnum;
-	centity_t			*cent;
-	int					autoanim;
-	clientinfo_t		*ci;
-	uint32				effects, renderfx;
-	float				time;
-
+	entity_t				ent = {0};
+	const entity_state_t	*s1;
+	float					autorotate;
+	int						i;
+	int						pnum;
+	centity_t				*cent;
+	int						autoanim;
+	const clientinfo_t		*ci;
+	uint32					effects, renderfx;
+	float					time;
+	
 	time = (float)cl.time;
 
 	// bonus items rotate at a fixed rate
@@ -1665,7 +1665,7 @@ void CL_AddPacketEntities (frame_t *frame)
 CL_AddViewWeapon
 ==============
 */
-void CL_AddViewWeapon (player_state_new *ps, player_state_new *ops)
+static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new *ops)
 {
 	entity_t	gun = {0};		// view model
 	int			i;
@@ -1725,13 +1725,13 @@ CL_CalcViewValues
 Sets cl.refdef view values
 ===============
 */
-void CL_CalcViewValues (void)
+static void CL_CalcViewValues (void)
 {
 	int			i;
 	float		lerp, backlerp;
 //	centity_t	*ent;
-	frame_t		*oldframe;
-	player_state_new	*ps, *ops;
+	const frame_t		*oldframe;
+	const player_state_new	*ps, *ops;
 
 	// find the previous frame to interpolate from
 	ps = &cl.frame.playerstate;
@@ -1900,7 +1900,7 @@ CL_GetEntitySoundOrigin
 Called to get the sound spatialization origin
 ===============
 */
-void CL_GetEntitySoundOrigin (int ent, vec3_t origin, vec3_t velocity)
+void CL_GetEntitySoundOrigin (int ent, vec3_t origin)
 {
 	/*centity_t	*old;
 
@@ -1933,13 +1933,6 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t origin, vec3_t velocity)
 		origin[0] = cent->current.old_origin[0] + (cent->current.origin[0] - cent->current.old_origin[0]) * cl.lerpfrac;
 		origin[1] = cent->current.old_origin[1] + (cent->current.origin[1] - cent->current.old_origin[1]) * cl.lerpfrac;
 		origin[2] = cent->current.old_origin[2] + (cent->current.origin[2] - cent->current.old_origin[2]) * cl.lerpfrac;
-
-		// Calculate velocity
-		if (velocity)
-		{
-			VectorSubtract(cent->current.origin, cent->current.old_origin, velocity);
-			VectorScale(velocity, 10, velocity);
-		}
 	}
 	else
 	{
@@ -1947,13 +1940,6 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t origin, vec3_t velocity)
 		origin[0] = cent->prev.origin[0] + (cent->current.origin[0] - cent->prev.origin[0]) * cl.lerpfrac;
 		origin[1] = cent->prev.origin[1] + (cent->current.origin[1] - cent->prev.origin[1]) * cl.lerpfrac;
 		origin[2] = cent->prev.origin[2] + (cent->current.origin[2] - cent->prev.origin[2]) * cl.lerpfrac;
-
-		// Calculate velocity
-		if (velocity)
-		{
-			VectorSubtract (cent->current.origin, cent->prev.origin, velocity);
-			VectorScale (velocity, 10, velocity);
-		}
 	}
 
 	// If a brush model, offset the origin

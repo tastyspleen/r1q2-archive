@@ -203,8 +203,8 @@ void SZ_WriteByte (sizebuf_t *buf, int c);
 void SZ_WriteShort (sizebuf_t *buf, int c);
 void SZ_WriteLong (sizebuf_t *buf, int c);
 
-void MSG_WriteDeltaUsercmd (struct usercmd_s *from, struct usercmd_s /*@out@*/*cmd);
-void MSG_WriteDeltaEntity (struct entity_state_s *from, struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol);
+void MSG_WriteDeltaUsercmd (const struct usercmd_s *from, const struct usercmd_s /*@out@*/*cmd);
+void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol);
 void MSG_WriteDir (vec3_t vector);
 
 
@@ -629,7 +629,7 @@ int Cvar_IntValue (const char *var_name);
 const char	*Cvar_VariableString (const char *var_name);
 // returns an empty string if not defined
 
-char 	*Cvar_CompleteVariable (const char *partial);
+const char 	*Cvar_CompleteVariable (const char *partial);
 // attempts to match a partial variable name for command line completion
 // returns NULL if nothing fits
 
@@ -812,7 +812,7 @@ cmodel_t	*CM_InlineModel (const char *name);	// *1, *2, etc
 char		*CM_EntityString (void);
 
 // creates a clipping hull for an arbitrary box
-int			CM_HeadnodeForBox (vec3_t mins, vec3_t maxs);
+int			CM_HeadnodeForBox (const vec3_t mins, const vec3_t maxs);
 
 
 // returns an ORed contents mask
@@ -877,7 +877,7 @@ void		EXPORT CM_SetAreaPortalState (int portalnum, qboolean open);
 qboolean	EXPORT CM_AreasConnected (int area1, int area2);
 
 int			CM_WriteAreaBits (byte *buffer, int area);
-qboolean	CM_HeadnodeVisible (int headnode, byte *visbits);
+qboolean	CM_HeadnodeVisible (int headnode, const byte *visbits);
 
 void		CM_WritePortalState (FILE *f);
 void		CM_ReadPortalState (FILE *f);
@@ -1126,7 +1126,7 @@ void CL_Init (void);
 void CL_Drop (qboolean skipdisconnect, qboolean nonerror);
 void CL_Shutdown (void);
 void CL_Frame (int msec);
-void Con_Print (char *text);
+void Con_Print (const char *text);
 void SCR_BeginLoadingPlaque (void);
 
 void SV_Init (void);

@@ -591,9 +591,10 @@ qboolean CL_ParseServerData (void)
 			{
 				Cvar_Set("game", str);
 			}
-			Cvar_ForceSet ("$$game", str);
 		}
 	}
+
+	Cvar_ForceSet ("$game", str);
 
 	// parse player entity number
 	cl.playernum = MSG_ReadShort (&net_message);

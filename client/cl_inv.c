@@ -40,7 +40,7 @@ void CL_ParseInventory (void)
 Inv_DrawString
 ================
 */
-void Inv_DrawString (int x, int y, char *string)
+static void Inv_DrawString (int x, int y, const char *string)
 {
 	while (*string)
 	{
@@ -50,7 +50,7 @@ void Inv_DrawString (int x, int y, char *string)
 	}
 }
 
-void SetStringHighBit (char *s)
+static void SetStringHighBit (char *s)
 {
 	while (*s)
 		*s++ |= 128;
@@ -71,7 +71,7 @@ void CL_DrawInventory (void)
 	char	string[1024];
 	int		x, y;
 	char	binding[1024];
-	char	*bind;
+	const char	*bind;
 	int		selected;
 	int		top;
 
@@ -136,8 +136,6 @@ void CL_DrawInventory (void)
 		Inv_DrawString (x, y, string);
 		y += 8;
 	}
-
-
 }
 
 

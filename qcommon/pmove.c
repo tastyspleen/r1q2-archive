@@ -75,7 +75,7 @@ returns the blocked flags (1 = floor, 2 = step / wall)
 */
 #define	STOP_EPSILON	0.1
 
-void PM_ClipVelocity (vec3_t in, vec3_t normal, vec3_t out, float overbounce)
+static void PM_ClipVelocity (vec3_t in, vec3_t normal, vec3_t out, float overbounce)
 {
 	float	backoff;
 	float	change;
@@ -108,7 +108,7 @@ Does not modify any world state?
 */
 #define	MIN_STEP_NORMAL	0.7		// can't step up onto very steep slopes
 #define	MAX_CLIP_PLANES	5
-void PM_StepSlideMove_ (void)
+static void PM_StepSlideMove_ (void)
 {
 	int			bumpcount, numbumps;
 	vec3_t		dir;
@@ -267,7 +267,7 @@ PM_StepSlideMove
 
 ==================
 */
-void PM_StepSlideMove (void)
+static void PM_StepSlideMove (void)
 {
 	vec3_t		start_o, start_v;
 	vec3_t		down_o, down_v;
@@ -341,7 +341,7 @@ PM_Friction
 Handles both ground friction and water friction
 ==================
 */
-void PM_Friction (void)
+static void PM_Friction (void)
 {
 	float	*vel;
 	float	speed, newspeed, control;
@@ -393,7 +393,7 @@ PM_Accelerate
 Handles user intended acceleration
 ==============
 */
-void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
+static void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
 {
 	float		addspeed, accelspeed, currentspeed;
 
@@ -412,7 +412,7 @@ void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
 	pml.velocity[2] += accelspeed*wishdir[2];
 }
 
-void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
+static void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 {
 	float		addspeed, accelspeed, currentspeed, wishspd = wishspeed;
 		
@@ -438,7 +438,7 @@ void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 PM_AddCurrents
 =============
 */
-void PM_AddCurrents (vec3_t	wishvel)
+static void PM_AddCurrents (vec3_t	wishvel)
 {
 	vec3_t	v;
 	float	s;
@@ -533,7 +533,7 @@ PM_WaterMove
 
 ===================
 */
-void PM_WaterMove (void)
+static void PM_WaterMove (void)
 {
 	vec3_t	wishvel;
 	float	wishspeed;
@@ -575,7 +575,7 @@ PM_AirMove
 
 ===================
 */
-void PM_AirMove (void)
+static void PM_AirMove (void)
 {
 	//int			i;
 	vec3_t		wishvel;
@@ -672,7 +672,7 @@ void PM_AirMove (void)
 PM_CatagorizePosition
 =============
 */
-void PM_CatagorizePosition (void)
+static void PM_CatagorizePosition (void)
 {
 	vec3_t		point;
 	int			cont;
@@ -780,7 +780,7 @@ void PM_CatagorizePosition (void)
 PM_CheckJump
 =============
 */
-void PM_CheckJump (void)
+static void PM_CheckJump (void)
 {
 	if (pm->s.pm_flags & PMF_TIME_LAND)
 	{	// hasn't been long enough since landing to jump again
@@ -833,7 +833,7 @@ void PM_CheckJump (void)
 PM_CheckSpecialMovement
 =============
 */
-void PM_CheckSpecialMovement (void)
+static void PM_CheckSpecialMovement (void)
 {
 	vec3_t	spot;
 	int		cont;
@@ -885,7 +885,7 @@ PM_FlyMove
 ===============
 */
 //void PM_FlyMove (qboolean doclip)
-void PM_FlyMove (void)
+static void PM_FlyMove (void)
 {
 	float	speed, drop, friction, control, newspeed;
 	float	currentspeed, addspeed, accelspeed;
@@ -971,7 +971,7 @@ PM_CheckDuck
 Sets mins, maxs, and pm->viewheight
 ==============
 */
-void PM_CheckDuck (void)
+static void PM_CheckDuck (void)
 {
 	trace_t	trace;
 
@@ -1069,7 +1069,7 @@ void PM_CheckDuck (void)
 PM_DeadMove
 ==============
 */
-void PM_DeadMove (void)
+static void PM_DeadMove (void)
 {
 	float	forward;
 
@@ -1092,7 +1092,7 @@ void PM_DeadMove (void)
 }
 
 
-qboolean	PM_GoodPosition (void)
+static qboolean	PM_GoodPosition (void)
 {
 	trace_t	trace;
 	vec3_t	origin, end;
@@ -1116,7 +1116,7 @@ On exit, the origin will have a value that is pre-quantized to the 0.125
 precision of the network channel and in a valid position.
 ================
 */
-void PM_SnapPosition (void)
+static void PM_SnapPosition (void)
 {
 	int		sign[3];
 	int		i, j, bits;
@@ -1168,7 +1168,7 @@ PM_InitialSnapPosition
 
 ================
 */
-void PM_InitialSnapPosition (void)
+static void PM_InitialSnapPosition (void)
 {
 	int		x, y, z;
 	int16	base[3];
@@ -1205,7 +1205,7 @@ PM_InitialSnapPosition
 
 ================
 */
-void PM_InitialSnapPosition(void)
+static void PM_InitialSnapPosition(void)
 {
 	int        x, y, z;
 	int16      base[3];
@@ -1241,7 +1241,7 @@ PM_ClampAngles
 
 ================
 */
-void PM_ClampAngles (void)
+static void PM_ClampAngles (void)
 {
 	int16	temp;
 	int		i;

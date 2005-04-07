@@ -170,9 +170,9 @@ linkedvaluelist_t	serveraliases;
 
 int		pyroadminid;
 
-void Master_Shutdown (void);
+//void Master_Shutdown (void);
 
-int CharVerify (char c)
+static int CharVerify (char c)
 {
 	if (sv_filter_q3names->intvalue == 2)
 		return !(isalnum(c));
@@ -182,7 +182,7 @@ int CharVerify (char c)
 
 //============================================================================
 
-int NameColorFilterCheck (const char *newname)
+static int NameColorFilterCheck (const char *newname)
 {
 	size_t	length;
 	size_t	i;
@@ -202,7 +202,7 @@ int NameColorFilterCheck (const char *newname)
 	return 0;
 }
 
-int StringIsWhitespace (const char *name)
+static int StringIsWhitespace (const char *name)
 {
 	const char	*p;
 
@@ -276,7 +276,7 @@ void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@nu
 }
 
 //r1: this does the final cleaning up of a client after zombie state.
-void SV_CleanClient (client_t *drop)
+static void SV_CleanClient (client_t *drop)
 {
 	//r1: drop message list
 	if (drop->messageListData)
@@ -317,11 +317,11 @@ void SV_CleanClient (client_t *drop)
 	}
 }
 
-banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
+static const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
 {
-	char		*s, *p;
-	char		value[MAX_INFO_VALUE];
-	banmatch_t	*match;
+	char				value[MAX_INFO_VALUE];
+	const char			*s, *p;
+	const banmatch_t	*match;
 
 	if (!userinfobans.next)
 		return NULL;
@@ -379,7 +379,7 @@ SV_StatusString
 Builds the string that is sent as heartbeats and status replies
 ===============
 */
-char	*SV_StatusString (void)
+static const char *SV_StatusString (void)
 {
 	char	*serverinfo;
 	char	player[1024];
@@ -552,7 +552,7 @@ char	*SV_StatusString (void)
 	return status;
 }
 
-qboolean RateLimited (ratelimit_t *limit, int maxCount)
+static qboolean RateLimited (ratelimit_t *limit, int maxCount)
 {
 	int diff;
 
@@ -573,7 +573,7 @@ qboolean RateLimited (ratelimit_t *limit, int maxCount)
 	return false;
 }
 
-void RateSample (ratelimit_t *limit)
+static void RateSample (ratelimit_t *limit)
 {
 	int diff;
 
@@ -598,7 +598,7 @@ SVC_Status
 Responds with all the info that qplug or qspy can see
 ================
 */
-void SVC_Status (void)
+static void SVC_Status (void)
 {
 	if (sv_hidestatus->intvalue)
 		return;
@@ -620,13 +620,15 @@ SVC_Ack
 
 ================
 */
-void SVC_Ack (void)
+static void SVC_Ack (void)
 {
 	int i;
 	//r1: could be used to flood server console - only show acks from masters.
 
-	for (i=0 ; i<MAX_MASTERS ; i++) {
-		if (master_adr[i].port && NET_CompareBaseAdr (&master_adr[i], &net_from)) {
+	for (i=0 ; i<MAX_MASTERS ; i++)
+	{
+		if (master_adr[i].port && NET_CompareBaseAdr (&master_adr[i], &net_from))
+		{
 			Com_Printf ("Ping acknowledge from %s\n", LOG_SERVER|LOG_NOTICE, NET_AdrToString(&net_from));
 			break;
 		}
@@ -641,7 +643,7 @@ Responds with short info for broadcast scans
 The second parameter should be the current protocol version number.
 ================
 */
-void SVC_Info (void)
+static void SVC_Info (void)
 {
 	char	string[64];
 	int		i, count;
@@ -679,7 +681,7 @@ SVC_Ping
 Just responds with an acknowledgement
 ================
 */
-void SVC_Ping (void)
+static void SVC_Ping (void)
 {
 	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "ack");
 }
@@ -697,7 +699,7 @@ challenge, they must give a valid IP address.
 =================
 */
 
-void SVC_GetChallenge (void)
+static void SVC_GetChallenge (void)
 {
 	int		i;
 	int		oldest = 0;
@@ -732,7 +734,8 @@ void SVC_GetChallenge (void)
 	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d", svs.challenges[i].challenge);
 }
 
-qboolean CheckUserInfoFields (char *userinfo)
+#if 0
+static qboolean CheckUserInfoFields (char *userinfo)
 {
 	if (!Info_KeyExists (userinfo, "name")) /* || !Info_KeyExists (userinfo, "rate") 
 		|| !Info_KeyExists (userinfo, "msg") || !Info_KeyExists (userinfo, "hand")
@@ -741,8 +744,9 @@ qboolean CheckUserInfoFields (char *userinfo)
 
 	return true;
 }
+#endif
 
-qboolean SV_UserinfoValidate (const char *userinfo)
+static qboolean SV_UserinfoValidate (const char *userinfo)
 {
 	const char		*s;
 	const char		*p;
@@ -794,6 +798,63 @@ qboolean SV_UserinfoValidate (const char *userinfo)
 	return true;
 }
 
+static void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame)
+{
+	char	*val;
+	int		i;
+
+	// call prog code to allow overrides
+	if (notifyGame)
+		ge->ClientUserinfoChanged (cl->edict, cl->userinfo);
+
+	val = Info_ValueForKey (cl->userinfo, "name");
+
+	if (val[0])
+	{
+		//truncate
+		val[15] = 0;
+
+		//r1: notify console
+		if (cl->name[0] && val[0] && strcmp (cl->name, val))
+			Com_Printf ("%s[%s] changed name to %s.\n", LOG_SERVER|LOG_NAME, cl->name, NET_AdrToString (&cl->netchan.remote_address), val);
+		
+		// name for C code
+		strcpy (cl->name, val);
+
+		// mask off high bit
+		for (i=0 ; i<sizeof(cl->name)-1; i++)
+			cl->name[i] &= 127;
+	}
+	else
+	{
+		cl->name[0] = 0;
+	}
+
+	// rate command
+	val = Info_ValueForKey (cl->userinfo, "rate");
+	if (val[0])
+	{
+		i = atoi(val);
+		cl->rate = i;
+		if (cl->rate < 100)
+			cl->rate = 100;
+		if (cl->rate > 15000)
+			cl->rate = 15000;
+	}
+	else
+		cl->rate = 5000;
+
+	// msg command
+	val = Info_ValueForKey (cl->userinfo, "msg");
+	if (val[0])
+	{
+		cl->messagelevel = atoi(val);
+
+		//safety check for integer overflow...
+		if (cl->messagelevel < 0)
+			cl->messagelevel = 0;
+	}
+}
 
 /*
 ==================
@@ -802,7 +863,7 @@ SVC_DirectConnect
 A connection request that did not come from the master
 ==================
 */
-void SVC_DirectConnect (void)
+static void SVC_DirectConnect (void)
 {
 	netadr_t	*adr;
 
@@ -810,7 +871,7 @@ void SVC_DirectConnect (void)
 
 	edict_t		*ent;
 
-	banmatch_t	*match;
+	const banmatch_t	*match;
 
 	int			i;
 	int			edictnum;
@@ -1266,7 +1327,7 @@ gotnewcl:
 	newcl->lastmessage = svs.realtime - ((timeout->intvalue - 5) * 1000);
 }
 
-int Rcon_Validate (void)
+static int Rcon_Validate (void)
 {
 	if (rcon_password->string[0] && !strcmp (Cmd_Argv(1), rcon_password->string) )
 		return 1;
@@ -1276,7 +1337,7 @@ int Rcon_Validate (void)
 	return 0;
 }
 
-uint32 CalcMask (int32 bits)
+static uint32 CalcMask (int32 bits)
 {
 	int				i;
 	uint32			mask;
@@ -1358,7 +1419,7 @@ qboolean UnBlackhole (int index)
 	return true;
 }
 
-const char *FindPlayer (netadr_t *from)
+static const char *FindPlayer (netadr_t *from)
 {
 	int			i;
 	client_t	*cl;
@@ -1387,7 +1448,7 @@ Shift down the remaining args
 Redirect all printfs
 ===============
 */
-void SVC_RemoteCommand (void)
+static void SVC_RemoteCommand (void)
 {
 	//static int last_rcon_time = 0;
 	int		i;
@@ -1505,7 +1566,7 @@ void SVC_RemoteCommand (void)
 }
 
 #ifdef USE_PYROADMIN
-void SVC_PyroAdminCommand (char *s)
+static void SVC_PyroAdminCommand (char *s)
 {
 	if (pyroadminid && atoi(Cmd_Argv(1)) == pyroadminid)
 	{
@@ -1540,7 +1601,7 @@ Clients that are in the game can still send
 connectionless packets.
 =================
 */
-void SV_ConnectionlessPacket (void)
+static void SV_ConnectionlessPacket (void)
 {
 	blackhole_t *blackhole = &blackholes;
 	char	*s;
@@ -1620,7 +1681,7 @@ SV_CalcPings
 Updates the cl->ping variables
 ===================
 */
-void SV_CalcPings (void)
+static void SV_CalcPings (void)
 {
 	int			i, j;
 	client_t	*cl;
@@ -1686,7 +1747,7 @@ Every few frames, gives all clients an allotment of milliseconds
 for their command moves.  If they exceed it, assume cheating.
 ===================
 */
-void SV_GiveMsec (void)
+static void SV_GiveMsec (void)
 {
 	int			msecpoint;
 	int			i;
@@ -1760,7 +1821,7 @@ void SV_GiveMsec (void)
 SV_ReadPackets
 =================
 */
-void SV_ReadPackets (void)
+static void SV_ReadPackets (void)
 {
 	int			i, j;
 	client_t	*cl;
@@ -1879,7 +1940,7 @@ for a few seconds to make sure any final reliable message gets resent
 if necessary
 ==================
 */
-void SV_CheckTimeouts (void)
+static void SV_CheckTimeouts (void)
 {
 	int		i;
 	client_t	*cl;
@@ -1960,7 +2021,7 @@ This has to be done before the world logic, because
 player processing happens outside RunWorldFrame
 ================
 */
-void SV_PrepWorldFrame (void)
+static void SV_PrepWorldFrame (void)
 {
 	edict_t	*ent;
 	int		i;
@@ -1973,7 +2034,7 @@ void SV_PrepWorldFrame (void)
 	}
 }
 
-void SV_RunClientDownload (client_t *cl)
+static void SV_RunClientDownload (client_t *cl)
 {
 	download_queue_t	*dl;
 
@@ -1981,7 +2042,7 @@ void SV_RunClientDownload (client_t *cl)
 
 }
 
-void SV_RunDownloadServer (void)
+static void SV_RunDownloadServer (void)
 {
 	int			i;
 	client_t	*cl;
@@ -1998,7 +2059,7 @@ void SV_RunDownloadServer (void)
 SV_RunGameFrame
 =================
 */
-void SV_RunGameFrame (void)
+static void SV_RunGameFrame (void)
 {
 #ifndef DEDICATED_ONLY
 	if (host_speeds->intvalue)
@@ -2035,6 +2096,49 @@ void SV_RunGameFrame (void)
 		time_after_game = Sys_Milliseconds ();
 #endif
 
+}
+
+/*
+================
+Master_Heartbeat
+
+Send a message to the master every few minutes to
+let it know we are alive, and log information
+================
+*/
+
+static void Master_Heartbeat (void)
+{
+	const char	*string;
+	int			i;
+
+	if (!dedicated->intvalue)
+		return;		// only dedicated servers send heartbeats
+
+	if (!public_server->intvalue)
+		return;		// a private dedicated game
+
+	// check for time wraparound
+	if (svs.last_heartbeat > svs.realtime)
+		svs.last_heartbeat = svs.realtime;
+
+	if (svs.realtime - svs.last_heartbeat < HEARTBEAT_SECONDS*1000)
+		return;		// not time to send yet
+
+	svs.last_heartbeat = svs.realtime;
+
+	// send the same string that we would give for a status OOB command
+	string = SV_StatusString();
+
+	// send to group master
+	for (i=0 ; i<MAX_MASTERS ; i++)
+	{
+		if (master_adr[i].port)
+		{
+			Com_Printf ("Sending heartbeat to %s\n", LOG_SERVER|LOG_NOTICE, NET_AdrToString (&master_adr[i]));
+			Netchan_OutOfBandPrint (NS_SERVER, &master_adr[i], "heartbeat\n%s", string);
+		}
+	}
 }
 
 /*
@@ -2128,54 +2232,13 @@ void SV_Frame (int msec)
 //============================================================================
 
 /*
-================
-Master_Heartbeat
-
-Send a message to the master every few minutes to
-let it know we are alive, and log information
-================
-*/
-
-void Master_Heartbeat (void)
-{
-	char		*string;
-	int			i;
-
-	if (!dedicated->intvalue)
-		return;		// only dedicated servers send heartbeats
-
-	if (!public_server->intvalue)
-		return;		// a private dedicated game
-
-	// check for time wraparound
-	if (svs.last_heartbeat > svs.realtime)
-		svs.last_heartbeat = svs.realtime;
-
-	if (svs.realtime - svs.last_heartbeat < HEARTBEAT_SECONDS*1000)
-		return;		// not time to send yet
-
-	svs.last_heartbeat = svs.realtime;
-
-	// send the same string that we would give for a status OOB command
-	string = SV_StatusString();
-
-	// send to group master
-	for (i=0 ; i<MAX_MASTERS ; i++)
-		if (master_adr[i].port)
-		{
-			Com_Printf ("Sending heartbeat to %s\n", LOG_SERVER|LOG_NOTICE, NET_AdrToString (&master_adr[i]));
-			Netchan_OutOfBandPrint (NS_SERVER, &master_adr[i], "heartbeat\n%s", string);
-		}
-}
-
-/*
 =================
 Master_Shutdown
 
 Informs all masters that this server is going down
 =================
 */
-void Master_Shutdown (void)
+static void Master_Shutdown (void)
 {
 	int			i;
 
@@ -2202,65 +2265,9 @@ void Master_Shutdown (void)
 //============================================================================
 
 
-void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame)
-{
-	char	*val;
-	int		i;
 
-	// call prog code to allow overrides
-	if (notifyGame)
-		ge->ClientUserinfoChanged (cl->edict, cl->userinfo);
 
-	val = Info_ValueForKey (cl->userinfo, "name");
-
-	if (val[0])
-	{
-		//truncate
-		val[15] = 0;
-
-		//r1: notify console
-		if (cl->name[0] && val[0] && strcmp (cl->name, val))
-			Com_Printf ("%s[%s] changed name to %s.\n", LOG_SERVER|LOG_NAME, cl->name, NET_AdrToString (&cl->netchan.remote_address), val);
-		
-		// name for C code
-		strcpy (cl->name, val);
-
-		// mask off high bit
-		for (i=0 ; i<sizeof(cl->name)-1; i++)
-			cl->name[i] &= 127;
-	}
-	else
-	{
-		cl->name[0] = 0;
-	}
-
-	// rate command
-	val = Info_ValueForKey (cl->userinfo, "rate");
-	if (val[0])
-	{
-		i = atoi(val);
-		cl->rate = i;
-		if (cl->rate < 100)
-			cl->rate = 100;
-		if (cl->rate > 15000)
-			cl->rate = 15000;
-	}
-	else
-		cl->rate = 5000;
-
-	// msg command
-	val = Info_ValueForKey (cl->userinfo, "msg");
-	if (val[0])
-	{
-		cl->messagelevel = atoi(val);
-
-		//safety check for integer overflow...
-		if (cl->messagelevel < 0)
-			cl->messagelevel = 0;
-	}
-}
-
-static void UserinfoBanDrop (char *key, banmatch_t *ban, char *result)
+static void UserinfoBanDrop (const char *key, const banmatch_t *ban, const char *result)
 {
 	if (ban->message[0])
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
@@ -2283,9 +2290,9 @@ into a more C freindly form.
 */
 void SV_UserinfoChanged (client_t *cl)
 {
-	char		*val;
-	char		key[MAX_INFO_KEY];
-	banmatch_t	*match;
+	char				*val;
+	char				key[MAX_INFO_KEY];
+	const banmatch_t	*match;
 
 	if (cl->state < cs_connected)
 		Com_Printf ("Warning, SV_UserinfoChanged for unconnected client %s[%s]!!\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
@@ -2366,14 +2373,22 @@ void SV_UserinfoChanged (client_t *cl)
 	match = SV_CheckUserinfoBans (cl->userinfo, key);
 	if (match)
 	{
-		if (CVARBAN_LOGONLY)
+		switch (match->blockmethod)
 		{
-			Com_Printf ("LOG: %s[%s] matched userinfoban: %s == %s\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), key, Info_ValueForKey (cl->userinfo, key));
-		}
-		else
-		{
-			UserinfoBanDrop (key, match, Info_ValueForKey (cl->userinfo, key));
-			return;
+			case CVARBAN_MESSAGE:
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", match->message);
+				break;
+			case CVARBAN_STUFF:
+				MSG_BeginWriting (svc_stufftext);
+				MSG_WriteString (va ("%s\n",match->message));
+				SV_AddMessage (sv_client, true);
+				break;
+			case CVARBAN_LOGONLY:
+				Com_Printf ("LOG: %s[%s] matched userinfoban: %s == %s\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), key, Info_ValueForKey (cl->userinfo, key));
+				break;
+			default:
+				UserinfoBanDrop (key, match, Info_ValueForKey (cl->userinfo, key));
+				return;
 		}
 	}
 
@@ -2381,7 +2396,7 @@ void SV_UserinfoChanged (client_t *cl)
 	SV_UpdateUserinfo (cl, true);
 }
 
-void SV_UpdateWindowTitle (cvar_t *cvar, char *old, char *newvalue)
+static void SV_UpdateWindowTitle (cvar_t *cvar, char *old, char *newvalue)
 {
 	if (dedicated->intvalue)
 	{
@@ -2394,7 +2409,7 @@ void SV_UpdateWindowTitle (cvar_t *cvar, char *old, char *newvalue)
 	}
 }
 
-void _password_changed (cvar_t *var, char *oldvalue, char *newvalue)
+static void _password_changed (cvar_t *var, char *oldvalue, char *newvalue)
 {
 	if (!newvalue[0] || !strcmp (newvalue, "none"))
 		Cvar_FullSet ("needpass", "0", CVAR_SERVERINFO);
@@ -2646,7 +2661,7 @@ not just stuck on the outgoing message list, because the server is going
 to totally exit after returning from this function.
 ==================
 */
-void SV_FinalMessage (const char *message, qboolean reconnect)
+static void SV_FinalMessage (const char *message, qboolean reconnect)
 {
 	int			i;
 	client_t	*cl;

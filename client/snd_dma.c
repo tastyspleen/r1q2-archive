@@ -694,7 +694,7 @@ void S_Spatialize(channel_t *ch)
 		VectorCopy (ch->origin, origin);
 	}
 	else
-		CL_GetEntitySoundOrigin (ch->entnum, origin, NULL);
+		CL_GetEntitySoundOrigin (ch->entnum, origin);
 
 	S_SpatializeOrigin (origin, (float)ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol);
 }           
@@ -1199,7 +1199,7 @@ void S_AddLoopSounds (void)
 		{
 			VectorCopy (ent->origin, origin);
 		}*/
-		CL_GetEntitySoundOrigin (ent->number, origin, NULL);
+		CL_GetEntitySoundOrigin (ent->number, origin);
 
 		// find the total contribution of all sounds of this type
 		S_SpatializeOrigin (origin, 255.0f, SOUND_LOOPATTENUATE,
@@ -1423,7 +1423,7 @@ openal_channel_t *S_OpenAL_PickChannel (int entNum, int entChannel)
 
 static void S_OpenAL_SpatializeChannel (openal_channel_t *ch)
 {
-	vec3_t	position, velocity;
+	vec3_t	position;
 
 	// Update position and velocity
 	if (ch->entNum == cl.playernum+1 || !ch->distanceMult)
@@ -1441,9 +1441,9 @@ static void S_OpenAL_SpatializeChannel (openal_channel_t *ch)
 		else
 		{
 			if (ch->loopSound)
-				CL_GetEntitySoundOrigin (ch->loopNum, position, velocity);
+				CL_GetEntitySoundOrigin (ch->loopNum, position);
 			else
-				CL_GetEntitySoundOrigin (ch->entNum, position, velocity);
+				CL_GetEntitySoundOrigin (ch->entNum, position);
 
 			qalSource3f(ch->sourceNum, AL_POSITION, position[1], position[2], -position[0]);
 			//qalSource3f(ch->sourceNum, AL_VELOCITY, velocity[1], velocity[2], -velocity[0]);
