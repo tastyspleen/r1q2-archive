@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define __TIMESTAMP__ __DATE__ " " __TIME__
 #endif
 
-int deffered_model_index;
+int deferred_model_index;
 
 extern cvar_t	*qport;
 extern cvar_t	*vid_ref;
@@ -212,10 +212,22 @@ qboolean CL_BeginRecording (char *name)
 	// don't start saving messages until a non-delta compressed message is received
 	cls.demowaiting = true;
 
+	// inform server we need to receive more data
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_RECORDING);
+		MSG_WriteShort (1);
+		MSG_EndWriting (&cls.netchan.message);
+	}
+
 	//
 	// write out messages to hold the startup information
 	//
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
+
+	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+		buf.maxsize = 1390;
 
 	// send the serverdata
 	MSG_BeginWriting (svc_serverdata);
@@ -295,6 +307,15 @@ void CL_EndRecording(void)
 	len = -1;
 	fwrite (&len, 4, 1, cls.demofile);
 	fclose (cls.demofile);
+
+	// inform server we are done with extra data
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_RECORDING);
+		MSG_WriteShort (0);
+		MSG_EndWriting (&cls.netchan.message);
+	}
 
 	cls.demofile = NULL;
 	cls.demorecording = false;
@@ -994,6 +1015,8 @@ CL_ClearState
 */
 void CL_ClearState (void)
 {
+	cvar_t	*gameDirHack;
+
 	S_StopAllSounds ();
 	CL_ClearEffects ();
 	CL_ClearTEnts ();
@@ -1001,6 +1024,10 @@ void CL_ClearState (void)
 // wipe the entire cl structure
 	memset (&cl, 0, sizeof(cl));
 	memset (&cl_entities, 0, sizeof(cl_entities));
+
+	//r1 unprotect game
+	gameDirHack = Cvar_FindVar ("game");
+	gameDirHack->flags &= ~CVAR_NOSET;
 
 	//r1: local ents clear
 	Le_Reset ();
@@ -1090,7 +1117,7 @@ void CL_Disconnect_f (void)
 	{
 		cls.serverProtocol = 0;
 		cls.key_dest = key_console;
-		Com_Error (ERR_DROP, "Disconnected from server");
+		Com_Error (ERR_HARD, "Disconnected from server");
 	}
 }
 
@@ -1193,7 +1220,7 @@ void CL_Packet_f (void)
 	incoming_allowed[incoming_allowed_index & 15].time = cls.realtime + 2500;
 	incoming_allowed_index++;
 
-	NET_SendPacket (NS_CLIENT, out-send, send, &adr);
+	NET_SendPacket (NS_CLIENT, (int)(out-send), send, &adr);
 }
 #endif
 
@@ -1217,18 +1244,21 @@ void CL_Changing_f (void)
 	if (cls.demofile)
 		CL_EndRecording();
 
-	cmd = Cmd_MacroExpandString("$endmapcmd");
+	//force screen update in case user has screenshot etc they want doing
+	SCR_UpdateScreen ();
+
+	cmd = Cmd_MacroExpandString("$cl_endmapcmd");
 	if (cmd)
 		Cmd_ExecuteString (cmd);
 	else
-		Com_Printf ("WARNING: Error expanding $endmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
+		Com_Printf ("WARNING: Error expanding $cl_endmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
 
 	//r1: prevent manual issuing crashing game
 	if (cls.state < ca_connected)
 		return;
 
 	//r1: stop loading models right now
-	deffered_model_index = MAX_MODELS;
+	deferred_model_index = MAX_MODELS;
 
 	SCR_BeginLoadingPlaque ();
 	cls.state = ca_connected;	// not active anymore, but not disconnected
@@ -1284,7 +1314,7 @@ void CL_PingServers_f (void)
 	Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
 
 	// send a packet to each address book entry
-	for (i=0 ; i<16 ; i++)
+	for (i=0 ; i < 32; i++)
 	{
 		Com_sprintf (name, sizeof(name), "adr%i", i);
 		adrstring = Cvar_VariableString (name);
@@ -1442,7 +1472,7 @@ safe:
 
 		cls.key_dest = key_game;
 
-		CL_FixCvarCheats();
+		//CL_FixCvarCheats();
 		send_packet_now = true;
 		cls.state = ca_connected;
 		return;
@@ -1680,7 +1710,7 @@ void CL_ReadPackets (void)
 		}
 
 		if (i == -1)
-			Com_Error (ERR_DROP, "Connection reset by peer.");
+			Com_Error (ERR_HARD, "Connection reset by peer.");
 
 		if (!Netchan_Process(&cls.netchan, &net_message))
 			continue;		// wasn't accepted for some reason
@@ -1866,6 +1896,7 @@ qboolean CL_LoadLoc (const char *filename)
 	int	linenum;
 	int len;
 	FILE	*handle;
+	qboolean	closeFile;
 
 	CL_FreeLocs ();
 
@@ -1877,7 +1908,7 @@ qboolean CL_LoadLoc (const char *filename)
 		return false;
 	}
 
-	FS_FOpenFile (filename, &handle, true);
+	FS_FOpenFile (filename, &handle, HANDLE_OPEN, &closeFile);
 	if (!handle)
 	{
 		Com_Printf ("CL_LoadLoc: couldn't open %s\n", LOG_CLIENT|LOG_WARNING, filename);
@@ -1887,7 +1918,9 @@ qboolean CL_LoadLoc (const char *filename)
 	locBuffer = Z_TagMalloc (len+2, TAGMALLOC_CLIENT_LOC);
 	//locBuffer = alloca (len+2);
 	FS_Read (locBuffer, len, handle);
-	FS_FCloseFile (handle);
+
+	if (closeFile)
+		FS_FCloseFile (handle);
 
 	//terminate if no EOL
 	locBuffer[len-1] = '\n';
@@ -2036,6 +2069,12 @@ void CL_AddLoc_f (void)
 		return;
 	}
 
+	if (cls.state < ca_active)
+	{
+		Com_Printf ("Not connected.\n", LOG_GENERAL);
+		return;
+	}
+
 	loc = &cl_locations;
 
 	last = loc->next;
@@ -2056,6 +2095,12 @@ void CL_SaveLoc_f (void)
 
 	char			locbuff[MAX_QPATH+4];
 	char			locfile[MAX_OSPATH];
+
+	if (!cl_locations.next)
+	{
+		Com_Printf ("No locations defined.\n", LOG_GENERAL);
+		return;
+	}
 
 	COM_StripExtension (cl.configstrings[CS_MODELS+1], locbuff);
 	strcat (locbuff, ".loc");
@@ -2392,7 +2437,8 @@ void CL_RequestNextDownload (void)
 		precache_check = CS_IMAGES;
 	}
 
-	if (precache_check >= CS_IMAGES && precache_check < CS_IMAGES+MAX_IMAGES) {
+	if (precache_check >= CS_IMAGES && precache_check < CS_IMAGES+MAX_IMAGES)
+	{
 		if (precache_check == CS_IMAGES)
 			precache_check++; // zero is blank
 
@@ -2691,15 +2737,17 @@ skipplayer:;
 		CL_BeginRecording (autorecord_name);
 	}
 
+	CL_FixCvarCheats();
+
 	MSG_WriteByte (clc_stringcmd);
 	MSG_WriteString (va("begin %i\n", precache_spawncount) );
 	MSG_EndWriting (&cls.netchan.message);
 
-	cmd = Cmd_MacroExpandString("$beginmapcmd");
+	cmd = Cmd_MacroExpandString("$cl_beginmapcmd");
 	if (cmd)
 		Cmd_ExecuteString (cmd);
 	else
-		Com_Printf ("WARNING: Error expanding $beginmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
+		Com_Printf ("WARNING: Error expanding $cl_beginmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
 
 	send_packet_now = true;
 }
@@ -2741,7 +2789,7 @@ void CL_Toggle_f (void)
 
 	if (Cmd_Argc() < 2)
 	{
-		Com_Printf ("Usage: toggle cvar [option1|option2|option3|optionx]\n", LOG_CLIENT);
+		Com_Printf ("Usage: toggle cvar [option1 option2 option3 ...]\n", LOG_CLIENT);
 		return;
 	}
 
@@ -3186,6 +3234,9 @@ void CL_FixCvarCheats (void)
 		}
 	}
 
+	if (cls.state == ca_disconnected || cl.attractloop || Com_ServerState() == ss_demo || cl.maxclients == 1)
+		return;		// single player can cheat
+
 	// make sure they are all set to the proper values
 	for (i=0, var = cheatvars ; i<numcheatvars ; i++, var++)
 	{
@@ -3223,7 +3274,7 @@ void CL_RefreshInputs (void)
 	// process new key events
 	Sys_SendKeyEvents ();
 
-#ifdef JOYSTICK
+#if (defined JOYSTICK) || (defined __linux__)
 	// process mice & joystick events
 	IN_Commands ();
 #endif
@@ -3245,32 +3296,31 @@ void CL_RefreshInputs (void)
 
 void CL_LoadDeferredModels (void)
 {
-	if (deffered_model_index == MAX_MODELS || !cl.refresh_prepped)
+	if (deferred_model_index == MAX_MODELS || !cl.refresh_prepped)
 		return;
 
 	for (;;)
 	{
-		deffered_model_index ++;
+		deferred_model_index ++;
 
-		if (deffered_model_index == MAX_MODELS)
+		if (deferred_model_index == MAX_MODELS)
 		{
 			re.EndRegistration ();
 			Com_DPrintf ("CL_LoadDeferredModels: All done.\n");
 			return;
 		}
 
-		if (!cl.configstrings[CS_MODELS+deffered_model_index][0])
+		if (!cl.configstrings[CS_MODELS+deferred_model_index][0])
 			continue;
 
-		if (cl.configstrings[CS_MODELS+deffered_model_index][0] != '#')
+		if (cl.configstrings[CS_MODELS+deferred_model_index][0] != '#')
 		{
-			Com_DPrintf ("CL_LoadDeferredModels: Now loading '%s'...", cl.configstrings[CS_MODELS+deffered_model_index]);
-			cl.model_draw[deffered_model_index] = re.RegisterModel (cl.configstrings[CS_MODELS+deffered_model_index]);
-			if (cl.configstrings[CS_MODELS+deffered_model_index][0] == '*')
-				cl.model_clip[deffered_model_index] = CM_InlineModel (cl.configstrings[CS_MODELS+deffered_model_index]);
+			//Com_DPrintf ("CL_LoadDeferredModels: Now loading '%s'...\n", cl.configstrings[CS_MODELS+deferred_model_index]);
+			cl.model_draw[deferred_model_index] = re.RegisterModel (cl.configstrings[CS_MODELS+deferred_model_index]);
+			if (cl.configstrings[CS_MODELS+deferred_model_index][0] == '*')
+				cl.model_clip[deferred_model_index] = CM_InlineModel (cl.configstrings[CS_MODELS+deferred_model_index]);
 			else
-				cl.model_clip[deffered_model_index] = NULL;
-			Com_DPrintf ("OK\n");
+				cl.model_clip[deferred_model_index] = NULL;
 		}
 
 		break;
@@ -3448,7 +3498,7 @@ void CL_Frame (int msec)
 #endif
 #endif
 
-	if (cl_async->intvalue == 0)
+	if (cl_async->intvalue != 1)
 	{
 		CL_Synchronous_Frame (msec);
 		return;
@@ -3605,6 +3655,10 @@ void CL_Init (void)
 
 	// all archived variables will now be loaded
 
+//	Cbuf_AddText ("exec autoexec.cfg\n");
+	FS_ExecAutoexec ();
+	Cbuf_Execute ();
+
 	Con_Init ();	
 #if defined __linux__ || defined __sgi
 	S_Init (true);	
@@ -3645,10 +3699,6 @@ void CL_Init (void)
 	LE_Init ();
 
 	CL_Loc_Init ();
-
-//	Cbuf_AddText ("exec autoexec.cfg\n");
-	FS_ExecAutoexec ();
-	Cbuf_Execute ();
 }
 
 

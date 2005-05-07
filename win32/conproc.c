@@ -48,7 +48,7 @@ HANDLE	hStdin;
 
 BOOL qHost = FALSE;
 
-unsigned _stdcall RequestProc (void *arg);
+DWORD CALLBACK RequestProc(LPVOID lpParameter);
 LPVOID GetMappedBuffer (HANDLE hfileBuffer);
 void ReleaseMappedBuffer (LPVOID pBuffer);
 BOOL GetScreenBufferLines (int *piLines);
@@ -161,7 +161,8 @@ void DeinitConProc (void)
 		SetEvent (heventDone);
 }
 
-unsigned _stdcall RequestProc (void *arg)
+//unsigned _stdcall RequestProc (void *arg)
+DWORD CALLBACK RequestProc(LPVOID lpParameter)
 {
 	int		*pBuffer;
 	DWORD	dwRet;

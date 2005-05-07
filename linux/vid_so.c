@@ -187,8 +187,12 @@ VID_LoadRefresh
 */
 qboolean VID_LoadRefresh( char *name )
 {
-	refimport_t	ri;
-	GetRefAPI_t	GetRefAPI;
+	refimport_t		ri;
+	refimportnew_t  rx;
+
+	GetRefAPI_t		GetRefAPI;
+	GetExtraAPI_t	GetExtraAPI;
+
 	char	fn[MAX_OSPATH];
 	struct stat st;
 	FILE *fp;
@@ -268,8 +272,24 @@ qboolean VID_LoadRefresh( char *name )
 	ri.Vid_MenuInit = VID_MenuInit;
 	ri.Vid_NewWindow = VID_NewWindow;
 
+	//EXTENDED FUNCTIONS
+	rx.FS_FOpenFile = FS_FOpenFile;
+	rx.FS_FCloseFile = FS_FCloseFile;
+	rx.FS_Read = FS_Read;
+	
+	rx.APIVersion = EXTENDED_API_VERSION;
+
 	if ( ( GetRefAPI = (void *) dlsym( reflib_library, "GetRefAPI" ) ) == 0 )
 		Com_Error( ERR_FATAL, "dlsym failed on %s", name );
+
+	if ( ( GetExtraAPI = (GetExtraAPI_t) dlsym( reflib_library, "GetExtraAPI" ) ) == 0 )
+	{
+		Com_DPrintf ("No ExtraAPI found.\n");
+	} else {
+		Com_DPrintf ("Initializing ExtraAPI...");
+		GetExtraAPI (rx);
+		Com_DPrintf ("done.\n");
+	}
 
 	re = GetRefAPI( ri );
 

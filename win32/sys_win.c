@@ -50,6 +50,8 @@ HMODULE hSh32 = NULL;
 FARPROC procShell_NotifyIcon = NULL;
 NOTIFYICONDATA pNdata;
 
+cvar_t	*win_priority;
+
 qboolean s_win95;
 
 int			starttime;
@@ -82,11 +84,11 @@ char		*argv[MAX_NUM_ARGVS];
 //cvar_t	*win_priority;
 
 sizebuf_t	console_buffer;
-byte console_buff[8192] = {0};
+byte console_buff[8192];
 //int console_lines = 0;
 
 int consoleBufferPointer = 0;
-byte consoleFullBuffer[16384] = {0};
+byte consoleFullBuffer[16384];
 
 //r1: service support
 #ifdef DEDICATED_ONLY
@@ -433,12 +435,12 @@ void Sys_SetWindowText (char *buff)
 
 void ServerWindowProcCommandExecute (void)
 {
-	int ret;
-	char buff[1024];
+	int			ret;
+	char		buff[1024];
 
 	*(DWORD *)&buff = sizeof(buff)-2;
 
-	ret = SendDlgItemMessage (hwnd_Server, IDC_COMMAND, EM_GETLINE, 1, (LPARAM)buff);
+	ret = (int)SendDlgItemMessage (hwnd_Server, IDC_COMMAND, EM_GETLINE, 1, (LPARAM)buff);
 	if (!ret)
 		return;
 
@@ -462,13 +464,17 @@ void Sys_UpdateConsoleBuffer (void)
 
 		buflen = console_buffer.cursize + 1024;
 		
-		if (consoleBufferPointer + buflen >= sizeof(consoleFullBuffer)) {
-			int moved;
-			char *p = consoleFullBuffer + buflen;
+		if (consoleBufferPointer + buflen >= sizeof(consoleFullBuffer))
+		{
+			int		moved;
+			char	*p = consoleFullBuffer + buflen;
+			char	*q;
+
 			while (*p && *p != '\n')
 				p++;
 			p++;
-			moved = (buflen + (p - (consoleFullBuffer + buflen)));
+			q = (consoleFullBuffer + buflen);
+			moved = (buflen + (int)(p - q));
 			memmove (consoleFullBuffer, consoleFullBuffer + moved, consoleBufferPointer - moved);
 			consoleBufferPointer -= moved;
 			consoleFullBuffer[consoleBufferPointer] = '\0';
@@ -479,7 +485,7 @@ void Sys_UpdateConsoleBuffer (void)
 
 		if (!Minimized) {
 			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, WM_SETTEXT, 0, (LPARAM)consoleFullBuffer);
-			len = SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0);
+			len = (int)SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0);
 			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_LINESCROLL, 0, len);
 		}
 
@@ -489,7 +495,7 @@ void Sys_UpdateConsoleBuffer (void)
 
 //================================================================
 
-LRESULT ServerWindowProcCommand(HWND hwnd, UINT message, WPARAM wParam, LONG lParam)
+LRESULT ServerWindowProcCommand(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UINT idItem = LOWORD(wParam);
 	UINT wNotifyCode = HIWORD(wParam);
@@ -537,7 +543,7 @@ LRESULT CALLBACK ServerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 				if (Minimized && !minimized) {
 					int len;
 					SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, WM_SETTEXT, 0, (LPARAM)consoleFullBuffer);
-					len = SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0);
+					len = (int)SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0);
 					SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_LINESCROLL, 0, len);
 				}
 
@@ -564,15 +570,10 @@ LRESULT CALLBACK ServerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 }
 #endif
 
-void Sys_SetQ2Priority (void)
+void _priority_changed (cvar_t *cvar, char *ov, char *nv)
 {
-	if (Cmd_Argc() < 2) {
-		Com_Printf ("usage: win_priority -2|-1|0|1|2\n", LOG_GENERAL);
-		return;
-	}
-
 	//r1: let dedicated servers eat the cpu if needed
-	switch (atoi(Cmd_Argv(1)))
+	switch (cvar->intvalue)
 	{
 		case -2:
 			SetPriorityClass (GetCurrentProcess (), IDLE_PRIORITY_CLASS);
@@ -582,6 +583,9 @@ void Sys_SetQ2Priority (void)
 			SetPriorityClass (GetCurrentProcess (), BELOW_NORMAL_PRIORITY_CLASS);
 			break;
 #endif
+		case 0:
+			SetPriorityClass (GetCurrentProcess (), NORMAL_PRIORITY_CLASS);
+			break;
 #ifdef ABOVE_NORMAL_PRIORITY_CLASS
 		case 1:
 			SetPriorityClass (GetCurrentProcess (), ABOVE_NORMAL_PRIORITY_CLASS);
@@ -591,7 +595,8 @@ void Sys_SetQ2Priority (void)
 			SetPriorityClass (GetCurrentProcess (), HIGH_PRIORITY_CLASS);
 			break;
 		default:
-			SetPriorityClass (GetCurrentProcess (), NORMAL_PRIORITY_CLASS);
+			Com_Printf ("Unknown priority class %d.\n", LOG_GENERAL, cvar->intvalue);
+			Cvar_Set (cvar->name, ov);
 			break;
 	}
 }
@@ -729,7 +734,10 @@ void Sys_Init (void)
 
 	Sys_InitConsoleMutex ();
 
-	Cmd_AddCommand ("win_priority", Sys_SetQ2Priority);
+	//Cmd_AddCommand ("win_priority", Sys_SetQ2Priority);
+	win_priority = Cvar_Get ("win_priority", "0", 0);
+	win_priority->changed = _priority_changed;
+	win_priority->changed (win_priority, "0", win_priority->string);
 #endif
 }
 
@@ -948,10 +956,11 @@ void Sys_SendKeyEvents (void)
 
 		//Com_Printf ("sske\n", LOG_GENERAL);
 
+		//while (GetInputState())
 		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			//if (GetMessage (&msg, NULL, 0, 0) == -1)
-			//	Com_Quit ();
+				//Com_Quit ();
 			sys_msg_time = msg.time;
       		TranslateMessage (&msg);
       		DispatchMessage (&msg);

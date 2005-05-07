@@ -8,9 +8,11 @@ quake2_SRC:=cl_cin.c cl_ents.c cl_fx.c cl_input.c cl_inv.c cl_main.c\
 	    sv_ccmds.c sv_ents.c sv_game.c sv_init.c sv_main.c sv_send.c\
 	    sv_user.c sv_world.c \
 	    q_shlinux.c vid_menu.c vid_so.c sys_linux.c glob.c net_udp.c\
-	    q_shared.c pmove.c snd_openal.c mersennetwister.c le_util.c\
-	    le_physics.c redblack.c cd_linux.c snd_linux.c 
+	    q_shared.c pmove.c mersennetwister.c le_util.c\
+	    le_physics.c redblack.c cd_linux.c snd_linux.c qal_linux.c\
+	    al_linux.c
 
+CFLAGS=-DUSE_OPENAL
 quake2_OBJ:=$(quake2_SRC:.c=.o)
 ALLSRC:=$(quake2_SRC)
 

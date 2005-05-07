@@ -696,11 +696,11 @@ int EXPORT entitycmpfnc( const entity_t *a, const entity_t *b )
 	*/
 	if ( a->model == b->model )
 	{
-		return ( ( ptrdiff_t ) a->skin - ( ptrdiff_t ) b->skin );
+		return (int)( ( ptrdiff_t ) a->skin - ( ptrdiff_t ) b->skin );
 	}
 	else
 	{
-		return ( ( ptrdiff_t ) a->model - ( ptrdiff_t ) b->model );
+		return (int)( ( ptrdiff_t ) a->model - ( ptrdiff_t ) b->model );
 	}
 }
 

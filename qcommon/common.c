@@ -33,9 +33,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define MAX_NUM_ARGVS	50
 
-entity_state_t	null_entity_state = {0};
-usercmd_t		null_usercmd = {0};
-cvar_t			uninitialized_cvar = {0};
+qboolean		q2_initialized = false;
+
+entity_state_t	null_entity_state;
+usercmd_t		null_usercmd;
+cvar_t			uninitialized_cvar;
 
 cvar_t			*z_debug;
 cvar_t			*z_buggygame;
@@ -93,10 +95,12 @@ int		time_before_ref;
 int		time_after_ref;
 
 // for profiling
+#ifndef NPROFILE
 static int msg_local_hits;
 static int msg_malloc_hits;
 
 static int messageSizes[1500];
+#endif
 
 char *svc_strings[256] =
 {
@@ -173,7 +177,8 @@ CLIENT / SERVER interactions
 ============================================================================
 */
 
-static int	rd_target;
+int	rd_target;
+
 static char	*rd_buffer;
 static int	rd_buffersize;
 static void	(*rd_flush)(int target, char *buffer);
@@ -190,9 +195,13 @@ void Com_BeginRedirect (int target, char *buffer, int buffersize, void *flush)
 	*rd_buffer = 0;
 }
 
-void Com_EndRedirect (void)
+void Com_EndRedirect (qboolean flush)
 {
-	rd_flush(rd_target, rd_buffer);
+	if (!rd_target)
+		return;
+
+	if (flush)
+		rd_flush(rd_target, rd_buffer);
 
 	rd_target = 0;
 	rd_buffer = NULL;
@@ -392,6 +401,8 @@ void Com_Error (int code, const char *fmt, ...)
 	vsnprintf (msg, sizeof(msg)-1, fmt,argptr);
 	va_end (argptr);
 
+	Com_EndRedirect (false);
+
 	if (err_fatal->intvalue)
 		code = ERR_FATAL;
 	
@@ -404,8 +415,9 @@ void Com_Error (int code, const char *fmt, ...)
 		recursive = false;
 		longjmp (abortframe, -1);
 	}
-	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET)
+	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET || code == ERR_HARD)
 	{
+		int	state = Com_ServerState() == ss_dead ? 0 : 1;
 		Com_Printf ("********************\nERROR: %s\n********************\n", LOG_GENERAL, msg);
 #ifndef NO_SERVER
 		SV_Shutdown (va("Server exited: %s\n", msg), false, false);
@@ -416,7 +428,7 @@ void Com_Error (int code, const char *fmt, ...)
 		recursive = false;
 
 		//r1: auto-restart server code on game crash
-		if (code == ERR_GAME)
+		if (state && (code == ERR_GAME || code == ERR_DROP))
 		{
 			const char *resmap;
 
@@ -735,17 +747,23 @@ void MSG_EndWrite (messagelist_t *out)
 	//r1: use small local buffer if possible to avoid thousands of mallocs with tiny amounts
 	if (msgbuff.cursize > MSG_MAX_SIZE_BEFORE_MALLOC)
 	{
+#ifndef NPROFILE
 		msg_malloc_hits++;
+#endif
 		out->data = malloc (msgbuff.cursize);
 	}
 	else
 	{
+#ifndef NPROFILE
 		msg_local_hits++;
+#endif
 		out->data = out->localbuff;
 	}
 
+#ifndef NPROFILE
 	if (msgbuff.cursize < sizeof(messageSizes) / sizeof(messageSizes[0]))
 		messageSizes[msgbuff.cursize]++;
+#endif
 
 	memcpy (out->data, message_buff, msgbuff.cursize);
 	out->cursize = msgbuff.cursize;
@@ -1277,8 +1295,8 @@ float MSG_ReadAngle16 (sizebuf_t *msg_read)
 
 void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t /*@out@*/*move)
 {
-	int bits;
-	int msec;
+	int			bits;
+	unsigned	msec;
 
 	memcpy (move, from, sizeof(*move));
 
@@ -1529,7 +1547,7 @@ void Info_Print (const char *s)
 		while (*s && *s != '\\')
 			*o++ = *s++;
 
-		l = o - key;
+		l = (int)(o - key);
 		if (l < 20)
 		{
 			memset (o, ' ', 20-l);
@@ -2176,6 +2194,7 @@ void Q_NullFunc(void)
 
 void Msg_Stats_f (void)
 {
+#ifndef NPROFILE
 	int		total;
 	int		i, j;
 	int		num;
@@ -2204,6 +2223,9 @@ void Msg_Stats_f (void)
 		Com_Printf ("%i-%d: %d\n", LOG_GENERAL, i, i + 10, sum);
 	}
 	Com_Printf ("mean: %.2f\n", LOG_GENERAL, (float)total / (float)num);
+#else
+	Com_Printf ("This binary was built with NPROFILE, no stats available.\n", LOG_GENERAL);
+#endif
 }
 
 void _z_debug_changed (cvar_t *cvar, char *o, char *n)
@@ -2383,6 +2405,7 @@ void Qcommon_Init (int argc, char **argv)
 	Cbuf_Execute ();
 
 	//ugly
+	q2_initialized = true;
 	logfile_timestamp_format->flags |= CVAR_NOSET;
 }
 
@@ -2521,22 +2544,25 @@ int ZLibDecompress (byte *in, int inlen, byte *out, int outlen, int wbits)
 	zs.avail_out = outlen;
 
 	result = inflateInit2(&zs, wbits);
-	if (result != Z_OK) {
-		Sys_Error ("Error on inflateInit %d\nMessage: %s\n", result, zs.msg);
+	if (result != Z_OK)
+	{
+		Com_Error (ERR_DROP, "ZLib data error! Error %d on inflateInit.\nMessage: %s", result, zs.msg);
 		return 0;
 	}
 
 	zs.avail_in = inlen;
 
 	result = inflate(&zs, Z_FINISH);
-	if (result != Z_STREAM_END) {
-		Sys_Error("Error on inflate %d\nMessage: %s\n", result, zs.msg);
+	if (result != Z_STREAM_END)
+	{
+		Com_Error (ERR_DROP, "ZLib data error! Error %d on inflate.\nMessage: %s", result, zs.msg);
 		zs.total_out = 0;
 	}
 
 	result = inflateEnd(&zs);
-	if (result != Z_OK) {
-		Sys_Error("Error on inflateEnd %d\nMessage: %s\n", result, zs.msg);
+	if (result != Z_OK)
+	{
+		Com_Error (ERR_DROP, "ZLib data error! Error %d on inflateEnd.\nMessage: %s", result, zs.msg);
 		return 0;
 	}
 
@@ -2656,15 +2682,16 @@ char *StripQuotes (char *string)
 	return string;
 }
 
-const char *MakePrintable (const byte *s)
+const char *MakePrintable (const void *subject)
 {
-	int len;
+	int			len;
 	static char printable[4096];
-	char tmp[8];
-	char *p;
+	char		tmp[8];
+	char		*p;
+	const byte	*s;
 
+	s = (const byte *)subject;
 	p = printable;
-
 	len = 0;
 
 	while (*s)

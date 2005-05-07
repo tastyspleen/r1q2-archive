@@ -53,7 +53,7 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 	client = svs.clients + (p-1);
 
 	//r1: trap bad writes from game dll
-	if (client->state <= cs_connected)
+	if (client->state <= cs_spawning)
 	{
 		Com_Printf ("GAME ERROR: Attempted to write %d byte %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, MSG_GetLength(), svc_strings[MSG_GetType()], p-1);
 		
@@ -470,7 +470,7 @@ fixed:
 	else if (index == CS_MAPCHECKSUM)
 	{
 		//shouldn't touch this!
-		Com_Error (ERR_DROP, "Game DLL tried to set CS_MAPCHECKSUM");
+		Com_Error (ERR_HARD, "Game DLL tried to set CS_MAPCHECKSUM");
 	}
 	else if (index == CS_SKYROTATE)
 	{
@@ -790,7 +790,7 @@ void SV_InitGameProgs (void)
 	ge = (game_export_t *)Sys_GetGameAPI (&import, sv.attractloop);
 
 	if (!ge)
-		Com_Error (ERR_DROP, "failed to load game DLL");
+		Com_Error (ERR_HARD, "failed to load game DLL");
 
 	i = ge->apiversion;
 
@@ -799,7 +799,7 @@ void SV_InitGameProgs (void)
 		//note, don't call usual unloadgame since that executes DLL code (which is invalid)
 		Sys_UnloadGame ();
 		ge = NULL;
-		Com_Error (ERR_DROP, "Game is API version %i (not supported by this version R1Q2).", i);
+		Com_Error (ERR_HARD, "Game is API version %i (not supported by this version R1Q2).", i);
 		return;
 	}
 
@@ -809,11 +809,11 @@ void SV_InitGameProgs (void)
 	if (!ge->ClientCommand || !ge->ClientBegin || !ge->ClientConnect || !ge->ClientDisconnect || !ge->ClientUserinfoChanged ||
 		!ge->ReadGame || !ge->ReadLevel || !ge->RunFrame || !ge->ServerCommand || !ge->Shutdown || !ge->SpawnEntities ||
 		!ge->WriteGame || !ge->WriteLevel || !ge->Init)
-		Com_Error (ERR_DROP, "Game is missing required exports");
+		Com_Error (ERR_HARD, "Game is missing required exports");
 
 	ge->Init ();
 	if (!ge->edicts)
-		Com_Error (ERR_DROP, "Game failed to initialize globals.edicts");
+		Com_Error (ERR_HARD, "Game failed to initialize globals.edicts");
 
 	//r1: moved from SV_InitGame to here.
 	for (i=0 ; i<maxclients->intvalue ; i++)

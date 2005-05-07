@@ -609,7 +609,6 @@ For development work
 */
 static void SV_Map_f (void)
 {
-	static qboolean warned = false;
 	char	*map;
 	char	expanded[MAX_QPATH];
 	//extern cvar_t	*fs_gamedirvar;
@@ -623,13 +622,22 @@ static void SV_Map_f (void)
 		return;
 	}
 
-	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0 && !sv_allow_map->intvalue)
+	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0)
 	{
-		Com_Printf ("WARNING: Using 'map' will reset the game state. Use 'gamemap' to change levels.\n", LOG_GENERAL);
-		if (!warned)
+		if (!sv_allow_map->intvalue)
 		{
-			Com_Printf ("(Set the cvar 'sv_allow_map 1' if you wish to disable this check)\n", LOG_GENERAL);
-			warned = true;
+			static	qboolean warned = false;
+
+			Com_Printf ("WARNING: Using 'map' will reset the game state. Use 'gamemap' to change levels.\n", LOG_GENERAL);
+			if (!warned)
+			{
+				Com_Printf ("(Set the cvar 'sv_allow_map 1' if you wish to disable this check)\n", LOG_GENERAL);
+				warned = true;
+			}
+		}
+		else if (sv_allow_map->intvalue == 2)
+		{
+			SV_GameMap_f ();
 		}
 		return;
 	}
@@ -1344,7 +1352,7 @@ static void SV_AddServerAlias_f (void)
 
 replace:
 
-	alias->value = Z_TagMalloc (strlen(text)+2, TAGMALLOC_ALIAS);
+	alias->value = Z_TagMalloc ((int)strlen(text)+2, TAGMALLOC_ALIAS);
 	strcpy (alias->value, text);
 	strcat (alias->value, "\n");
 
@@ -1794,7 +1802,7 @@ static void SV_DelLrconCmd_f(void)
 	}
 
 	match = StripQuotes(Cmd_Args());
-	mlen = strlen(match);
+	mlen = (int)strlen(match);
 
 	ncmd = last = &lrconcmds;
 
@@ -1948,11 +1956,21 @@ static void SV_Status_f (void)
 	}
 	Com_Printf ("\n", LOG_GENERAL);
 
+#ifndef NPROFILE
 	if (statusMethod == 1)
 	{
+		unsigned long	total;
+
 		Com_Printf ("Protocol 35 netcode has saved %lu bytes.\n", LOG_GENERAL, svs.proto35BytesSaved);
 		Com_Printf ("Protocol 35 compression has saved %lu bytes.\n", LOG_GENERAL, svs.proto35CompressionBytes);
+		Com_Printf ("R1Q2 quantization optimization has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2OptimizedBytes);
+		Com_Printf ("R1Q2 custom delta management has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2CustomBytes);
+
+		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes;
+
+		Com_Printf ("Total byte savings: %lu (%.2f MB)\n", LOG_GENERAL, total, (float)total / 1024.0 / 1024.0);
 	}
+#endif
 }
 
 /*

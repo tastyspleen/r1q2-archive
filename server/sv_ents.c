@@ -403,6 +403,11 @@ do { \
 	(int)(v1[1]*4)==(int)(v2[1]*4) && \
 	(int)(v1[2]*4) == (int)(v2[2]*4))
 
+#define Vec_RoughCompare(v1,v2) \
+	(*(int *)&(v1[0])== *(int *)&(v2[0]) && \
+	*(int *)&(v1[1]) == *(int *)&(v2[1]) && \
+	*(int *)&(v1[2]) == *(int *)&(v2[2]))
+
 /*
 =============
 SV_WritePlayerstateToClient
@@ -419,6 +424,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	qboolean					enhanced;
 	player_state_new			*ps;
 	const player_state_new		*ops;
+	qboolean					noDeltaOptimize;
 
 	ps = &to->ps;
 
@@ -510,37 +516,139 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 		|| ps->viewoffset[1] != ops->viewoffset[1]
 		|| ps->viewoffset[2] != ops->viewoffset[2] )*/
 
-	if (!Vec_ByteCompare (ps->viewoffset, ops->viewoffset))
-		pflags |= PS_VIEWOFFSET;
-
-	if (ps->viewangles[0] != ops->viewangles[0] || ps->viewangles[1] != ops->viewangles[1])
+	if (!Vec_RoughCompare (ps->viewoffset, ops->viewoffset))
 	{
-		if (!enhanced)
-			extraflags |= EPS_VIEWANGLE2;
-		pflags |= PS_VIEWANGLES;
+		if (!Vec_ByteCompare (ps->viewoffset, ops->viewoffset))
+			pflags |= PS_VIEWOFFSET;
+#ifndef NPROFILE
+		else
+			svs.r1q2OptimizedBytes += 3;
+#endif
 	}
-	
-	if (ps->viewangles[2] != ops->viewangles[2])
-	{
-		if (!enhanced)
-			pflags |= PS_VIEWANGLES;
 
-		extraflags |= EPS_VIEWANGLE2;
+
+	noDeltaOptimize = (sv_optimize_deltas->intvalue == 1 && client->protocol != ENHANCED_PROTOCOL_VERSION) || ps->pmove.pm_type >= PM_DEAD || client->settings[CLSET_RECORDING];
+
+	//why are we even sending these back to client? optimize.
+	if (sv_optimize_deltas->intvalue == 0 || noDeltaOptimize)
+	{
+		/*qboolean	deltaHack;
+	
+		if (deltaOptimize)
+			deltaHack = (ps->pmove.pm_type >= PM_DEAD && ops->pmove.pm_type < PM_DEAD);
+		else
+			deltaHack = false;*/
+
+		if (*(int *)&ps->viewangles[0] != *(int *)&ops->viewangles[0] || *(int *)&ps->viewangles[1] != *(int *)&ops->viewangles[1])
+		{
+			if (ANGLE2SHORT(ps->viewangles[0]) != ANGLE2SHORT(ops->viewangles[0]) || ANGLE2SHORT(ps->viewangles[1]) != ANGLE2SHORT(ops->viewangles[1]))
+			{
+				if (!enhanced)
+					extraflags |= EPS_VIEWANGLE2;
+				pflags |= PS_VIEWANGLES;
+			}
+#ifndef NPROFILE
+			else
+			{
+				if (!enhanced)
+					svs.r1q2OptimizedBytes += 6;
+				else
+					svs.r1q2OptimizedBytes += 4;
+			}
+#endif
+		}
+		
+		if (!(extraflags & EPS_VIEWANGLE2) && *(int *)&ps->viewangles[2] != *(int *)&ops->viewangles[2])
+		{
+			if (ANGLE2SHORT(ps->viewangles[2]) != ANGLE2SHORT(ops->viewangles[2]))
+			{
+				if (!enhanced)
+					pflags |= PS_VIEWANGLES;
+
+				extraflags |= EPS_VIEWANGLE2;
+			}
+#ifndef NPROFILE
+			else
+			{
+				if (!enhanced)
+					svs.r1q2OptimizedBytes += 6;
+				else
+					svs.r1q2OptimizedBytes += 2;
+			}
+#endif
+		}
+	}
+	else
+	{
+#ifndef NPROFILE
+		if (*(int *)&ps->viewangles[0] != *(int *)&ops->viewangles[0] || *(int *)&ps->viewangles[1] != *(int *)&ops->viewangles[1])
+		{
+			if (!enhanced)
+				svs.r1q2CustomBytes += 6;
+			else
+				svs.r1q2CustomBytes += 4;
+		}
+		if (enhanced && *(int *)&ps->viewangles[2] != *(int *)&ops->viewangles[2])
+			svs.r1q2CustomBytes += 2;
+#endif
+		//force no delta if condition changes. this is really nasty...
+		//*(int *)&ps->viewangles[0] = ~*(int *)&ps->viewangles[0];
+		//*(int *)&ps->viewangles[2] = ~*(int *)&ps->viewangles[2];
+		ps->viewangles[0] = ops->viewangles[0];
+		ps->viewangles[1] = ops->viewangles[1];
+		ps->viewangles[2] = ops->viewangles[2];
 	}
 
 	/*if (ps->kick_angles[0] != ops->kick_angles[0]
 		|| ps->kick_angles[1] != ops->kick_angles[1]
 		|| ps->kick_angles[2] != ops->kick_angles[2] )*/
 
-	if (!Vec_ByteCompare (ps->kick_angles, ops->kick_angles))
-		pflags |= PS_KICKANGLES;
+	if (!Vec_RoughCompare (ps->kick_angles, ops->kick_angles))
+	{
+		if (!Vec_ByteCompare (ps->kick_angles, ops->kick_angles))
+			pflags |= PS_KICKANGLES;
+#ifndef NPROFILE
+		else
+			svs.r1q2OptimizedBytes += 3;
+#endif
+	}
+
 
 	/*if (ps->blend[0] != ops->blend[0]
 		|| ps->blend[1] != ops->blend[1]
 		|| ps->blend[2] != ops->blend[2]
 		|| ps->blend[3] != ops->blend[3] )*/
-	if (!Vec_ByteCompare (ps->blend, ops->blend) || (int)(ps->blend[3]*4) != (int)(ops->blend[3]*4))
-		pflags |= PS_BLEND;
+
+	//we can afford to do this as float load/compares below are relatively expensive
+	if (*(int *)&ps->blend[0] != *(int *)&ops->blend[0] ||
+		*(int *)&ps->blend[1] != *(int *)&ops->blend[1] ||
+		*(int *)&ps->blend[2] != *(int *)&ops->blend[2] ||
+		*(int *)&ps->blend[3] != *(int *)&ops->blend[3])
+	{
+		if (!client->settings[CLSET_NOBLEND] || client->settings[CLSET_RECORDING])
+		{
+			//special range checking here since we aren't *4 any more
+			if ((int)(ps->blend[0]*255) != (int)(ops->blend[0]*255) ||
+				(int)(ps->blend[1]*255) != (int)(ops->blend[1]*255) ||
+				(int)(ps->blend[2]*255) != (int)(ops->blend[2]*255) ||
+				(int)(ps->blend[3]*255) != (int)(ops->blend[3]*255))
+			{
+				pflags |= PS_BLEND;
+			}
+#ifndef NPROFILE
+			else
+			{
+				svs.r1q2OptimizedBytes += 4;
+			}
+#endif
+		}
+#ifndef NPROFILE
+		else
+		{
+			svs.r1q2CustomBytes += 4;
+		}
+#endif
+	}
 
 	if ((int)ps->fov != (int)ops->fov)
 		pflags |= PS_FOV;
@@ -550,19 +658,48 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 
 	if (ps->gunframe != ops->gunframe)
 	{
-		pflags |= PS_WEAPONFRAME;
-		if (!enhanced)
+		if (!client->settings[CLSET_NOGUN] || client->settings[CLSET_RECORDING])
 		{
-			extraflags |= EPS_GUNANGLES|EPS_GUNOFFSET;
+			pflags |= PS_WEAPONFRAME;
+			if (!enhanced)
+			{
+				extraflags |= EPS_GUNANGLES|EPS_GUNOFFSET;
+			}
+			else
+			{
+				if (!Vec_RoughCompare (ps->gunangles, ops->gunangles))
+				{
+					if (!Vec_ByteCompare (ps->gunangles, ops->gunangles))
+						extraflags |= EPS_GUNANGLES;
+#ifndef NPROFILE
+					else
+						svs.r1q2OptimizedBytes += 3;
+#endif
+				}
+
+				if (!Vec_RoughCompare (ps->gunoffset, ops->gunoffset))
+				{
+					if (!Vec_ByteCompare (ps->gunoffset, ops->gunoffset))
+						extraflags |= EPS_GUNOFFSET;
+#ifndef NPROFILE
+					else
+						svs.r1q2OptimizedBytes += 3;
+#endif
+				}
+			}
 		}
+#ifndef NPROFILE
 		else
 		{
-			if (!Vec_ByteCompare (ps->gunangles, ops->gunangles))
-				extraflags |= EPS_GUNANGLES;
+			svs.r1q2CustomBytes++;
 
-			if (!Vec_ByteCompare (ps->gunoffset, ops->gunoffset))
-				extraflags |= EPS_GUNOFFSET;
+			if (!Vec_RoughCompare (ps->gunangles, ops->gunangles))
+				svs.r1q2CustomBytes += 3;
+
+			if (!Vec_RoughCompare (ps->gunoffset, ops->gunoffset))
+				svs.r1q2CustomBytes += 3;
 		}
+#endif
 	}
 
 	//only possibly send bbox if the client supports it AND the game is supposed to send it
@@ -572,7 +709,14 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 #endif
 
 	if (ps->gunindex != ops->gunindex)
-		pflags |= PS_WEAPONINDEX;
+	{
+		if (!client->settings[CLSET_NOGUN] || client->settings[CLSET_RECORDING])
+			pflags |= PS_WEAPONINDEX;
+#ifndef NPROFILE
+		else
+			svs.r1q2CustomBytes++;
+#endif
+	}
 
 	//
 	// write it
@@ -599,8 +743,10 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	//r1
 	if (extraflags & EPS_PMOVE_ORIGIN2)
 		MSG_WriteShort (ps->pmove.origin[2]);
+#ifndef NPROFILE
 	else if (pflags & PS_M_ORIGIN)
 		svs.proto35BytesSaved += 2;
+#endif
 
 	if (pflags & PS_M_VELOCITY)
 	{
@@ -611,8 +757,10 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	//r1
 	if (extraflags & EPS_PMOVE_VELOCITY2)
 		MSG_WriteShort (ps->pmove.velocity[2]);
+#ifndef NPROFILE
 	else if (pflags & PS_M_VELOCITY)
 		svs.proto35BytesSaved += 2;
+#endif
 
 	if (pflags & PS_M_TIME)
 		MSG_WriteByte (ps->pmove.pm_time);
@@ -649,8 +797,10 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	//r1
 	if (extraflags & EPS_VIEWANGLE2)
 		MSG_WriteAngle16 (ps->viewangles[2]);	//this one rarely changes
+#ifndef NPROFILE
 	else if (pflags & PS_VIEWANGLES)
 		svs.proto35BytesSaved += 2;
+#endif
 
 	if (pflags & PS_KICKANGLES)
 	{
@@ -677,10 +827,12 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 		MSG_WriteChar ((int)(ps->gunoffset[1]*4));
 		MSG_WriteChar ((int)(ps->gunoffset[2]*4));
 	}
+#ifndef NPROFILE
 	else if (pflags & PS_WEAPONFRAME)
 	{
 		svs.proto35BytesSaved += 3;
 	}
+#endif
 
 	//r1
 	if (extraflags & EPS_GUNANGLES)
@@ -689,10 +841,12 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 		MSG_WriteChar ((int)(ps->gunangles[1]*4));
 		MSG_WriteChar ((int)(ps->gunangles[2]*4));
 	}
+#ifndef NPROFILE
 	else if (pflags & PS_WEAPONFRAME)
 	{
 		svs.proto35BytesSaved += 3;
 	}
+#endif
 
 	if (pflags & PS_BLEND)
 	{
@@ -755,10 +909,12 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 			if (statbits & (1<<i) )
 				MSG_WriteShort (ps->stats[i]);
 	}
+#ifndef NPROFILE
 	else
 	{
 		svs.proto35BytesSaved += 4;
 	}
+#endif
 
 	MSG_EndWriting (msg);
 
@@ -822,7 +978,9 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 		encodedFrame += (offset << 27);
 
 		SZ_WriteLong (msg, encodedFrame);
+#ifndef NPROFILE
 		svs.proto35BytesSaved += 4;
+#endif
 	}
 	else
 	{

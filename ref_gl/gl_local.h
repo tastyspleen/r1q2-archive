@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.24"
+#define	REF_VERSION	"R1GL 0.1.5.25"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -328,7 +328,7 @@ void GL_SelectTexture( GLenum );
 
 void R_LightPoint (vec3_t p, vec3_t color);
 void R_PushDlights (void);
-unsigned int hashify (char *S);
+unsigned int hashify (const char *S);
 //====================================================================
 
 extern	model_t	*r_worldmodel;
@@ -397,10 +397,10 @@ void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,
 
 struct image_s * EXPORT R_RegisterSkin (char *name);
 
-void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height);
-image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits);
-image_t	*GL_FindImage (char *name, char *basename, imagetype_t type);
-image_t	*GL_FindImageBase (char *basename, imagetype_t type);
+void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height);
+image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int bits);
+image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type);
+image_t	*GL_FindImageBase (const char *basename, imagetype_t type);
 void	GL_TextureMode( char *string );
 void	GL_ImageList_f (void);
 void	GL_Version_f (void);

@@ -48,6 +48,7 @@ cvar_t	*allow_download_players;
 cvar_t	*allow_download_models;
 cvar_t	*allow_download_sounds;
 cvar_t	*allow_download_maps;
+cvar_t	*allow_download_pics;
 cvar_t	*allow_download_textures;
 cvar_t	*allow_download_others;
 
@@ -154,6 +155,13 @@ cvar_t	*sv_download_drop_message;
 
 cvar_t	*sv_blackhole_mask;
 cvar_t	*sv_badcvarcheck;
+
+cvar_t	*sv_rcon_buffsize;
+cvar_t	*sv_rcon_showoutput;
+
+cvar_t	*sv_show_name_changes;
+
+cvar_t	*sv_optimize_deltas;
 
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
@@ -664,7 +672,7 @@ static void SVC_Info (void)
 	{
 		count = 0;
 		for (i=0 ; i<maxclients->intvalue ; i++)
-			if (svs.clients[i].state >= cs_connected)
+			if (svs.clients[i].state >= cs_spawning)
 				count++;
 
 		Com_sprintf (string, sizeof(string), "%20s %8s %2i/%2i\n",
@@ -816,7 +824,11 @@ static void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame)
 
 		//r1: notify console
 		if (cl->name[0] && val[0] && strcmp (cl->name, val))
+		{
 			Com_Printf ("%s[%s] changed name to %s.\n", LOG_SERVER|LOG_NAME, cl->name, NET_AdrToString (&cl->netchan.remote_address), val);
+			if (sv_show_name_changes->intvalue)
+				SV_BroadcastPrintf (PRINT_HIGH, "%s changed name to %s.\n", cl->name, val);
+		}
 		
 		// name for C code
 		strcpy (cl->name, val);
@@ -874,8 +886,8 @@ static void SVC_DirectConnect (void)
 	const banmatch_t	*match;
 
 	int			i;
-	int			edictnum;
-	int			protocol;
+	unsigned	edictnum;
+	unsigned	protocol;
 	int			challenge;
 	int			previousclients;
 
@@ -1170,8 +1182,14 @@ static void SVC_DirectConnect (void)
 			//r1: clean up last client data
 			SV_CleanClient (cl);
 
-			if (cl->reconnect_var[0] && adr->port != cl->netchan.remote_address.port)
-				Com_Printf ("Warning, %s[%s] reconnected from a different port! Tried to use ratbot/proxy or has broken router?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr));
+			if (cl->reconnect_var[0])
+			{
+				if (adr->port != cl->netchan.remote_address.port)
+					Com_Printf ("Warning, %s[%s] reconnected from a different port! Tried to use ratbot/proxy or has broken router?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr));
+
+				if (cl->protocol != protocol)
+					Com_Printf ("Warning, %s[%s] reconnected using a different protocol! Why would that happen?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr));
+			}
 
 			strcpy (saved_var, cl->reconnect_var);
 			strcpy (saved_val, cl->reconnect_value);
@@ -1182,9 +1200,18 @@ static void SVC_DirectConnect (void)
 	}
 
 	if (!strcmp (pass, sv_reserved_password->string))
+	{
 		reserved = 0;
+
+		//r1: this prevents mod/admin dll from also checking password as some mods incorrectly
+		//refuse if password cvar exists and no password is set on the server. by definition a
+		//server with reserved slots should be public anyway.
+		Info_RemoveKey (userinfo, "password");
+	}
 	else
+	{
 		reserved = sv_reserved_slots->intvalue;
+	}
 
 	// find a client slot
 	newcl = NULL;
@@ -1199,7 +1226,7 @@ static void SVC_DirectConnect (void)
 
 	if (!newcl)
 	{
-		if (reserved)
+		if (!reserved)
 		{
 			Com_DPrintf ("    reserved slots full\n");
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer and reserved slots are full.\n");
@@ -1228,7 +1255,7 @@ gotnewcl:
 		strcpy (newcl->reconnect_var, saved_var);
 	}
 
-	edictnum = (newcl-svs.clients)+1;
+	edictnum = (int)(newcl-svs.clients)+1;
 	ent = EDICT_NUM(edictnum);
 	newcl->edict = ent;
 	newcl->challenge = challenge; // save challenge for checksumming
@@ -1282,7 +1309,10 @@ gotnewcl:
 	// send the connect packet to the client
 	// r1: also send dlport as per tcp download spec. note we could ideally send this twice but it prints
 	// unsightly message on original client.
-	Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect dlserver=:%d", sv_downloadport->intvalue);
+	if (sv_downloadport->intvalue)
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect dlserver=:%d", sv_downloadport->intvalue);
+	else
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect");
 
 	if (sv_connectmessage->modified)
 	{
@@ -1466,17 +1496,20 @@ static void SVC_RemoteCommand (void)
 	if (!i)
 		RateSample (&svs.ratelimit_badrcon);
 
-	Com_BeginRedirect (RD_PACKET, sv_outputbuf, SV_OUTPUTBUF_LENGTH, SV_FlushRedirect);
+	Com_BeginRedirect (RD_PACKET, sv_outputbuf, sv_rcon_buffsize->intvalue, SV_FlushRedirect);
 
 	if (!i)
 	{
 		Com_Printf ("Bad rcon_password.\n", LOG_GENERAL);
-		Com_EndRedirect ();
+		Com_EndRedirect (true);
 		Com_Printf ("Bad rcon from %s[%s] (%s).\n", LOG_SERVER|LOG_ERROR, NET_AdrToString (&net_from), FindPlayer(&net_from), Cmd_Args());
 	}
 	else
 	{
+		qboolean	endRedir;
+
 		remaining[0] = 0;
+		endRedir = true;
 
 		//hack to allow clients to send rcon set commands properly
 		if (!Q_stricmp (Cmd_Argv(2), "set"))
@@ -1504,6 +1537,24 @@ static void SVC_RemoteCommand (void)
 
 			Com_sprintf (remaining, sizeof(remaining), "set %s \"%s\"%s", Cmd_Argv(3), setvar, serverinfo ? " s" : "");
 		}
+		//FIXME: This is a nice idea, but currently redirected output blocks until full buffer occurs, making it useless.
+		/*else if (!Q_stricmp (Cmd_Argv(2), "monitor"))
+		{
+			Sys_ConsoleOutput ("Console monitor request from ");
+			Sys_ConsoleOutput (NET_AdrToString (&net_from));
+			Sys_ConsoleOutput ("\n");
+			if (!Q_stricmp (Cmd_Argv(3), "on"))
+			{
+				Com_Printf ("Console monitor enabled.\n", LOG_SERVER);
+				return;
+			}
+			else
+			{
+				Com_Printf ("Console monitor disabled.\n", LOG_SERVER);
+				Com_EndRedirect (true);
+				return;
+			}
+		}*/
 		else
 		{
 			Q_strncpy (remaining, Cmd_Args2(2), sizeof(remaining)-1);
@@ -1550,19 +1601,19 @@ static void SVC_RemoteCommand (void)
 		if (i)
 		{
 			Cmd_ExecuteString (remaining);
-			Com_EndRedirect ();
+			Com_EndRedirect (true);
 			Com_Printf ("Rcon from %s[%s]:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
 		}
 		else
 		{
-			Com_EndRedirect();
+			Com_EndRedirect (true);
 			Com_Printf ("Bad limited rcon from %s[%s]:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
 		}
 	}
 
 	//check for remote kill
 	if (!svs.initialized)
-		Com_Error (ERR_DROP, "server killed via rcon");
+		Com_Error (ERR_HARD, "server killed via rcon");
 }
 
 #ifdef USE_PYROADMIN
@@ -2417,6 +2468,18 @@ static void _password_changed (cvar_t *var, char *oldvalue, char *newvalue)
 		Cvar_FullSet ("needpass", "1", CVAR_SERVERINFO);
 }
 
+static void _rcon_buffsize_changed (cvar_t *var, char *oldvalue, char *newvalue)
+{
+	if (var->intvalue > SV_OUTPUTBUF_LENGTH)
+	{
+		Cvar_SetValue (var->name, SV_OUTPUTBUF_LENGTH);
+	}
+	else if (var->intvalue < 256)
+	{
+		Cvar_Set (var->name, "256");
+	}
+}
+
 /*
 ===============
 SV_Init
@@ -2474,6 +2537,7 @@ void SV_Init (void)
 	allow_download_models = Cvar_Get ("allow_download_models", "1", CVAR_ARCHIVE);
 	allow_download_sounds = Cvar_Get ("allow_download_sounds", "1", CVAR_ARCHIVE);
 	allow_download_maps	  = Cvar_Get ("allow_download_maps", "1", CVAR_ARCHIVE);
+	allow_download_pics	  = Cvar_Get ("allow_download_pics", "1", CVAR_ARCHIVE);
 	allow_download_textures = Cvar_Get ("allow_download_textures", "1", 0);
 	allow_download_others = Cvar_Get ("allow_download_others", "0", 0);
 #endif
@@ -2633,6 +2697,19 @@ void SV_Init (void)
 	//r1: what to do on unrequested cvars
 	sv_badcvarcheck = Cvar_Get ("sv_badcvarcheck", "1", 0);
 
+	//r1: control rcon buffer size
+	sv_rcon_buffsize = Cvar_Get ("sv_rcon_buffsize", "1384", 0);
+	sv_rcon_buffsize->changed = _rcon_buffsize_changed;
+
+	//r1: show output of rcon in console?
+	sv_rcon_showoutput = Cvar_Get ("sv_rcon_showoutput", "0", 0);
+
+	//r1: broadcast name changes?
+	sv_show_name_changes = Cvar_Get ("sv_show_name_changes", "0", 0);
+
+	//r1: delta optimz (small non-r1q2 client breakage)
+	sv_optimize_deltas = Cvar_Get ("sv_optimize_deltas", "1", 0);
+
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN
 	if (pyroadminport->intvalue)
@@ -2737,6 +2814,9 @@ void SV_Shutdown (char *finalmsg, qboolean reconnect, qboolean crashing)
 
 	if (svs.demofile)
 		fclose (svs.demofile);
+
+	Cvar_ForceSet ("$mapname", "");
+	Cvar_ForceSet ("$game", "");
 
 	memset (&svs, 0, sizeof(svs));
 

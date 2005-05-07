@@ -542,7 +542,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	else
 		info.samples = samples;
 
-	info.dataofs = data_p - wav;
+	info.dataofs = (int)(data_p - wav);
 	
 	return info;
 }

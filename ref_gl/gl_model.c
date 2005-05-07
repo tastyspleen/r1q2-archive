@@ -511,8 +511,9 @@ qboolean GetWalInfo (const char *name, int *width, int *height)
 	{
 		miptex_t	mt;
 		FILE		*h;
+		qboolean	closeFile;
 
-		rx.FS_FOpenFile (name, &h, true);
+		rx.FS_FOpenFile (name, &h, true, &closeFile);
 		if (!h)
 			return false;
 
@@ -522,7 +523,9 @@ qboolean GetWalInfo (const char *name, int *width, int *height)
 			return false;
 		}*/
 		rx.FS_Read (&mt, sizeof(mt), h);
-		rx.FS_FCloseFile (h);
+
+		if (closeFile)
+			rx.FS_FCloseFile (h);
 		
 		*width = LittleLong (mt.width);
 		*height = LittleLong (mt.height);
@@ -558,6 +561,7 @@ void Mod_LoadTexinfo (lump_t *l)
 	int 	i, count;
 	char	name[MAX_QPATH];
 	int		next;
+	int		length;
 
 	in = (void *)(mod_base + l->fileofs);
 	
@@ -610,9 +614,12 @@ void Mod_LoadTexinfo (lump_t *l)
 			continue;
 		}
 
+		length = strlen(name);
+
 		if (load_tga_wals)
 		{
-			Com_sprintf (name, sizeof(name), "textures/%s.tga", in->texture);
+			//Com_sprintf (name, sizeof(name), "textures/%s.tga", in->texture);
+			memcpy (name + length-3, "tga", 3);
 			out->image = GL_FindImage (name, in->texture, it_wall);
 		}
 		else
@@ -624,7 +631,8 @@ void Mod_LoadTexinfo (lump_t *l)
 		{
 			if (load_png_wals)
 			{
-				Com_sprintf (name, sizeof(name), "textures/%s.png", in->texture);
+				memcpy (name + length-3, "png", 3);
+				//Com_sprintf (name, sizeof(name), "textures/%s.png", in->texture);
 				out->image = GL_FindImage (name, in->texture, it_wall);
 			}
 
@@ -632,13 +640,15 @@ void Mod_LoadTexinfo (lump_t *l)
 			{
 				if (load_jpg_wals)
 				{
-					Com_sprintf (name, sizeof(name), "textures/%s.jpg", in->texture);
+					memcpy (name + length-3, "jpg", 3);
+					//Com_sprintf (name, sizeof(name), "textures/%s.jpg", in->texture);
 					out->image = GL_FindImage (name, in->texture, it_wall);
 				}
 
 				if (!out->image)
 				{
-					Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
+					memcpy (name + length-3, "wal", 3);
+					//Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
 					out->image = GL_FindImage (name, in->texture, it_wall);
 					
 					if (!out->image)

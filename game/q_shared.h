@@ -65,6 +65,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #pragma warning(3 : 4254)
 #pragma warning(disable: 4996)		// deprecated functions
 
+#pragma intrinsic(memcmp)
+
 #define alloca _alloca
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
@@ -221,6 +223,7 @@ do { \
 #define	ERR_GAME		3		// r1ch: game dll error, allow special handling
 #define	ERR_NET			4		// r1ch: network error, don't use net functions after seeing
 #define	ERR_DIE			5
+#define	ERR_HARD		6
 
 #define	PRINT_ALL			0
 #define PRINT_DEVELOPER		1		// only print when "developer 1"
@@ -284,7 +287,7 @@ extern vec3_t vec3_origin;
 #if !defined C_ONLY && !defined __linux__ && !defined __sgi && !defined SSE2 && !defined __FreeBSD__
 //extern void __cdecl Q_sseinit (void);
 void __cdecl Q_ftol2( float f, int *out );
-uint32 __cdecl Q_ftol( float f );
+int __cdecl Q_ftol( float f );
 extern void __cdecl Q_fastfloats (float *f, int *out);
 //extern void __cdecl Q_ftolsse( float f, int *out );
 //the overhead of using function pointer offsets any savings of using sse2 :/

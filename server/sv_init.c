@@ -196,12 +196,28 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 {
 	int			i;
 	uint32		checksum;
+	char		*cmd;
 
 	//r1: get latched vars
 	if (Cvar_GetNumLatchedVars())
 	{
 		SV_InitGame();
 	}
+
+	Cvar_ForceSet ("$mapname", server);
+
+#ifndef DEDICATED_ONLY
+	if (dedicated->intvalue)
+	{
+#endif
+		cmd = Cmd_MacroExpandString("$sv_beginmapcmd");
+		if (cmd)
+			Cmd_ExecuteString (cmd);
+		else
+			Com_Printf ("WARNING: Error expanding $sv_beginmapcmd, ignored.\n", LOG_SERVER|LOG_WARNING);
+#ifndef DEDICATED_ONLY
+	}
+#endif
 
 	Z_Verify("SV_SpawnServer:START");
 
@@ -504,6 +520,7 @@ another level:
 */
 void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 {
+	char	*cmd;
 	char	level[MAX_QPATH-9]; //save space for maps/*.bsp
 	char	*ch;
 	char	spawnpoint[MAX_QPATH];
@@ -514,14 +531,24 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	sv.loadgame = loadgame;
 	sv.attractloop = attractloop;
 
+	//r1: yet another buffer overflow was here.
+	Q_strncpy (level, levelstring, sizeof(level)-1);
+
+	//warning: macro expansion will overwrite cmd_argv == levelstring.
+	if (sv.state != ss_dead)
+	{
+		cmd = Cmd_MacroExpandString("$sv_endmapcmd");
+		if (cmd)
+			Cmd_ExecuteString (cmd);
+		else
+			Com_Printf ("WARNING: Error expanding $sv_endmapcmd, ignored.\n", LOG_SERVER|LOG_WARNING);
+	}
+
 	if (sv.state == ss_dead && !sv.loadgame)
 	{
 		// the game is just starting
 		SV_InitGame ();
 	}
-
-	//r1: yet another buffer overflow was here.
-	Q_strncpy (level, levelstring, sizeof(level)-1);
 
 	// if there is a + in the map, set nextserver to the remainder
 	ch = strchr(level, '+');
@@ -565,7 +592,7 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	else if (l > 4 && !strcmp (level+l-4, ".dm2") )
 	{
 		if (!attractloop)
-			Com_Error (ERR_DROP, "Demos should be replayed using the 'demomap' command");
+			Com_Error (ERR_HARD, "Demos should be replayed using the 'demomap' command");
 #ifndef DEDICATED_ONLY
 		SCR_BeginLoadingPlaque ();			// for local system
 #endif

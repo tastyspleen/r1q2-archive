@@ -127,6 +127,21 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 # Begin Source File
 
+SOURCE=.\win32\alw_win.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Dedicated Only"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
 SOURCE=.\win32\cd_win.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
@@ -487,6 +502,21 @@ SOURCE=.\win32\q_shwin.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\win32\qal_win.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Dedicated Only"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
 SOURCE=.\client\qmenu.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
@@ -537,36 +567,6 @@ SOURCE=.\client\snd_mem.c
 # Begin Source File
 
 SOURCE=.\client\snd_mix.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Dedicated Only"
-
-# PROP Exclude_From_Build 1
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\client\alw_win.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Dedicated Only"
-
-# PROP Exclude_From_Build 1
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\client\qal_win.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -766,15 +766,6 @@ SOURCE=.\win32\q2.ico
 # Begin Source File
 
 SOURCE=.\win32\q2.rc
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Dedicated Only"
-
-!ENDIF 
-
 # End Source File
 # End Group
 # End Target

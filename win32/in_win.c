@@ -691,6 +691,13 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 				else
 					cl.viewangles[YAW] -= m_yaw->value * val;
 
+
+#ifdef _DEBUG
+				//fix non-exclusive mouse being able to click window titlebar
+				if (FLOAT_NE_ZERO (val))
+					SetCursorPos (window_center_x, window_center_y);
+#endif
+
 				break;
 
             case DIMOFS_Y:
@@ -701,6 +708,12 @@ void IN_ReadBufferedData( usercmd_t *cmd )
 					cl.viewangles[PITCH] += m_pitch->value * val;
 				else
 					cmd->forwardmove -= (int)(m_forward->value * val);
+
+#ifdef _DEBUG
+				//fix non-exclusive mouse being able to click window titlebar
+				if (FLOAT_NE_ZERO (val))
+					SetCursorPos (window_center_x, window_center_y);
+#endif
 
 				break;
 
@@ -861,6 +874,13 @@ void IN_ReadImmediateData (usercmd_t *cmd)
 	mx *= sensitivity->value;
 	my *= sensitivity->value;
 
+
+#ifdef _DEBUG
+	//fix non-exclusive mouse being able to click window titlebar
+	if (FLOAT_NE_ZERO(mx) || FLOAT_NE_ZERO(my))
+		SetCursorPos (window_center_x, window_center_y);
+#endif
+
 	// add mouse X/Y movement to cmd
 	if ( (in_strafe.state & 1) || (lookstrafe->intvalue && mlooking ))
 		cmd->sidemove += (int)(m_side->value * mx);
@@ -904,16 +924,15 @@ void IN_ActivateMouse (void)
 	{
 		IDirectInputDevice8_Acquire (g_pMouse);
 	}
-	else if (!m_directinput->intvalue)
+
+	if (mouseparmsvalid)
 	{
-		if (mouseparmsvalid)
-		{
-			if (m_winxp_fix->intvalue)
-				restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, winxpmouseparms, 0);
-			else
-				restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
-		}
+		if (m_winxp_fix->intvalue)
+			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, winxpmouseparms, 0);
+		else
+			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
 	}
+
 
 	width = GetSystemMetrics (SM_CXSCREEN);
 	height = GetSystemMetrics (SM_CYSCREEN);
@@ -978,11 +997,9 @@ void IN_DeactivateMouse (void)
 	{
 		IDirectInputDevice8_Unacquire (g_pMouse);
 	}
-	else if (!m_directinput->intvalue)
-	{
-		if (restore_spi)
-			SystemParametersInfo (SPI_SETMOUSE, 0, originalmouseparms, 0);
-	}
+
+	if (restore_spi)
+		SystemParametersInfo (SPI_SETMOUSE, 0, originalmouseparms, 0);
 
 	ClipCursor (NULL);
 	ReleaseCapture ();
@@ -1108,10 +1125,6 @@ void IN_MouseMove (usercmd_t *cmd)
 			IN_ReadBufferedData (cmd);
 		else
 			IN_ReadImmediateData (cmd);
-#ifdef _DEBUG
-		//fix non-exclusive mouse being able to click window titlebar
-		SetCursorPos (window_center_x, window_center_y);
-#endif
 		return;
 	}
 

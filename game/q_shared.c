@@ -280,7 +280,7 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 	__asm ret
 }*/
 
-__declspec( naked ) long __cdecl Q_ftol( float f )
+__declspec( naked ) int __cdecl Q_ftol( float f )
 {
 	static int tmp;
 	__asm fld dword ptr [esp+4]
@@ -1015,8 +1015,8 @@ void COM_DefaultExtension (char *path, char *extension)
 ============================================================================
 */
 
-//r1: stupid little endian systems can go to hell, this is a waste of function
-//calls for everything.
+//r1: endianness sucks. this is a waste of function calls for everything.
+//define YOU_HAVE_A_BROKEN_COMPUTER if you're on a mac or some other big endian system.
 
 //need this for network ports
 int16 ShortSwap (int16 l)

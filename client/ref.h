@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/qcommon.h"
 
+#define	EXTENDED_API_VERSION	2
+
 #define	MAX_DLIGHTS		32
 #define	MAX_ENTITIES	128
 #define	MAX_PARTICLES	16384
@@ -191,11 +193,12 @@ typedef struct
 typedef struct
 {
 	//for backwards compatibility
-	int			structSize;
+	int			APIVersion;
+
 	//**********************************************************************
 	// extended renderer API functions, check for NULL in ref before using!!
 	//**********************************************************************
-	int			(IMPORT *FS_FOpenFile) (const char *filename, FILE **file, qboolean openHandle);
+	int			(IMPORT *FS_FOpenFile) (const char *filename, FILE **file, handlestyle_t openHandle, qboolean *closeHandle);
 	void		(IMPORT *FS_FCloseFile) (FILE *file);
 	void		(IMPORT *FS_Read) (void *buffer, int len, FILE *f);
 } refimportnew_t;

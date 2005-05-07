@@ -50,8 +50,6 @@ static 		void M_Menu_R1Q2_f (void);
 static 		void M_Menu_Keys_f (void);
 static 	void M_Menu_Quit_f (void);
 
-static 	void M_Menu_Credits( void );
-
 qboolean	m_entersound;		// play after drawing a frame, so caching
 								// won't disrupt the sound
 
@@ -1043,7 +1041,7 @@ static menuframework_s	s_options_menu;
 static menuaction_s		s_options_r1q2_action;
 static menuaction_s		s_options_defaults_action;
 static menuaction_s		s_options_customize_options_action;
-static menuslider_s		s_options_sensitivity_slider;
+static menufield_s		s_options_sensitivity_slider;
 static menulist_s		s_options_freelook_box;
 //static menulist_s		s_options_noalttab_box;
 static menulist_s		s_options_alwaysrun_box;
@@ -1296,7 +1294,14 @@ static void FreeLookFunc( void *unused )
 
 static void MouseSpeedFunc( void *unused )
 {
-	Cvar_SetValue( "sensitivity", s_options_sensitivity_slider.curvalue / 2.0F );
+	float	value;
+
+	value = (float)atof(s_options_sensitivity_slider.buffer);
+
+	if (value < 2)
+		value = 2;
+
+	Cvar_SetValue( "sensitivity", value);
 }
 
 /*static void NoAltTabFunc( void *unused )
@@ -1308,9 +1313,11 @@ static void MouseSpeedFunc( void *unused )
 static void ControlsSetMenuItemValues( void )
 {
 	s_options_sfxvolume_slider.curvalue		= Cvar_VariableValue( "s_volume" ) * 10;
-	s_options_cdvolume_box.curvalue 		= !Cvar_VariableValue("cd_nocd");
+	s_options_cdvolume_box.curvalue 		= !Cvar_IntValue("cd_nocd");
 	//s_options_quality_list.curvalue			= !Cvar_VariableValue( "s_loadas8bit" );
-	s_options_sensitivity_slider.curvalue	= ( sensitivity->value ) * 2;
+	//strncpy (s_options_sensitivity_slider.buffer, sensitivity->string, sizeof(s_options_sensitivity_slider.buffer)-1);
+	snprintf (s_options_sensitivity_slider.buffer, sizeof(s_options_sensitivity_slider.buffer)-1, "%.3g", sensitivity->value);
+	//s_options_sensitivity_slider.curvalue	= ( sensitivity->value;
 
 	Cvar_SetValue( "cl_run", ClampCvar( 0, 1, cl_run->value ) );
 	s_options_alwaysrun_box.curvalue		= cl_run->intvalue;
@@ -1498,7 +1505,7 @@ static void Options_MenuInit( void )
 	s_options_cdvolume_box.generic.name	= "CD music";
 	s_options_cdvolume_box.generic.callback	= UpdateCDVolumeFunc;
 	s_options_cdvolume_box.itemnames		= cd_music_items;
-	s_options_cdvolume_box.curvalue 		= !Cvar_VariableValue("cd_nocd");
+	s_options_cdvolume_box.curvalue 		= !Cvar_IntValue("cd_nocd");
 
 	s_options_quality_list.generic.type	= MTYPE_SPINCONTROL;
 	s_options_quality_list.generic.x		= 0;
@@ -1516,13 +1523,16 @@ static void Options_MenuInit( void )
 	s_options_compatibility_list.itemnames		= compatibility_items;
 	s_options_compatibility_list.curvalue		= Cvar_IntValue( "s_primary" );
 
-	s_options_sensitivity_slider.generic.type	= MTYPE_SLIDER;
+	s_options_sensitivity_slider.generic.type	= MTYPE_FIELD;
+	s_options_sensitivity_slider.generic.flags = QMF_NUMBERSONLY;
+	s_options_sensitivity_slider.length = 3;
+	s_options_sensitivity_slider.visible_length = 3;
 	s_options_sensitivity_slider.generic.x		= 0;
 	s_options_sensitivity_slider.generic.y		= 50;
 	s_options_sensitivity_slider.generic.name	= "mouse speed";
-	s_options_sensitivity_slider.generic.callback = MouseSpeedFunc;
-	s_options_sensitivity_slider.minvalue		= 2;
-	s_options_sensitivity_slider.maxvalue		= 22;
+	//s_options_sensitivity_slider.generic.callback = MouseSpeedFunc;
+	//s_options_sensitivity_slider.minvalue		= 2;
+	//s_options_sensitivity_slider.maxvalue		= 22;
 
 	s_options_alwaysrun_box.generic.type = MTYPE_SPINCONTROL;
 	s_options_alwaysrun_box.generic.x	= 0;
@@ -1637,6 +1647,9 @@ static void Options_MenuDraw (void)
 
 static const char *Options_MenuKey( int key )
 {
+	if (key == K_ESCAPE)
+		MouseSpeedFunc (NULL);
+
 	return Default_MenuKey( &s_options_menu, key );
 }
 
@@ -2503,7 +2516,7 @@ void M_AddToServerList (netadr_t adr, char *info)
 			return;
 
 	local_server_netadr[m_num_servers] = adr;
-	strncpy (local_server_names[m_num_servers], info, sizeof(local_server_names[0])-1);
+	snprintf (local_server_names[m_num_servers], sizeof(local_server_names[m_num_servers])-1, "%d. %s", m_num_servers+1, info);
 	m_num_servers++;
 }
 
@@ -2513,7 +2526,7 @@ static void JoinServerFunc( void *self )
 	char	buffer[128];
 	int		index;
 
-	index = ( menuaction_s * ) self - s_joinserver_server_actions;
+	index = (int)(( menuaction_s * ) self - s_joinserver_server_actions);
 
 	if ( Q_stricmp( local_server_names[index], NO_SERVER_STRING ) == 0 )
 		return;
@@ -2541,7 +2554,8 @@ static void SearchLocalGames( void )
 
 	m_num_servers = 0;
 	for (i=0 ; i<MAX_LOCAL_SERVERS ; i++)
-		strcpy (local_server_names[i], NO_SERVER_STRING);
+		//strcpy (local_server_names[i], NO_SERVER_STRING);
+		sprintf (local_server_names[i], "%d. %s", i+1, NO_SERVER_STRING);
 
 	M_DrawTextBox( 8, 120 - 48, 36, 3 );
 	M_Print( 16 + 16, 120 - 48 + 8,  "Searching for local servers, this" );
@@ -2590,7 +2604,8 @@ static void JoinServer_MenuInit( void )
 	for ( i = 0; i < MAX_LOCAL_SERVERS; i++ )
 	{
 		s_joinserver_server_actions[i].generic.type	= MTYPE_ACTION;
-		strcpy (local_server_names[i], NO_SERVER_STRING);
+		//strcpy (local_server_names[i], NO_SERVER_STRING);
+		sprintf (local_server_names[i], "%d. %s", i+1, NO_SERVER_STRING);
 		s_joinserver_server_actions[i].generic.name	= local_server_names[i];
 		s_joinserver_server_actions[i].generic.flags	= QMF_LEFT_JUSTIFY;
 		s_joinserver_server_actions[i].generic.x		= 0;
@@ -2603,7 +2618,7 @@ static void JoinServer_MenuInit( void )
 	Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_title );
 	Menu_AddItem( &s_joinserver_menu, &s_joinserver_search_action );
 
-	for ( i = 0; i < 8; i++ )
+	for ( i = 0; i < MAX_LOCAL_SERVERS; i++ )
 		Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_actions[i] );
 
 	Menu_Center( &s_joinserver_menu );
@@ -2620,6 +2635,13 @@ static void JoinServer_MenuDraw(void)
 
 static const char *JoinServer_MenuKey( int key )
 {
+	//r1: join server shortcut keys
+	if (key >= '0' && key <= '9')
+	{
+		s_joinserver_menu.cursor = 2 + key - '0';
+		Menu_AdjustCursor (&s_joinserver_menu, 1);
+		Menu_SelectItem (&s_joinserver_menu);
+	}
 	return Default_MenuKey( &s_joinserver_menu, key );
 }
 
@@ -3472,7 +3494,7 @@ static void DownloadOptions_MenuInit( void )
 	s_allow_download_box.generic.name	= "allow downloading";
 	s_allow_download_box.generic.callback = DownloadCallback;
 	s_allow_download_box.itemnames = yes_no_names;
-	s_allow_download_box.curvalue = (Cvar_VariableValue("allow_download") != 0);
+	s_allow_download_box.curvalue = (Cvar_IntValue("allow_download") != 0);
 
 	s_allow_download_maps_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_maps_box.generic.x	= 0;
@@ -3480,7 +3502,7 @@ static void DownloadOptions_MenuInit( void )
 	s_allow_download_maps_box.generic.name	= "maps";
 	s_allow_download_maps_box.generic.callback = DownloadCallback;
 	s_allow_download_maps_box.itemnames = yes_no_names;
-	s_allow_download_maps_box.curvalue = (Cvar_VariableValue("allow_download_maps") != 0);
+	s_allow_download_maps_box.curvalue = (Cvar_IntValue("allow_download_maps") != 0);
 
 	s_allow_download_players_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_players_box.generic.x	= 0;
@@ -3488,7 +3510,7 @@ static void DownloadOptions_MenuInit( void )
 	s_allow_download_players_box.generic.name	= "player models/skins";
 	s_allow_download_players_box.generic.callback = DownloadCallback;
 	s_allow_download_players_box.itemnames = yes_no_names;
-	s_allow_download_players_box.curvalue = (Cvar_VariableValue("allow_download_players") != 0);
+	s_allow_download_players_box.curvalue = (Cvar_IntValue("allow_download_players") != 0);
 
 	s_allow_download_models_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_models_box.generic.x	= 0;
@@ -3496,7 +3518,7 @@ static void DownloadOptions_MenuInit( void )
 	s_allow_download_models_box.generic.name	= "models";
 	s_allow_download_models_box.generic.callback = DownloadCallback;
 	s_allow_download_models_box.itemnames = yes_no_names;
-	s_allow_download_models_box.curvalue = (Cvar_VariableValue("allow_download_models") != 0);
+	s_allow_download_models_box.curvalue = (Cvar_IntValue("allow_download_models") != 0);
 
 	s_allow_download_sounds_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_sounds_box.generic.x	= 0;
@@ -3504,7 +3526,7 @@ static void DownloadOptions_MenuInit( void )
 	s_allow_download_sounds_box.generic.name	= "sounds";
 	s_allow_download_sounds_box.generic.callback = DownloadCallback;
 	s_allow_download_sounds_box.itemnames = yes_no_names;
-	s_allow_download_sounds_box.curvalue = (Cvar_VariableValue("allow_download_sounds") != 0);
+	s_allow_download_sounds_box.curvalue = (Cvar_IntValue("allow_download_sounds") != 0);
 
 	Menu_AddItem( &s_downloadoptions_menu, &s_download_title );
 	Menu_AddItem( &s_downloadoptions_menu, &s_allow_download_box );
@@ -3784,6 +3806,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 				}
 			}
 		}
+
 		if ( !nskins )
 			continue;
 

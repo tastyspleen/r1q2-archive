@@ -227,9 +227,15 @@ int CL_ParseEntityBits (uint32 *bits)
 			bitcounts[i]++;*/
 
 	if (total & U_NUMBER16)
+	{
 		number = MSG_ReadShort (&net_message);
+		if (number > MAX_EDICTS)
+			Com_Error (ERR_DROP, "CL_ParseEntityBits: Bad entity number %u", number);
+	}
 	else
+	{
 		number = MSG_ReadByte (&net_message);
+	}
 
 	*bits = total;
 
@@ -919,7 +925,7 @@ void CL_ParseFrame (int extrabits)
 	uint32		serverframe;
 	frame_t		*old;
 
-	memset (&cl.frame, 0, sizeof(cl.frame));
+	//memset (&cl.frame, 0xCC, sizeof(cl.frame));
 
 #if 0
 	CL_ClearProjectiles(); // clear projectiles for new frame
@@ -1184,8 +1190,10 @@ static void CL_AddPacketEntities (const frame_t *frame)
 			ent.frame = autoanim & 1;
 		else if (effects & EF_ANIM23)
 			ent.frame = 2 + (autoanim & 1);
-		//else if (effects & EF_ANIM_ALLFAST)
-		//	ent.frame = cl.time / 100;
+		else if (effects & EF_ANIM_ALL)
+			ent.frame = autoanim;
+		else if (effects & EF_ANIM_ALLFAST)
+			ent.frame = cl.time / 100;
 		else
 			ent.frame = s1->frame;
 
@@ -1223,6 +1231,7 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		ent.oldframe = cent->prev.frame;
 		ent.backlerp = 1.0f - cl.lerpfrac;
 
+#if 0
 		if (effects & EF_ANIM_ALL) {
 			//ent.oldframe = ent.frame;
 			//r1: updated to become useful. loops between 0 and ent->s.framenum
@@ -1251,12 +1260,28 @@ static void CL_AddPacketEntities (const frame_t *frame)
 			else
 				ent.oldframe = 0;
 		}
+#endif
 
 		if (renderfx & (RF_FRAMELERP|RF_BEAM))
 		{	// step origin discretely, because the frames
 			// do the animation properly
-			VectorCopy (cent->current.origin, ent.origin);
-			VectorCopy (cent->current.old_origin, ent.oldorigin);
+
+			//r1: beam lerp fix
+			if (renderfx & RF_BEAM)
+			{
+				ent.oldorigin[0] = cent->prev.old_origin[0] + cl.lerpfrac * (cent->current.old_origin[0] - cent->prev.old_origin[0]);
+				ent.oldorigin[1] = cent->prev.old_origin[1] + cl.lerpfrac * (cent->current.old_origin[1] - cent->prev.old_origin[1]);
+				ent.oldorigin[2] = cent->prev.old_origin[2] + cl.lerpfrac * (cent->current.old_origin[2] - cent->prev.old_origin[2]);
+
+				ent.origin[0] = cent->prev.origin[0] + cl.lerpfrac * (cent->current.origin[0] - cent->prev.origin[0]);
+				ent.origin[1] = cent->prev.origin[1] + cl.lerpfrac * (cent->current.origin[1] - cent->prev.origin[1]);
+				ent.origin[2] = cent->prev.origin[2] + cl.lerpfrac * (cent->current.origin[2] - cent->prev.origin[2]);
+			}
+			else
+			{
+				VectorCopy (cent->current.origin, ent.origin);
+				VectorCopy (cent->current.old_origin, ent.oldorigin);
+			}
 		}
 		else
 		{	
@@ -1684,6 +1709,7 @@ static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new
 		gun.model = gun_model;	// development tool
 	else
 		gun.model = cl.model_draw[ps->gunindex];
+
 	if (!gun.model)
 		return;
 
@@ -1808,9 +1834,19 @@ static void CL_CalcViewValues (void)
 	}
 	else
 	{	// just use interpolated values
-		cl.refdef.viewangles[0] = LerpAngle (ops->viewangles[0], ps->viewangles[0], lerp);
-		cl.refdef.viewangles[1] = LerpAngle (ops->viewangles[1], ps->viewangles[1], lerp);
-		cl.refdef.viewangles[2] = LerpAngle (ops->viewangles[2], ps->viewangles[2], lerp);
+		if (cl.frame.playerstate.pmove.pm_type >= PM_DEAD && ops->pmove.pm_type < PM_DEAD)
+		{
+			//r1: fix for server no longer sending viewangles every frame.
+			cl.refdef.viewangles[0] = LerpAngle (cl.predicted_angles[0], ps->viewangles[0], lerp);
+			cl.refdef.viewangles[1] = LerpAngle (cl.predicted_angles[1], ps->viewangles[1], lerp);
+			cl.refdef.viewangles[2] = LerpAngle (cl.predicted_angles[2], ps->viewangles[2], lerp);
+		}
+		else
+		{
+			cl.refdef.viewangles[0] = LerpAngle (ops->viewangles[0], ps->viewangles[0], lerp);
+			cl.refdef.viewangles[1] = LerpAngle (ops->viewangles[1], ps->viewangles[1], lerp);
+			cl.refdef.viewangles[2] = LerpAngle (ops->viewangles[2], ps->viewangles[2], lerp);
+		}
 	}
 
 	cl.refdef.viewangles[0] += LerpAngle (ops->kick_angles[0], ps->kick_angles[0], lerp);
@@ -1895,17 +1931,17 @@ void CL_AddEntities (void)
 
 /*
 ===============
-CL_GetEntitySoundOrigin
+CL_GetEntityOrigin
 
 Called to get the sound spatialization origin
 ===============
 */
-void CL_GetEntitySoundOrigin (int ent, vec3_t origin)
+void CL_GetEntityOrigin (int ent, vec3_t origin)
 {
 	/*centity_t	*old;
 
 	if (ent < 0 || ent >= MAX_EDICTS)
-		Com_Error (ERR_DROP, "CL_GetEntitySoundOrigin: bad ent");
+		Com_Error (ERR_DROP, "CL_GetEntityOrigin: bad ent");
 
 	if (ent == (cl.playernum+1))
 	{
@@ -1923,7 +1959,14 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t origin)
 	vec3_t		midPoint;
 
 	if (ent < 0 || ent >= MAX_EDICTS)
-		Com_Error(ERR_DROP, "CL_GetEntitySoundSpatialization: ent = %i", ent);
+		Com_Error(ERR_DROP, "CL_GetEntityOrigin: ent = %i", ent);
+
+	// Player entity
+	if (ent == cl.playernum + 1)
+	{
+		VectorCopy (cl.refdef.vieworg, origin);
+		return;
+	}
 
 	cent = &cl_entities[ent];
 

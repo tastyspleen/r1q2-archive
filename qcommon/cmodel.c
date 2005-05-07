@@ -341,6 +341,7 @@ void CMod_LoadPlanes (lump_t *l)
 
 	if (count < 1)
 		Com_Error (ERR_DROP, "Map with no planes");
+
 	// need to save space for box planes
 	if (count > MAX_MAP_PLANES)
 		Com_Error (ERR_DROP, "Map has too many planes");
@@ -360,7 +361,7 @@ void CMod_LoadPlanes (lump_t *l)
 
 		out->dist = LittleFloat (in->dist);
 		if (in->type > 5)
-			Com_Error (ERR_DROP, "CMod_LoadPlanes: bad plane type %d", in->type);
+			Com_Error (ERR_DROP, "CMod_LoadPlanes: bad plane type %u (expected 0-5)", in->type);
 		out->type = (byte)LittleLong (in->type);
 		out->signbits = bits;
 	}
@@ -627,10 +628,11 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 	{
 		FILE			*script;
 		char			csname[MAX_QPATH];
+		qboolean		closeFile;
 
 		Com_sprintf (csname, sizeof(csname), "%s.override", name);
 		
-		FS_FOpenFile (csname, &script, true);
+		FS_FOpenFile (csname, &script, HANDLE_OPEN, &closeFile);
 
 		if (script)
 		{
@@ -653,7 +655,8 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 				FS_Read (map_entitystring, length, script);
 			}
 
-			FS_FCloseFile (script);
+			if (closeFile)
+				FS_FCloseFile (script);
 			name = newname;
 		}
 	}
@@ -1689,7 +1692,7 @@ void CM_DecompressVis (byte *in, byte *out)
 		in += 2;
 		if ((out_p - out) + c > row)
 		{
-			c = row - (out_p - out);
+			c = row - (int)(out_p - out);
 			Com_DPrintf ("warning: Vis decompression overrun\n");
 		}
 		while (c)

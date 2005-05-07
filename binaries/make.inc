@@ -1,4 +1,4 @@
-CFLAGS+=-DNDEBUG -DLINUX -O2 -g -MF .depends/$*.d -MMD
+CFLAGS+=-DNDEBUG -DLINUX -O2 -Wall -g -MF .depends/$*.d -MMD
 ALLOBJ:=$(ALLSRC:.c=.o)
 
 .PHONY: clean distclean

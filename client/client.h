@@ -381,23 +381,21 @@ extern	cvar_t	*cl_test2;
 
 extern cvar_t *vid_fullscreen;
 
-#ifdef USE_OPENAL
-extern int openal_active;
-#endif
-
 #ifndef DEDICATED_ONLY
 extern	qboolean send_packet_now;
 #endif
 
 typedef struct
 {
-	int		key;				// so entities can reuse same entry
-	int		die;				// stop lighting after this time
+	int			entity;				// so entities can reuse same entry
+	int			die;				// stop lighting after this time
 
-	vec3_t	color;
-	vec3_t	origin;
+	qboolean	follow;			// r1: follow entity
 
-	float	radius;
+	vec3_t		color;
+	vec3_t		origin;
+
+	float		radius;
 	//float	minlight;			// don't add when contributing less
 } cdlight_t;
 
@@ -667,7 +665,7 @@ void CL_CheckPredictionError (void);
 //
 // cl_fx.c
 //
-cdlight_t *CL_AllocDlight (int key);
+cdlight_t *CL_AllocDlight (int entity, qboolean follow);
 void CL_BigTeleportParticles (vec3_t org);
 void CL_RocketTrail (vec3_t start, vec3_t end, centity_t *old);
 void CL_DiminishingTrail (vec3_t start, vec3_t end, centity_t *old, int flags);

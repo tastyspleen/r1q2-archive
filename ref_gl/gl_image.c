@@ -37,7 +37,7 @@ unsigned	d_8to24table[256];
 qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, image_t *image);
 qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, int bpp, image_t *image);
 
-char	*current_texture_filename;
+const char	*current_texture_filename;
 
 int		gl_solid_format = 3;
 int		gl_alpha_format = 4;
@@ -439,7 +439,7 @@ PCX LOADING
 LoadPCX
 ==============
 */
-void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height)
+void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height)
 {
 	byte	*raw;
 	pcx_t	*pcx;
@@ -562,7 +562,7 @@ void __cdecl PngReadFunc(png_struct *Png, png_bytep buf, png_size_t size)
 }
 
 
-void LoadPNG (char *name, byte **pic, int *width, int *height)
+void LoadPNG (const char *name, byte **pic, int *width, int *height)
 {
 	unsigned int	i, rowbytes;
 	png_structp		png_ptr;
@@ -717,7 +717,7 @@ LoadTGA
 NiceAss: LoadTGA() from Q2Ice, it supports more formats
 =============
 */
-void LoadTGA (char *filename, byte **pic, int *width, int *height)
+void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 {
 	int			w, h, x, y, i, temp1, temp2;
 	int			realrow, truerow, baserow, size, interleave, origin;
@@ -1040,7 +1040,7 @@ void jpeg_mem_src(j_decompress_ptr cinfo, byte *mem, int len)
 LoadJPG
 ==============
 */
-void LoadJPG (char *filename, byte **pic, int *width, int *height)
+void LoadJPG (const char *filename, byte **pic, int *width, int *height)
 {
 	struct jpeg_decompress_struct	cinfo;
 	struct jpeg_error_mgr			jerr;
@@ -1867,7 +1867,9 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 
 	if (scaled_width < 1)
 		scaled_width = 1;
+
 	if (scaled_height < 1)
+		scaled_height = 1;
 
 	upload_width = scaled_width;
 	upload_height = scaled_height;
@@ -2077,7 +2079,7 @@ GL_LoadPic
 This is also used as an entry point for the generated r_notexture
 ================
 */
-image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits)
+image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int bits)
 {
 	qboolean	mipmap;
 	image_t		*image;
@@ -2153,7 +2155,7 @@ image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t t
 			//image->scrap = true;
 			image->has_alpha = true;
 
-			image->upload_height = image->width;
+			image->upload_width = image->width;
 			image->upload_height = image->height;
 
 			image->sl = (x+0.01f)/(float)BLOCK_WIDTH;
@@ -2182,8 +2184,15 @@ nonscrap:
 
 	if (global_hax_texture_x && global_hax_texture_y)
 	{
-		image->width = global_hax_texture_x;
-		image->height = global_hax_texture_y;
+		if (1 || global_hax_texture_x <= image->width && global_hax_texture_y <= image->height)
+		{
+			image->width = global_hax_texture_x;
+			image->height = global_hax_texture_y;
+		}
+		else
+		{
+			ri.Con_Printf (PRINT_DEVELOPER, "Warning, texture '%s' has hi-res replacement smaller than the original! (%d x %d) < (%d x %d)\n", name, image->width, image->height, global_hax_texture_x, global_hax_texture_y);
+		}	
 	}
 
 	image->sl = 0;
@@ -2199,7 +2208,7 @@ nonscrap:
 GL_LoadWal
 ================
 */
-image_t *GL_LoadWal (char *name)
+image_t *GL_LoadWal (const char *name)
 {
 	miptex_t	*mt;
 	int			width, height, ofs, len;
@@ -2229,7 +2238,7 @@ image_t *GL_LoadWal (char *name)
 #define IMAGES_HASH_SIZE	64
 static image_t	*images_hash[IMAGES_HASH_SIZE];
 
-unsigned int hashify (char *S)
+unsigned int hashify (const char *S)
 {
   unsigned int hash_PeRlHaSh;
 
@@ -2258,7 +2267,7 @@ void Cmd_HashStats_f (void)
 	}
 }
 
-image_t	*GL_FindImageBase (char *basename, imagetype_t type)
+image_t	*GL_FindImageBase (const char *basename, imagetype_t type)
 {
 	image_t		*imghash;
 	unsigned	hash;
@@ -2284,7 +2293,7 @@ GL_FindImage
 Finds or loads the given image
 ===============
 */
-image_t	*GL_FindImage (char *name, char *basename, imagetype_t type)
+image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 {
 	image_t	*image;
 	image_t	*imghash;
@@ -2507,7 +2516,7 @@ void	GL_ImageList_f (void)
 		((float)(l1cachehits+(l2cachehits/4)) / (float)(l1cachehits+l2cachehits+cachemisses) * 100.0));
 	*/
 
-	ri.Con_Printf (PRINT_ALL, "Total texel count (not counting mipmaps): %i\n", texels);
+	ri.Con_Printf (PRINT_ALL, "Total texel count (not counting mipmaps): %i (%.2f MB)\n", texels, (texels * sizeof(int)) / 1024.0f / 1024.0f);
 }
 
 /*

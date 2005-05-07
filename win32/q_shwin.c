@@ -163,7 +163,8 @@ int Sys_Milliseconds (void)
 		initialized = true;
 //		oldcurtime = 0;
 	}
-	
+
+	//FIXME: this wraps at 24 days and can make shit go weird
 	curtime = timeGetTime() - base;
 
 	/*if (curtime < oldcurtime)

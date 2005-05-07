@@ -240,6 +240,7 @@ extern	float	LittleFloat (float l);
 #endif
 //============================================================================
 
+extern	qboolean	q2_initialized;
 
 int	COM_Argc (void);
 char *COM_Argv (int arg);	// range and null checked
@@ -254,7 +255,7 @@ char *CopyString (const char *in, int tag);
 
 void StripHighBits (char *string, int highbits);
 void ExpandNewLines (char *string);
-const char *MakePrintable (const byte *s);
+const char *MakePrintable (const void *s);
 qboolean isvalidchar (int c);
 
 //============================================================================
@@ -283,7 +284,7 @@ PROTOCOL
 #define	ORIGINAL_PROTOCOL_VERSION	34
 #define	ENHANCED_PROTOCOL_VERSION	35
 
-#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1901
+#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1902
 
 //=========================================
 
@@ -347,6 +348,14 @@ enum svc_ops_e
 	svc_max_enttypes
 };
 
+typedef enum
+{
+	CLSET_NOGUN,
+	CLSET_NOBLEND,
+	CLSET_RECORDING,
+	CLSET_MAX
+} clientsetting_t;
+
 //==============================================
 
 //
@@ -358,7 +367,9 @@ enum clc_ops_e
 	clc_nop, 		
 	clc_move,				// [[usercmd_t]
 	clc_userinfo,			// [[userinfo string]
-	clc_stringcmd			// [string] message
+	clc_stringcmd,			// [string] message
+	clc_setting,			// [setting][value] R1Q2 settings support.
+	clc_moves
 };
 
 //==============================================
@@ -904,13 +915,20 @@ FILESYSTEM
 ==============================================================
 */
 
+typedef enum
+{
+	HANDLE_NONE,
+	HANDLE_OPEN,
+	HANDLE_DUPE
+} handlestyle_t;
+
 void	FS_InitFilesystem (void);
 void	FS_SetGamedir (const char *dir);
 char	*EXPORT FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
 void	FS_ExecAutoexec (void);
 
-int		EXPORT FS_FOpenFile (const char *filename, FILE /*@out@*/**file, qboolean openHandle);
+int		EXPORT FS_FOpenFile (const char *filename, FILE /*@out@*/**file, handlestyle_t openHandle, qboolean *closeHandle);
 void	EXPORT FS_FCloseFile (FILE *f);
 // note: this can't be called from another DLL, due to MS libc issues
 
@@ -949,7 +967,7 @@ do { \
 #endif
 
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
-void		Com_EndRedirect (void);
+void		Com_EndRedirect (qboolean flush);
 void 		_Com_DPrintf (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void 		Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
 void 		Com_Error (int code, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));

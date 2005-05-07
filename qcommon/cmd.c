@@ -271,14 +271,17 @@ void Cbuf_Execute (void)
 
 		//Com_DPrintf ("Cbuf_Execute: found %d bytes\n", i);
 
-		if (i >= sizeof(line)-1) {
+		if (i >= sizeof(line)-1)
+		{
 			Com_Printf ("Cbuf_Execute: overflow of %d truncated\n", LOG_GENERAL, i);
 			memcpy (line, text, sizeof(line)-1);
-		} else {
-			memcpy (line, text, i);
+			line[sizeof(line)-1] = 0;
 		}
-
-		line[i] = 0;
+		else
+		{
+			memcpy (line, text, i);
+			line[i] = 0;
+		}
 		
 // delete the text from the command buffer and move remaining commands down
 // this is necessary because commands (exec, alias) can insert data at the
@@ -737,10 +740,16 @@ char *Cmd_MacroExpandString (char *text)
 	{
 		if (scan[i] == '"')
 			inquote ^= 1;
+
 		if (inquote)
 			continue;	// don't expand inside quotes
+
+		if (!scan[i])
+			break;
+
 		if (scan[i] != '$')
 			continue;
+
 		if (i && scan[i-1] == '\\')
 		{
 			memmove (scan + i - 1, scan + i, len-i+1);
@@ -856,7 +865,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 	for (;;)
 	{
 		// skip whitespace up to a /n
-		while (*text && *text <= ' ' && *text != '\n')
+		while (*text && (*text == '\t' || *text == ' ')  && *text != '\n')
 		{
 			text++;
 		}

@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 #include "localent.h"
 
-extern int deffered_model_index;
+extern int deferred_model_index;
 
 //=============
 //
@@ -348,7 +348,7 @@ void CL_PrepRefresh (void)
 
 	if (cl_defermodels->intvalue)
 	{
-		deffered_model_index = 1;
+		deferred_model_index = 1;
 		for (i = 2; i < MAX_MODELS; i++)
 		{
 			cl.model_clip[i] = NULL;
@@ -357,7 +357,7 @@ void CL_PrepRefresh (void)
 	}
 	else
 	{
-		deffered_model_index = MAX_MODELS;
+		deferred_model_index = MAX_MODELS;
 		for (i = 2; i < MAX_MODELS; i++)
 		{
 			if (!cl.configstrings[CS_MODELS+i][0])
@@ -423,7 +423,7 @@ void CL_PrepRefresh (void)
 	Com_Printf ("   \r", LOG_CLIENT);
 
 	// the renderer can now free unneeded stuff
-	if (deffered_model_index == MAX_MODELS)
+	if (deferred_model_index == MAX_MODELS)
 		re.EndRegistration ();
 
 	// clear any lines of console text
@@ -624,7 +624,7 @@ void V_RenderView(void)
 		cl.refdef.width = scr_vrect.width;
 		cl.refdef.height = scr_vrect.height;
 		cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, (float)cl.refdef.width, (float)cl.refdef.height);
-		cl.refdef.time = cl.time*0.001f;
+		cl.refdef.time = cl.time * 0.001f;
 
 		cl.refdef.areabits = cl.frame.areabits;
 

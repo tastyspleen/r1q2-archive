@@ -21,6 +21,8 @@ int NET_IPSocket (char *net_interface, int port);
 #ifndef _WIN32
 #define closesocket close
 #define ioctlsocket ioctl
+#define SOCKET unsigned int
+#define INVALID_SOCKET -1
 #endif
 
 int _true = 1;
@@ -228,7 +230,7 @@ void NET_OpenIP (int flags)
 	int		dedicated;
 
 	net_total_in = net_packets_in = net_total_out = net_packets_out = 0;
-	net_inittime = time(0);
+	net_inittime = (unsigned int)time(NULL);
 
 	ip = Cvar_Get ("ip", "localhost", CVAR_NOSET);
 
@@ -372,18 +374,18 @@ void NET_SendLoopPacket (netsrc_t sock, int length, const void *data)
 
 int NET_Accept (int serversocket, netadr_t *address)
 {
-	int socket;
+	SOCKET				socket;
 	struct sockaddr_in	addr;
-	int addrlen = sizeof(addr);
+	int					addrlen = sizeof(addr);
 
 	socket = accept (serversocket, (struct sockaddr *)&addr, &addrlen);
 
-	if (socket != -1)
-	{
-		address->type = NA_IP;
-		address->port = ntohs (addr.sin_port);
-		memcpy (address->ip, &addr.sin_addr, sizeof(int));
-	}
+	if (socket == INVALID_SOCKET)
+		return -1;
+
+	address->type = NA_IP;
+	address->port = ntohs (addr.sin_port);
+	memcpy (address->ip, &addr.sin_addr, sizeof(int));
 
 	return socket;
 }
@@ -407,13 +409,13 @@ void NET_CloseSocket (int s)
 
 int NET_Listen (uint16 port)
 {
-	struct sockaddr_in addr;
-	int s;
+	struct sockaddr_in	addr;
+	SOCKET				s;
 
 	s = socket (AF_INET, SOCK_STREAM, 0);
 
-	if (s == -1)
-		return s;
+	if (s == INVALID_SOCKET)
+		return -1;
 
 	addr.sin_addr.s_addr = INADDR_ANY;
 	addr.sin_family = AF_INET;
@@ -460,11 +462,12 @@ int NET_Select (int s, int msec)
 int NET_Connect (netadr_t *to, int port)
 {
 	struct sockaddr_in	addr;
-	int s;
+	SOCKET				s;
 
 	s = socket (AF_INET, SOCK_STREAM, 0);
-	if (s == -1)
-		return s;
+
+	if (s == INVALID_SOCKET)
+		return -1;
 
 	memset (&addr.sin_zero, 0, sizeof(addr.sin_zero));
 	addr.sin_port = htons ((uint16)port);
@@ -484,9 +487,9 @@ int NET_Connect (netadr_t *to, int port)
 
 int NET_Client_Sleep (int msec)
 {
-    struct timeval timeout;
-	fd_set	fdset;
-	int i;
+    struct timeval	timeout;
+	fd_set			fdset;
+	SOCKET			i;
 
 	FD_ZERO(&fdset);
 	i = 0;

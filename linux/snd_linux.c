@@ -22,7 +22,7 @@ cvar_t *snddevice;
 
 static int tryrates[] = { 11025, 22051, 44100, 8000 };
 
-qboolean SNDDMA_Init(qboolean firsttime)
+qboolean SNDDMA_Init(int firsttime)
 {
 
 	int rc;

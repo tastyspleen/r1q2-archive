@@ -580,7 +580,7 @@ channel_t *S_PickChannel(int entnum, int entchannel)
     int			life_left;
 	channel_t	*ch;
 
-	if (entchannel<0)
+	if (entchannel < 0)
 		Com_Error (ERR_DROP, "S_PickChannel: entchannel<0");
 
 // Check for replacement sound, or find the best one to replace
@@ -694,7 +694,7 @@ void S_Spatialize(channel_t *ch)
 		VectorCopy (ch->origin, origin);
 	}
 	else
-		CL_GetEntitySoundOrigin (ch->entnum, origin);
+		CL_GetEntityOrigin (ch->entnum, origin);
 
 	S_SpatializeOrigin (origin, (float)ch->master_vol, ch->dist_mult, &ch->leftvol, &ch->rightvol);
 }           
@@ -1199,7 +1199,7 @@ void S_AddLoopSounds (void)
 		{
 			VectorCopy (ent->origin, origin);
 		}*/
-		CL_GetEntitySoundOrigin (ent->number, origin);
+		CL_GetEntityOrigin (ent->number, origin);
 
 		// find the total contribution of all sounds of this type
 		S_SpatializeOrigin (origin, 255.0f, SOUND_LOOPATTENUATE,
@@ -1441,9 +1441,9 @@ static void S_OpenAL_SpatializeChannel (openal_channel_t *ch)
 		else
 		{
 			if (ch->loopSound)
-				CL_GetEntitySoundOrigin (ch->loopNum, position);
+				CL_GetEntityOrigin (ch->loopNum, position);
 			else
-				CL_GetEntitySoundOrigin (ch->entNum, position);
+				CL_GetEntityOrigin (ch->entNum, position);
 
 			qalSource3f(ch->sourceNum, AL_POSITION, position[1], position[2], -position[0]);
 			//qalSource3f(ch->sourceNum, AL_VELOCITY, velocity[1], velocity[2], -velocity[0]);
@@ -1617,7 +1617,11 @@ void S_Update_OpenAL (vec3_t position, const vec3_t velocity, const vec3_t at, c
 	qalListenerfv(AL_POSITION, s_openal_listener.position);
 	//qalListenerfv(AL_VELOCITY, s_openal_listener.velocity);
 	qalListenerfv(AL_ORIENTATION, s_openal_listener.orientation);
+#ifdef _WIN32
 	qalListenerf(AL_GAIN, (ActiveApp) ? s_volume->value : 0);
+#else
+	qalListenerf(AL_GAIN, s_volume->value);
+#endif
 
 	// Set state
 	qalDistanceModel(AL_INVERSE_DISTANCE_CLAMPED);

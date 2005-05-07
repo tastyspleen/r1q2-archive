@@ -144,9 +144,9 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)
 {
 //	char *z;
-	int		ret;
+	int					ret;
 	struct sockaddr_in	addr;
-	int		net_socket;
+	SOCKET				net_socket;
 
 	if (to->type == NA_IP)
 	{
@@ -236,14 +236,14 @@ NET_Socket
 */
 int NET_IPSocket (char *net_interface, int port)
 {
-	int					newsocket;
+	SOCKET				newsocket;
 	struct sockaddr_in	address;
 	int					i;
 	int					j;
 	int					x = sizeof(i);
 	int					err;
 
-	if ((newsocket = socket (PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+	if ((newsocket = socket (PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET)
 	{
 		err = WSAGetLastError();
 		if (err != WSAEAFNOSUPPORT)
@@ -310,10 +310,10 @@ int NET_IPSocket (char *net_interface, int port)
 
 void Net_Stats_f (void)
 {
-	int now = time(0);
-	int diff = now - net_inittime;
+	unsigned int now = time(NULL);
+	unsigned int diff = now - net_inittime;
 
-	Com_Printf ("Network up for %i seconds.\n"
+	Com_Printf ("Network up for %u seconds.\n"
 				"%I64u bytes in %I64u packets received (av: %i kbps)\n"
 				"%I64u bytes in %I64u packets sent (av: %i kbps)\n", LOG_NET,
 				

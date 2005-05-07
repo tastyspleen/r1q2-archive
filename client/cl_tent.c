@@ -329,15 +329,19 @@ void CL_ParseBeam (struct model_s *model)
 	int		i;
 	
 	ent = MSG_ReadShort (&net_message);
+
+	//if (ent < 1 || ent > MAX_EDICTS)
+	//	Com_Error (ERR_DROP, "CL_ParseBeam: bad entity %d", ent);
 	
 	MSG_ReadPos (&net_message, start);
 	MSG_ReadPos (&net_message, end);
 
 // override any beam with the same entity
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
+	{
 		if (b->entity == ent)
 		{
-			b->entity = ent;
+			//b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
 			VectorCopy (start, b->start);
@@ -345,6 +349,7 @@ void CL_ParseBeam (struct model_s *model)
 			VectorClear (b->offset);
 			return;
 		}
+	}
 
 // find a free beam
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
@@ -385,9 +390,10 @@ void CL_ParseBeam2 (struct model_s *model)
 // override any beam with the same entity
 
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
+	{
 		if (b->entity == ent)
 		{
-			b->entity = ent;
+			//b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
 			VectorCopy (start, b->start);
@@ -395,6 +401,7 @@ void CL_ParseBeam2 (struct model_s *model)
 			VectorCopy (offset, b->offset);
 			return;
 		}
+	}
 
 // find a free beam
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
@@ -463,7 +470,7 @@ void CL_ParsePlayerBeam (int tempent)
 	{
 		if (b->entity == ent)
 		{
-			b->entity = ent;
+			//b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
 			VectorCopy (start, b->start);
@@ -512,10 +519,11 @@ int CL_ParseLightning (struct model_s *model)
 
 // override any beam with the same source AND destination entities
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
+	{
 		if (b->entity == srcEnt && b->dest_entity == destEnt)
 		{
-			b->entity = srcEnt;
-			b->dest_entity = destEnt;
+			//b->entity = srcEnt;
+			//b->dest_entity = destEnt;
 			b->model = model;
 			b->endtime = cl.time + 200;
 			VectorCopy (start, b->start);
@@ -523,6 +531,7 @@ int CL_ParseLightning (struct model_s *model)
 			VectorClear (b->offset);
 			return srcEnt;
 		}
+	}
 
 // find a free beam
 	for (i=0, b=cl_beams ; i< MAX_BEAMS ; i++, b++)
@@ -649,6 +658,7 @@ void CL_ParseWidow (void)
 			break;
 		}
 	}
+
 	if (free_sustain)
 	{
 		s->id = id;
@@ -680,6 +690,7 @@ void CL_ParseNuke (void)
 			break;
 		}
 	}
+
 	if (free_sustain)
 	{
 		s->id = 21000;
@@ -1512,6 +1523,7 @@ void CL_AddPlayerBeams (void)
 	for (i=0, b=cl_playerbeams ; i< MAX_BEAMS ; i++, b++)
 	{
 		vec3_t		f,r,u;
+
 		if (!b->model || b->endtime < cl.time)
 			continue;
 

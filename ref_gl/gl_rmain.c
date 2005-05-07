@@ -783,7 +783,7 @@ void R_SetupFrame (void)
 	c_alias_polys = 0;
 
 	// clear out the portion of the screen that the NOWORLDMODEL defines
-	if ( r_newrefdef.rdflags & RDF_NOWORLDMODEL )
+	/*if ( r_newrefdef.rdflags & RDF_NOWORLDMODEL )
 	{
 		qglEnable( GL_SCISSOR_TEST );
 		qglClearColor( 0.3f, 0.3f, 0.3f, 1 );
@@ -794,6 +794,16 @@ void R_SetupFrame (void)
 		qglClearColor( 1, 0, 0.5f, 0.5f );
 
 		qglDisable( GL_SCISSOR_TEST );
+	}*/
+	if (r_newrefdef.rdflags & RDF_NOWORLDMODEL)
+	{
+		qglEnable(GL_SCISSOR_TEST);
+		qglClearColor(0.3f, 0.3f, 0.3f, 1);
+		qglScissor(r_newrefdef.x, vid.height - r_newrefdef.height - r_newrefdef.y, r_newrefdef.width,
+			   r_newrefdef.height);
+		qglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		qglClearColor(0, 0, 0, 1);
+		qglDisable(GL_SCISSOR_TEST);
 	}
 }
 
@@ -876,7 +886,7 @@ void R_SetupGL (void)
 	else
 		qglDisable(GL_CULL_FACE);
 
-	//GLPROFqglDisable(GL_BLEND);
+	//qglDisable(GL_BLEND);
 	qglDisable(GL_ALPHA_TEST);
 	//qglEnable(GL_ALPHA_TEST);
 	qglEnable(GL_DEPTH_TEST);
@@ -959,11 +969,11 @@ void R_RenderView (refdef_t *fd)
 	if (!r_worldmodel && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 		ri.Sys_Error (ERR_DROP, "R_RenderView: NULL worldmodel");
 
-	if (FLOAT_NE_ZERO(r_speeds->value))
-	{
-		c_brush_polys = 0;
-		c_alias_polys = 0;
-	}
+	//if (FLOAT_NE_ZERO(r_speeds->value))
+	//{
+	c_brush_polys = 0;
+	c_alias_polys = 0;
+	//}
 
 	R_PushDlights ();
 
@@ -1236,7 +1246,8 @@ void R_Register( void )
 
 	gl_dlight_falloff = ri.Cvar_Get ("gl_dlight_falloff", "0", 0);
 	gl_alphaskins = ri.Cvar_Get ("gl_alphaskins", "0", 0);
-	gl_defertext = ri.Cvar_Get ("gl_defertext", "1", 0);
+	gl_defertext = ri.Cvar_Get ("gl_defertext", "0", 0);
+	defer_drawing = (int)gl_defertext->value;
 
 	//con_alpha = ri.Cvar_Get ("con_alpha", "1.0", 0);
 
@@ -1812,7 +1823,7 @@ void EXPORT R_BeginFrame( float camera_separation )
 	//GLPROFqglEnable (GL_ALPHA_TEST);
 	qglColor4fv(colorWhite);
 
-	//GLPROFqglEnable(GL_MULTISAMPLE_ARB);
+	//qglEnable(GL_MULTISAMPLE_ARB);
 
 	/*
 	** draw buffer stuff
@@ -2024,6 +2035,12 @@ GetRefAPI
 */
 void EXPORT GetExtraAPI (refimportnew_t rimp )
 {
+	if (rimp.APIVersion != EXTENDED_API_VERSION)
+	{
+		ri.Con_Printf (PRINT_ALL, "R1GL: ExtraAPI version number mismatch, expected version %d, got version %d.\n", EXTENDED_API_VERSION, rimp.APIVersion);
+		return;
+	}
+
 	memcpy (&rx, &rimp, sizeof(rx));
 }
 

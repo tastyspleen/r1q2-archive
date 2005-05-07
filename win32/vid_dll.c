@@ -56,7 +56,7 @@ HWND        cl_hwnd;            // Main window handle for life of program
 
 #define VID_NUM_MODES ( sizeof( vid_modes ) / sizeof( vid_modes[0] ) )
 
-LONG WINAPI MainWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
+LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 static qboolean s_alttab_disabled;
 
@@ -342,15 +342,9 @@ MainWndProc
 main window procedure
 ====================
 */
-LONG WINAPI MainWndProc (
-    HWND    hWnd,
-    UINT    uMsg,
-    WPARAM  wParam,
-    LPARAM  lParam)
+LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-//	LONG			lRet = 0;
-
-	//r1: ignore messages that occur during vid_restart
+	//r1: ignore the flood of messages that occur during vid_restart
 	if (closing_reflib)
 	{
 		//Com_Printf ("Ignored WM_%d\n", uMsg);
@@ -575,21 +569,21 @@ LONG WINAPI MainWndProc (
 			return 0;
 		}
 		if (!g_pKeyboard)
-			Key_Event( MapKey( lParam ), true, sys_msg_time);
+			Key_Event( MapKey( (int)lParam ), true, sys_msg_time);
 		return 0;
 	case WM_KEYDOWN:
 		if (!g_pKeyboard)
-			Key_Event( MapKey( lParam ), true, sys_msg_time);
+			Key_Event( MapKey( (int)lParam ), true, sys_msg_time);
 		break;
 
 	case WM_SYSKEYUP:
 		if (!g_pKeyboard)
-			Key_Event( MapKey( lParam ), false, sys_msg_time);
+			Key_Event( MapKey( (int)lParam ), false, sys_msg_time);
 		return 0;
 
 	case WM_KEYUP:
 		if (!g_pKeyboard)
-			Key_Event( MapKey( lParam ), false, sys_msg_time);
+			Key_Event( MapKey( (int)lParam ), false, sys_msg_time);
 		break;
 
 #ifdef CD_AUDIO
@@ -604,7 +598,8 @@ LONG WINAPI MainWndProc (
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
     }
 
-	//return 0;
+	if (cl_test->intvalue)
+		return 0;
 
     /* return 0 if handled message, 1 if not */
     return DefWindowProc( hWnd, uMsg, wParam, lParam );
@@ -774,7 +769,8 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 	rx.FS_FOpenFile = FS_FOpenFile;
 	rx.FS_FCloseFile = FS_FCloseFile;
 	rx.FS_Read = FS_Read;
-	rx.structSize = sizeof(rx);
+
+	rx.APIVersion = EXTENDED_API_VERSION;
 
 	Com_DPrintf ("refimport_t set.\n");
 
@@ -952,7 +948,7 @@ void VID_ReloadRefresh (void)
 
 void VID_AltTab_Modified (cvar_t *cvar, char *old, char *newv)
 {
-	if ( win_noalttab->intvalue )
+	if ( cvar->intvalue )
 	{
 		WIN_DisableAltTab();
 	}
@@ -960,7 +956,7 @@ void VID_AltTab_Modified (cvar_t *cvar, char *old, char *newv)
 	{
 		WIN_EnableAltTab();
 	}
-	win_noalttab->modified = false;
+	cvar->modified = false;
 }
 
 void VID_XY_Modified (cvar_t *cvar, char *old, char *newv)
@@ -1003,6 +999,7 @@ void VID_Init (void)
 		gl_mode->changed = VID_Ref_Modified;*/
 	
 	win_noalttab->changed = VID_AltTab_Modified;
+	win_noalttab->changed (win_noalttab, win_noalttab->string, win_noalttab->string);
 
 	/*
 	** this is a gross hack but necessary to clamp the mode for 3Dfx

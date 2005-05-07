@@ -104,7 +104,6 @@ typedef struct
 
 	// demo server information
 	FILE		*demofile;
-
 	uint32		randomframe;
 } server_t;
 
@@ -267,6 +266,8 @@ typedef struct client_s
 	messagelist_t				*msgListEnd;
 
 	qboolean					moved;
+
+	unsigned long				settings[CLSET_MAX];
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -319,8 +320,12 @@ typedef struct
 	ratelimit_t	ratelimit_badrcon;
 
 	//crazy stats :)
+#ifndef NPROFILE
 	unsigned long		proto35BytesSaved;
 	unsigned long		proto35CompressionBytes;
+	unsigned long		r1q2OptimizedBytes;
+	unsigned long		r1q2CustomBytes;
+#endif
 } server_static_t;
 
 extern	cvar_t	*sv_ratelimit_status;
@@ -386,6 +391,8 @@ extern	cvar_t		*sv_msecs;
 extern	cvar_t		*sv_blackhole_mask;
 extern	cvar_t		*sv_badcvarcheck;
 
+extern	cvar_t		*sv_rcon_showoutput;
+
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
 
@@ -394,6 +401,7 @@ extern	cvar_t	*allow_download_players;
 extern	cvar_t	*allow_download_models;
 extern	cvar_t	*allow_download_sounds;
 extern	cvar_t	*allow_download_maps;
+extern	cvar_t	*allow_download_pics;
 extern	cvar_t	*allow_download_textures;
 extern	cvar_t	*allow_download_others;
 
@@ -435,6 +443,8 @@ extern cvar_t	*sv_deny_q2ace;
 
 extern cvar_t	*sv_gamedebug;
 extern cvar_t	*sv_packetentities_hack;
+
+extern cvar_t	*sv_optimize_deltas;
 
 //void Master_Heartbeat (void);
 //void Master_Packet (void);

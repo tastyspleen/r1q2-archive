@@ -397,7 +397,10 @@ static cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean forc
 				if (!strcmp(var->name, "game"))
 				{
 					FS_SetGamedir (var->string);
-					FS_ExecAutoexec ();
+#ifndef DEDICATED_ONLY
+					if (!Cvar_IntValue ("dedicated"))
+						FS_ExecAutoexec ();
+#endif
 				}
 			}
 			return var;
@@ -540,7 +543,10 @@ void Cvar_GetLatchedVars (void)
 		if (!strcmp(var->name, "game"))
 		{
 			FS_SetGamedir (var->string);
-			FS_ExecAutoexec ();
+#ifndef DEDICATED_ONLY
+			if (!Cvar_IntValue ("dedicated"))
+				FS_ExecAutoexec ();
+#endif
 		}
 	}
 }

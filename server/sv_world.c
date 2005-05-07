@@ -375,7 +375,7 @@ SV_AreaEdicts_r
 
 ====================
 */
-const void SV_AreaEdicts_r (const areanode_t *node)
+static void SV_AreaEdicts_r (const areanode_t *node)
 {
 	link_t			*l, *next;
 	const link_t	*start;

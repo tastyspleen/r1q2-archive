@@ -320,18 +320,18 @@ void CL_Download_f (void)
 		return;
 	}
 
+	if (cls.state < ca_connected)
+	{
+		Com_Printf ("Not connected.\n", LOG_CLIENT);
+		return;
+	}
+
 	//Com_sprintf(filename, sizeof(filename), "%s", Cmd_Argv(1));
 	filename = Cmd_Argv(1);
 
 	if (strstr (filename, ".."))
 	{
 		Com_Printf ("Refusing to download a path with .. (%s)\n", LOG_CLIENT, filename);
-		return;
-	}
-
-	if (cls.state < ca_connected)
-	{
-		Com_Printf ("Not connected.\n", LOG_CLIENT);
 		return;
 	}
 
@@ -473,7 +473,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	// open the file if not opened yet
 	if (!cls.download)
 	{
-		if (!*cls.downloadtempname)
+		if (!cls.downloadtempname[0])
 		{
 			Com_Printf ("Received download packet without request. Ignored.\n", LOG_CLIENT);
 			net_message.readcount += size;
@@ -556,7 +556,7 @@ qboolean CL_ParseServerData (void)
 	char	*str;
 	int		i;
 	int		newVersion;
-
+	cvar_t	*gameDirHack;
 //
 // wipe the client_state_t struct
 //
@@ -571,7 +571,7 @@ qboolean CL_ParseServerData (void)
 	cl.attractloop = MSG_ReadByte (&net_message);
 
 	if (i != ORIGINAL_PROTOCOL_VERSION && i != ENHANCED_PROTOCOL_VERSION && !cl.attractloop)
-		Com_Error (ERR_DROP, "Server is using unknown protocol %d.", i);
+		Com_Error (ERR_HARD, "Server is using unknown protocol %d.", i);
 
 	// game directory
 	str = MSG_ReadString (&net_message);
@@ -596,6 +596,9 @@ qboolean CL_ParseServerData (void)
 
 	Cvar_ForceSet ("$game", str);
 
+	gameDirHack = Cvar_FindVar ("game");
+	gameDirHack->flags |= CVAR_NOSET;
+
 	// parse player entity number
 	cl.playernum = MSG_ReadShort (&net_message);
 
@@ -609,11 +612,21 @@ qboolean CL_ParseServerData (void)
 		newVersion = MSG_ReadShort (&net_message);
 		if (newVersion != CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
 		{
-			Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", LOG_CLIENT, newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
-			CL_Disconnect(false);
-			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-			CL_Reconnect_f ();
-			return false;
+			if (cl.attractloop)
+			{
+				if (newVersion < CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
+					Com_Printf ("This demo was recorded with an earlier version of the R1Q2 protocol. It may not play back properly.\n", LOG_CLIENT);
+				else
+					Com_Printf ("This demo was recorded with a later version of the R1Q2 protocol. It may not play back properly. Please update your R1Q2 client.\n", LOG_CLIENT);
+			}
+			else
+			{
+				Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", LOG_CLIENT, newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+				CL_Disconnect(false);
+				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+				CL_Reconnect_f ();
+				return false;
+			}
 		}
 	}
 	else
@@ -641,7 +654,7 @@ qboolean CL_ParseServerData (void)
 		cl.refresh_prepped = false;
 	}
 
-	CL_FixCvarCheats();
+	//CL_FixCvarCheats();
 	return true;
 }
 /*
@@ -1090,7 +1103,8 @@ void CL_ParseStartSoundPacket(void)
 	{	// entity reletive
 		channel = MSG_ReadShort(&net_message); 
 		ent = channel>>3;
-		if (ent > MAX_EDICTS)
+
+		if (ent < 0 || ent > MAX_EDICTS)
 			Com_Error (ERR_DROP,"CL_ParseStartSoundPacket: ent = %i", ent);
 
 		channel &= 7;

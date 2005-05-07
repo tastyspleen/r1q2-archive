@@ -164,13 +164,7 @@ void Sys_KillServer (int sig)
 	Com_Quit();
 }
 
-//gcc 2.7.2 has trouble understanding this unfortunately at compile time
-//and 2.95.3 won't find it at link time. blah.
-#define GCC_VERSION (__GNUC__ * 10000 \
-                     + __GNUC_MINOR__ * 100 \
-                     + __GNUC_PATCHLEVEL__)
-
-#if GCC_VERSION > 30000
+#if R1RELEASE == 3
 static int dlcallback (struct dl_phdr_info *info, size_t size, void *data)
 {
 	int		j;
@@ -252,7 +246,7 @@ void Sys_Backtrace (int sig, siginfo_t *siginfo, void *secret)
 	uname (&info);
 	fprintf (stderr, "OS Info: %s %s %s %s %s\n\n", info.sysname, info.nodename, info.release, info.version, info.machine);
 
-#if GCC_VERSION > 30000
+#if R1RELEASE == 3
 	fprintf (stderr, "Loaded libraries:\n");
 	dl_iterate_phdr(dlcallback, NULL);
 #endif
@@ -438,6 +432,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2)
 	if (baseq2)
 	{
 		Com_sprintf (name, sizeof(name), "%s/%s/%s", curpath, BASEDIRNAME, gamename);
+		game_library = dlopen (name, RTLD_NOW );
 	}
 	else
 	{

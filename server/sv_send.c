@@ -29,13 +29,24 @@ Com_Printf redirection
 =============================================================================
 */
 
-char sv_outputbuf[SV_OUTPUTBUF_LENGTH];
+char	sv_outputbuf[SV_OUTPUTBUF_LENGTH];
+extern	int	rd_target;
 
 void SV_FlushRedirect (int sv_redirected, char *outputbuf)
 {
 	if (sv_redirected == RD_PACKET)
 	{
 		Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s", outputbuf);
+
+		//FIXME: this is REALLY nasty
+		if (sv_rcon_showoutput->intvalue)
+		{
+			int	saved_target;
+			saved_target = rd_target;
+			rd_target = 0;
+			Com_Printf ("%s", LOG_SERVER, outputbuf);
+			rd_target = saved_target;
+		}
 	}
 }
 
@@ -189,6 +200,12 @@ static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 		return;
 	}
 
+	if (cl->state == cs_connected && sv_force_reconnect->string[0] && !cl->reconnect_done && !NET_IsLANAddress (&cl->netchan.remote_address) && !cl->reconnect_var[0])
+	{
+		Com_Printf ("Dropped a %sreliable message to connecting client %d.\n", LOG_SERVER|LOG_NOTICE, reliable ? "" : "un", (int)(cl - svs.clients));
+		return;
+	}
+
 	//an overflown client
 	if (!cl->messageListData)
 		return;
@@ -198,7 +215,7 @@ static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 		return;
 
 	//get next message position
-	index = (cl->msgListEnd - cl->msgListStart) + 1;
+	index = (int)((cl->msgListEnd - cl->msgListStart)) + 1;
 
 	//have they overflown?
 	if (index >= MAX_MESSAGES_PER_LIST-1)
@@ -228,10 +245,10 @@ static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 	SV_MSGListIntegrityCheck (cl);
 
 	//check its sane, should never happen...
-	if (next->cursize >= MAX_USABLEMSG)
+	if (next->cursize >= cl->netchan.message.buffsize)
 	{
 		//uh oh...
-		Com_Printf ("ALERT: SV_AddMessageSingle: Message size %d to %s is larger than MAX_USABLEMSG!!\n", LOG_SERVER|LOG_WARNING, next->cursize, cl->name);
+		Com_Printf ("ALERT: SV_AddMessageSingle: Message size %d to %s is larger than MAX_USABLEMSG (%d)!!\n", LOG_SERVER|LOG_WARNING, next->cursize, cl->name, cl->netchan.message.buffsize);
 
 		//clear the buffer for overflow print and malloc cleanup
 		SV_ClearMessageList (cl);
@@ -571,13 +588,19 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 
 	for (j = 0, client = svs.clients; j < maxclients->intvalue; j++, client++)
 	{
-		if (client->state <= cs_zombie || (client->state != cs_spawned && !(channel & CHAN_RELIABLE)))
+		//r1: do we really want to be sending sounds to clients who have no entity state?
+		//if (client->state <= cs_zombie || (client->state != cs_spawned && !(channel & CHAN_RELIABLE)))
+		if (client->state != cs_spawned)
 			continue;
 
-		if (use_phs) {
-			if (force_pos) {
+		if (use_phs)
+		{
+			if (force_pos)
+			{
 				flags |= SND_POS;
-			} else {
+			}
+			else
+			{
 				if (!PF_inPHS (client->edict->s.origin, origin))
 					continue;
 
@@ -681,7 +704,15 @@ void SV_WriteReliableMessages (client_t *client, int buffSize)
 			{
 				//but it wouldn't fit.
 				if (message->cursize + client->netchan.message.cursize > client->netchan.message.maxsize)
+				{
+					if (!client->netchan.message.cursize)
+					{
+						Com_Printf ("SV_WriteReliableMessages: Reliable message of type %s (%d bytes) too big for maxsize %d!\n", LOG_SERVER|LOG_WARNING, svc_strings[message->data[0]], message->cursize, client->netchan.message.maxsize);
+						SV_DropClient (client, false);
+						return;
+					}
 					break;
+				}
 
 				//it fits, write it in
 				SZ_Write (&client->netchan.message, message->data, message->cursize);
@@ -791,7 +822,9 @@ retryframe:
 					SZ_WriteShort (&msg, compressed_frame_len);
 					SZ_WriteShort (&msg, frame.cursize);
 					SZ_Write (&msg, compressed_frame, compressed_frame_len);
+#ifndef NPROFILE
 					svs.proto35CompressionBytes += frame.cursize - compressed_frame_len;
+#endif
 				}
 				else
 				{
@@ -1088,7 +1121,7 @@ void SV_SendClientMessages (void)
 				return;
 			}
 			if (msglen > MAX_MSGLEN)
-				Com_Error (ERR_DROP, "SV_SendClientMessages: msglen > MAX_MSGLEN");
+				Com_Error (ERR_DROP, "SV_SendClientMessages: msglen %d > MAX_MSGLEN (%d)", msglen, MAX_MSGLEN);
 			r = fread (msgbuf, msglen, 1, sv.demofile);
 			if (r != 1)
 			{
@@ -1124,7 +1157,8 @@ void SV_SendClientMessages (void)
 		{
 			SV_WriteReliableMessages (c, c->netchan.message.buffsize);
 			// just update reliable	if needed
-			if (c->netchan.reliable_length || curtime - c->netchan.last_sent > 100)
+			// r1: write if pending reliable buffer too.
+			if ((!c->netchan.reliable_length && c->netchan.message.cursize) || c->netchan.reliable_length || curtime - c->netchan.last_sent > 100)
 				Netchan_Transmit (&c->netchan, 0, NULL);
 		}
 	}

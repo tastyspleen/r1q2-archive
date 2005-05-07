@@ -576,10 +576,11 @@ SCR_PlayCinematic
 */
 void SCR_PlayCinematic (char *arg)
 {
-	int		width, height;
-	byte	*palette;
-	char	name[MAX_OSPATH], *dot;
-	int		old_khz;
+	int			width, height;
+	byte		*palette;
+	char		name[MAX_OSPATH], *dot;
+	int			old_khz;
+	qboolean	dummy;
 
 	// make sure CD isn't playing music
 #ifdef CD_AUDIO
@@ -610,7 +611,7 @@ void SCR_PlayCinematic (char *arg)
 	}
 
 	Com_sprintf (name, sizeof(name), "video/%s", arg);
-	FS_FOpenFile (name, &cl.cinematic_file, true);
+	FS_FOpenFile (name, &cl.cinematic_file, HANDLE_DUPE, &dummy);
 	if (!cl.cinematic_file)
 	{
 //		Com_Error (ERR_DROP, "Cinematic %s not found.\n", name);

@@ -166,21 +166,22 @@ CL_AllocDlight
 
 ===============
 */
-cdlight_t *CL_AllocDlight (int key)
+cdlight_t *CL_AllocDlight (int entity, qboolean follow)
 {
 	int		i;
 	cdlight_t	*dl;
 
 // first look for an exact key match
-	if (key)
+	if (entity)
 	{
 		dl = cl_dlights;
 		for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 		{
-			if (dl->key == key)
+			if (dl->entity == entity)
 			{
-				memset (dl, 0, sizeof(*dl));
-				dl->key = key;
+				//memset (dl, 0, sizeof(*dl));
+				dl->follow = follow;
+				//dl->key = key;
 				return dl;
 			}
 		}
@@ -192,15 +193,17 @@ cdlight_t *CL_AllocDlight (int key)
 	{
 		if (dl->die < cl.time)
 		{
-			memset (dl, 0, sizeof(*dl));
-			dl->key = key;
+			//memset (dl, 0, sizeof(*dl));
+			dl->follow = follow;
+			dl->entity = entity;
 			return dl;
 		}
 	}
 
 	dl = &cl_dlights[0];
-	memset (dl, 0, sizeof(*dl));
-	dl->key = key;
+	//memset (dl, 0, sizeof(*dl));
+	dl->follow = follow;
+	dl->entity = entity;
 	return dl;
 }
 
@@ -250,7 +253,7 @@ void CL_ParseMuzzleFlash (void)
 
 	i = MSG_ReadShort (&net_message);
 	if (i < 1 || i >= MAX_EDICTS)
-		Com_Error (ERR_DROP, "CL_ParseMuzzleFlash: bad entity");
+		Com_Error (ERR_DROP, "CL_ParseMuzzleFlash: bad entity %d", i);
 
 	weapon = MSG_ReadByte (&net_message);
 	silenced = weapon & MZ_SILENCED;
@@ -258,8 +261,9 @@ void CL_ParseMuzzleFlash (void)
 
 	pl = &cl_entities[i];
 
-	dl = CL_AllocDlight (i);
-	VectorCopy (pl->current.origin,  dl->origin);
+	dl = CL_AllocDlight (i, true);
+	//VectorCopy (pl->current.origin,  dl->origin);
+	CL_GetEntityOrigin (i, dl->origin);
 	AngleVectors (pl->current.angles, fv, rv, NULL);
 	VectorMA (dl->origin, 18, fv, dl->origin);
 	VectorMA (dl->origin, 16, rv, dl->origin);
@@ -291,7 +295,7 @@ void CL_ParseMuzzleFlash (void)
 		break;
 	case MZ_MACHINEGUN:
 		dl->color[0] = 1;dl->color[1] = 1;dl->color[2] = 0;
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
 		break;
 	case MZ_SHOTGUN:
@@ -306,27 +310,27 @@ void CL_ParseMuzzleFlash (void)
 	case MZ_CHAINGUN1:
 		dl->radius = 200.0f + (randomMT()&31);
 		dl->color[0] = 1;dl->color[1] = 0.25;dl->color[2] = 0;
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
 		break;
 	case MZ_CHAINGUN2:
 		dl->radius = 225.0f + (randomMT()&31);
 		dl->color[0] = 1;dl->color[1] = 0.5;dl->color[2] = 0;
 		dl->die = cl.time;//  + 0.1;	// long delay
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.05f);
 		break;
 	case MZ_CHAINGUN3:
 		dl->radius = 250.0f + (randomMT()&31);
 		dl->color[0] = 1;dl->color[1] = 1;dl->color[2] = 0;
 		dl->die = cl.time;//  + 0.1;	// long delay
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.033f);
-		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%lub.wav", (randomMT() % 5) + 1);
+		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ub.wav", (randomMT() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.066f);
 		break;
 	case MZ_RAILGUN:
@@ -433,24 +437,29 @@ void CL_ParseMuzzleFlash2 (void)
 {
 	int			ent;
 	vec3_t		origin;
-	int			flash_number;
+	unsigned	flash_number;
 	cdlight_t	*dl;
 	vec3_t		forward, right;
 	char		soundname[64];
 
 	ent = MSG_ReadShort (&net_message);
+
 	if (ent < 1 || ent >= MAX_EDICTS)
-		Com_Error (ERR_DROP, "CL_ParseMuzzleFlash2: bad entity");
+		Com_Error (ERR_DROP, "CL_ParseMuzzleFlash2: bad entity %d", ent);
 
 	flash_number = MSG_ReadByte (&net_message);
 
+	if (flash_number > 210)
+		Com_Error (ERR_DROP, "CL_ParseMuzzleFlash2: bad offset index %d", flash_number);
+
 	// locate the origin
 	AngleVectors (cl_entities[ent].current.angles, forward, right, NULL);
+
 	origin[0] = cl_entities[ent].current.origin[0] + forward[0] * monster_flash_offset[flash_number][0] + right[0] * monster_flash_offset[flash_number][1];
 	origin[1] = cl_entities[ent].current.origin[1] + forward[1] * monster_flash_offset[flash_number][0] + right[1] * monster_flash_offset[flash_number][1];
 	origin[2] = cl_entities[ent].current.origin[2] + forward[2] * monster_flash_offset[flash_number][0] + right[2] * monster_flash_offset[flash_number][1] + monster_flash_offset[flash_number][2];
 
-	dl = CL_AllocDlight (ent);
+	dl = CL_AllocDlight (ent, false);
 	VectorCopy (origin,  dl->origin);
 	dl->radius = 200.0f + (randomMT()&31);
 	//dl->minlight = 32;
@@ -827,6 +836,10 @@ void CL_AddDLights (void)
 		{
 			if (FLOAT_EQ_ZERO(dl->radius))
 				continue;
+
+			if (dl->follow)
+				CL_GetEntityOrigin (dl->entity, dl->origin);
+
 			V_AddLight (dl->origin, dl->radius,
 				dl->color[0], dl->color[1], dl->color[2]);
 		}
@@ -846,6 +859,10 @@ void CL_AddDLights (void)
 				dl->color[1] = 1;
 				dl->color[2] = 1;
 			}
+			
+			if (dl->follow)
+				CL_GetEntityOrigin (dl->entity, dl->origin);
+
 			V_AddLight (dl->origin, dl->radius,
 				dl->color[0], dl->color[1], dl->color[2]);
 		}
@@ -2329,29 +2346,33 @@ extern struct sfx_s	*cl_sfx_footsteps[4];
 
 void CL_EntityEvent (entity_state_t *ent)
 {
+	vec3_t	origin;
+
 	switch (ent->event)
 	{
-	case EV_ITEM_RESPAWN:
-		S_StartSound (NULL, ent->number, CHAN_WEAPON, S_RegisterSound("items/respawn1.wav"), 1, ATTN_IDLE, 0);
-		CL_ItemRespawnParticles (ent->origin);
-		break;
-	case EV_PLAYER_TELEPORT:
-		S_StartSound (NULL, ent->number, CHAN_WEAPON, S_RegisterSound("misc/tele1.wav"), 1, ATTN_IDLE, 0);
-		CL_TeleportParticles (ent->origin);
-		break;
-	case EV_FOOTSTEP:
-		if (cl_footsteps->intvalue)
-			S_StartSound (NULL, ent->number, CHAN_BODY, cl_sfx_footsteps[randomMT()&3], 1, ATTN_NORM, 0);
-		break;
-	case EV_FALLSHORT:
-		S_StartSound (NULL, ent->number, CHAN_AUTO, S_RegisterSound ("player/land1.wav"), 1, ATTN_NORM, 0);
-		break;
-	case EV_FALL:
-		S_StartSound (NULL, ent->number, CHAN_AUTO, S_RegisterSound ("*fall2.wav"), 1, ATTN_NORM, 0);
-		break;
-	case EV_FALLFAR:
-		S_StartSound (NULL, ent->number, CHAN_AUTO, S_RegisterSound ("*fall1.wav"), 1, ATTN_NORM, 0);
-		break;
+		case EV_ITEM_RESPAWN:
+			S_StartSound (NULL, ent->number, CHAN_WEAPON, S_RegisterSound("items/respawn1.wav"), 1, ATTN_IDLE, 0);
+			CL_GetEntityOrigin (ent->number, origin);
+			CL_ItemRespawnParticles (origin);
+			break;
+		case EV_PLAYER_TELEPORT:
+			S_StartSound (NULL, ent->number, CHAN_WEAPON, S_RegisterSound("misc/tele1.wav"), 1, ATTN_IDLE, 0);
+			CL_GetEntityOrigin (ent->number, origin);
+			CL_TeleportParticles (origin);
+			break;
+		case EV_FOOTSTEP:
+			if (cl_footsteps->intvalue)
+				S_StartSound (NULL, ent->number, CHAN_BODY, cl_sfx_footsteps[randomMT()&3], 1, ATTN_NORM, 0);
+			break;
+		case EV_FALLSHORT:
+			S_StartSound (NULL, ent->number, CHAN_AUTO, S_RegisterSound ("player/land1.wav"), 1, ATTN_NORM, 0);
+			break;
+		case EV_FALL:
+			S_StartSound (NULL, ent->number, CHAN_AUTO, S_RegisterSound ("*fall2.wav"), 1, ATTN_NORM, 0);
+			break;
+		case EV_FALLFAR:
+			S_StartSound (NULL, ent->number, CHAN_AUTO, S_RegisterSound ("*fall1.wav"), 1, ATTN_NORM, 0);
+			break;
 	}
 }
 

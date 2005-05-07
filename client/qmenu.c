@@ -241,7 +241,7 @@ qboolean Field_Key( menufield_s *f, int key )
 
 	case K_SPACE:
 	default:
-		if ( !isdigit( key ) && ( f->generic.flags & QMF_NUMBERSONLY ) )
+		if (( f->generic.flags & QMF_NUMBERSONLY ) && !isdigit( key ) && key != '.' )
 			return false;
 
 		if ( f->cursor < f->length )

@@ -51,7 +51,7 @@ void Draw_InitLocal (void)
 	// load console characters (don't bilerp characters)
 	draw_chars = GL_FindImage ("pics/conchars.pcx", "pics/conchars.pcx", it_pic);
 	if (!draw_chars)
-		ri.Sys_Error (ERR_FATAL, "R1GL: Couldn't load conchars.pcx\n\nLikely you aren't running Quake 2 from the correct directory or you are missing important files.");
+		ri.Sys_Error (ERR_FATAL, "R1GL: Couldn't load conchars.pcx\n\nEither you aren't running Quake 2 from the correct directory or you are missing important files.");
 	GL_Bind( draw_chars->texnum );
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);

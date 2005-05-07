@@ -364,7 +364,7 @@ __inline void CL_InitCmd (void)
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
 
 	// init the current cmd buffer
-	memset(cmd, 0, sizeof(struct usercmd_s) );
+	memset(cmd, 0, sizeof(*cmd));
 }
 
 // CL_RefreshCmd
@@ -373,7 +373,6 @@ __inline void CL_InitCmd (void)
 trace_t		EXPORT CL_PMTrace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end);
 void CL_RefreshCmd (void)
 {	
-	static struct edict_s *found;
 	int ms;
 	usercmd_t *cmd = &cl.cmds[ cls.netchan.outgoing_sequence & (CMD_BACKUP-1) ];
 
@@ -672,6 +671,24 @@ void CL_SendCmd_Synchronous (void)
 		}
 		return;
 	}
+
+	//FIXME: fix this and test if it works
+	/*if (cl_async->intvalue == 2)
+	{
+		i = (cls.netchan.outgoing_sequence-1) & (CMD_BACKUP-1);
+		oldcmd = &cl.cmds[i];
+
+		if (cmd->forwardmove == oldcmd->forwardmove && cmd->sidemove == oldcmd->sidemove && cmd->upmove == oldcmd->upmove && cmd->impulse == oldcmd->impulse && cmd->buttons == oldcmd->buttons)
+		{
+			if (cmd->msec + oldcmd->msec < 250)
+			{
+				cmd->msec += oldcmd->msec;
+				//oldcmd->msec = 0;
+				memset (oldcmd, 0, sizeof(*oldcmd));
+				return;
+			}
+		}
+	}*/
 
 	// send a userinfo update if needed
 	if (userinfo_modified)

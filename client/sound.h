@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 struct sfx_s;
 
-void S_Init (qboolean firsttime);
+void S_Init (int firsttime);
 void S_Shutdown (void);
 
 // if origin is NULL, the sound will be dynamically sourced from the entity
@@ -42,4 +42,4 @@ struct sfx_s *S_FindName (char *name, qboolean create);
 
 // the sound code makes callbacks to the client for entitiy position
 // information, so entities can be dynamically re-spatialized
-void CL_GetEntitySoundOrigin (int ent, vec3_t origin);
+void CL_GetEntityOrigin (int ent, vec3_t origin);

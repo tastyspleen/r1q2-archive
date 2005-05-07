@@ -748,7 +748,7 @@ void Key_Message (int key)
 				chat_curbuffer = 0;
 		}
 
-		chat_bufferlen = chat_cursorpos = strlen(chat_buffer[chat_curbuffer]);
+		chat_bufferlen = chat_cursorpos = (int)strlen(chat_buffer[chat_curbuffer]);
 		return;
 	}
 
@@ -761,7 +761,7 @@ void Key_Message (int key)
 		if (chat_curbuffer > 7)
 			chat_curbuffer = 0;
 
-		chat_bufferlen = chat_cursorpos = strlen(chat_buffer[chat_curbuffer]);
+		chat_bufferlen = chat_cursorpos = (int)strlen(chat_buffer[chat_curbuffer]);
 		return;
 	}
 

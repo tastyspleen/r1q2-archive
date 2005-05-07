@@ -208,6 +208,7 @@ struct fscache_s
 	char		filepath[MAX_OSPATH];
 	uint32		filelen;
 	uint32		fileseek;
+	pack_t		*pak;
 #ifdef HASH_CACHE
 	fscache_t	*next;
 	uint32		hash;
@@ -346,14 +347,18 @@ static void FS_Stats_f (void)
 }
 
 #if BTREE_SEARCH
-static void FS_AddToCache (const char *path, uint32 filelen, uint32 fileseek, const char *filename)
+static void FS_AddToCache (const char *path, uint32 filelen, uint32 fileseek, const char *filename, pack_t *pak)
 {
 	void		**newitem;
 	fscache_t	*cache;
 
+	if (!q2_initialized)
+		return;
+
 	cache = Z_TagMalloc (sizeof(fscache_t), TAGMALLOC_FSCACHE);
 	cache->filelen = filelen;
 	cache->fileseek = fileseek;
+	cache->pak = pak;
 
 	if (path)
 		strncpy (cache->filepath, path, sizeof(cache->filepath)-1);
@@ -444,7 +449,7 @@ a seperate file.
 ===========
 */
 
-int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
+int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHandle, qboolean *closeHandle)
 {
 	fscache_t		*cache;
 	searchpath_t	*search;
@@ -461,12 +466,13 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 			if (!strncmp (filename, link->from, link->fromlength))
 			{
 				Com_sprintf (netpath, sizeof(netpath), "%s%s",link->to, filename+link->fromlength);
-				if (openHandle)
+				if (openHandle != HANDLE_NONE)
 				{
 					*file = fopen (netpath, "rb");
 					if (*file)
 					{	
 						Com_DPrintf ("link file: %s\n",netpath);
+						*closeHandle = true;
 						return FS_filelength (*file);
 					}
 					return -1;
@@ -492,13 +498,31 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 #ifdef _DEBUG
 		Com_DPrintf ("File '%s' found in cache: %s\n", filename, cache->filepath);
 #endif
-		if (openHandle)
+		if (openHandle != HANDLE_NONE)
 		{
-			*file = fopen (cache->filepath, "rb");
-			if (!*file)
-				Com_Error (ERR_FATAL, "Couldn't open %s (cached)", cache->filepath);	
+			if (cache->pak)
+			{
+				if (openHandle == HANDLE_DUPE)
+				{
+					*file = fopen (cache->pak->filename, "rb");
+					*closeHandle = true;
+				}
+				else
+				{
+					*file = cache->pak->handle;
+					*closeHandle = false;
+				}
+			}
+			else
+			{
+				*file = fopen (cache->filepath, "rb");
+				if (!*file)
+					Com_Error (ERR_FATAL, "Couldn't open %s (cached)", cache->filepath);	
+
+				*closeHandle = true;
+			}
 			if (cache->fileseek && fseek (*file, cache->fileseek, SEEK_SET))
-				Com_Error (ERR_FATAL, "Couldn't seek to offset %d in %s (cached)", cache->fileseek, cache->filepath);
+				Com_Error (ERR_FATAL, "Couldn't seek to offset %u in %s (cached)", cache->fileseek, cache->filepath);
 		}
 		return cache->filelen;
 	}
@@ -587,11 +611,22 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 #ifdef _DEBUG
 				Com_DPrintf ("File '%s' found in %s, (%s)\n", filename, pak->filename, entry->name);
 #endif
-				if (openHandle)
+				if (openHandle != HANDLE_NONE)
 				{
-					*file = fopen (pak->filename, "rb");
-					if (!*file)
-						Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
+					//*file = fopen (pak->filename, "rb");
+					if (openHandle == HANDLE_DUPE)
+					{
+						*file = fopen (pak->filename, "rb");
+						*closeHandle = true;	
+					}
+					else
+					{
+						*file = pak->handle;
+						*closeHandle = false;
+					}
+					//if (!*file)
+					//	Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
+
 					if (fseek (*file, entry->filepos, SEEK_SET))
 						Com_Error (ERR_FATAL, "Couldn't seek to offset %u for %s in %s", entry->filepos, entry->name, pak->filename);
 				}
@@ -599,7 +634,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 				if (fs_cache->intvalue & 1)
 				{
 #if BTREE_SEARCH
-					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename);
+					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename, pak);
 #elif HASH_CACHE
 					FS_AddToCache (hash, pak->filename, entry->filelen, entry->filepos, cache, filename);
 #elif MAGIC_BTREE
@@ -617,21 +652,24 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 			
 			Com_sprintf (netpath, sizeof(netpath), "%s/%s",search->filename, filename);
 
-			if (!openHandle)
+			if (openHandle == HANDLE_NONE)
 			{
 				filelen = Sys_FileLength (netpath);
 				if (filelen == -1)
 					continue;
 				
 				if (fs_cache->intvalue & 4)
-					FS_AddToCache (netpath, filelen, 0, filename);
+					FS_AddToCache (netpath, filelen, 0, filename, NULL);
 
 				return filelen;
 			}
 
 			*file = fopen (netpath, "rb");
+
 			if (!*file)
 				continue;
+
+			*closeHandle = true;
 			
 			Com_DPrintf ("FindFile: %s\n",netpath);
 
@@ -639,7 +677,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 			if (fs_cache->intvalue & 4)
 			{
 #if BTREE_SEARCH
-				FS_AddToCache (netpath, filelen, 0, filename);
+				FS_AddToCache (netpath, filelen, 0, filename, NULL);
 #elif HASH_CACHE
 				FS_AddToCache (hash, netpath, filelen, 0, cache, filename);
 #elif MAGIC_BTREE
@@ -656,7 +694,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, qboolean openHandle)
 	if (fs_cache->intvalue & 2)
 	{
 #if BTREE_SEARCH
-		FS_AddToCache (NULL, 0, 0, filename);
+		FS_AddToCache (NULL, 0, 0, filename, NULL);
 #elif HASH_CACHE
 		FS_AddToCache (hash, NULL, 0, 0, cache, filename);
 #elif MAGIC_BTREE
@@ -745,14 +783,14 @@ a null buffer will just return the file length without loading
 */
 int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 {
-	FILE	*h;
-	byte	*buf;
-	int		len;
-
+	FILE		*h;
+	byte		*buf;
+	int			len;
+	qboolean	closeHandle;
 	// look for it in the filesystem or pack files
 	//START_PERFORMANCE_TIMER;
 	//Com_Printf ("%s... ", path);
-	len = FS_FOpenFile (path, &h, buffer ? true : false);
+	len = FS_FOpenFile (path, &h, buffer ? HANDLE_OPEN : HANDLE_NONE, &closeHandle);
 	//STOP_PERFORMANCE_TIMER;
 
 	//Com_Printf ("TOTAL SO FAR: %.5f\n", totalTime);
@@ -781,7 +819,8 @@ int EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer)
 	FS_Read (buf, len, h);
 	current_filename = "unknown";
 
-	fclose (h);
+	if (closeHandle)
+		fclose (h);
 
 	return len;
 }
@@ -846,6 +885,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 
 	if (!numpackfiles)
 	{
+		fclose (packhandle);
 		Com_Printf ("WARNING: Empty packfile %s\n", LOG_GENERAL|LOG_WARNING, packfile);
 		return NULL;
 	}
@@ -1366,6 +1406,8 @@ void FS_InitFilesystem (void)
 	// allows the game to run from outside the data tree
 	//
 	fs_basedir = Cvar_Get ("basedir", ".", CVAR_NOSET);
+	fs_cache = Cvar_Get ("fs_cache", "7", 0);
+	fs_noextern = Cvar_Get ("fs_noextern", "0", 0);
 
 	//
 	// start up with baseq2 by default
@@ -1379,7 +1421,4 @@ void FS_InitFilesystem (void)
 	fs_gamedirvar = Cvar_Get ("game", "", CVAR_LATCH|CVAR_SERVERINFO);
 	if (fs_gamedirvar->string[0])
 		FS_SetGamedir (fs_gamedirvar->string);
-
-	fs_cache = Cvar_Get ("fs_cache", "7", 0);
-	fs_noextern = Cvar_Get ("fs_noextern", "0", 0);
 }

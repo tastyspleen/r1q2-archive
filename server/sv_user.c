@@ -26,8 +26,8 @@ edict_t	*sv_player;
 cvar_t	*sv_max_download_size;
 cvar_t	*sv_downloadwait;
 
-char	svConnectStuffString[1100] = {0};
-char	svBeginStuffString[1100] = {0};
+char	svConnectStuffString[1100];
+char	svBeginStuffString[1100];
 
 int		stringCmdCount;
 
@@ -50,12 +50,13 @@ SV_BeginDemoServer
 static void SV_BeginDemoserver (void)
 {
 	char		name[MAX_OSPATH];
+	qboolean	dummy;
 
 	Com_sprintf (name, sizeof(name), "demos/%s", sv.name);
-	FS_FOpenFile (name, &sv.demofile, true);
+	FS_FOpenFile (name, &sv.demofile, HANDLE_DUPE, &dummy);
 
 	if (!sv.demofile)
-		Com_Error (ERR_DROP, "Couldn't open demo %s", name);
+		Com_Error (ERR_HARD, "Couldn't open demo %s", name);
 }
 
 /*
@@ -245,8 +246,9 @@ plainStrings:
 			MSG_WriteShort (realBytes);
 			MSG_Write (compressedStringStream, z.total_out);
 			SV_AddMessage (sv_client, true);
-
+#ifndef NPROFILE
 			svs.proto35CompressionBytes += realBytes - z.total_out;
+#endif
 		}
 	}
 	
@@ -290,6 +292,9 @@ static void SV_New_f (void)
 		SV_BeginDemoserver ();
 		return;
 	}
+
+	//r1: new client state now to prevent multiple new from causing high cpu / overflows.
+	sv_client->state = cs_spawning;
 
 	//r1: fix for old clients that don't respond to stufftext due to pending cmd buffer
 	MSG_BeginWriting (svc_stufftext);
@@ -364,8 +369,17 @@ static void SV_New_f (void)
 			MSG_WriteString (va ("$%s $%s\n",  aliasConnect, aliasJunk[serverIndex]));
 			SV_AddMessage (sv_client, true);
 
-			//add to netchan immediately since we destroy it next line
-			SV_WriteReliableMessages (sv_client, sv_client->netchan.message.buffsize);
+			if (sv_client->netchan.reliable_length)
+			{
+				//FIXME: why does this happen?
+				Com_Printf ("WARNING: Calling SV_WriteReliableMessages for %s but netchan already has %d bytes of data! This shouldn't happen.\n", LOG_SERVER|LOG_WARNING, sv_client->name, sv_client->netchan.reliable_length);
+				Com_Printf ("data: %s\n", LOG_GENERAL, MakePrintable (sv_client->netchan.message.data));
+			}
+			else
+			{
+				//add to netchan immediately since we destroy it next line
+				SV_WriteReliableMessages (sv_client, sv_client->netchan.message.buffsize);
+			}
 
 			//give them 5 seconds to reconnect
 			//sv_client->lastmessage = svs.realtime - ((timeout->intvalue - 5) * 1000);
@@ -373,9 +387,6 @@ static void SV_New_f (void)
 			return;
 		}
 	}
-
-	//r1: new client state now to prevent multiple new from causing high cpu / overflows.
-	sv_client->state = cs_spawning;
 
 	//
 	// serverdata needs to go over for all types of servers
@@ -395,7 +406,7 @@ static void SV_New_f (void)
 	if (sv.state == ss_cinematic || sv.state == ss_pic)
 		playernum = -1;
 	else
-		playernum = sv_client - svs.clients;
+		playernum = (int)(sv_client - svs.clients);
 	MSG_WriteShort (playernum);
 
 	// send full levelname
@@ -669,8 +680,9 @@ plainLines:
 			MSG_WriteShort (realBytes);
 			MSG_Write (compressedLineStream, z.total_out);
 			SV_AddMessage (sv_client, true);
-
+#ifndef NPROFILE
 			svs.proto35CompressionBytes += realBytes - z.total_out;
+#endif
 		}
 	}
 
@@ -751,7 +763,7 @@ static void SV_Begin_f (void)
 
 	//r1: check dll versions for struct mismatch
 	if (sv_client->edict->client == NULL)
-		Com_Error (ERR_DROP, "Tried to run API V4 game on a V3 server!!");
+		Com_Error (ERR_HARD, "Tried to run API V4 game on a V3 server!!");
 
 	if (sv_deny_q2ace->intvalue)
 	{
@@ -828,7 +840,7 @@ static void SV_NextDownload_f (void)
 
 		j = 0;
 
-		r = sv_client->downloadsize - sv_client->downloadcount;
+		//r = sv_client->downloadsize - sv_client->downloadcount;
 
 		if (remaining > sv_client->netchan.message.buffsize - 300)
 			r = sv_client->netchan.message.buffsize - 300;
@@ -847,6 +859,10 @@ static void SV_NextDownload_f (void)
 
 			if (sv_client->downloadcount + j + i > sv_client->downloadsize)
 				i = sv_client->downloadsize - (sv_client->downloadcount + j);
+
+			//in case of really good compression...
+			if (realBytes + i > 0xFFFF)
+				break;
 
 			buff = sv_client->download + sv_client->downloadcount + j;
 
@@ -877,20 +893,22 @@ static void SV_NextDownload_f (void)
 		}
 
 		result = deflate(&z, Z_FINISH);
-		if (result != Z_STREAM_END) {
+		if (result != Z_STREAM_END)
+		{
 			SV_ClientPrintf (sv_client, PRINT_HIGH, "deflate() Z_FINISH failed.\n");
 			SV_DropClient (sv_client, true);
 			return;
 		}
 
 		result = deflateEnd(&z);
-		if (result != Z_OK) {
+		if (result != Z_OK)
+		{
 			SV_ClientPrintf (sv_client, PRINT_HIGH, "deflateEnd() failed.\n");
 			SV_DropClient (sv_client, true);
 			return;
 		}
 
-		if (z.total_out >= realBytes || z.total_out >= (MAX_USABLEMSG - 6) || realBytes < sv_client->netchan.message.buffsize - 100)
+		if (z.total_out >= realBytes || z.total_out >= (sv_client->netchan.message.buffsize - 6) || realBytes < sv_client->netchan.message.buffsize - 100)
 			goto olddownload;
 
 		//r1: use message queue so other reliable messages put in the stream perhaps by game won't cause overflow
@@ -912,8 +930,9 @@ static void SV_NextDownload_f (void)
 		MSG_WriteShort (realBytes);
 		MSG_Write (zOut, z.total_out);
 		SV_AddMessage (sv_client, true);
-
+#ifndef NPROFILE
 		svs.proto35CompressionBytes += realBytes - z.total_out;
+#endif
 	}
 	else
 	{
@@ -1105,6 +1124,11 @@ static void SV_BeginDownload_f(void)
 	else if (strncmp(name, "maps/", 5) == 0)
 	{
 		if (!(allow_download_maps->intvalue & DL_UDP))
+			valid = false;
+	}
+	else if (strncmp(name, "pics/", 5) == 0)
+	{
+		if (!(allow_download_pics->intvalue & DL_UDP))
 			valid = false;
 	}
 	else if ((strncmp(name, "env/", 4) == 0 || strncmp(name, "textures/", 9) == 0))
@@ -1596,6 +1620,7 @@ SV_ExecuteUserCommand
 static void SV_ExecuteUserCommand (char *s)
 {
 	const char			*teststring;
+	const char			*flattened;
 
 	ucmd_t				*u;
 	bannedcommands_t	*x;
@@ -1641,11 +1666,14 @@ static void SV_ExecuteUserCommand (char *s)
 		StripHighBits(s, (int)sv_filter_stringcmds->intvalue == 2);
 
 	Cmd_TokenizeString (s, false);
+
+	flattened = Cmd_Args2 (0);
+
 	sv_player = sv_client->edict;
 
 	for (z = serveraliases.next; z; z = z->next)
 	{
-		if (!strcmp (Cmd_Argv(0), z->name))
+		if (!strcmp (Cmd_Argv(0), z->name) || !strcmp (flattened, z->name))
 		{
 			MSG_BeginWriting (svc_stufftext);
 			MSG_WriteString (z->value);
@@ -1656,7 +1684,7 @@ static void SV_ExecuteUserCommand (char *s)
 
 	for (x = bannedcommands.next; x; x = x->next)
 	{
-		if (!strcmp (Cmd_Argv(0), x->name))
+		if (!strcmp (Cmd_Argv(0), x->name) || !strcmp (flattened, x->name))
 		{
 			if (x->logmethod == CMDBAN_LOG_MESSAGE)
 				Com_Printf ("SV_ExecuteUserCommand: %s tried to use '%s'\n", LOG_SERVER, sv_client->name, s);
@@ -1785,7 +1813,7 @@ static void SV_ExecuteUserCommand (char *s)
 
 	for (y = nullcmds.next; y; y = y->next)
 	{
-		if (!strcmp (Cmd_Argv(0), y->name))
+		if (!strcmp (Cmd_Argv(0), y->name) || !strcmp (flattened, y->name))
 			return;
 	}
 
@@ -1810,6 +1838,134 @@ static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 
 	ge->ClientThink (cl->edict, cmd);
 }
+
+static void SV_SetClientSetting (client_t *cl)
+{
+	uint32	setting;
+	uint32	value;
+
+	setting = MSG_ReadShort (&net_message);
+	value = MSG_ReadShort (&net_message);
+
+	//unknown settings are ignored
+	if (setting >= CLSET_MAX)
+		return;
+
+	cl->settings[setting] = value;
+}
+
+#ifdef _DEBUG
+void SV_RunMultiMoves (client_t *cl)
+{
+	int			i;
+	unsigned	bits;
+	unsigned	offset;
+	unsigned	nummoves;
+
+	int			lastframe;
+
+	usercmd_t	last;
+	usercmd_t	move;
+	usercmd_t	*oldcmd;
+
+	bits = MSG_ReadShort (&net_message);
+
+	//3 bits   5 bits
+	//[xxx]    [xxxxx]
+	//nummoves offset
+
+	nummoves = bits & 0xE0;
+	offset = bits & 0x1F;
+
+	//special value 31 indicates lastframe is beyond representation of 5 bits, suck up long
+	if (offset == 31)
+	{
+		lastframe = MSG_ReadLong (&net_message);
+	}
+	else
+	{
+		if (cl->lastframe == -1)
+		{
+			SV_KickClient (cl, NULL, "Invalid delta offset with lastframe -1\n");
+			return;
+		}
+	}
+	
+	lastframe = cl->lastframe + offset;
+
+	//r1ch: allow server admins to stop clients from using nodelta
+	//note, this doesn't affect server->client if the clients frame
+	//was too old (ie client lagged out) so should be safe to enable
+	//nodelta clients typically consume 4-5x bandwidth than normal.
+	if (lastframe == -1 && cl->lastframe == -1)
+	{
+		if (++cl->nodeltaframes >= 100 && !sv_allownodelta->intvalue)
+		{
+			SV_KickClient (cl, "too many nodelta packets", "ERROR: You may not use cl_nodelta on this server as it consumes excessive bandwidth. Please set cl_nodelta 0. This error may also be caused by a very laggy connection.\n");
+			return;
+		}
+	}
+	else
+	{
+		cl->nodeltaframes = 0;
+	}
+
+	if (lastframe != cl->lastframe)
+	{
+		cl->lastframe = lastframe;
+		if (cl->lastframe > 0)
+		{
+			//FIXME: should we adjust for FPS latency?
+			cl->frame_latency[cl->lastframe&(LATENCY_COUNTS-1)] = 
+				svs.realtime - cl->frames[cl->lastframe & UPDATE_MASK].senttime;
+		}
+	}
+
+	if ( cl->state != cs_spawned )
+	{
+		cl->lastframe = -1;
+		return;
+	}
+
+	memset (&last, 0, sizeof(last));
+
+	oldcmd = &cl->lastcmd;
+
+	//r1: check there are actually enough usercmds in the message!
+	for (i = 0; i < nummoves; i++)
+	{
+		MSG_ReadDeltaUsercmd (&net_message, &last, &move);
+
+		if (net_message.readcount > net_message.cursize)
+		{
+			SV_KickClient (cl, "bad usercmd read", NULL);
+			return;
+		}
+
+		//r1: normal q2 client caps at 250 internally so this is a nice hack check
+		if (cl->state == cs_spawned && move.msec > 250)
+		{
+			Com_Printf ("EXPLOIT: Client %s[%s] tried to use illegal msec value: %d\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), move.msec);
+			Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal msec value (%d)", move.msec);
+			SV_KickClient (cl, "illegal pmove msec detected", NULL);
+			return;
+		}
+
+		//r1: reset idle time on activity
+		if (move.buttons != oldcmd->buttons ||
+			move.forwardmove != oldcmd->forwardmove ||
+			move.upmove != oldcmd->upmove)
+			cl->idletime = 0;
+
+		SV_ClientThink (cl, &move);
+		last = move;
+	}
+
+	//flag to see if this is actually a player or what (used in givemsec)
+	cl->moved = true;
+	cl->lastcmd = move;
+}
+#endif
 
 #define	MAX_STRINGCMDS			8
 #define	MAX_USERINFO_UPDATES	8
@@ -1885,7 +2041,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			{
 				if (++cl->nodeltaframes >= 100 && !sv_allownodelta->intvalue)
 				{
-					SV_KickClient (cl, "client is using cl_nodelta", "ERROR: You may not use cl_nodelta on this server as it consumes excessive bandwidth. Please set cl_nodelta 0 if you wish to be able to play on this server.\n");
+					SV_KickClient (cl, "too many nodelta packets", "ERROR: You may not use cl_nodelta on this server as it consumes excessive bandwidth. Please set cl_nodelta 0. This error may also be caused by a very laggy connection.\n");
 					return;
 				}
 			}
@@ -2053,6 +2209,18 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//FIXME: remove this?
 		case clc_nop:
 			break;
+
+		//r1ch ************* BEGIN R1Q2 SPECIFIC ****************************
+		case clc_setting:
+			SV_SetClientSetting (cl);
+			break;
+
+#ifdef _DEBUG
+		case clc_moves:
+			SV_RunMultiMoves (cl);
+			break;
+#endif
+		//r1ch ************* END R1Q2 SPECIFIC ****************************
 
 		default:
 			Com_Printf ("SV_ExecuteClientMessage: unknown command byte %d from %s\n", LOG_SERVER|LOG_WARNING, c, cl->name);

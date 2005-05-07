@@ -40,7 +40,7 @@ void CL_CheckPredictionError (void)
 
 	// save the prediction error for interpolation
 	len = abs(delta[0]) + abs(delta[1]) + abs(delta[2]);
-	if (len > 640)	// 80 world units
+	if (len > 640 && !cl.attractloop)	// 80 world units
 	{	// a teleport or something
 		VectorClear (cl.prediction_error);
 	}
