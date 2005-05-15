@@ -1052,7 +1052,7 @@ void CL_ParseConfigString (void)
 		}
 		else
 		{
-			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin %d (%s)\n", i, MakePrintable(s));
+			Com_DPrintf ("CL_ParseConfigString: Ignoring out-of-range playerskin %d (%s)\n", i, MakePrintable(s, 0));
 		}
 	}
 }

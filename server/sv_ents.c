@@ -221,6 +221,10 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 	//r1: pointless waste of byte since this is already inside an svc_frame
 	if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
 		MSG_BeginWriting (svc_packetentities);
+#ifndef NPROFILE
+	else
+		svs.proto35BytesSaved++;
+#endif
 
 	if (!from)
 		from_num_entities = 0;
@@ -725,6 +729,10 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	//r1: pointless waste of byte since this is already inside an svc_frame
 	if (!enhanced)
 		MSG_BeginWriting (svc_playerinfo);
+#ifndef NPROFILE
+	else
+		svs.proto35BytesSaved++;
+#endif
 
 	MSG_WriteShort (pflags);
 

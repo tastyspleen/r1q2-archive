@@ -930,11 +930,16 @@ static void SVC_DirectConnect (void)
 		if (Cmd_Argv(5)[0])
 		{
 			msglen = atoi (Cmd_Argv(5));
+
 			if (msglen > MAX_USABLEMSG)
 			{
 				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nInvalid maximum message length.\n");
 				Com_DPrintf ("    rejected msglen %u\n", msglen);
 				return;
+			}
+			else if (msglen == 0)
+			{
+				msglen = MAX_USABLEMSG;
 			}
 
 			i = Cvar_IntValue ("net_maxmsglen");
@@ -1030,7 +1035,7 @@ static void SVC_DirectConnect (void)
 	if (!SV_UserinfoValidate (userinfo))
 	{
 		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s (%s)\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr), MakePrintable (userinfo));
-		Com_Printf ("EXPLOIT: Client %s supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), MakePrintable (userinfo));
+		Com_Printf ("EXPLOIT: Client %s supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), MakePrintable (userinfo, 0));
 		Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal userinfo string");
 		return;
 	}
@@ -1044,7 +1049,7 @@ static void SVC_DirectConnect (void)
 		ptr -= 8;
 		if (ptr < userinfo)
 			ptr = userinfo;
-		p = MakePrintable (ptr);
+		p = MakePrintable (ptr, 0);
 		Com_Printf ("EXPLOIT: Client %s supplied userinfo string containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, NET_AdrToString(adr), p);
 		Blackhole (adr, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in userinfo (%.32s)", p);
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nConnection refused.\n");
@@ -1119,7 +1124,7 @@ static void SVC_DirectConnect (void)
 
 	if (sv_password->string[0] && strcmp(sv_password->string, "none"))
 	{
-		if (!*pass)
+		if (!pass[0])
 		{
 			Com_DPrintf ("    empty password\n");
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPassword required.\n");
@@ -1148,6 +1153,19 @@ static void SVC_DirectConnect (void)
 		}
 	}*/
 
+	if (!strcmp (pass, sv_reserved_password->string))
+	{
+		reserved = 0;
+
+		//r1: this prevents mod/admin dll from also checking password as some mods incorrectly
+		//refuse if password cvar exists and no password is set on the server. by definition a
+		//server with reserved slots should be public anyway.
+		Info_RemoveKey (userinfo, "password");
+	}
+	else
+	{
+		reserved = sv_reserved_slots->intvalue;
+	}
 
 	//newcl = &temp;
 //	memset (newcl, 0, sizeof(client_t));
@@ -1197,20 +1215,6 @@ static void SVC_DirectConnect (void)
 			newcl = cl;
 			goto gotnewcl;
 		}
-	}
-
-	if (!strcmp (pass, sv_reserved_password->string))
-	{
-		reserved = 0;
-
-		//r1: this prevents mod/admin dll from also checking password as some mods incorrectly
-		//refuse if password cvar exists and no password is set on the server. by definition a
-		//server with reserved slots should be public anyway.
-		Info_RemoveKey (userinfo, "password");
-	}
-	else
-	{
-		reserved = sv_reserved_slots->intvalue;
 	}
 
 	// find a client slot
@@ -2360,7 +2364,7 @@ void SV_UserinfoChanged (client_t *cl)
 		ptr -= 8;
 		if (ptr < cl->userinfo)
 			ptr = cl->userinfo;
-		p = MakePrintable (ptr);
+		p = MakePrintable (ptr, 0);
 		Com_Printf ("EXPLOIT: Client %s[%s] supplied userinfo string containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), p);
 		Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in userinfo (%.32s)", p);
 		SV_KickClient (cl, "illegal userinfo", NULL);
@@ -2370,7 +2374,7 @@ void SV_UserinfoChanged (client_t *cl)
 	if (!SV_UserinfoValidate (cl->userinfo))
 	{
 		//Com_Printf ("WARNING: SV_UserinfoValidate failed for %s[%s] (%s)\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
-		Com_Printf ("EXPLOIT: Client %s[%s] supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo));
+		Com_Printf ("EXPLOIT: Client %s[%s] supplied an illegal userinfo string: %s\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), MakePrintable (cl->userinfo, 0));
 		Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal userinfo string");
 		SV_KickClient (cl, "illegal userinfo", NULL);
 		return;
@@ -2395,7 +2399,7 @@ void SV_UserinfoChanged (client_t *cl)
 	//they tried to set name to something bad
 	if (!val[0] || NameColorFilterCheck (val) || StringIsWhitespace(val))
 	{
-		Com_Printf ("Warning, invalid name change to '%s' from %s[%s].\n", LOG_SERVER|LOG_WARNING, MakePrintable(val), cl->name, NET_AdrToString(&cl->netchan.remote_address)); 
+		Com_Printf ("Warning, invalid name change to '%s' from %s[%s].\n", LOG_SERVER|LOG_WARNING, MakePrintable(val, 0), cl->name, NET_AdrToString(&cl->netchan.remote_address)); 
 		SV_ClientPrintf (cl, PRINT_HIGH, "Invalid name '%s'\n", val);
 		if (cl->name[0])
 		{
@@ -2707,7 +2711,7 @@ void SV_Init (void)
 	//r1: broadcast name changes?
 	sv_show_name_changes = Cvar_Get ("sv_show_name_changes", "0", 0);
 
-	//r1: delta optimz (small non-r1q2 client breakage)
+	//r1: delta optimz (small non-r1q2 client breakage on 2)
 	sv_optimize_deltas = Cvar_Get ("sv_optimize_deltas", "1", 0);
 
 	//r1: init pyroadmin

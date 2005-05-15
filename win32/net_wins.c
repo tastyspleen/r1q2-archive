@@ -38,6 +38,8 @@ static uint64 net_packets_out;
 static cvar_t	*net_rcvbuf;
 static cvar_t	*net_sndbuf;
 
+static	cvar_t	*net_ignore_icmp;
+
 static SOCKET		ip_sockets[2];
 int			server_port;
 //int			ipx_sockets[2];
@@ -105,9 +107,18 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 		if (err == WSAEWOULDBLOCK)// || (err == WSAECONNRESET && Com_ServerState()))
 			return 0;
-		if (err == WSAECONNRESET) {
-			SockadrToNetadr (&from, net_from);
-			return -1; 
+
+		if (err == WSAECONNRESET)
+		{
+			if (net_ignore_icmp->intvalue)
+			{
+				return 0;
+			}
+			else
+			{
+				SockadrToNetadr (&from, net_from);
+				return -1; 
+			}
 		}
 #ifndef NO_SERVER
 		if (dedicated->intvalue)	// let dedicated servers continue after errors
@@ -193,7 +204,12 @@ int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)
 			//r1: this error is "normal" in Win2k TCP/IP stack, don't bother spamming server
 			//    console with it.
 			if (err == WSAECONNRESET)
-				return -1;
+			{
+				if (net_ignore_icmp->intvalue)
+					return 0;
+				else
+					return -1;
+			}
 				//Com_Printf ("NET_SendPacket ERROR: %s\n", NET_ErrorString());
 		}
 		else
@@ -379,6 +395,8 @@ void NET_Init (void)
 
 	net_rcvbuf = Cvar_Get ("net_rcvbuf", "128", 0);
 	net_sndbuf = Cvar_Get ("net_sndbuf", "128", 0);
+
+	net_ignore_icmp = Cvar_Get ("net_ignore_icmp", "0", 0);
 
 	//r1: needed for pyroadmin hooks
 #ifndef NO_SERVER

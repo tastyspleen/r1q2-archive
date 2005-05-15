@@ -262,7 +262,39 @@ static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 	next->reliable = reliable;
 }
 
-static void SV_CheckForOverflow (void)
+/*
+=================
+Overflow Checking
+=================
+Note that we can't check for overflows in SV_AddMessage* functions as if the client
+overflows, we will want to print '%s overflowed / %s disconnected' or such, which in
+turn will call SV_AddMessage* again and possibly cause either infinite looping or loss
+of whatever data was in the message buffer from the original call (eg, multicasting)
+*/
+static void SV_CheckForOverflowSingle (client_t *cl)
+{
+	if (!(cl->notes & NOTE_OVERFLOWED) || (cl->notes & NOTE_OVERFLOW_DONE))
+		return;
+
+	cl->notes |= NOTE_OVERFLOW_DONE;
+
+	//drop message
+	if (cl->name[0])
+	{
+		if (cl->state == cs_spawned)
+		{
+			SV_BroadcastPrintf (PRINT_HIGH, "%s overflowed\n", cl->name);
+		}
+		else
+		{
+			Com_Printf ("%s overflowed message list size!\n", LOG_SERVER|LOG_WARNING, cl->name);
+		}
+	}
+
+	SV_DropClient (cl, true);
+}
+
+static void SV_CheckForOverflow ()
 {
 	int				i;
 	client_t		*cl;
@@ -275,22 +307,7 @@ static void SV_CheckForOverflow (void)
 		if (!(cl->notes & NOTE_OVERFLOWED) || (cl->notes & NOTE_OVERFLOW_DONE))
 			continue;
 
-		cl->notes |= NOTE_OVERFLOW_DONE;
-
-		//drop message
-		if (cl->name[0])
-		{
-			if (cl->state == cs_spawned)
-			{
-				SV_BroadcastPrintf (PRINT_HIGH, "%s overflowed\n", cl->name);
-			}
-			else
-			{
-				Com_Printf ("%s overflowed message list size!\n", LOG_SERVER|LOG_WARNING, cl->name);
-			}
-		}
-
-		SV_DropClient (cl, true);
+		SV_CheckForOverflowSingle (cl);
 	}
 }
 
@@ -298,7 +315,7 @@ void SV_AddMessage (client_t *cl, qboolean reliable)
 {
 	SV_AddMessageSingle (cl, reliable);
 	MSG_FreeData ();
-	SV_CheckForOverflow ();
+	SV_CheckForOverflowSingle (cl);
 }
 
 /*void SV_AddMessageAll (qboolean reliable)

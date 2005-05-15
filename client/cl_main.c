@@ -2716,7 +2716,7 @@ skipplayer:;
 
 	Com_DPrintf ("Precache completed in %u msec.\n", Sys_Milliseconds() - precache_start_time);
 
-	if (cl_maxfps->intvalue > 100)
+	if (cl_async->intvalue && cl_maxfps->intvalue > 100)
 		Com_Printf ("\n%s\nR1Q2 separates network and rendering so a cl_maxfps value > 30\nis rarely needed. Use r_maxfps to control maximum rendered FPS\n\n", LOG_CLIENT, colortext ("WARNING: A cl_maxfps value of over 100 is strongly discouraged"));
 
 	if (cl_autorecord->intvalue)
@@ -3656,7 +3656,7 @@ void CL_Init (void)
 	// all archived variables will now be loaded
 
 //	Cbuf_AddText ("exec autoexec.cfg\n");
-	FS_ExecAutoexec ();
+	FS_ExecConfig ("autoexec.cfg");
 	Cbuf_Execute ();
 
 	Con_Init ();	
@@ -3699,6 +3699,9 @@ void CL_Init (void)
 	LE_Init ();
 
 	CL_Loc_Init ();
+
+	FS_ExecConfig ("postinit.cfg");
+	Cbuf_Execute ();
 }
 
 

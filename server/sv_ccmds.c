@@ -624,7 +624,7 @@ static void SV_Map_f (void)
 
 	if (sv.state == ss_game && Cvar_GetNumLatchedVars() == 0)
 	{
-		if (!sv_allow_map->intvalue)
+		if (sv_allow_map->intvalue == 0)
 		{
 			static	qboolean warned = false;
 
@@ -638,8 +638,8 @@ static void SV_Map_f (void)
 		else if (sv_allow_map->intvalue == 2)
 		{
 			SV_GameMap_f ();
+			return;
 		}
-		return;
 	}
 
 	// if not a pcx, demo, or cinematic, check to make sure the level exists

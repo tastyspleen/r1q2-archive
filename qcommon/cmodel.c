@@ -636,6 +636,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 
 		if (script)
 		{
+			Com_Printf ("Using override file: %s\n", LOG_GENERAL, name);
 			FS_Read (&override_bits, sizeof(override_bits), script);
 
 			if (override_bits & 1)

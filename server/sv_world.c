@@ -48,7 +48,7 @@ typedef struct areanode_s
 #define	AREA_DEPTH	4
 #define	AREA_NODES	32
 
-unsigned long		sv_tracecount;
+unsigned int		sv_tracecount;
 
 static areanode_t	sv_areanodes[AREA_NODES];
 static int			sv_numareanodes;
@@ -670,14 +670,14 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	//r1: server-side hax for bad looping traces
 	if (++sv_tracecount >= sv_max_traces_per_frame->intvalue)
 	{
-		Com_Printf ("GAME ERROR: Bad SV_Trace: %lu calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
+		Com_Printf ("GAME ERROR: Bad SV_Trace: %u calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
 		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;
 
 		clip.trace.fraction = 1.0;
 		clip.trace.ent = ge->edicts;
 		VectorCopy (end, clip.trace.endpos);
-		//this is really nasty, attempts to overwite source in Game DLL. may result in flying players and ents if it uses an origin
+		//this is really nasty, attempts to overwrite source in Game DLL. may result in flying players and ents if it uses an origin
 		//directly!! we may even crash here if we are given a write protected start.
 		VectorCopy (end, start);
 		sv_tracecount = 0;

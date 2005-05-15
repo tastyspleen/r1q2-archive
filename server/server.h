@@ -653,4 +653,4 @@ extern	varban_t	userinfobans;
 const banmatch_t *VarBanMatch (varban_t *bans, const char *var, const char *result);
 
 extern	cvar_t	*sv_max_traces_per_frame;
-extern	unsigned long		sv_tracecount;
+extern	unsigned int		sv_tracecount;

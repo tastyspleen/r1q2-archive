@@ -84,7 +84,7 @@ void EXPORT PF_dprintf (const char *fmt, ...)
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 	{
 		if (sv_gamedebug->intvalue)
-			Com_Printf ("GAME WARNING: PF_dprintf: message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+			Com_Printf ("GAME WARNING: dprintf: message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 2)
 			Q_DEBUGBREAKPOINT;
@@ -311,7 +311,7 @@ void EXPORT PF_Configstring (int index, char *val)
 	size_t	length;
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
-		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)", index, MakePrintable(val));
+		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)", index, MakePrintable(val, 0));
 
 	if (!val)
 		val = "";
@@ -401,7 +401,7 @@ fixed:
 		//this results in overwrite of CS_PLAYERSKINS subscripts.
 		if (length > sizeof(sv.configstrings[index])-1)
 		{
-			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val));
+			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
 			Q_strncpy (safestring, val, sizeof(safestring)-1);
 			val = safestring;
 		}
@@ -441,7 +441,7 @@ fixed:
 		}
 		else
 		{
-			Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val));
+			Com_Printf ("WARNING: configstring %d ('%.32s...') spans more than one subscript.\n", LOG_SERVER|LOG_WARNING, index, MakePrintable(val, 0));
 		}
 	}
 
@@ -494,7 +494,7 @@ fixed:
 	if (!strcmp (sv.configstrings[index], val))
 	{
 		if (sv_gamedebug->intvalue)
-			Com_Printf ("GAME WARNING: Redundant update of configstring index %d (%s).\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val));
+			Com_Printf ("GAME WARNING: Redundant update of configstring index %d (%s).\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
 
 		if (sv_gamedebug->intvalue >= 3)
 			Q_DEBUGBREAKPOINT;

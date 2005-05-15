@@ -2682,7 +2682,7 @@ char *StripQuotes (char *string)
 	return string;
 }
 
-const char *MakePrintable (const void *subject)
+const char *MakePrintable (const void *subject, unsigned numchars)
 {
 	int			len;
 	static char printable[4096];
@@ -2694,7 +2694,10 @@ const char *MakePrintable (const void *subject)
 	p = printable;
 	len = 0;
 
-	while (*s)
+	if (!numchars)
+		numchars = strlen(s);
+
+	while (numchars--)
 	{
 		if (isprint(*s))
 		{

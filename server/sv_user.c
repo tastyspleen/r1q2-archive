@@ -373,7 +373,7 @@ static void SV_New_f (void)
 			{
 				//FIXME: why does this happen?
 				Com_Printf ("WARNING: Calling SV_WriteReliableMessages for %s but netchan already has %d bytes of data! This shouldn't happen.\n", LOG_SERVER|LOG_WARNING, sv_client->name, sv_client->netchan.reliable_length);
-				Com_Printf ("data: %s\n", LOG_GENERAL, MakePrintable (sv_client->netchan.message.data));
+				Com_Printf ("Netchan data: %s\n", LOG_GENERAL, MakePrintable (sv_client->netchan.message.data, sv_client->netchan.message.cursize));
 			}
 			else
 			{
@@ -1636,7 +1636,7 @@ static void SV_ExecuteUserCommand (char *s)
 
 		if (strcmp (teststring, s))
 		{
-			Com_Printf ("EXPLOIT: Client %s[%s] attempted macro-expansion: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), MakePrintable(s));
+			Com_Printf ("EXPLOIT: Client %s[%s] attempted macro-expansion: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), MakePrintable(s, 0));
 			//we no longer kick or blackhole for this since the new "cool" thing to do is to tell people
 			//to type "$GOD" FOR GOD MODE!!! and other stupid stuff that some server admins seem to fall for.
 			//we still return instead of processing the command though in case something else could expand it.
@@ -1654,7 +1654,7 @@ static void SV_ExecuteUserCommand (char *s)
 		ptr -= 8;
 		if (ptr < s)
 			ptr = s;
-		p = MakePrintable (ptr);
+		p = MakePrintable (ptr, 0);
 		Blackhole (&sv_client->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "0xFF in command packet (%.32s)", p);
 		Com_Printf ("EXPLOIT: Client %s[%s] tried to use a command containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), p);
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
