@@ -443,7 +443,13 @@ void CL_ParsePlayerBeam (int tempent)
 
 	// PMM - network optimization
 	if (!cl_mod_heatbeam)
+	{
 		cl_mod_heatbeam = re.RegisterModel ("models/proj/beam/tris.md2");
+		//if (!cl_mod_heatbeam)
+		//{
+		//	Com_Error (ERR_DROP, "Couldn't load models/proj/beam/tris.md2");
+		//}
+	}
 
 	model = cl_mod_heatbeam;
 
@@ -1046,7 +1052,11 @@ void CL_ParseTEnt (void)
 		else
 		{
 			if (!cl_mod_explo4_big)
+			{
 				cl_mod_explo4_big = re.RegisterModel ("models/objects/r_explode2/tris.md2");
+				//if (!cl_mod_explo4_big)
+				//	Com_Error (ERR_DROP, "Couldn't load models/objects/r_explode2/tris.md2");
+			}
 			ex->ent.model = cl_mod_explo4_big;
 		}
 		if (frand() < 0.5)
@@ -1204,7 +1214,11 @@ void CL_ParseTEnt (void)
 
 	case TE_LIGHTNING:
 		if (!cl_mod_lightning)
+		{
 			cl_mod_lightning = re.RegisterModel ("models/proj/lightning/tris.md2");
+			//if (!cl_mod_lightning)
+			//	Com_Error (ERR_DROP, "Couldn't load models/proj/lightning/tris.md2");
+		}
 
 		ent = CL_ParseLightning (cl_mod_lightning);
 		S_StartSound (NULL, ent, CHAN_WEAPON, cl_sfx_lightning, 1, ATTN_NORM, 0);

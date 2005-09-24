@@ -120,6 +120,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define RELEASESTRING "Source Build"
 #endif
 
+#define R1Q2_VERSION_STRING "R1Q2 " VERSION " " CPUSTRING " " __DATE__ " " BUILDSTRING
+
 //============================================================================
 
 //maximum length of message list. keep in mind unreliable messages are
@@ -142,6 +144,7 @@ typedef struct sizebuf_s
 	int			cursize;
 	int			readcount;
 	int			buffsize;
+	int			bit;
 } sizebuf_t;
 
 typedef struct messagelist_s
@@ -177,6 +180,60 @@ extern	entity_state_t	null_entity_state;
 extern	usercmd_t		null_usercmd;
 extern	cvar_t			uninitialized_cvar;
 
+/* This is based on the Adaptive Huffman algorithm described in Sayood's Data
+ * Compression book.  The ranks are not actually stored, but implicitly defined
+ * by the location of a node within a doubly-linked list */
+
+#define NYT HMAX					/* NYT = Not Yet Transmitted */
+#define INTERNAL_NODE (HMAX+1)
+
+typedef struct nodetype {
+	struct	nodetype *left, *right, *parent; /* tree structure */ 
+	struct	nodetype *next, *prev; /* doubly-linked list */
+	struct	nodetype **head; /* highest ranked node in block */
+	int		weight;
+	int		symbol;
+} node_t;
+
+#define HMAX 256 /* Maximum symbol */
+
+typedef struct {
+	int			blocNode;
+	int			blocPtrs;
+
+	node_t*		tree;
+	node_t*		lhead;
+	node_t*		ltail;
+	node_t*		loc[HMAX+1];
+	node_t**	freelist;
+
+	node_t		nodeList[768];
+	node_t*		nodePtrs[768];
+} huff_t;
+
+typedef struct {
+	huff_t		compressor;
+	huff_t		decompressor;
+} huffman_t;
+
+void	Huff_Compress(sizebuf_t *buf, int offset);
+void	Huff_Decompress(sizebuf_t *buf, int offset);
+void	Huff_Init(huffman_t *huff);
+void	Huff_addRef(huff_t* huff, byte ch);
+int		Huff_Receive (node_t *node, int *ch, byte *fin);
+void	Huff_transmit (huff_t *huff, int ch, byte *fout);
+void	Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset);
+void	Huff_offsetTransmit (huff_t *huff, int ch, byte *fout, int *offset);
+void	Huff_putBit( int bit, byte *fout, int *offset);
+int		Huff_getBit( byte *fout, int *offset);
+
+void MSG_initHuffman();
+
+extern huffman_t clientHuffTables;
+
+#define	GENTITYNUM_BITS		10		// don't need to send any more
+#define	MAX_GENTITIES		(1<<GENTITYNUM_BITS)
+
 void MSG_WriteChar (int c);
 void MSG_BeginWriting (int c);
 void MSG_WriteByte (int c);
@@ -195,6 +252,7 @@ void MSG_Print (const char *data);
 
 int	MSG_GetLength (void);
 byte *MSG_GetData (void);
+sizebuf_t *MSG_GetRawMsg (void);
 byte MSG_GetType (void);
 void MSG_FreeData (void);
 void MSG_Clear(void);
@@ -203,8 +261,13 @@ void SZ_WriteByte (sizebuf_t *buf, int c);
 void SZ_WriteShort (sizebuf_t *buf, int c);
 void SZ_WriteLong (sizebuf_t *buf, int c);
 
+void MSG_SetBit (int bits);
+void MSG_ReadDeltaEntityQ3 ( sizebuf_t *msg, entity_state_t *from, entity_state_t *to, int number);
+int MSG_ReadBits( sizebuf_t *msg, int bits );
+void MSG_WriteBits( sizebuf_t *msg, int value, int bits );
+
 void MSG_WriteDeltaUsercmd (const struct usercmd_s *from, const struct usercmd_s /*@out@*/*cmd);
-void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol);
+void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol, qboolean advanced);
 void MSG_WriteDir (vec3_t vector);
 
 
@@ -284,7 +347,7 @@ PROTOCOL
 #define	ORIGINAL_PROTOCOL_VERSION	34
 #define	ENHANCED_PROTOCOL_VERSION	35
 
-#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1902
+#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1903
 
 //=========================================
 
@@ -353,6 +416,7 @@ typedef enum
 	CLSET_NOGUN,
 	CLSET_NOBLEND,
 	CLSET_RECORDING,
+	CLSET_HTTP_DOWNLOADING,
 	CLSET_MAX
 } clientsetting_t;
 
@@ -493,6 +557,8 @@ The + command line options are also added to the command buffer.
 The game starts with a Cbuf_AddText ("exec quake.rc\n"); Cbuf_Execute ();
 
 */
+
+extern unsigned long r1q2DeltaOptimizedBytes;
 
 #define	EXEC_NOW	0		// don't return until completed
 #define	EXEC_INSERT	1		// insert at current position, but don't run yet
@@ -710,18 +776,6 @@ int			NET_Config (int openFlags);
 int			NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
 int			NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to);
 
-int NET_Accept (int s, netadr_t *address);
-int NET_Listen (uint16 port);
-int NET_Select (int s, int msec);
-void NET_CloseSocket (int s);
-int NET_SendTCP (int s, byte *data, int len);
-int NET_RecvTCP (int s, byte *buffer, int len);
-int NET_Connect (netadr_t *to, int port);
-
-//qboolean	NET_CompareAdr (netadr_t a, netadr_t b);
-//qboolean	NET_CompareBaseAdr (netadr_t a, netadr_t b);
-//qboolean	NET_IsLocalAddress (netadr_t adr);
-
 #define NET_IsLocalAddress(x) \
 	((x)->ip[0] == 127)
 
@@ -922,11 +976,14 @@ typedef enum
 	HANDLE_DUPE
 } handlestyle_t;
 
+void FS_ReloadPAKs (void);
 void	FS_InitFilesystem (void);
 void	FS_SetGamedir (const char *dir);
 char	*EXPORT FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
 void	FS_ExecConfig (const char *filename);
+
+qboolean FS_ExistsInGameDir (char *filename);
 
 int		EXPORT FS_FOpenFile (const char *filename, FILE /*@out@*/**file, handlestyle_t openHandle, qboolean *closeHandle);
 void	EXPORT FS_FCloseFile (FILE *f);

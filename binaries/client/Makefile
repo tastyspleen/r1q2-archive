@@ -10,7 +10,7 @@ quake2_SRC:=cl_cin.c cl_ents.c cl_fx.c cl_input.c cl_inv.c cl_main.c\
 	    q_shlinux.c vid_menu.c vid_so.c sys_linux.c glob.c net_udp.c\
 	    q_shared.c pmove.c mersennetwister.c le_util.c\
 	    le_physics.c redblack.c cd_linux.c snd_linux.c qal_linux.c\
-	    al_linux.c
+	    al_linux.c huffman.c
 
 CFLAGS=-DUSE_OPENAL
 quake2_OBJ:=$(quake2_SRC:.c=.o)

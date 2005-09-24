@@ -1,4 +1,4 @@
-//static char rcsid[]="$Id: redblack.c,v 1.10 2004/12/19 04:53:35 r1ch Exp $";
+//static char rcsid[]="$Id: redblack.c,v 1.11 2005/09/23 14:31:35 r1ch Exp $";
 
 /*
    Redblack balanced tree algorithm
@@ -94,7 +94,8 @@ static struct RB_ENTRY(node) /*@null@*/ *RB_ENTRY(_alloc)() {
 #endif
 }
 
-static void RB_ENTRY(_free)(struct RB_ENTRY(node) *x) {
+static void RB_ENTRY(_free)(struct RB_ENTRY(node) *x)
+{
 #ifndef REF_GL
 	Z_Free(x);
 #else
@@ -161,7 +162,7 @@ static void RB_ENTRY(_closelist)(RBLIST *);
 
 #ifndef RB_CUSTOMIZE
 RB_STATIC struct RB_ENTRY(tree) *
-rbinit(int (*cmp)(const void *, const void *), int dupkey)
+rbinit(int (*cmp)(const void *, const void *), int prealloc)
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void)
 #endif /* RB_CUSTOMIZE */
@@ -179,7 +180,22 @@ RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void)
 	retval->rb_cmp=cmp;
 #endif /* RB_CUSTOMIZE */
 	retval->rb_root=RBNULL;
-	retval->rb_dupkey = dupkey;
+	retval->nodecount = 0;
+
+	if (prealloc)
+	{
+#ifndef REF_GL
+		if ((retval->prealloc_base =(struct RB_ENTRY(node) *) Z_TagMalloc(prealloc * sizeof(struct RB_ENTRY(node)), TAGMALLOC_REDBLACK))==NULL)
+#else
+		if ((retval->prealloc_base =(struct RB_ENTRY(node) *) malloc(prealloc * sizeof(struct RB_ENTRY(node))))==NULL)
+#endif
+			return (NULL);
+	}
+	else
+	{
+		retval->prealloc_base = NULL;
+	}
+		 
 
 	return(retval);
 }
@@ -191,11 +207,15 @@ RB_ENTRY(destroy)(struct RB_ENTRY(tree) *rbinfo)
 	if (rbinfo==NULL)
 		return;
 
-	if (rbinfo->rb_root!=RBNULL)
+	if (rbinfo->rb_root!=RBNULL && !rbinfo->prealloc_base)
 		RB_ENTRY(_destroy)(rbinfo->rb_root);
 #ifndef REF_GL
+	if (rbinfo->prealloc_base)
+		Z_Free (rbinfo->prealloc_base);
 	Z_Free (rbinfo);
 #else
+	if (rbinfo->prealloc_base)
+		free (rbinfo->prealloc_base);
 	free (rbinfo);
 #endif
 }
@@ -249,14 +269,14 @@ RB_ENTRY(delete)(const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 	{
 		y = x->key;
 		RB_ENTRY(_delete)(&rbinfo->rb_root, x);
-		if (rbinfo->rb_dupkey)
+/*		if (rbinfo->rb_dupkey)
 		{
 #ifndef REF_GL
 			Z_Free ((void *)y);
 #else
 			free ((void *)y);
 #endif
-		}
+		}*/
 		return(NULL);
 	}
 }
@@ -344,15 +364,23 @@ RB_ENTRY(_traverse)(int insert, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tre
 	if (found || !insert)
 		return(x);
 
-	if ((z=RB_ENTRY(_alloc)())==NULL)
+	if (rbinfo->prealloc_base)
 	{
-		/* Whoops, no memory */
-		return(RBNULL);
+		z = &rbinfo->prealloc_base[rbinfo->nodecount];
+		rbinfo->nodecount++;
+	}
+	else
+	{
+		if ((z=RB_ENTRY(_alloc)())==NULL)
+		{
+			/* Whoops, no memory */
+			return(RBNULL);
+		}
 	}
 
 	//RB_SET(z, key, key);
 	//z->key = strdup(key);
-	if (rbinfo->rb_dupkey)
+/*	if (rbinfo->rb_dupkey)
 	{
 #ifndef REF_GL
 		z->key = CopyString (key, TAGMALLOC_REDBLACK);
@@ -360,7 +388,7 @@ RB_ENTRY(_traverse)(int insert, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tre
 		z->key = strdup (key);
 #endif
 	}
-	else
+	else*/
 	{
 		z->key = key;
 	}
@@ -988,6 +1016,9 @@ RB_ENTRY(_free)(struct RB_ENTRY(node) *x)
 
 /*
  * $Log: redblack.c,v $
+ * Revision 1.11  2005/09/23 14:31:35  r1ch
+ * HTTP downloading, demotranslating, winkey shit, tons of goodies, oh my!
+ *
  * Revision 1.10  2004/12/19 04:53:35  r1ch
  * rb const fixes
  *

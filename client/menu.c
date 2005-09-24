@@ -4058,7 +4058,7 @@ static qboolean PlayerConfig_MenuInit( void )
 	return true;
 }
 
-extern float CalcFov( float fov_x, float w, float h );
+extern float CalcFov( float fov_x, int w, int h );
 static void PlayerConfig_MenuDraw( void )
 {
 	refdef_t refdef;
@@ -4071,7 +4071,7 @@ static void PlayerConfig_MenuDraw( void )
 	refdef.width = 144;
 	refdef.height = 168;
 	refdef.fov_x = 40;
-	refdef.fov_y = CalcFov( refdef.fov_x, (float)refdef.width, (float)refdef.height );
+	refdef.fov_y = CalcFov( refdef.fov_x, refdef.width, refdef.height );
 	refdef.time = cls.realtime*0.001f;
 
 	if ( s_pmi[s_player_model_box.curvalue].skindisplaynames )

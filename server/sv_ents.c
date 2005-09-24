@@ -27,170 +27,6 @@ Encode a client frame onto the network channel
 =============================================================================
 */
 
-#if 0
-
-// because there can be a lot of projectiles, there is a special
-// network protocol for them
-#define	MAX_PROJECTILES		64
-edict_t	*projectiles[MAX_PROJECTILES];
-int		numprojs;
-cvar_t  *sv_projectiles;
-
-qboolean SV_AddProjectileUpdate (edict_t *ent)
-{
-	if (!sv_projectiles)
-		sv_projectiles = Cvar_Get("sv_projectiles", "1", 0);
-
-	if (!sv_projectiles->value)
-		return false;
-
-	if (!(ent->svflags & SVF_PROJECTILE))
-		return false;
-	if (numprojs == MAX_PROJECTILES)
-		return true;
-
-	projectiles[numprojs++] = ent;
-	return true;
-}
-
-void SV_EmitProjectileUpdate (sizebuf_t *msg)
-{
-	byte	bits[16];	// [modelindex] [48 bits] xyz p y 12 12 12 8 8 [entitynum] [e2]
-	int		n, i;
-	edict_t	*ent;
-	int		x, y, z, p, yaw;
-	int len;
-
-	if (!numprojs)
-		return;
-
-	MSG_WriteByte (msg, numprojs);
-
-	for (n=0 ; n<numprojs ; n++)
-	{
-		ent = projectiles[n];
-		x = (int)(ent->s.origin[0]+4096)>>1;
-		y = (int)(ent->s.origin[1]+4096)>>1;
-		z = (int)(ent->s.origin[2]+4096)>>1;
-		p = (int)(256*ent->s.angles[0]/360)&255;
-		yaw = (int)(256*ent->s.angles[1]/360)&255;
-
-		len = 0;
-		bits[len++] = x;
-		bits[len++] = (x>>8) | (y<<4);
-		bits[len++] = (y>>4);
-		bits[len++] = z;
-		bits[len++] = (z>>8);
-		if (ent->s.effects & EF_BLASTER)
-			bits[len-1] |= 64;
-
-		if (ent->s.old_origin[0] != ent->s.origin[0] ||
-			ent->s.old_origin[1] != ent->s.origin[1] ||
-			ent->s.old_origin[2] != ent->s.origin[2]) {
-			bits[len-1] |= 128;
-			x = (int)(ent->s.old_origin[0]+4096)>>1;
-			y = (int)(ent->s.old_origin[1]+4096)>>1;
-			z = (int)(ent->s.old_origin[2]+4096)>>1;
-			bits[len++] = x;
-			bits[len++] = (x>>8) | (y<<4);
-			bits[len++] = (y>>4);
-			bits[len++] = z;
-			bits[len++] = (z>>8);
-		}
-
-		bits[len++] = p;
-		bits[len++] = yaw;
-		bits[len++] = ent->s.modelindex;
-
-		bits[len++] = (ent->s.number & 0x7f);
-		if (ent->s.number > 255) {
-			bits[len-1] |= 128;
-			bits[len++] = (ent->s.number >> 7);
-		}
-
-		for (i=0 ; i<len ; i++)
-			MSG_WriteByte (msg, bits[i]);
-	}
-}
-#endif
-
-/*
-#define PACKER_BUFFER_SIZE	256
-#define BITS_PER_WORD		32
-
-typedef struct packer_s
-{
-	int		next_bit_to_write;
-	byte	buffer[MAX_EDICTS * sizeof(uint16)];	//worst case
-} packer_t;
-
-void BP_pack (packer_t *packer, uint32 value, uint32 num_bits_to_pack)
-{
-	int		byte_index;
-	int		bit_index;
-	int		empty_space_this_byte;
-	byte	*dest;
-
-	Q_assert(num_bits_to_pack <= 32);
-	Q_assert((value & ((1 << num_bits_to_pack) - 1)) == value);
-
-	// Scoot the value bits up to the top of the word; this makes
-	// them easier to work with.
-
-	value <<= (BITS_PER_WORD - num_bits_to_pack);
-
-	// First we do the hard part: pack bits into the first u8,
-	// which may already have bits in it.
-
-	byte_index = (packer->next_bit_to_write / 8);
-	bit_index = (packer->next_bit_to_write % 8);
-	empty_space_this_byte = (8 - bit_index) & 0x7;
-
-	// Update next_bit_to_write for the next call; we don't need 
-	// the old value any more.
-
-	packer->next_bit_to_write += num_bits_to_pack;
-
-	dest = packer->buffer + byte_index;
-
-	if (empty_space_this_byte)
-	{
-		int	fill_bits;
-		int to_copy = empty_space_this_byte;
-		int align = 0;
-
-		if (to_copy > num_bits_to_pack)
-		{
-			// We don't have enough bits to fill up this u8.
-			align = to_copy - num_bits_to_pack;
-			to_copy = num_bits_to_pack;
-		}
-
-		fill_bits = value >> (BITS_PER_WORD - empty_space_this_byte);
-		*dest |= fill_bits;
-
-		num_bits_to_pack -= to_copy;
-		dest++;
-		value <<= to_copy;
-	}
-
-	// Now we do the fast and easy part for what is hopefully
-	// the bulk of the data.
-
-	while (value)
-	{
-		*dest++ = value >> (BITS_PER_WORD - 8);
-		value <<= 8;
-	}
-}
-
-int BP_get_length (packer_t *packer)
-{
-	int len_in_bytes = (packer->next_bit_to_write + 7) / 8;
-	Q_assert(len_in_bytes <= PACKER_BUFFER_SIZE);
-	return len_in_bytes;
-}*/
-
 /*
 =============
 SV_EmitPacketEntities
@@ -208,13 +44,6 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 	int				oldindex, newindex;
 	int				oldnum, newnum;
 	int				from_num_entities;
-	int				bits;
-
-#if 0
-	if (numprojs)
-		MSG_BeginWriting (svc_packetentities2);
-	else
-#endif
 
 //	removedindex = 0;
 
@@ -277,7 +106,7 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
 
-			MSG_WriteDeltaEntity (oldent, newent, false, newent->number <= maxclients->intvalue, cl->protocol);
+			MSG_WriteDeltaEntity (oldent, newent, false, newent->number <= maxclients->intvalue, cl->protocol, sv_advanced_deltas->intvalue);
 
 			oldindex++;
 			newindex++;
@@ -286,112 +115,25 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 	
 		if (newnum < oldnum)
 		{	// this is a new entity, send it from the baseline
-			MSG_WriteDeltaEntity (&cl->lastlines[newnum], newent, true, true, cl->protocol);
-
+			MSG_WriteDeltaEntity (&cl->lastlines[newnum], newent, true, true, cl->protocol, sv_advanced_deltas->intvalue);
 			newindex++;
 			continue;
 		}
 
 		if (newnum > oldnum)
 		{	// the old entity isn't present in the new message
-			//Com_Printf ("server: remove!!!\n");
-			/*if (cl->protocol == ENHANCED_PROTOCOL_VERSION)
-			{
-				removed[removedindex++] = oldnum;
-			}
-			else*/
-			{
-				bits = U_REMOVE;
-				if (oldnum >= 256)
-					bits |= U_NUMBER16 | U_MOREBITS1;
-
-				MSG_WriteByte (bits&255 );
-				if (bits & 0x0000ff00)
-					MSG_WriteByte ((bits>>8)&255 );
-
-				if (bits & U_NUMBER16)
-					MSG_WriteShort (oldnum);
-				else
-					MSG_WriteByte (oldnum);
-			}
-
+			MSG_WriteDeltaEntity (oldent, NULL, true, false, cl->protocol, sv_advanced_deltas->intvalue);
 			oldindex++;
 			continue;
 		}
 	}
 
-	MSG_WriteShort (0);	// end of packetentities
-
-	//pack all the removed entities as efficiently as possible using a packer
-	//reference: http://number-none.com/product/Packing%20Integers/
-#if 0
-	if (cl->protocol == ENHANCED_PROTOCOL_VERSION)
-	{
- 		if (removedindex)
-		{
-			int		i;
-			int		maxEntNum;
-
-			maxEntNum = svs.client_entities[(from->first_entity + from->num_entities-1) %svs.num_client_entities ].number + 1;
-
-			if (maxEntNum < 256)
-			{
-				for (i = 0; i < removedindex; i++)
-					MSG_WriteByte (removed[i]);
-
-				MSG_WriteByte (0);
-			}
-			else
-			{
-				packer_t	bitpacker;
-				int			byteCount;
-
-				memset (&bitpacker, 0, sizeof(bitpacker));
-
-				for (i = 0; i < removedindex; i++)
-				{
-					BP_pack (&bitpacker, removed[i], 10);
-				}
-
-				byteCount = BP_get_length(&bitpacker);
-
-				MSG_WriteByte (byteCount);
-				MSG_Write (bitpacker.buffer, byteCount);
-			}
-
-			/*for (i = 0; i < removedindex; i++)
-			{
-				//check for overflow
-				if (i && i % flushNum == 0)
-				{
-					MSG_WriteLong (accumulator);
-					accumulator = 0;
-				}
-				accumulator = (maxEntNum * accumulator) + removed[i];
-			}
-
-			for (i = 0; i < removedindex; i++)
-			{
-				quotient = accumulator / maxEntNum;
-				remainder = accumulator % maxEntNum;
-
-				accumulator = quotient;
-				Com_Printf ("packed: %d\n", LOG_GENERAL, remainder);
-			}*/
-		}
-		else
-		{
-			if (from)
-				MSG_WriteByte (0);
-		}
-	}
-#endif
+	if (cl->protocol == ORIGINAL_PROTOCOL_VERSION || !sv_advanced_deltas->intvalue )
+		MSG_WriteShort (0);	// end of packetentities
+	else
+		MSG_WriteBits (MSG_GetRawMsg(), (MAX_GENTITIES-1), GENTITYNUM_BITS);	// end of packetentities
 
 	MSG_EndWriting (msg);
-#if 0
-	if (numprojs)
-		SV_EmitProjectileUpdate(msg);
-#endif
 }
 
 #define Vec_RangeCap(x,minv,maxv) \
@@ -998,7 +740,7 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	extraDataIndex = msg->cursize;
 	SZ_WriteByte (msg, 0);
 	//SZ_WriteByte (msg, client->surpressCount);	// rate dropped packets
-	client->surpressCount = 0;
+	
 
 	// send over the areabits
 	SZ_WriteByte (msg, frame->areabytes);
@@ -1019,7 +761,10 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 		msg->data[extraDataIndex] = client->surpressCount;
 	}
 
+	client->surpressCount = 0;
+
 	// delta encode the entities
+	msg->bit = msg->cursize * 8;
 	SV_EmitPacketEntities (client, oldframe, frame, msg);
 } 
 
@@ -1192,10 +937,6 @@ void SV_BuildClientFrame (client_t *client)
 	if (!clent->client)
 		return;		// not in game yet
 
-#if 0
-	numprojs = 0; // no projectiles yet
-#endif
-
 	// this is the frame we are creating
 	frame = &client->frames[(sv.framenum + sv.randomframe) & UPDATE_MASK];
 
@@ -1327,11 +1068,6 @@ void SV_BuildClientFrame (client_t *client)
 				}
 			}
 		}
-
-#if 0
-		if (SV_AddProjectileUpdate(ent))
-			continue; // added as a special projectile
-#endif
 
 		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP && ent->solid != SOLID_TRIGGER)
 		{
@@ -1473,7 +1209,7 @@ void SV_RecordDemoMessage (void)
 			(ent->s.modelindex || ent->s.effects || ent->s.sound || ent->s.event) && 
 			!(ent->svflags & SVF_NOCLIENT))
 		{
-			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, ORIGINAL_PROTOCOL_VERSION);
+			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, ORIGINAL_PROTOCOL_VERSION, false);
 			MSG_EndWriting (&buf);
 		}
 

@@ -1,5 +1,5 @@
 /*
- * RCS $Id: redblack.h,v 1.3 2004/12/19 04:46:37 r1ch Exp $
+ * RCS $Id: redblack.h,v 1.4 2005/09/23 14:31:35 r1ch Exp $
  */
 
 /*
@@ -85,7 +85,9 @@ struct RB_ENTRY(tree) {
 		/* root of tree */
 #endif /* RB_CUSTOMIZE */
 	struct RB_ENTRY(node) *rb_root;
-	int rb_dupkey;
+	//int rb_dupkey;
+	int nodecount;
+	struct RB_ENTRY(node) *prealloc_base;
 };
 
 #ifndef RB_CUSTOMIZE
@@ -136,6 +138,9 @@ RB_STATIC void RB_ENTRY(closelist)(RBLIST *);
 /*
  *
  * $Log: redblack.h,v $
+ * Revision 1.4  2005/09/23 14:31:35  r1ch
+ * HTTP downloading, demotranslating, winkey shit, tons of goodies, oh my!
+ *
  * Revision 1.3  2004/12/19 04:46:37  r1ch
  * redblack delete fixes, rbtree alias/cvar/cmd lookups
  *

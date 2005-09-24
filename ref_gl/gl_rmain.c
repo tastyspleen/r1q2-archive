@@ -414,7 +414,7 @@ void R_DrawEntitiesOnList (void)
 				R_DrawSpriteModel (currententity);
 				break;
 			default:
-				ri.Sys_Error (ERR_DROP, "Bad modeltype %d", currentmodel->type);
+				ri.Sys_Error (ERR_DROP, "Bad modeltype %d on %s", currentmodel->type, currentmodel->name);
 				break;
 			}
 		}
@@ -454,7 +454,7 @@ void R_DrawEntitiesOnList (void)
 				R_DrawSpriteModel (currententity);
 				break;
 			default:
-				ri.Sys_Error (ERR_DROP, "Bad modeltype %d", currentmodel->type);
+				ri.Sys_Error (ERR_DROP, "Bad modeltype %d on %s", currentmodel->type, currentmodel->name);
 				break;
 			}
 		}
@@ -1339,6 +1339,8 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 	{
 		r_turbsin[j] *= 0.5;
 	}
+
+	ri.Cmd_ExecuteText (EXEC_NOW, "exec r1gl.cfg\n");
 
 	ri.Con_Printf (PRINT_ALL, "ref_gl version: "REF_VERSION"\n");
 

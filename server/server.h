@@ -139,41 +139,6 @@ typedef struct
 
 //#define MAX_DELTA_SAMPLES 30
 
-#define DL_COMP_NONE	0x00		//No compression used, <len> represents size of <data>.
-#define	DL_COMP_ZLIB	0x01		//zlib deflate() used. WINDOWBITS MUST BE NEGATIVE.
-#define	DL_COMP_BZIP2	0x02		//bzip2 compression.
-#define	DL_COMP_LZMA	0x04		//lzma compression.
-#define	DL_COMP_FLAC	0x08		//flac (for audio files) compression.
-#define	DL_COMP_LZO		0x10		//lzo compression.
-#define	DL_COMP_UCL		0x20		//ucl compression.
-
-#define	DL_REASON_NOTFOUND		0x01	//"Server does not have this file."
-#define	DL_REASON_NOTALLOWED	0x02	//"Server does not allow downloading of this file type."
-#define	DL_REASON_TOOLARGE		0x03	//"Server will not send files this large."
-#define	DL_REASON_BADPATH		0x04	//"Server refused path '%s'."
-#define	DL_REASON_TOOBUSY		0x05	//"Server is too busy."
-#define	DL_REASON_TOOMANY		0x06	//"Server has too many downloads queued from your client."
-
-#define	DL_REASON_CUSTOMMSG	0xFF	//A custom message.
-
-typedef struct download_queue_s
-{
-	struct download_queue_s	*next;
-	char					path[MAX_QPATH];
-	uint32					downloadID;
-} download_queue_t;
-
-typedef struct download_state_s
-{
-	download_queue_t	*queueEntry;
-	FILE				*fileHandle;
-	size_t				fileOffset;
-	size_t				fileLength;
-	int32				compMethod;
-	MD4_CTX				MD4Context;
-	z_stream			zlibStream;
-} download_state_t;
-
 typedef struct client_s
 {
 	serverclient_state_t	state;
@@ -249,13 +214,6 @@ typedef struct client_s
 
 	//r1: version string
 	char						*versionString;
-
-	//r1: message queuing framework
-	//message_queue_t				messageQueue;
-
-	//r1: tcp download queue
-	download_queue_t			downloadQueue;
-	download_state_t			downloadState;
 
 	char						reconnect_var[32];
 	char						reconnect_value[32];
@@ -346,8 +304,7 @@ extern	cvar_t		*sv_noreload;			// don't reload level state when reentering
 extern	cvar_t		*sv_airaccelerate;		// don't reload level state when reentering
 											// development tool
 extern	cvar_t		*sv_max_download_size;
-extern	cvar_t		*sv_downloadwait;
-extern	cvar_t		*sv_downloadport;
+extern	cvar_t		*sv_downloadserver;
 
 extern	cvar_t		*sv_nc_visibilitycheck;
 extern	cvar_t		*sv_nc_clientsonly;
@@ -396,6 +353,10 @@ extern	cvar_t		*sv_rcon_showoutput;
 extern	client_t	*sv_client;
 extern	edict_t		*sv_player;
 
+extern	cvar_t		*sv_enhanced_setplayer;
+
+extern	cvar_t		*sv_predict_on_lag;
+
 extern	cvar_t	*allow_download;
 extern	cvar_t	*allow_download_players;
 extern	cvar_t	*allow_download_models;
@@ -432,6 +393,7 @@ void SV_InitOperatorCommands (void);
 
 void SV_SendServerinfo (client_t *client);
 void SV_UserinfoChanged (client_t *cl);
+
 //void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame);
 
 extern cvar_t	*sv_filter_q3names;
@@ -445,6 +407,7 @@ extern cvar_t	*sv_gamedebug;
 extern cvar_t	*sv_packetentities_hack;
 
 extern cvar_t	*sv_optimize_deltas;
+extern cvar_t	*sv_advanced_deltas;
 
 //void Master_Heartbeat (void);
 //void Master_Packet (void);
@@ -537,7 +500,6 @@ void SV_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
 //
 // sv_game.c
 //
-extern	int	sv_download_socket;
 extern	game_export_t	*ge;
 
 qboolean EXPORT PF_inPVS (vec3_t p1, vec3_t p2);
@@ -624,6 +586,7 @@ struct blackhole_s
 #define	CVARBAN_LOGONLY		3
 #define	CVARBAN_MESSAGE		4
 #define	CVARBAN_STUFF		5
+#define	CVARBAN_EXEC		6
 
 extern blackhole_t blackholes;
 
@@ -649,7 +612,9 @@ struct varban_s
 extern	varban_t	cvarbans;
 extern	varban_t	userinfobans;
 
-
+qboolean SV_UserInfoBanned (client_t *cl);
+void UserinfoBanDrop (const char *key, const banmatch_t *ban, const char *result);
+const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key);
 const banmatch_t *VarBanMatch (varban_t *bans, const char *var, const char *result);
 
 extern	cvar_t	*sv_max_traces_per_frame;

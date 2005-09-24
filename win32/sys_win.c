@@ -19,6 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // sys_win.h
 
+#define _WINNT_VER 0x5
+
 #include "../qcommon/qcommon.h"
 #include "winquake.h"
 #include "resource.h"
@@ -51,6 +53,7 @@ FARPROC procShell_NotifyIcon = NULL;
 NOTIFYICONDATA pNdata;
 
 cvar_t	*win_priority;
+//cvar_t	*win_disablewinkey;
 
 qboolean s_win95;
 
@@ -156,11 +159,17 @@ void Sys_Error (const char *error, ...)
 	if (strlen(text) < 900)
 		strcat (text, "\n\nPress Retry to cause a debug breakpoint.\n");
 
+rebox:;
+
 	ret = MessageBox(NULL, text, "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_ABORTRETRYIGNORE);
 
 	if (ret == IDRETRY)
 	{
-		Q_DEBUGBREAKPOINT;
+		ret = MessageBox(NULL, "Do you really know what a debug breakpoint is, and what will happen when you click Yes?", "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_YESNO);
+		if (ret == IDYES)
+			Q_DEBUGBREAKPOINT;
+		else
+			goto rebox;
 	}
 	else if (ret == IDIGNORE)
 	{
@@ -188,6 +197,9 @@ void Sys_Quit (void)
 #endif
 
 	Qcommon_Shutdown ();
+
+    // Cleanup before shutdown
+    //UnhookWindowsHookEx( g_hKeyboardHook );
 
 	if (procShell_NotifyIcon)
 		procShell_NotifyIcon (NIM_DELETE, &pNdata);
@@ -623,8 +635,7 @@ void Sys_FreeConsoleMutex (void)
 	//DeleteCriticalSection (&consoleCrit);
 }
 
-
-extern	qboolean os_winxp;
+qboolean os_winxp = false;
 
 /*
 ================
@@ -730,6 +741,10 @@ void Sys_Init (void)
 				SetFocus (GetDlgItem (hwnd_Server, IDC_COMMAND));
 			}
 		}
+	}
+	else
+	{
+		// Initialization
 	}
 
 	Sys_InitConsoleMutex ();
@@ -1259,9 +1274,13 @@ void QuakeMain (void)
 void FixWorkingDirectory (void)
 {
 	char *p;
-	char curDir[MAX_OSPATH];
+	char curDir[MAX_PATH];
 
 	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
+
+	if (strlen(curDir) > (MAX_OSPATH - MAX_QPATH))
+		Sys_Error ("Current directory is too deep. Please move your Quake II installation to a shorter path.");
+
 	p = strrchr (curDir, '\\');
 	*p = 0;
 
@@ -1316,7 +1335,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	Qcommon_Init (argc, argv);
 
-	_controlfp( _PC_24, _MCW_PC );
+	//_controlfp( _PC_24, _MCW_PC );
 
 	oldtime = Sys_Milliseconds ();
 	/* main window message loop */

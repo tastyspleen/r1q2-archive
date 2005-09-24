@@ -88,7 +88,7 @@ typedef struct pendingcmd_s
 
 static pendingcmd_t	pendingcommands[MAX_PENDING_BUFFERS];
 static int			pendingcommandindex;
-/*
+*/
 
 /*
 ============

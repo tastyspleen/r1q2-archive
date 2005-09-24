@@ -32,7 +32,6 @@ client_t	*sv_client;			// current client
 
 cvar_t	*sv_paused;
 cvar_t	*sv_timedemo;
-cvar_t	*sv_downloadport;
 cvar_t	*sv_fpsflood;
 
 cvar_t	*sv_enforcetime;
@@ -42,6 +41,8 @@ cvar_t	*zombietime;			// seconds to sink messages after disconnect
 
 cvar_t	*rcon_password;			// password for remote server commands
 cvar_t	*lrcon_password;
+
+cvar_t	*sv_enhanced_setplayer;
 
 cvar_t	*allow_download;
 cvar_t	*allow_download_players;
@@ -135,6 +136,8 @@ cvar_t	*sv_no_game_serverinfo;
 cvar_t	*sv_mapdownload_denied_message;
 cvar_t	*sv_mapdownload_ok_message;
 
+cvar_t	*sv_downloadserver;
+
 cvar_t	*sv_max_traces_per_frame;
 
 cvar_t	*sv_ratelimit_status;
@@ -162,6 +165,9 @@ cvar_t	*sv_rcon_showoutput;
 cvar_t	*sv_show_name_changes;
 
 cvar_t	*sv_optimize_deltas;
+cvar_t	*sv_advanced_deltas;
+
+cvar_t	*sv_predict_on_lag;
 
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
@@ -325,8 +331,10 @@ static void SV_CleanClient (client_t *drop)
 	}
 }
 
-static const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
+const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
 {
+	qboolean			waitForKey;
+	char				myKey[MAX_INFO_VALUE];
 	char				value[MAX_INFO_VALUE];
 	const char			*s, *p;
 	const banmatch_t	*match;
@@ -336,6 +344,11 @@ static const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
 
 	s = userinfo;
 
+	if (key[0])
+		waitForKey = true;
+	else
+		waitForKey = false;
+
 	while (s && *s)
 	{
 		s++;
@@ -343,7 +356,7 @@ static const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
 		p = strchr (s, '\\');
 		if (p)
 		{
-			Q_strncpy (key, s, p-s);
+			Q_strncpy (myKey, s, p-s);
 		}
 		else
 		{
@@ -363,10 +376,21 @@ static const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
 			Q_strncpy (value, p, MAX_INFO_VALUE-1);
 		}
 
-		match = VarBanMatch (&userinfobans, key,  value);
+		if (waitForKey)
+		{
+			if (!strcmp (myKey, key))
+				waitForKey = false;
+
+			continue;
+		}
+
+		match = VarBanMatch (&userinfobans, myKey, value);
 
 		if (match)
+		{
+			strcpy (key, myKey);
 			return match;
+		}
 	}
 
 	return NULL;
@@ -739,7 +763,7 @@ static void SVC_GetChallenge (void)
 	}
 
 	// send it back
-	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d", svs.challenges[i].challenge);
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d p=34,35", svs.challenges[i].challenge);
 }
 
 #if 0
@@ -883,7 +907,7 @@ static void SVC_DirectConnect (void)
 
 	edict_t		*ent;
 
-	const banmatch_t	*match;
+	//const banmatch_t	*match;
 
 	int			i;
 	unsigned	edictnum;
@@ -899,7 +923,7 @@ static void SVC_DirectConnect (void)
 	char		saved_var[32];
 	char		saved_val[32];
 	char		userinfo[MAX_INFO_STRING];
-	char		key[MAX_INFO_KEY];
+	//char		key[MAX_INFO_KEY];
 
 	int			reserved;
 	unsigned	msglen;
@@ -1077,8 +1101,8 @@ static void SVC_DirectConnect (void)
 		return;
 	}*/
 
-	match = SV_CheckUserinfoBans (userinfo, key);
-	if (match)
+	/*key[0] = 0;
+	while ((match = SV_CheckUserinfoBans (userinfo, key)))
 	{
 		if (match->message[0])
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s\n", match->message);
@@ -1095,7 +1119,7 @@ static void SVC_DirectConnect (void)
 			Com_DPrintf ("    userinfo ban %s matched\n", key);
 			return;
 		}
-	}
+	}*/
 
 	pass = Info_ValueForKey (userinfo, "name");
 
@@ -1185,7 +1209,7 @@ static void SVC_DirectConnect (void)
 			if (cl->state != cs_zombie)
 			{
 				Com_DPrintf ("    client already found\n");
-				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nUser '%s' already connected from %s.\n", cl->name, NET_AdrToString(adr));
+				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPlayer '%s' is already connected from %s.\n", cl->name, NET_AdrToString(adr));
 				return;
 			}
 
@@ -1250,6 +1274,11 @@ gotnewcl:
 	
 	sv_client = newcl;
 
+	if (newcl->messageListData || newcl->versionString || newcl->downloadFileName || newcl->download || newcl->lastlines)
+	{
+		Com_Printf ("WARNING: Client %d never got cleaned up, possible memory leak.\n", LOG_SERVER|LOG_WARNING, (int)(newcl - svs.clients));
+	}
+
 	memset (newcl, 0, sizeof(*newcl));
 
 	//r1: reconnect check
@@ -1311,10 +1340,9 @@ gotnewcl:
 	//r1: netchan init was here
 
 	// send the connect packet to the client
-	// r1: also send dlport as per tcp download spec. note we could ideally send this twice but it prints
-	// unsightly message on original client.
-	if (sv_downloadport->intvalue)
-		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect dlserver=:%d", sv_downloadport->intvalue);
+	// r1: note we could ideally send this twice but it prints unsightly message on original client.
+	if (sv_downloadserver->string[0])
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect dlserver=%s", sv_downloadserver->string);
 	else
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect");
 
@@ -1900,6 +1928,10 @@ static void SV_ReadPackets (void)
 				if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
 					continue;
 
+				// r1: only drop if we haven't seen a packet for a bit
+				if (cl->lastmessage > svs.realtime - 1500)
+					continue;
+
 				SV_KickClient (cl, "connection reset by peer", NULL);
 				break;
 			}
@@ -2050,6 +2082,18 @@ static void SV_CheckTimeouts (void)
 			{
 				cl->idletime++;
 
+				//icky test
+				if (sv_predict_on_lag->intvalue && cl->lastmessage < svs.realtime - 200)
+				{
+					//int old = cl->lastcmd.msec;
+					Com_DPrintf ("Lag predicting %s (lastMsg %d)\n", cl->name, svs.realtime - cl->lastmessage);
+					//cl->lastcmd.msec = 100;
+					//SV_ClientThink (cl, cl->lastcmd);
+					ge->ClientThink (cl->edict, &cl->lastcmd);
+					//cl->lastcmd.msec = old;
+				}
+
+
 				if (sv_idlekick->intvalue && cl->idletime >= sv_idlekick->intvalue * 10)
 					SV_KickClient (cl, "idling", "You have been disconnected due to inactivity.\n");
 			}
@@ -2086,26 +2130,6 @@ static void SV_PrepWorldFrame (void)
 		ent = EDICT_NUM(i);
 		// events only last for a single message
 		ent->s.event = 0;
-	}
-}
-
-static void SV_RunClientDownload (client_t *cl)
-{
-	download_queue_t	*dl;
-
-	dl = cl->downloadQueue.next;
-
-}
-
-static void SV_RunDownloadServer (void)
-{
-	int			i;
-	client_t	*cl;
-
-	for (i=0,cl=svs.clients ; i<maxclients->intvalue ; i++,cl++)
-	{
-		if (cl->downloadQueue.next)
-			SV_RunClientDownload (cl);
 	}
 }
 
@@ -2256,9 +2280,6 @@ void SV_Frame (int msec)
 	if (!svs.initialized)
 		return;
 
-	//r1: run tcp downloads
-	SV_RunDownloadServer ();
-
 	// update ping based on the last known frame from all clients
 	SV_CalcPings ();
 
@@ -2322,7 +2343,7 @@ static void Master_Shutdown (void)
 
 
 
-static void UserinfoBanDrop (const char *key, const banmatch_t *ban, const char *result)
+void UserinfoBanDrop (const char *key, const banmatch_t *ban, const char *result)
 {
 	if (ban->message[0])
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", ban->message);
@@ -2333,6 +2354,40 @@ static void UserinfoBanDrop (const char *key, const banmatch_t *ban, const char 
 	Com_Printf ("Dropped client %s, userinfoban: %s == %s\n", LOG_SERVER|LOG_DROP, sv_client->name, key, result);
 
 	SV_DropClient (sv_client, (ban->blockmethod != CVARBAN_BLACKHOLE));
+}
+
+qboolean SV_UserInfoBanned (client_t *cl)
+{
+	char				key[MAX_INFO_KEY];
+	const banmatch_t	*match;
+
+	key[0] = 0;
+	while ((match = SV_CheckUserinfoBans (cl->userinfo, key)))
+	{
+		switch (match->blockmethod)
+		{
+			case CVARBAN_MESSAGE:
+				SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", match->message);
+				break;
+			case CVARBAN_STUFF:
+				MSG_BeginWriting (svc_stufftext);
+				MSG_WriteString (va ("%s\n",match->message));
+				SV_AddMessage (cl, true);
+				break;
+			case CVARBAN_LOGONLY:
+				Com_Printf ("LOG: %s[%s] matched userinfoban: %s == %s\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), key, Info_ValueForKey (cl->userinfo, key));
+				break;
+			case CVARBAN_EXEC:
+				Cbuf_AddText (match->message);
+				Cbuf_AddText ("\n");
+				break;
+			default:
+				UserinfoBanDrop (key, match, Info_ValueForKey (cl->userinfo, key));
+				return true;
+		}
+	}
+
+	return false;
 }
 
 /*
@@ -2346,8 +2401,6 @@ into a more C freindly form.
 void SV_UserinfoChanged (client_t *cl)
 {
 	char				*val;
-	char				key[MAX_INFO_KEY];
-	const banmatch_t	*match;
 
 	if (cl->state < cs_connected)
 		Com_Printf ("Warning, SV_UserinfoChanged for unconnected client %s[%s]!!\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
@@ -2425,27 +2478,8 @@ void SV_UserinfoChanged (client_t *cl)
 		return;
 	}
 
-	match = SV_CheckUserinfoBans (cl->userinfo, key);
-	if (match)
-	{
-		switch (match->blockmethod)
-		{
-			case CVARBAN_MESSAGE:
-				SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", match->message);
-				break;
-			case CVARBAN_STUFF:
-				MSG_BeginWriting (svc_stufftext);
-				MSG_WriteString (va ("%s\n",match->message));
-				SV_AddMessage (sv_client, true);
-				break;
-			case CVARBAN_LOGONLY:
-				Com_Printf ("LOG: %s[%s] matched userinfoban: %s == %s\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), key, Info_ValueForKey (cl->userinfo, key));
-				break;
-			default:
-				UserinfoBanDrop (key, match, Info_ValueForKey (cl->userinfo, key));
-				return;
-		}
-	}
+	if (SV_UserInfoBanned (cl))
+		return;
 
 	//this actually fills in the client fields
 	SV_UpdateUserinfo (cl, true);
@@ -2587,6 +2621,8 @@ void SV_Init (void)
 
 	//r1: option to block q2ace due to hacked versions
 	sv_deny_q2ace = Cvar_Get ("sv_deny_q2ace", "0", 0);
+	if (sv_deny_q2ace->intvalue)
+		Com_Printf ("WARNING: sv_deny_q2ace is deprecated and will be removed in a future build.\n", LOG_SERVER|LOG_WARNING);
 
 	//r1: limit connections per ip address (stop zombie dos/flood)
 	sv_iplimit = Cvar_Get ("sv_iplimit", "3", 0);
@@ -2599,11 +2635,11 @@ void SV_Init (void)
 	sv_nc_visibilitycheck = Cvar_Get ("sv_nc_visibilitycheck", "0", 0);
 	sv_nc_clientsonly = Cvar_Get ("sv_nc_clientsonly", "1", 0);
 
-	//r1: delay between sending 32k download packets via dl server
-	sv_downloadwait = Cvar_Get ("sv_downloadwait", "250", 0);
+	//r1: http dl server
+	sv_downloadserver = Cvar_Get ("sv_downloadserver", "", 0);
 
 	//r1: max allowed file size for autodownloading (bytes)
-	sv_max_download_size = Cvar_Get ("sv_max_download_size", "16777216", 0);
+	sv_max_download_size = Cvar_Get ("sv_max_download_size", "8388608", 0);
 
 	//r1: max backup packets to allow from lagged clients (id.default=20)
 	sv_max_netdrop = Cvar_Get ("sv_max_netdrop", "20", 0);
@@ -2625,8 +2661,16 @@ void SV_Init (void)
 
 	//r1: nocheat parser shit
 	sv_nc_kick = Cvar_Get ("sv_nc_kick", "0", 0);
+	if (sv_nc_kick->intvalue)
+		Com_Printf ("WARNING: sv_nc_kick is deprecated and will be removed in a future build.\n", LOG_SERVER|LOG_WARNING);
+
 	sv_nc_announce = Cvar_Get ("sv_nc_announce", "0", 0);
+	if (sv_nc_announce->intvalue)
+		Com_Printf ("WARNING: sv_nc_announce is deprecated and will be removed in a future build.\n", LOG_SERVER|LOG_WARNING);
+
 	sv_filter_nocheat_spam = Cvar_Get ("sv_filter_nocheat_spam", "0", 0);
+	if (sv_filter_nocheat_spam->intvalue)
+		Com_Printf ("WARNING: sv_filter_nocheat_spam is deprecated and will be removed in a future build.\n", LOG_SERVER|LOG_WARNING);
 
 	//r1: crash on game errors with int3
 	sv_gamedebug = Cvar_Get ("sv_gamedebug", "0", 0);
@@ -2638,7 +2682,7 @@ void SV_Init (void)
 	sv_uptime = Cvar_Get ("sv_uptime", "0", 0);
 
 	//r1: allow strafe jumping at high fps values (Requires hacked client (!!!))
-	sv_strafejump_hack = Cvar_Get ("sv_strafejump_hack", "0", 0);
+	sv_strafejump_hack = Cvar_Get ("sv_strafejump_hack", "0", CVAR_LATCH);
 
 	//r1: reserved slots (set 'rp' userinfo)
 	sv_reserved_password = Cvar_Get ("sv_reserved_password", "", 0);
@@ -2713,6 +2757,15 @@ void SV_Init (void)
 
 	//r1: delta optimz (small non-r1q2 client breakage on 2)
 	sv_optimize_deltas = Cvar_Get ("sv_optimize_deltas", "1", 0);
+
+	//r1: q3-style delta entities?
+	sv_advanced_deltas = Cvar_Get ("sv_advanced_deltas", "0", CVAR_LATCH);
+
+	//r1: enhanced setplayer code?
+	sv_enhanced_setplayer = Cvar_Get ("sv_enhanced_setplayer", "0", 0);
+
+	//r1: test lag stuff
+	sv_predict_on_lag = Cvar_Get ("sv_predict_on_lag", "0", 0);
 
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN
@@ -2797,12 +2850,6 @@ void SV_Shutdown (char *finalmsg, qboolean reconnect, qboolean crashing)
 	if (!crashing || dbg_unload->intvalue)
 		SV_ShutdownGameProgs ();
 
-	if (sv_download_socket)
-	{
-		Com_DPrintf ("SV_ShutDown: Closing downloadserver!\n");
-		NET_CloseSocket (sv_download_socket);
-	}
-	
 	// free current level
 	if (sv.demofile)
 		fclose (sv.demofile);

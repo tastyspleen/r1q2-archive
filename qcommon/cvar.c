@@ -36,6 +36,11 @@ const char *CL_Get_Loc_There (void);
 const char *CL_Get_Loc_Here (void);
 #endif
 
+//Server metavars
+const char *SV_GetClientID (void);
+const char *SV_GetClientIP (void);
+const char *SV_GetClientName (void);
+
 /*
 ============
 Cvar_InfoValidate
@@ -164,6 +169,18 @@ static const char *Cvar_GetMetaVar (const char *var_name)
 		{
 			//aiee
 			return CL_Get_Loc_There ();
+		}
+		else if (!strcmp (var_name, "$client.id"))
+		{
+			return SV_GetClientID ();
+		}
+		else if (!strcmp (var_name, "$client.ip"))
+		{
+			return SV_GetClientIP ();
+		}
+		else if (!strcmp (var_name, "$client.name"))
+		{
+			return SV_GetClientName ();
 		}
 	}
 

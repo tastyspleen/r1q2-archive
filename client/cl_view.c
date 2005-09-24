@@ -190,38 +190,27 @@ If cl_testentities is set, create 32 player models
 */
 void V_TestEntities (void)
 {
-	int			j;
+	int			i, j;
 	float		f, r;
 	entity_t	*ent;
-	localent_t	*lent;
 
+	r_numentities = 32;
+	memset (r_entities, 0, sizeof(r_entities));
 
-	lent = Le_Alloc ();
-	if (!lent)
-		return;
+	for (i=0 ; i<r_numentities ; i++)
+	{
+		ent = &r_entities[i];
 
-	ent = &lent->ent;
+		r = 64 * ( (i%4) - 1.5f );
+		f = (float)(64 * (i/4) + 128);
 
-	lent->movetype = MOVETYPE_TOSS;
-	
-	r = 64 * ( (0%4) - 1.5 );
-	f = 64 * (0/4) + 128;
+		for (j=0 ; j<3 ; j++)
+			ent->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
+			cl.v_right[j]*r;
 
-	for (j=0 ; j<3 ; j++)
-		ent->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
-		cl.v_right[j]*r;
-
-	VectorSet (lent->mins, -16, -16, -16);
-	VectorSet (lent->maxs, 16, 16, 32);
-
-	lent->velocity[2] = 50;
-	lent->velocity[1] = 20;
-	lent->velocity[0] = 20;
-
-	lent->movetype = MOVETYPE_BOUNCE;
-
-	ent->model = cl.baseclientinfo.model;
-	ent->skin = cl.baseclientinfo.skin;
+		ent->model = cl.baseclientinfo.model;
+		ent->skin = cl.baseclientinfo.skin;
+	}
 }
 
 /*
@@ -449,7 +438,7 @@ void CL_PrepRefresh (void)
 	S_StopAllSounds ();
 
 	//can't use cls.realtime - could be out of date :)
-	cls.defer_rendering = (int)(Sys_Milliseconds() + (cl_defertimer->value * 1000));
+	cl.defer_rendering = (int)(Sys_Milliseconds() + (cl_defertimer->value * 1000));
 
 	// start the cd track
 #ifdef CD_AUDIO
@@ -462,19 +451,29 @@ void CL_PrepRefresh (void)
 CalcFov
 ====================
 */
-float CalcFov (float fov_x, float width, float height)
+float CalcFov (float fov_x, int width, int height)
 {
-	float	a;
-	float	x;
+	static float	a;
+	static float	last_fov;
+	static int		lw, lh;
 
-	if (fov_x < 1 || fov_x > 179)
-		Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
+	//r1: only calculate if needed
+	if (width != lw || height != lh || *(int*)&fov_x != *(int*)&last_fov)
+	{
+		float			x;
 
-	x = width / (float)tan(fov_x/360*M_PI);
+		if (fov_x < 1 || fov_x > 179)
+			Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
 
-	a = (float)atan (height/x);
+		x = width / (float)tan(fov_x/360*M_PI);
 
-	a = a*360/M_PI;
+		a = (float)atan (height/x);
+		a = a*360/M_PI;
+
+		last_fov = fov_x;
+		lw = width;
+		lh = height;
+	}
 
 	return a;
 }
@@ -593,13 +592,14 @@ void V_RenderView(void)
 		
 		if (cl_testlights->intvalue)
 			V_TestLights ();
-		/*if (cl_testblend->value)
+
+		if (cl_testblend->value)
 		{
 			cl.refdef.blend[0] = 1;
 			cl.refdef.blend[1] = 0.5;
 			cl.refdef.blend[2] = 0.25;
 			cl.refdef.blend[3] = 0.5;
-		}*/
+		}
 
 		// offset vieworg appropriately if we're doing stereo separation
 #ifdef CL_STEREO_SUPPORT
@@ -623,7 +623,7 @@ void V_RenderView(void)
 		cl.refdef.y = scr_vrect.y;
 		cl.refdef.width = scr_vrect.width;
 		cl.refdef.height = scr_vrect.height;
-		cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, (float)cl.refdef.width, (float)cl.refdef.height);
+		cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);
 		cl.refdef.time = cl.time * 0.001f;
 
 		cl.refdef.areabits = cl.frame.areabits;
@@ -639,7 +639,7 @@ void V_RenderView(void)
 			VectorClear (cl.refdef.blend);
 		}
 
-		if (cls.defer_rendering > cls.realtime)
+		if (cl.defer_rendering > cls.realtime)
 			r_numentities = r_numparticles = r_numdlights = 0;
 
 		cl.refdef.num_entities = r_numentities;
@@ -796,6 +796,6 @@ void V_Init (void)
 
 	cl_stats = Cvar_Get ("cl_stats", "0", 0);
 	cl_drawfps = Cvar_Get ("cl_drawfps", "0", 0);
-	cl_stfu_ilkhan = Cvar_Get ("cl_stfu_ilkhan", "0", 0);
+	cl_stfu_ilkhan = Cvar_Get ("cl_drawmaptime", "0", 0);
 	cl_defermodels = Cvar_Get ("cl_defermodels", "1", 0);
 }

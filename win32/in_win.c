@@ -166,6 +166,13 @@ LPDIRECTINPUTDEVICE8	g_pKeyboard = NULL;
 #define	DX_KEYBOARD_BUFFER_SIZE	16
 #define	DX_MOUSE_BUFFER_SIZE	32
 
+qboolean IN_NeedDInput (void)
+{
+	if (m_directinput->intvalue || in_dinputkeyboard->intvalue)
+		return true;
+	return false;
+}
+
 void IN_InitDInput (void)
 {
 	HRESULT	hr;
@@ -255,7 +262,10 @@ int IN_InitDInputKeyboard (void)
     DWORD   dwCoopFlags;
 
 	if (!in_dinputkeyboard->intvalue)
+	{
+		Com_Printf ("...ignoring DirectInput keyboard\n", LOG_CLIENT);
 		return 0;
+	}
 
 	if (!g_pDI)
 	{
@@ -288,10 +298,14 @@ int IN_InitDInputKeyboard (void)
     if( bDisableWindowsKey && !bExclusive && bForeground )
         dwCoopFlags |= DISCL_NOWINKEY;
 
-    
+   	Com_Printf ("...creating keyboard device interface: ", LOG_CLIENT);
     // Obtain an interface to the system keyboard device.
     if( FAILED( hr = IDirectInput_CreateDevice (g_pDI, (const GUID *)&GUID_SysKeyboard, &g_pKeyboard, NULL ) ) )
-		return 0;
+    {
+		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
+        return 0;
+    }
+	Com_Printf ("ok\n", LOG_CLIENT);
 
     // Set the data format to "keyboard format" - a predefined data format 
     //
@@ -459,7 +473,7 @@ int IN_InitDInputMouse (void)
         dwCoopFlags |= DISCL_BACKGROUND;
     
     // Obtain an interface to the system mouse device.
-	Com_Printf ("...creating device interface: ", LOG_CLIENT);
+	Com_Printf ("...creating mouse device interface: ", LOG_CLIENT);
     if( FAILED( hr = IDirectInput_CreateDevice(g_pDI, (const GUID *)&GUID_SysMouse, &g_pMouse, NULL ) ) )
     {
 		Com_Printf ("failed: %d\n", LOG_CLIENT, hr);
@@ -1046,6 +1060,7 @@ void IN_StartupMouse (void)
 	if ( !cv->value ) 
 		return; */
 
+	Com_Printf ("...ignoring DirectInput mouse\n", LOG_CLIENT);
 	mouseinitialized = true;
 	
 	//mouse_buttons = MAX_MOUSE_BUTTONS;
@@ -1061,18 +1076,22 @@ void IN_Restart_f (void)
 	mouseactive = false;
 	mouseinitialized = false;
 
+	Com_Printf("------- input initialization -------\n", LOG_CLIENT|LOG_NOTICE);
+
 	Key_ClearStates ();
 
 #ifdef JOYSTICK
 	IN_StartupJoystick ();
 #endif
 
-	IN_InitDInput ();
+	if (IN_NeedDInput())
+		IN_InitDInput ();
 
 	IN_InitDInputKeyboard ();
 	IN_StartupMouse ();
 
 	input_active = true;
+	Com_Printf("------------------------------------\n", LOG_CLIENT|LOG_NOTICE);
 }
 
 /*
@@ -1200,8 +1219,6 @@ void IN_CvarModified (cvar_t *self, char *oldValue, char *newValue)
 	IN_Restart_f ();
 }
 
-qboolean os_winxp = false;
-
 void IN_UpdateRate (cvar_t *self, char *oldValue, char *newValue)
 {
 	IN_SetRepeatRate ();
@@ -1273,18 +1290,22 @@ void IN_Init (void)
 
 	Cmd_AddCommand ("in_restart", IN_Restart_f);
 
+	Com_Printf("\n------- input initialization -------\n", LOG_CLIENT|LOG_NOTICE);
+
 #ifdef JOYSTICK
 	Cmd_AddCommand ("joy_advancedupdate", Joy_AdvancedUpdate_f);
 	IN_StartupJoystick ();
 #endif
 
-	IN_InitDInput ();
+	if (IN_NeedDInput())
+		IN_InitDInput ();
 
 	IN_InitDInputKeyboard();
 
 	IN_StartupMouse ();
 
 	input_active = true;
+	Com_Printf("------------------------------------\n", LOG_CLIENT|LOG_NOTICE);
 }
 
 /*

@@ -250,7 +250,10 @@ Con_MessageMode_f
 */
 static void Con_MessageMode_f (void)
 {
-	chat_team = false;
+	if (cls.state != ca_active)
+		return;
+
+	chat_mode = CHAT_MODE_PUBLIC;
 
 	if (!chat_bufferlen && Cmd_Argc() > 1)
 	{
@@ -273,11 +276,45 @@ Con_MessageMode2_f
 */
 static void Con_MessageMode2_f (void)
 {
-	chat_team = true;
+	if (cls.state != ca_active)
+		return;
+
+	chat_mode = CHAT_MODE_TEAM;
 
 	if (!chat_bufferlen && Cmd_Argc() > 1)
 	{
 		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer[chat_curbuffer])-2);
+		if (chat_buffer[0])
+		{
+			strcat (chat_buffer[chat_curbuffer], " ");
+			chat_bufferlen = (int)strlen(chat_buffer[chat_curbuffer]);
+			chat_cursorpos = chat_bufferlen;
+		}
+	}
+
+	cls.key_dest = key_message;
+}
+
+static void Con_MessageModex_f (void)
+{
+	if (cls.state != ca_active)
+		return;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Usage: messagemodex prompt [default]\n", LOG_GENERAL);
+		return;
+	}
+
+	chat_mode = CHAT_MODE_CUSTOM;
+
+	strncpy (chat_custom_prompt, Cmd_Argv(1), sizeof(chat_custom_prompt)-3);
+	strcpy (chat_custom_cmd, chat_custom_prompt);
+	strcat (chat_custom_prompt, ": ");
+
+	if (!chat_bufferlen && Cmd_Argc() > 2)
+	{
+		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args2(2), sizeof(chat_buffer[chat_curbuffer])-2);
 		if (chat_buffer[0])
 		{
 			strcat (chat_buffer[chat_curbuffer], " ");
@@ -379,6 +416,7 @@ void Con_Init (void)
 	Cmd_AddCommand ("togglechat", Con_ToggleChat_f);
 	Cmd_AddCommand ("messagemode", Con_MessageMode_f);
 	Cmd_AddCommand ("messagemode2", Con_MessageMode2_f);
+	Cmd_AddCommand ("messagemodex", Con_MessageModex_f);
 	Cmd_AddCommand ("clear", Con_Clear_f);
 	Cmd_AddCommand ("condump", Con_Dump_f);
 	con.initialized = true;
@@ -605,15 +643,20 @@ void Con_DrawNotify (void)
 		int		cursorpos;
 		int		maxwidth;
 
-		if (chat_team)
+		switch (chat_mode)
 		{
-			DrawString (8, v, "say_team:");
-			skip = 11;
-		}
-		else
-		{
-			DrawString (8, v, "say:");
-			skip = 5;
+			case CHAT_MODE_PUBLIC:
+				DrawString (8, v, "say:");
+				skip = 5;
+				break;
+			case CHAT_MODE_TEAM:
+				DrawString (8, v, "say_team:");
+				skip = 11;
+				break;
+			case CHAT_MODE_CUSTOM:
+				DrawString (8, v, chat_custom_prompt);
+				skip = strlen (chat_custom_prompt)+1;
+				break;
 		}
 
 		s = chat_buffer[chat_curbuffer];
@@ -742,7 +785,8 @@ void Con_DrawConsole (float frac)
 //ZOID
 	// draw the download bar
 	// figure out width
-	if (cls.download) {
+	if (cls.downloadname[0] && (cls.download || cls.downloadposition))
+	{
 		if ((text = strrchr(cls.downloadname, '/')) != NULL)
 			text++;
 		else
@@ -773,7 +817,10 @@ void Con_DrawConsole (float frac)
 				dlbar[i++] = '\x81';
 		dlbar[i++] = '\x82';
 
-		sprintf (dlbar + i, " %02d%% (%.02f KB)", cls.downloadpercent, (float)ftell(cls.download)/1024.0);
+		if (cls.download)
+			cls.downloadposition = ftell (cls.download);
+
+		sprintf (dlbar + i, " %02d%% (%.02f KB)", cls.downloadpercent, (float)cls.downloadposition / 1024.0);
 
 		j = (int)strlen(dlbar);
 

@@ -52,7 +52,7 @@ void *Hunk_Begin (int maxsize)
 #elif CREATE_HEAP
 	{
 		ULONG lfh = 2;
-		membase = HeapCreate (HEAP_NO_SERIALIZE | HEAP_GENERATE_EXCEPTIONS, 0, maxsize);
+		membase = HeapCreate (HEAP_NO_SERIALIZE, 524288, 0);
 		HeapSetInformation (membase, HeapCompatibilityInformation, &lfh, sizeof(lfh));
 	}
 #else
@@ -73,7 +73,7 @@ void *Hunk_Alloc (int size)
 	size = (size+31)&~31;
 
 #if CREATE_HEAP
-	buf = HeapAlloc (membase, 0, size);
+	buf = HeapAlloc (membase, HEAP_NO_SERIALIZE, size);
 	if (!buf)
 	{
 		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
@@ -133,7 +133,7 @@ void Hunk_Free (void *base)
 #if VIRTUAL_ALLOC
 		VirtualFree (base, 0, MEM_RELEASE);
 #elif CREATE_HEAP
-		HeapDestroy (membase);
+		HeapFree (membase, HEAP_NO_SERIALIZE, base);
 #else
 		free (base);
 #endif

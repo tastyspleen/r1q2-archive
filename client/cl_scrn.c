@@ -68,7 +68,7 @@ typedef struct
 
 dirty_t		scr_dirty, scr_old_dirty[2];
 
-char		crosshair_pic[MAX_QPATH];
+char		crosshair_pic[8];
 int			crosshair_width, crosshair_height;
 
 void SCR_TimeRefresh_f (void);
@@ -455,12 +455,12 @@ void SCR_Conheight_Changed (cvar_t *self, char *old, char *newValue)
 {
 	if (self->value > 1.0)
 	{
-		Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
+		//Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
 		Cvar_ForceSet ("scr_conheight", "1");
 	}
 	else if (FLOAT_LT_ZERO(self->value))
 	{
-		Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
+		//Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
 		Cvar_ForceSet ("scr_conheight", "0");
 	}
 }
@@ -498,7 +498,10 @@ void SCR_Init (void)
 	scr_drawall = Cvar_Get ("scr_drawall", "0", 0);
 
 	scr_conheight->changed = SCR_Conheight_Changed;
+	scr_conheight->changed (scr_conheight, scr_conheight->string, scr_conheight->string);
+
 	scr_viewsize->changed = _viewsize_changed;
+	scr_viewsize->changed (scr_viewsize, scr_viewsize->string, scr_viewsize->string);
 
 //
 // register our commands

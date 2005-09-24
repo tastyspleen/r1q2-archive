@@ -144,7 +144,7 @@ void _Q_assert (char *expression, char *function, uint32 line);
 typedef unsigned char 		byte;
 typedef enum {false, true}	qboolean;
 
-//r1: set this to 1 if you have a stupid little endian thingy
+//r1: set this to 1 if you have a stupid endian thingy
 #define YOU_HAVE_A_BROKEN_COMPUTER 0
 
 //#define random()	(randomMT() / ((float)0xFFFFFFFFU))
@@ -222,8 +222,8 @@ do { \
 #define	ERR_DISCONNECT	2		// not an error, just a normal exit
 #define	ERR_GAME		3		// r1ch: game dll error, allow special handling
 #define	ERR_NET			4		// r1ch: network error, don't use net functions after seeing
-#define	ERR_DIE			5
-#define	ERR_HARD		6
+#define	ERR_DIE			5		// r1ch: die ASAP. memory corrupt or other super-fatal
+#define	ERR_HARD		6		// r1ch: don't try to auto restart from this error
 
 #define	PRINT_ALL			0
 #define PRINT_DEVELOPER		1		// only print when "developer 1"
@@ -376,7 +376,7 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 //=============================================
 
 char *COM_SkipPath (char *pathname);
-void COM_StripExtension (char *in, char *out);
+void COM_StripExtension (const char *in, char *out);
 void COM_FileBase (char *in, char *out);
 void COM_FilePath (char *in, char *out);
 void COM_DefaultExtension (char *path, char *extension);

@@ -690,12 +690,23 @@ void EXPORT SV_Pmove (pmove_t *pm)
 	memcpy (&epm, pm, sizeof(pmove_t));
 
 	//r1ch: allow non-client calls of this function
-	if (sv_client && sv_client->protocol == ENHANCED_PROTOCOL_VERSION && pm->s.pm_type == PM_SPECTATOR)
+	if (sv_client && sv_client->protocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		if (pm->s.pm_type == PM_SPECTATOR)
 		epm.multiplier = 2;
+		if (sv_strafejump_hack->intvalue)
+			epm.strafehack = true;
+		else
+			epm.strafehack = false;
+	}
 	else
+	{
 		epm.multiplier = 1;
-
-	epm.strafehack = (qboolean)sv_strafejump_hack->intvalue;
+		if (sv_strafejump_hack->intvalue == 2)
+			epm.strafehack = true;
+		else
+			epm.strafehack = false;
+	}
 
 #ifdef ENHANCED_SERVER
 	epm.enhanced = true;

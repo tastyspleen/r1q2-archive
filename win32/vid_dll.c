@@ -176,7 +176,7 @@ const byte        scantokey[128] =
 	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
 	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
 	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             0,              K_F11, 
-	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
+	K_F12,0  ,    0  ,    0  ,    0  ,    K_APP  ,    0  ,    0,        // 5
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
@@ -968,6 +968,91 @@ void VID_XY_Modified (cvar_t *cvar, char *old, char *newv)
 	vid_ypos->modified = false;
 }
 
+HHOOK		g_hKeyboardHook;
+
+cvar_t		*win_disablewinkey;
+
+typedef struct tagKBDLLHOOKSTRUCT {
+    DWORD   vkCode;
+    DWORD   scanCode;
+    DWORD   flags;
+    DWORD   time;
+    ULONG_PTR dwExtraInfo;
+} KBDLLHOOKSTRUCT, FAR *LPKBDLLHOOKSTRUCT, *PKBDLLHOOKSTRUCT;
+
+//FIXME: Nt4+ only :E
+LRESULT CALLBACK LowLevelKeyboardProc( int nCode, WPARAM wParam, LPARAM lParam )
+{
+	KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+	qboolean bEatKeystroke;
+	qboolean down;
+
+    if (nCode < 0 || nCode != HC_ACTION )  // do not process message 
+        return CallNextHookEx( g_hKeyboardHook, nCode, wParam, lParam); 
+ 
+	bEatKeystroke = false;
+	down = false;
+    
+    switch (wParam) 
+    {
+        case WM_KEYDOWN:
+			down = true;
+        case WM_KEYUP:    
+        {
+            bEatKeystroke = (ActiveApp && ((p->vkCode == VK_LWIN) || (p->vkCode == VK_RWIN)));
+            break;
+        }
+    }
+ 
+    if( bEatKeystroke )
+	{
+		int	key;
+
+		if (p->vkCode == VK_LWIN)
+			key = K_LWINKEY;
+		else
+			key = K_RWINKEY;
+
+		Key_Event (key, down, sys_msg_time);
+        return 1;
+	}
+    else
+	{
+        return CallNextHookEx( g_hKeyboardHook, nCode, wParam, lParam );
+	}
+}
+
+void _winkey_changed (cvar_t *cvar, char *old, char *newv)
+{
+	if (!os_winxp && cvar->intvalue)
+	{
+		Com_Printf ("win_disablewinkey required Windows 2000 or higher.\n", LOG_CLIENT);
+		Cvar_Set ("win_disablewinkey", "0");
+		return;
+	}
+
+	if (!g_hKeyboardHook && cvar->intvalue)
+	{
+#define WH_KEYBOARD_LL 13
+		g_hKeyboardHook = SetWindowsHookEx( WH_KEYBOARD_LL,  LowLevelKeyboardProc, GetModuleHandle(NULL), 0 );
+		if (!g_hKeyboardHook)
+		{
+			Com_Printf ("Unable to install KeyboardHook for some reason :(\n", LOG_CLIENT);
+			Cvar_Set ("win_disablewinkey", "0");
+		}
+		else
+		{
+			Com_Printf ("KeyboardHook installed - Windows key disabled.\n", LOG_CLIENT);
+		}
+	}
+	else if (g_hKeyboardHook && !cvar->intvalue)
+	{
+		Com_Printf ("KeyboardHook removed - Windows key enabled.\n", LOG_CLIENT);
+		UnhookWindowsHookEx (g_hKeyboardHook);
+		g_hKeyboardHook = NULL;
+	}
+}
+
 /*
 ============
 VID_Init
@@ -982,6 +1067,7 @@ void VID_Init (void)
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
 	vid_gamma = Cvar_Get( "vid_gamma", "1", CVAR_ARCHIVE );
 	win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
+	win_disablewinkey = Cvar_Get ("win_disablewinkey", "0", 0);
 	//win_nopriority = Cvar_Get ("win_nopriority", "0", CVAR_ARCHIVE);
 
 	/* Add some console commands that we want to handle */
@@ -1025,8 +1111,10 @@ void VID_Init (void)
 	//vid_ref->changed (NULL, NULL, NULL);
 	VID_ReloadRefresh ();
 
+	win_disablewinkey->changed = _winkey_changed;
+	_winkey_changed (win_disablewinkey, win_disablewinkey->string, win_disablewinkey->string);
+
 	//FIXME: combine multi line changes into a single reload of refresh dll
-		
 }
 
 /*
@@ -1040,6 +1128,12 @@ void VID_Shutdown (void)
 	{
 		re.Shutdown ();
 		VID_FreeReflib ();
+	}
+
+	if (g_hKeyboardHook)
+	{
+		UnhookWindowsHookEx (g_hKeyboardHook);
+		g_hKeyboardHook = NULL;
 	}
 }
 

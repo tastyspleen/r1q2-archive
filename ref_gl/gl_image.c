@@ -2687,7 +2687,7 @@ void	GL_InitImages (void)
 		{
 			float inf;
 
-			inf = 255 * (float)pow ( (i+0.5f)/255.5f , g ) + 0.5f;
+			inf = 255.0f * (float)pow ( ((float)i+0.5f)/255.5f , g ) + 0.5f;
 			if (FLOAT_LT_ZERO(inf))
 				inf = 0;
 			if (inf > 255)

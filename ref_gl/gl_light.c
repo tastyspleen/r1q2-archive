@@ -646,8 +646,9 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 		{
 			bl = s_blocklights;
 
-			for (i=0 ; i<3 ; i++)
-				scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[i];
+			scale[0] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[0];
+			scale[1] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
+			scale[2] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
 
 			if ( scale[0] == 1.0F &&
 				 scale[1] == 1.0F &&

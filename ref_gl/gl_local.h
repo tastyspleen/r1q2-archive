@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.25"
+#define	REF_VERSION	"R1GL 0.1.5.26"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -377,7 +377,7 @@ char	*va(char *format, ...);
 // does a varargs printf into a temp buffer
 #endif
 
-void COM_StripExtension (char *in, char *out);
+//void COM_StripExtension (char *in, char *out);
 
 void	EXPORT Draw_GetPicSize (int *w, int *h, char *name);
 void	EXPORT Draw_Pic (int x, int y, char *name);

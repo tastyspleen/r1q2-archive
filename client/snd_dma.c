@@ -526,6 +526,8 @@ void S_EndRegistration (void)
 		{	// don't need this sound
 			if (sfx->cache)				// it is possible to have a leftover
 				Z_Free (sfx->cache);	// from a server that didn't finish loading
+			if (sfx->truename)
+				Z_Free (sfx->truename); // memleak fix from echon
 			rbdelete (sfx->name, knownsounds);
 			sfx->name[0] = 0;
 #ifdef USE_OPENAL

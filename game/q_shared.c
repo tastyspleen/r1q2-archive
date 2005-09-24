@@ -188,7 +188,7 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 			minelem = (float)fabs( src[i] );
 		}
 	}
-	tempvec[0] = tempvec[1] = tempvec[2] = 0.0F;
+	VectorClear (tempvec);
 	tempvec[pos] = 1.0F;
 
 	/*
@@ -907,7 +907,7 @@ char *COM_SkipPath (char *pathname)
 COM_StripExtension
 ============
 */
-void COM_StripExtension (char *in, char *out)
+void COM_StripExtension (const char *in, char *out)
 {
 	while (*in && *in != '.')
 		*out++ = *in++;

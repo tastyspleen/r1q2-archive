@@ -40,8 +40,11 @@ void CL_CheckPredictionError (void)
 
 	// save the prediction error for interpolation
 	len = abs(delta[0]) + abs(delta[1]) + abs(delta[2]);
-	if (len > 640 && !cl.attractloop)	// 80 world units
-	{	// a teleport or something
+
+	//r1: demos replay at 10 fps, falling could trigger this which looks like shit.
+	if (len > (!cl.attractloop ? 640 : 1280))	// 80 world units
+	{
+		// a teleport or something
 		VectorClear (cl.prediction_error);
 	}
 	else
@@ -305,7 +308,7 @@ void CL_PredictMovement (void)
 		pm.multiplier = 1;
 
 	pm.enhanced = cl.enhancedServer;
-	pm.strafehack = cl_strafejump_hack->intvalue;
+	pm.strafehack = cl.strafeHack;
 
 	if (cl_async->intvalue)
 	{

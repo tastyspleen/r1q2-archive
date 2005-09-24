@@ -85,6 +85,9 @@ static qboolean StringIsNumeric (const char *s)
 {
 	const char	*p;
 
+	if (!s[0])
+		return false;
+
 	p = s;
 
 	while (*p)
@@ -147,6 +150,23 @@ static qboolean SV_SetPlayer (void)
 			sv_client = cl;
 			sv_player = sv_client->edict;
 			return true;
+		}
+	}
+
+	// check for a subname match
+	if (sv_enhanced_setplayer->intvalue)
+	{
+		for (i=0,cl=svs.clients ; i<maxclients->intvalue; i++,cl++)
+		{
+			if (cl->state <= cs_zombie)
+				continue;
+
+			if (!strstr(cl->name, s))
+			{
+				sv_client = cl;
+				sv_player = sv_client->edict;
+				return true;
+			}
 		}
 	}
 
@@ -523,7 +543,7 @@ goes to map jail.bsp.
 static void SV_GameMap_f (void)
 {
 	char		expanded[MAX_QPATH];
-	char		*map;
+	char		map[MAX_TOKEN_CHARS];
 	int			i;
 	client_t	*cl;
 
@@ -538,7 +558,8 @@ static void SV_GameMap_f (void)
 
 	Com_DPrintf("SV_GameMap(%s)\n", Cmd_Argv(1));
 
-	map = Cmd_Argv(1);
+	//SV_Map nukes cmd_arg*
+	Q_strncpy (map, Cmd_Argv(1), sizeof(map)-1);
 
 	FS_CreatePath (va("%s/save/current/", FS_Gamedir()));
 
@@ -586,10 +607,10 @@ static void SV_GameMap_f (void)
 	}
 
 	// start up the next map
-	SV_Map (false, Cmd_Argv(1), false );
+	SV_Map (false, map, false );
 
 	// archive server state
-	strncpy (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd)-1);
+	strncpy (svs.mapcmd, map, sizeof(svs.mapcmd)-1);
 
 	// copy off the level to the autosave slot
 	if (!dedicated->intvalue && !Cvar_IntValue ("deathmatch"))
@@ -1017,6 +1038,10 @@ static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *if
 	{
 		blockmethod = CVARBAN_STUFF;
 	}
+	else if (!Q_stricmp (iffound, "exec"))
+	{
+		blockmethod = CVARBAN_EXEC;
+	}
 	else
 	{
 		Com_Printf ("Error: Unknown match action '%s'\n", LOG_GENERAL, iffound);
@@ -1065,7 +1090,7 @@ static void SV_AddCvarBan_f (void)
 	if (Cmd_Argc() < 4)
 	{
 		Com_Printf ("Purpose: Add a simple check for a client cvar.\n"
-					"Syntax : addcvarban <cvarname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE|LOG|MESSAGE|STUFF> message\n"
+					"Syntax : addcvarban <cvarname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE|LOG|MESSAGE|STUFF|EXEC> message\n"
 					"Example: addcvarban gl_modulate >2 KICK Use a lower gl_modulate\n"
 					"Example: addcvarban frkq2_bot * BLACKHOLE\n"
 					"Example: addcvarban vid_ref sw KICK Software mode is not allowed\n"
@@ -1095,7 +1120,7 @@ static void SV_AddUserinfoBan_f (void)
 	if (Cmd_Argc() < 4)
 	{
 		Com_Printf ("Purpose: Add a simple check for a userinfo variable.\n"
-			"Syntax : adduserinfoban <varname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE|LOG|MESSAGE|STUFF> message\n"
+			"Syntax : adduserinfoban <varname> <[!]((=|<|>)numvalue|[~|#]string|*)> <KICK|BLACKHOLE|LOG|MESSAGE|STUFF|EXEC> message\n"
 					"Example: adduserinfoban rate >15000 KICK Your rate value is too high!\n"
 					"Example: adduserinfoban name ~lamer KICK Lamers aren't welcome here.\n"
 					"Example: adduserinfoban name !~[R1Q2] KICK This server is for R1Q2 clan members only!\n"
@@ -1201,7 +1226,7 @@ remove:
 		Com_Printf ("Error removing blackhole %d.\n", LOG_GENERAL, x);
 }
 
-static char *cmdbanmethodnames[] =
+static const char *cmdbanmethodnames[] =
 {
 	"message",
 	"kick",
@@ -1931,6 +1956,8 @@ static void SV_Status_f (void)
 		if (cl->state == cs_connected || cl->state == cs_spawning) {
 			if (cl->download)
 				Com_Printf ("DNLD ", LOG_GENERAL);
+			else if (cl->downloadsize)
+				Com_Printf ("HTTP ", LOG_GENERAL);
 			else 
 				Com_Printf ("CNCT ", LOG_GENERAL);
 		} else if (cl->state == cs_zombie) {
@@ -1963,10 +1990,11 @@ static void SV_Status_f (void)
 
 		Com_Printf ("Protocol 35 netcode has saved %lu bytes.\n", LOG_GENERAL, svs.proto35BytesSaved);
 		Com_Printf ("Protocol 35 compression has saved %lu bytes.\n", LOG_GENERAL, svs.proto35CompressionBytes);
-		Com_Printf ("R1Q2 quantization optimization has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2OptimizedBytes);
+		Com_Printf ("R1Q2 playerstate quantization optimization has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2OptimizedBytes);
+		Com_Printf ("R1Q2 entity quantization optimization has saved %lu bytes.\n", LOG_GENERAL, r1q2DeltaOptimizedBytes);
 		Com_Printf ("R1Q2 custom delta management has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2CustomBytes);
 
-		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes;
+		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes + r1q2DeltaOptimizedBytes;
 
 		Com_Printf ("Total byte savings: %lu (%.2f MB)\n", LOG_GENERAL, total, (float)total / 1024.0 / 1024.0);
 	}

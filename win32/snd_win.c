@@ -77,7 +77,7 @@ MMTIME		mmstarttime;
 LPDIRECTSOUND pDS;
 LPDIRECTSOUNDBUFFER pDSBuf, pDSPBuf;
 
-HINSTANCE hInstDS;
+//HINSTANCE hInstDS;
 
 qboolean SNDDMA_InitDirect (void);
 qboolean SNDDMA_InitWav (void);
@@ -361,12 +361,12 @@ void FreeSound (void)
 		pDS->lpVtbl->Release( pDS );
 	}
 
-	if ( hInstDS )
+/*	if ( hInstDS )
 	{
 		Com_DPrintf( "...freeing DSOUND.DLL\n" );
 		FreeLibrary( hInstDS );
 		hInstDS = NULL;
-	}
+	}*/
 
 	pDS = NULL;
 	pDSBuf = NULL;
@@ -406,7 +406,7 @@ sndinitstat SNDDMA_InitDirect (void)
 
 	Com_Printf( "Initializing DirectSound\n", LOG_CLIENT|LOG_NOTICE);
 
-	if ( !hInstDS )
+	/*if ( !hInstDS )
 	{
 		Com_DPrintf( "...loading dsound.dll: " );
 
@@ -430,10 +430,10 @@ sndinitstat SNDDMA_InitDirect (void)
 			Com_Printf ("*** couldn't get DS procaddr (do you have DirectX installed properly?) ***\n", LOG_CLIENT|LOG_ERROR);
 			return SIS_FAILURE;
 		}
-	}
+	}*/
 
 	Com_DPrintf( "...creating DS object: " );
-	while ( ( hresult = iDirectSoundCreate( NULL, &pDS, NULL ) ) != DS_OK )
+	while ( ( hresult = DirectSoundCreate ( NULL, &pDS, NULL ) ) != DS_OK )
 	{
 		if (hresult != DSERR_ALLOCATED)
 		{

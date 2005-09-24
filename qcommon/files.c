@@ -438,6 +438,89 @@ static void FS_AddToCache (uint32 hash, char *path, uint32 filelen, uint32 files
 }
 #endif
 
+void FS_WhereIs_f (void)
+{
+	char			*filename;
+	searchpath_t	*search;
+	pack_t			*pak;
+	filelink_t		*link;
+	char			netpath[MAX_OSPATH];
+	char			lowered[MAX_QPATH];
+
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf ("Purpose: Find where a file is being loaded from on the filesystem.\n"
+					"Syntax : whereis <path>\n"
+					"Example: whereis maps/q2dm1.bsp\n", LOG_GENERAL);
+		return;
+	}
+
+	filename = Cmd_Argv(1);
+
+	// check for links firstal
+	if (!fs_noextern->intvalue)
+	{
+		for (link = fs_links ; link ; link=link->next)
+		{
+			if (!strncmp (filename, link->from, link->fromlength))
+			{
+				int	len;
+				Com_sprintf (netpath, sizeof(netpath), "%s%s",link->to, filename+link->fromlength);
+				len = Sys_FileLength (netpath);
+				if (len != -1)
+				{
+					Com_Printf ("%s is found on disk as %s (using linkpath), %d bytes.\n", LOG_GENERAL, Cmd_Argv(1), netpath, len);
+				}
+				else
+				{
+					Com_Printf ("%s is not found.\n", LOG_GENERAL, Cmd_Argv(1));
+				}
+				return;
+			}
+		}
+	}
+
+	Q_strncpy (lowered, filename, sizeof(lowered)-1);
+	fast_strlwr (lowered);
+
+	for (search = fs_searchpaths ; search ; search = search->next)
+	{
+		// is the element a pak file?
+		if (search->pack)
+		{
+			packfile_t	*entry;
+
+			//r1: optimized btree search
+			pak = search->pack;
+
+			entry = rbfind (lowered, pak->rb);
+
+			if (entry)
+			{
+				entry = *(packfile_t **)entry;
+				Com_Printf ("%s is found in pakfile %s as %s, %d bytes.\n", LOG_GENERAL, Cmd_Argv(1), pak->filename, entry->name, entry->filelen);
+				return;
+			}
+		}
+		else if (!fs_noextern->intvalue)
+		{
+			int filelen;
+			// check a file in the directory tree
+			
+			Com_sprintf (netpath, sizeof(netpath), "%s/%s",search->filename, filename);
+
+			filelen = Sys_FileLength (netpath);
+			if (filelen == -1)
+				continue;
+
+			Com_Printf ("%s is found on disk as %s, %d bytes.\n", LOG_GENERAL, Cmd_Argv(1), netpath, filelen);
+			return;
+		}
+	}
+
+	Com_Printf ("%s is not found.\n", LOG_GENERAL, Cmd_Argv(1));
+}
+
 /*
 ===========
 FS_FOpenFile
@@ -517,7 +600,12 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 			{
 				*file = fopen (cache->filepath, "rb");
 				if (!*file)
-					Com_Error (ERR_FATAL, "Couldn't open %s (cached)", cache->filepath);	
+				{
+					Com_Printf ("WARNING: Cached file '%s' failed to open! Did you delete it?", LOG_WARNING|LOG_GENERAL, cache->filepath);
+					rbdelete (filename, rb);
+					return -1;
+				}
+					//Com_Error (ERR_FATAL, "Couldn't open %s (cached)", cache->filepath);	
 
 				*closeHandle = true;
 			}
@@ -851,6 +939,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	dpackheader_t	header;
 	int				i;
 	//packfile_t		*newfiles;
+	unsigned		pakLen;
 	int				numpackfiles;
 	pack_t			*pack;
 	FILE			*packhandle;
@@ -860,8 +949,13 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	//packfile_t		*entry;
 
 	packhandle = fopen(packfile, "rb");
+
 	if (!packhandle)
 		return NULL;
+
+	fseek (packhandle, 0, SEEK_END);
+	pakLen = ftell (packhandle);
+	rewind (packhandle);
 
 	if (fread (&header, sizeof(header), 1, packhandle) != 1)
 		Com_Error (ERR_FATAL, "couldn't read pak header from %s", packfile);
@@ -901,7 +995,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 
 	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
 
-	pack->rb = rbinit ((int (*)(const void *, const void *))strcmp, 0);
+	pack->rb = rbinit ((int (*)(const void *, const void *))strcmp, numpackfiles);
 
 	//entry = Z_TagMalloc (sizeof(packfile_t) * numpackfiles, TAGMALLOC_FSLOADPAK);
 
@@ -912,6 +1006,8 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 		info[i].filepos = LittleLong(info[i].filepos);
 		info[i].filelen = LittleLong(info[i].filelen);
 #endif
+		if (info[i].filepos + info[i].filelen >= pakLen)
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: file '%s' has illegal offset %u past end of file %u", info[i].name, info[i].filepos, pakLen);
 		
 		newitem = rbsearch (info[i].name, pack->rb);
 		*newitem = &info[i];
@@ -1079,6 +1175,62 @@ char * EXPORT FS_Gamedir (void)
 }
 
 /*
+============
+FS_ExistsInGameDir
+
+See if a file exists in the mod directory/paks (ignores baseq2)
+============
+*/
+qboolean FS_ExistsInGameDir (char *filename)
+{
+	int				len;
+	char			*gamedir;
+	char			lowered[MAX_QPATH];
+	searchpath_t	*search;
+	pack_t			*pak;
+
+	Q_strncpy (lowered, filename, sizeof(lowered)-1);
+	fast_strlwr (lowered);
+
+	gamedir = FS_Gamedir();
+	len = strlen(gamedir);
+
+	for (search = fs_searchpaths ; search ; search = search->next)
+	{
+		// is the element a pak file?
+		if (search->pack)
+		{
+			packfile_t	*entry;
+
+			//r1: optimized btree search
+			pak = search->pack;
+
+			if (strncmp (pak->filename, gamedir, len))
+				continue;
+
+			entry = rbfind (lowered, pak->rb);
+
+			if (entry)
+				return true;
+		}
+		else
+		{
+			char	netpath[MAX_OSPATH];
+
+			if (strncmp (search->filename, gamedir, len))
+				continue;
+
+			Com_sprintf (netpath, sizeof(netpath), "%s/%s",search->filename, filename);
+
+			if (Sys_FileLength (netpath) != -1)
+				return true;
+		}
+	}
+
+	return false;
+}
+
+/*
 =============
 FS_ExecConfig
 =============
@@ -1098,6 +1250,34 @@ void FS_ExecConfig (const char *filename)
 	Sys_FindClose();
 }
 
+void FS_ReloadPAKs (void)
+{
+	const char		*dir;
+	searchpath_t	*next;
+
+	//
+	// free up any current game dir info
+	//
+	while (fs_searchpaths != fs_base_searchpaths)
+	{
+		if (fs_searchpaths->pack)
+		{
+			fclose (fs_searchpaths->pack->handle);
+			//Z_Free (fs_searchpaths->pack->files);
+			//RB_Purge (fs_searchpaths->pack->rb);
+			rbdestroy (fs_searchpaths->pack->rb);
+			Z_Free (fs_searchpaths->pack);
+		}
+		next = fs_searchpaths->next;
+		Z_Free (fs_searchpaths);
+		fs_searchpaths = next;
+	}
+
+	dir = Cvar_VariableString ("gamedir");
+
+	if (dir[0] && strcmp(dir, BASEDIRNAME))
+		FS_AddGameDirectory (va("%s/%s", fs_basedir->string, dir) );
+}
 
 /*
 ================
@@ -1126,7 +1306,7 @@ void FS_SetGamedir (const char *dir)
 		{
 			fclose (fs_searchpaths->pack->handle);
 			//Z_Free (fs_searchpaths->pack->files);
-			RB_Purge (fs_searchpaths->pack->rb);
+			rbdestroy (fs_searchpaths->pack->rb);
 			Z_Free (fs_searchpaths->pack);
 		}
 		next = fs_searchpaths->next;
@@ -1388,6 +1568,9 @@ void FS_InitFilesystem (void)
 	Cmd_AddCommand ("path", FS_Path_f);
 	Cmd_AddCommand ("link", FS_Link_f);
 	Cmd_AddCommand ("dir", FS_Dir_f );
+
+	//r1: search for a file
+	Cmd_AddCommand ("whereis", FS_WhereIs_f);
 
 	//r1: allow manual cache flushing
 	Cmd_AddCommand ("fsflushcache", FS_FlushCache);

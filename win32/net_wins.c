@@ -228,7 +228,7 @@ int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)
 			//    - if we are a listen server then we would Com_Error out at this point without
 			//    this fix (or hack if you prefer).
 			else {
-				if (to->type != NA_BROADCAST && !(length == 11 && *(int *)data == -1) &&
+				if (to->type != NA_BROADCAST && !(sock == NS_CLIENT && length == 12 && *(int *)data == -1) &&
 					!(sock == NS_SERVER && err == WSAECONNRESET))
 					Com_Error (ERR_NET, "NET_SendPacket ERROR: %s", NET_ErrorString());
 			}

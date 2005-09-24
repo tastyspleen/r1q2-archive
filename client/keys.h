@@ -79,6 +79,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	K_PRTSCR		178
 
+#define	K_LWINKEY		179
+#define	K_RWINKEY		180
+#define K_APP			181
+
 #define K_PAUSE			255
 
 //
@@ -150,7 +154,14 @@ extern	char chat_buffer[8][MAXCMDLINE];
 extern	int chat_bufferlen;
 extern	int	chat_curbuffer;
 extern	int	chat_cursorpos;
-extern	qboolean	chat_team;
+
+#define CHAT_MODE_PUBLIC	0
+#define CHAT_MODE_TEAM		1
+#define CHAT_MODE_CUSTOM	2
+
+extern char		chat_custom_cmd[32];
+extern char		chat_custom_prompt[32];
+extern int			chat_mode;
 
 void Key_GenerateRepeats (void);
 void Key_Event (int key, qboolean down, uint32 time);

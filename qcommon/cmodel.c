@@ -66,24 +66,24 @@ static int			numnodes;
 static cnode_t		map_nodes[MAX_MAP_NODES+6];		// extra for box hull
 
 static int			numleafs = 1;	// allow leaf funcs to be called without a map
-cleaf_t		map_leafs[MAX_MAP_LEAFS];
+cleaf_t				map_leafs[MAX_MAP_LEAFS];
 static int			emptyleaf, solidleaf;
 
 static int			numleafbrushes;
 static uint16		map_leafbrushes[MAX_MAP_LEAFBRUSHES];
 
-int			numcmodels;
-static cmodel_t	map_cmodels[MAX_MAP_MODELS];
+int					numcmodels;
+static cmodel_t		map_cmodels[MAX_MAP_MODELS];
 
 static int			numbrushes;
-static cbrush_t	map_brushes[MAX_MAP_BRUSHES];
+static cbrush_t		map_brushes[MAX_MAP_BRUSHES];
 
 static int			numvisibility;
 static byte			map_visibility[MAX_MAP_VISIBILITY];
 static dvis_t		*map_vis = (dvis_t *)map_visibility;
 
 static int			numentitychars;
-static char		map_entitystring[MAX_MAP_ENTSTRING];
+static char			map_entitystring[MAX_MAP_ENTSTRING];
 
 static int			numareas = 1;
 static carea_t		map_areas[MAX_MAP_AREAS];

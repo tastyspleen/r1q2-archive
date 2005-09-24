@@ -42,6 +42,7 @@ typedef struct incoming_s
 #define	CL_SERVER_INFO			2
 #define	CL_SERVER_STATUS		3
 #define	CL_SERVER_STATUS_FULL	4
+#define CL_MASTER_QUERY			5
 
 //list of addresses other than remote that can send us connectionless and for what purpose
 static incoming_t	incoming_allowed[16];
@@ -138,7 +139,6 @@ cvar_t	*cl_protocol;
 cvar_t	*dbg_framesleep;
 //cvar_t	*cl_snaps;
 
-cvar_t	*cl_strafejump_hack;
 cvar_t	*cl_nolerp;
 
 cvar_t	*cl_instantack;
@@ -180,7 +180,7 @@ CL_WriteDemoMessage
 Dumps the current net message, prefixed by the length
 ====================
 */
-void CL_WriteDemoMessage (void)
+void CL_WriteDemoMessageFull (void)
 {
 	int		len, swlen;
 
@@ -194,9 +194,41 @@ void CL_WriteDemoMessage (void)
 	}
 }
 
+void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
+{
+	if (!cls.demorecording || cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+		return;
+
+	if (forceFlush)
+	{
+		if (!cls.demowaiting)
+		{
+			int	swlen;
+
+			if (cl.demoBuff.overflowed)
+			{
+				Com_DPrintf ("Dropped a demo frame, maximum message size exceeded: %d > %d\n", cl.demoBuff.cursize, cl.demoBuff.maxsize);
+
+				//we write a message regardless to keep in sync time-wise.
+				SZ_Clear (&cl.demoBuff);
+				SZ_WriteByte (&cl.demoBuff, svc_nop);
+			}
+
+			swlen = LittleLong(cl.demoBuff.cursize);
+			fwrite (&swlen, 4, 1, cls.demofile);
+			fwrite (cl.demoFrame, cl.demoBuff.cursize, 1, cls.demofile);
+		}
+		SZ_Clear (&cl.demoBuff);
+	}
+
+	if (len)
+		SZ_Write (&cl.demoBuff, buff, len);
+}
+
+void CL_DemoDeltaEntity (entity_state_t *from, entity_state_t *to, qboolean force, qboolean newentity);
 qboolean CL_BeginRecording (char *name)
 {
-	byte	buf_data[MAX_MSGLEN];
+	byte	buf_data[1390];
 	sizebuf_t	buf;
 	int		i;
 	int		len;
@@ -226,22 +258,23 @@ qboolean CL_BeginRecording (char *name)
 	//
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
 
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
-		buf.maxsize = 1390;
+	//if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	//	buf.maxsize = 1390;
 
 	// send the serverdata
 	MSG_BeginWriting (svc_serverdata);
-	MSG_WriteLong (cls.serverProtocol);
+	MSG_WriteLong (ORIGINAL_PROTOCOL_VERSION);
 	MSG_WriteLong (0x10000 + cl.servercount);
 	MSG_WriteByte (1);	// demos are always attract loops
 	MSG_WriteString (cl.gamedir);
 	MSG_WriteShort (cl.playernum);
 	MSG_WriteString (cl.configstrings[CS_NAME]);
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 	{
-		MSG_WriteByte (0);
+		MSG_WriteByte (cl.enhancedServer);
 		MSG_WriteShort (CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
-	}
+		MSG_WriteByte (cl.advancedDeltas);
+	}*/
 	MSG_EndWriting (&buf);
 
 	// configstrings
@@ -280,8 +313,8 @@ qboolean CL_BeginRecording (char *name)
 			buf.cursize = 0;
 		}
 
-		MSG_BeginWriting (svc_spawnbaseline);		
-		MSG_WriteDeltaEntity (&null_entity_state, &cl_entities[i].baseline, true, true, ORIGINAL_PROTOCOL_VERSION);
+		MSG_BeginWriting (svc_spawnbaseline);
+		CL_DemoDeltaEntity (&null_entity_state, &cl_entities[i].baseline, true, true);
 		MSG_EndWriting (&buf);
 	}
 
@@ -447,6 +480,12 @@ void CL_Record_f (void)
 		return;
 	}
 
+	if (cl.attractloop)
+	{
+		Com_Printf ("Unable to record from a demo stream due to insufficient deltas.\n", LOG_CLIENT);
+		return;
+	}
+
 	if (strstr (Cmd_Argv(1), "..") || strchr (Cmd_Argv(1), '/') || strchr (Cmd_Argv(1), '\\') )
 	{
 		Com_Printf ("Illegal filename.\n", LOG_CLIENT);
@@ -466,8 +505,18 @@ void CL_Record_f (void)
 	}
 	else
 	{
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-			Com_Printf ("WARNING: Demos recorded at cl_protocol 35 are not compatible with non-R1Q2 clients!\n", LOG_CLIENT);
+		/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		{
+			//make it a bit more obvious for the bleeding idiots out there
+			//Com_Printf ("WARNING: Demos recorded at cl_protocol 35 are not guaranteed to replay properly!\n", LOG_CLIENT);
+			Com_Printf("\n\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n", LOG_CLIENT);
+			S_StartLocalSound ("player/burn1.wav");
+			S_StartLocalSound ("player/burn2.wav");
+			con.ormask = 128;
+			Com_Printf ("Demos recorded at cl_protocol 35 are\nnot guaranteed to replay properly!\n", LOG_CLIENT);
+			con.ormask = 0;
+			Com_Printf("\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n", LOG_CLIENT);
+		}*/
 		Com_Printf ("recording to %s.\n", LOG_CLIENT, name);
 	}
 }
@@ -658,7 +707,7 @@ We have gotten a challenge from the server, so try and
 connect.
 ======================
 */
-void CL_SendConnectPacket (void)
+void CL_SendConnectPacket (int useProtocol)
 {
 	netadr_t	adr;
 	int			port;
@@ -696,11 +745,15 @@ void CL_SendConnectPacket (void)
 	{
 		msglen = Cvar_IntValue ("net_maxmsglen");
 
-		if (!cls.serverProtocol && cl_protocol->intvalue)
-			cls.serverProtocol = cl_protocol->intvalue;
-
 		if (!cls.serverProtocol)
-			cls.serverProtocol = ENHANCED_PROTOCOL_VERSION;
+		{
+			if (cl_protocol->intvalue)
+				cls.serverProtocol = cl_protocol->intvalue;
+			else if (useProtocol)
+				cls.serverProtocol = useProtocol;
+			else
+				cls.serverProtocol = ENHANCED_PROTOCOL_VERSION;
+		}
 	}
 
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
@@ -792,7 +845,7 @@ void CL_CheckForResend (void)
 		cls.state = ca_connecting;
 		strcpy (cls.servername, "localhost");
 		// we don't need a challenge on the localhost
-		CL_SendConnectPacket ();
+		CL_SendConnectPacket (0);
 		return;
 //		cls.connect_time = -99999;	// CL_CheckForResend() will fire immediately
 	}
@@ -831,7 +884,7 @@ CL_Connect_f
 */
 void CL_Connect_f (void)
 {
-	char		*server;
+	char		*server, *p;
 	netadr_t	adr;
 
 	if (Cmd_Argc() != 2)
@@ -848,10 +901,19 @@ void CL_Connect_f (void)
 	}
 	else
 	{
+		//we do this anyway below
 		//CL_Disconnect (false);
 	}
 
 	server = Cmd_Argv (1);
+
+	// quake2://protocol support
+	if (!strncmp (server, "quake2://", 9))
+		server += 9;
+
+	p = strchr (server, '/');
+	if (p)
+		*p = 0;
 
 	NET_Config (NET_CLIENT);		// allow remote
 
@@ -1034,8 +1096,12 @@ void CL_ClearState (void)
 
 	//r1: reset
 	cl.maxclients = MAX_CLIENTS;
-	cls.defer_rendering = 0;
 	SZ_Clear (&cls.netchan.message);
+
+
+	SZ_Init (&cl.demoBuff, cl.demoFrame, sizeof(cl.demoFrame));
+	cl.demoBuff.allowoverflow = true;
+
 }
 
 /*
@@ -1094,16 +1160,26 @@ void CL_Disconnect (qboolean skipdisconnect)
 	CL_ClearState ();
 
 	// stop download
-	if (cls.download) {
+	if (cls.download)
+	{
 		fclose(cls.download);
 		cls.download = NULL;
 	}
 
+#ifdef USE_CURL
+	CL_CancelHTTPDownloads (true);
+	cls.downloadReferer[0] = 0;
+#endif
+
+	cls.downloadname[0] = 0;
+	cls.downloadposition = 0;
+
 	cls.state = ca_disconnected;
-	cls.servername[0] = '\0';
+	cls.servername[0] = 0;
 
 	Cvar_ForceSet ("$mapname", "");
 	Cvar_ForceSet ("$game", "");
+	Cvar_ForceSet ("$serverip", "");
 
 	//r1: swap games if needed
 	Cvar_GetLatchedVars();
@@ -1286,6 +1362,27 @@ void CL_ParseStatusMessage (void)
 	M_AddToServerList (net_from, s);
 }
 
+//FIXME: add this someday
+/*void CL_GetServers_f (void)
+{
+	netadr_t		adr;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf ("Usage: getservers <master>\n", LOG_GENERAL);
+		return;
+	}
+
+	NET_StringToAdr (Cmd_Argv(1), &adr);
+
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "getservers");
+
+	//allow remote response
+	incoming_allowed[incoming_allowed_index & 15].remote = to;
+	incoming_allowed[incoming_allowed_index & 15].type = CL_MASTER_QUERY;
+	incoming_allowed[incoming_allowed_index & 15].time = cls.realtime + 2500;
+	incoming_allowed_index++;
+}*/
 
 /*
 =================
@@ -1311,7 +1408,13 @@ void CL_PingServers_f (void)
 
 	//r1: only ping original, r1q2 servers respond to either, but 3.20 server would
 	//reply with errors on receiving enhanced info
-	Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "info 34\n");
+
+	//also ping local server
+	adr.type = NA_IP;;
+	*(int *)&adr.ip = 0x100007F;
+	adr.port = ShortSwap(PORT_SERVER);
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "info 34\n");
 
 	// send a packet to each address book entry
 	for (i=0 ; i < 32; i++)
@@ -1330,7 +1433,7 @@ void CL_PingServers_f (void)
 		if (!adr.port)
 			adr.port = ShortSwap(PORT_SERVER);
 		//Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", ENHANCED_PROTOCOL_VERSION));
-		Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i\n", ORIGINAL_PROTOCOL_VERSION));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "info %i\n", ORIGINAL_PROTOCOL_VERSION);
 	}
 }
 
@@ -1446,6 +1549,9 @@ safe:
 	// server connection
 	if (!strcmp(c, "client_connect"))
 	{
+		int		i;
+		char	*buff, *p;
+
 		if (cls.state == ca_connected)
 		{
 			Com_DPrintf ("Dup connect received.  Ignored.\n");
@@ -1465,6 +1571,32 @@ safe:
 		Com_DPrintf ("client_connect: new\n");
 
 		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort, 0);
+
+		buff = NET_AdrToString(&cls.netchan.remote_address);
+
+		for (i = 1; i < Cmd_Argc(); i++)
+		{
+			p = Cmd_Argv(i);
+			if (!strncmp (p, "dlserver=", 9))
+			{
+#ifdef USE_CURL
+				p += 9;
+				Com_sprintf (cls.downloadReferer, sizeof(cls.downloadReferer), "quake2://%s", buff);
+				CL_SetHTTPServer (p);
+				if (cls.downloadServer[0])
+					Com_Printf ("HTTP downloading enabled, URL: %s\n", LOG_CLIENT|LOG_NOTICE, cls.downloadServer);
+#else
+				Com_Printf ("HTTP downloading supported by server but this client was built without USE_CURL, bad luck.\n", LOG_CLIENT);
+#endif
+				break;
+
+			}
+		}
+
+		p = strchr (buff, ':');
+		if (p)
+			*p = 0;
+		Cvar_ForceSet ("$serverip", buff);
 
 		MSG_WriteByte (clc_stringcmd);
 		MSG_WriteString ("new");
@@ -1648,11 +1780,38 @@ safe:
 	// challenge from the server we are connecting to
 	if (!strcmp(c, "challenge"))
 	{
+		int		protocol = 0;
+		int		i;
+		char	*p;
+
 		cls.challenge = atoi(Cmd_Argv(1));
+
+		// available protocol versions now in challenge, until few months we still default to brute.
+		for (i = 2; i < Cmd_Argc(); i++)
+		{
+			p = Cmd_Argv(i);
+			if (!strncmp (p, "p=", 2))
+			{
+				p += 2;
+				for (;;)
+				{
+					i = atoi (p);
+					if (i == ENHANCED_PROTOCOL_VERSION)
+						protocol = i;
+					p = strchr(p, ',');
+					if (!p)
+						break;
+					p++;
+					if (!p[0])
+						break;
+				}
+				break;
+			}
+		}
 
 		//r1: reset the timer so we don't send dup. getchallenges
 		cls.connect_time = cls.realtime;
-		CL_SendConnectPacket ();
+		CL_SendConnectPacket (protocol);
 		return;
 	}
 
@@ -1674,6 +1833,10 @@ CL_ReadPackets
 void CL_ReadPackets (void)
 {
 	int i;
+
+#ifdef _DEBUG
+	memset (net_message_buffer, 31, sizeof(net_message_buffer));
+#endif
 
 	while ((i = (NET_GetPacket (NS_CLIENT, &net_from, &net_message))))
 	{
@@ -1737,8 +1900,8 @@ void CL_ReadPackets (void)
 		// we don't know if it is ok to save a demo message until
 		// after we have parsed the frame
 		//
-		if (cls.demorecording && !cls.demowaiting)
-			CL_WriteDemoMessage ();
+		if (cls.demorecording && !cls.demowaiting && cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+			CL_WriteDemoMessageFull ();
 	}
 
 	//
@@ -2227,6 +2390,15 @@ const char *colortext(const char *text)
 	return ctext[c];
 }
 
+void CL_ResetPrecacheCheck (void)
+{
+	precache_start_time = Sys_Milliseconds();
+
+	precache_check = CS_MODELS;
+	precache_model = 0;
+	precache_model_skin = -1;
+}
+
 void CL_RequestNextDownload (void)
 {
 	int			PLAYER_MULT;
@@ -2260,6 +2432,9 @@ void CL_RequestNextDownload (void)
 		}
 	}
 
+
+redoSkins:;
+
 	if (precache_check >= CS_MODELS && precache_check < CS_MODELS+MAX_MODELS)
 	{
 		if (allow_download_models->intvalue)
@@ -2277,49 +2452,66 @@ void CL_RequestNextDownload (void)
 				}
 
 				//new model, try downloading it
-				if (precache_model_skin == 0)
+				if (precache_model_skin == -1)
 				{
 					if (!CL_CheckOrDownloadFile(cl.configstrings[precache_check]))
 					{
-						precache_model_skin = 1;
+						precache_check++;
 						return; // started a download
 					}
-					precache_model_skin = 1;
+					precache_check++;
 				}
-
-				//model is ok, now we are checking for skins in the model
-				if (!precache_model)
+				else
 				{
-					//load model into buffer
-					FS_LoadFile (cl.configstrings[precache_check], (void **)&precache_model);
+					//model is ok, now we are checking for skins in the model
 					if (!precache_model)
 					{
-						//shouldn't happen?
-						precache_model_skin = 0;
-						precache_check++;
-						continue; // couldn't load it
-					}
-					
-					//is it an alias model
-					if (LittleLong(*(uint32 *)precache_model) != IDALIASHEADER)
-					{
-						//is it a sprite
-						if (LittleLong(*(uint32 *)precache_model) != IDSPRITEHEADER)
+						//load model into buffer
+						precache_model_skin = 1;
+						FS_LoadFile (cl.configstrings[precache_check], (void **)&precache_model);
+						if (!precache_model)
 						{
-							//no, free and move onto next model
-							FS_FreeFile(precache_model);
-							precache_model = NULL;
+							//shouldn't happen?
 							precache_model_skin = 0;
 							precache_check++;
-							continue;
+							continue; // couldn't load it
+						}
+						
+						//is it an alias model
+						if (LittleLong(*(uint32 *)precache_model) != IDALIASHEADER)
+						{
+							//is it a sprite
+							if (LittleLong(*(uint32 *)precache_model) != IDSPRITEHEADER)
+							{
+								//no, free and move onto next model
+								FS_FreeFile(precache_model);
+								precache_model = NULL;
+								precache_model_skin = 0;
+								precache_check++;
+								continue;
+							}
+							else
+							{
+								//get sprite header
+								spriteheader = (dsprite_t *)precache_model;
+								if (LittleLong (spriteheader->version != SPRITE_VERSION))
+								{
+									//this is unknown version! free and move onto next.
+									FS_FreeFile(precache_model);
+									precache_model = NULL;
+									precache_check++;
+									precache_model_skin = 0;
+									continue; // couldn't load it
+								}
+							}
 						}
 						else
 						{
-							//get sprite header
-							spriteheader = (dsprite_t *)precache_model;
-							if (LittleLong (spriteheader->version != SPRITE_VERSION))
+							//get model header
+							pheader = (dmdl_t *)precache_model;
+							if (LittleLong (pheader->version) != ALIAS_VERSION)
 							{
-								//this is unknown version! free and move onto next.
+								//unknown version! free and move onto next
 								FS_FreeFile(precache_model);
 								precache_model = NULL;
 								precache_check++;
@@ -2328,93 +2520,92 @@ void CL_RequestNextDownload (void)
 							}
 						}
 					}
+
+					//if its an alias model
+					if (LittleLong(*(uint32 *)precache_model) == IDALIASHEADER)
+					{
+						pheader = (dmdl_t *)precache_model;
+
+						//iterate through number of skins
+						while (precache_model_skin - 1 < LittleLong(pheader->num_skins))
+						{
+							skinname = (char *)precache_model +
+								LittleLong(pheader->ofs_skins) + 
+								(precache_model_skin - 1)*MAX_SKINNAME;
+
+							//r1: spam warning for models that are broken
+							if (strchr (skinname, '\\'))
+							{
+								Com_Printf ("Warning, model %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
+							}
+							else if (strlen(skinname) > MAX_SKINNAME-1)
+							{
+								Com_Error (ERR_DROP, "Model %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
+							}
+
+							//check if this skin exists
+							if (!CL_CheckOrDownloadFile(skinname))
+							{
+								precache_model_skin++;
+								return; // started a download
+							}
+							precache_model_skin++;
+						}
+					}
 					else
 					{
-						//get model header
-						pheader = (dmdl_t *)precache_model;
-						if (LittleLong (pheader->version) != ALIAS_VERSION)
-						{
-							//unknown version! free and move onto next
-							FS_FreeFile(precache_model);
-							precache_model = NULL;
-							precache_check++;
-							precache_model_skin = 0;
-							continue; // couldn't load it
-						}
-					}
-				}
+						//its a sprite
+						spriteheader = (dsprite_t *)precache_model;
 
-				//if its an alias model
-				if (LittleLong(*(uint32 *)precache_model) == IDALIASHEADER)
-				{
-					pheader = (dmdl_t *)precache_model;
-
-					//iterate through number of skins
-					while (precache_model_skin - 1 < LittleLong(pheader->num_skins))
-					{
-						skinname = (char *)precache_model +
-							LittleLong(pheader->ofs_skins) + 
-							(precache_model_skin - 1)*MAX_SKINNAME;
-
-						//r1: spam warning for models that are broken
-						if (strchr (skinname, '\\'))
+						//iterate through skins
+						while (precache_model_skin - 1 < LittleLong(spriteheader->numframes))
 						{
-							Com_Printf ("Warning, model %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
-						}
-						else if (strlen(skinname) > MAX_SKINNAME-1)
-						{
-							Com_Error (ERR_DROP, "Model %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
-						}
+							skinname = spriteheader->frames[(precache_model_skin - 1)].name;
 
-						//check if this skin exists
-						if (!CL_CheckOrDownloadFile(skinname))
-						{
+							//r1: spam warning for models that are broken
+							if (strchr (skinname, '\\'))
+							{
+								Com_Printf ("Warning, sprite %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
+							}
+							else if (strlen(skinname) > MAX_SKINNAME-1)
+							{
+								Com_Error (ERR_DROP, "Sprite %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
+							}
+
+							//check if this skin exists
+							if (!CL_CheckOrDownloadFile(skinname))
+							{
+								precache_model_skin++;
+								return; // started a download
+							}
 							precache_model_skin++;
-							return; // started a download
 						}
-						precache_model_skin++;
 					}
-				}
-				else
-				{
-					//its a sprite
-					spriteheader = (dsprite_t *)precache_model;
 
-					//iterate through skins
-					while (precache_model_skin - 1 < LittleLong(spriteheader->numframes))
-					{
-						skinname = spriteheader->frames[(precache_model_skin - 1)].name;
-
-						//r1: spam warning for models that are broken
-						if (strchr (skinname, '\\'))
-						{
-							Com_Printf ("Warning, sprite %s with incorrectly linked skin: %s\n", LOG_CLIENT|LOG_WARNING, cl.configstrings[precache_check], skinname);
-						}
-						else if (strlen(skinname) > MAX_SKINNAME-1)
-						{
-							Com_Error (ERR_DROP, "Sprite %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
-						}
-
-						//check if this skin exists
-						if (!CL_CheckOrDownloadFile(skinname))
-						{
-							precache_model_skin++;
-							return; // started a download
-						}
-						precache_model_skin++;
+					//we're done checking the model and all skins, free
+					if (precache_model)
+					{ 
+						FS_FreeFile(precache_model);
+						precache_model = NULL;
 					}
-				}
 
-				//we're done checking the model and all skins, free
-				if (precache_model)
-				{ 
-					FS_FreeFile(precache_model);
-					precache_model = NULL;
+					precache_model_skin = 0;
+					precache_check++;
 				}
-
-				precache_model_skin = 0;
-				precache_check++;
 			}
+		}
+		if (precache_model_skin == -1)
+		{
+			precache_check = CS_MODELS + 2;
+			precache_model_skin = 0;
+
+	//pending downloads (models), let's wait here before we can check skins.
+#ifdef USE_CURL
+		if (CL_PendingHTTPDownloads ())
+			return;
+#endif
+
+			goto redoSkins;
 		}
 		precache_check = CS_SOUNDS;
 	}
@@ -2636,7 +2827,13 @@ skipplayer:;
 		precache_check = ENV_CNT;
 	}
 
-	if (precache_check == ENV_CNT)
+#ifdef USE_CURL
+		//map might still be downloading?
+		if (CL_PendingHTTPDownloads ())
+			return;
+#endif
+
+ 	if (precache_check == ENV_CNT)
 	{
 		char locbuff[MAX_QPATH+4];
 		precache_check = ENV_CNT + 1;
@@ -2710,6 +2907,12 @@ skipplayer:;
 		precache_check = TEXTURE_CNT+999;
 	}
 
+	//pending downloads (possibly textures), let's wait here.
+#ifdef USE_CURL
+	if (CL_PendingHTTPDownloads ())
+		return;
+#endif
+
 //ZOID
 	CL_RegisterSounds ();
 	CL_PrepRefresh ();
@@ -2773,13 +2976,8 @@ void CL_Precache_f (void)
 		return;
 	}
 
-	precache_start_time = Sys_Milliseconds();
-
-	precache_check = CS_MODELS;
 	precache_spawncount = atoi(Cmd_Argv(1));
-	precache_model = 0;
-	precache_model_skin = 0;
-
+	CL_ResetPrecacheCheck ();
 	CL_RequestNextDownload();
 }
 
@@ -2812,7 +3010,6 @@ void CL_Toggle_f (void)
 	}
 	else
 	{
-		//Com_Printf ("XXX: fixme\n", LOG_CLIENT);
 		int i;
 
 		for (i = 2; i < Cmd_Argc(); i++)
@@ -2890,6 +3087,130 @@ void _protocol_changed (cvar_t *var, char *oldValue, char *newValue)
 		cls.serverProtocol = 0;
 }
 
+void CL_IndexStats_f (void)
+{
+	int	i;
+	int	count;
+/*
+#define	CS_SOUNDS			(CS_MODELS+MAX_MODELS)			//288
+#define	CS_IMAGES			(CS_SOUNDS+MAX_SOUNDS)			//544
+#define	CS_LIGHTS			(CS_IMAGES+MAX_IMAGES)			//800
+#define	CS_ITEMS			(CS_LIGHTS+MAX_LIGHTSTYLES)		//1056
+#define	CS_PLAYERSKINS		(CS_ITEMS+MAX_ITEMS)			//1312
+#define CS_GENERAL			(CS_PLAYERSKINS+MAX_CLIENTS)	//1568
+#define	MAX_CONFIGSTRINGS	(CS_GENERAL+MAX_GENERAL)		//2080
+*/
+	if (Cmd_Argc() != 1)
+	{
+		unsigned	offset;
+		unsigned	count = atoi(Cmd_Argv(2));
+
+		if (!Q_stricmp (Cmd_Argv(1), "cs_models"))
+			offset = CS_MODELS;
+		else if (!Q_stricmp (Cmd_Argv(1), "cs_sounds"))
+			offset = CS_SOUNDS;
+		else if (!Q_stricmp (Cmd_Argv(1), "cs_images"))
+			offset = CS_IMAGES;
+		else if (!Q_stricmp (Cmd_Argv(1), "cs_items"))
+			offset = CS_ITEMS;
+		else if (!Q_stricmp (Cmd_Argv(1), "cs_playerskins"))
+			offset = CS_PLAYERSKINS;
+		else
+			offset = atoi(Cmd_Argv(1));
+
+		if (offset >= CS_GENERAL + MAX_GENERAL)
+		{
+			Com_Printf ("Bad offset.\n", LOG_GENERAL);
+			return;
+		}
+
+		if (count == 0)
+			count = 256;
+
+		if (offset + count > CS_GENERAL + MAX_GENERAL)
+		{
+			count = CS_GENERAL + MAX_GENERAL - offset;
+		}
+
+		for (i = offset; i < offset + count; i++)
+		{
+			Com_Printf ("%3d/%3d: %s\n", LOG_GENERAL, i, i - offset, cl.configstrings[i]);
+		}
+		
+		return;
+	}
+	for (count = 0, i = CS_MODELS; i < CS_MODELS + MAX_MODELS; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_MODELS     : %d\n", LOG_GENERAL, count);
+
+	for (count = 0, i = CS_SOUNDS; i < CS_SOUNDS + MAX_SOUNDS; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_SOUNDS     : %d\n", LOG_GENERAL, count);
+
+	for (count = 0, i = CS_LIGHTS; i < CS_LIGHTS + MAX_LIGHTSTYLES; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_LIGHTS     : %d\n", LOG_GENERAL, count);
+
+	for (count = 0, i = CS_IMAGES; i < CS_IMAGES + MAX_IMAGES; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_IMAGES     : %d\n", LOG_GENERAL, count);
+
+	for (count = 0, i = CS_ITEMS; i < CS_ITEMS + MAX_ITEMS; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_ITEMS      : %d\n", LOG_GENERAL, count);
+
+	for (count = 0, i = CS_PLAYERSKINS; i < CS_PLAYERSKINS + MAX_CLIENTS; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_PLAYERSKINS: %d\n", LOG_GENERAL, count);
+
+	for (count = 0, i = CS_GENERAL; i < CS_GENERAL + MAX_GENERAL; i++)
+	{
+		if (cl.configstrings[i][0])
+			count++;
+	}
+	Com_Printf ("CS_GENERAL    : %d\n", LOG_GENERAL, count);
+}
+
+void _cl_http_max_connections_changed (cvar_t *c, char *old, char *new)
+{
+	if (c->intvalue > 4)
+		Cvar_Set (c->name, "4");
+	else if (c->intvalue < 1)
+		Cvar_Set (c->name, "1");
+
+	if (c->intvalue > 2)
+		Com_Printf ("WARNING: Changing the maximum connections higher than 2 violates the HTTP specification recommendations. Doing so may result in you being blocked from the remote system and offers no performance benefits unless you are on a very high latency link (ie, satellite)\n", LOG_GENERAL);
+}
+
+void _gun_changed (cvar_t *c, char *old, char *new)
+{
+	if (cls.state >= ca_connected && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_NOGUN);
+		MSG_WriteShort (c->intvalue ? 0 : 1);
+		MSG_EndWriting (&cls.netchan.message);
+	}
+}
+
 /*
 =================
 CL_InitLocal
@@ -2927,6 +3248,8 @@ void CL_InitLocal (void)
 	cl_add_particles = Cvar_Get ("cl_particles", "1", 0);
 	cl_add_entities = Cvar_Get ("cl_entities", "1", 0);
 	cl_gun = Cvar_Get ("cl_gun", "1", CVAR_ARCHIVE);
+	cl_gun->changed = _gun_changed;
+
 	cl_footsteps = Cvar_Get ("cl_footsteps", "1", 0);
 	cl_noskins = Cvar_Get ("cl_noskins", "0", 0);
 //	cl_autoskins = Cvar_Get ("cl_autoskins", "0", 0);
@@ -3005,7 +3328,6 @@ void CL_InitLocal (void)
 	cl_defertimer = Cvar_Get ("cl_defertimer", "1", 0);
 	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "3", 0);
 	cl_instantpacket = Cvar_Get ("cl_instantpacket", "1", 0);
-	cl_strafejump_hack = Cvar_Get ("cl_strafejump_hack", "0", 0);
 	cl_nolerp = Cvar_Get ("cl_nolerp", "0", 0);
 	cl_instantack = Cvar_Get ("cl_instantack", "0", 0);
 	cl_autorecord = Cvar_Get ("cl_autorecord", "0", 0);
@@ -3023,6 +3345,14 @@ void CL_InitLocal (void)
 	allow_download_models = Cvar_Get ("allow_download_models", "1", CVAR_ARCHIVE);
 	allow_download_sounds = Cvar_Get ("allow_download_sounds", "1", CVAR_ARCHIVE);
 	allow_download_maps	  = Cvar_Get ("allow_download_maps", "1", CVAR_ARCHIVE);
+#endif
+
+#ifdef USE_CURL
+	cl_http_proxy = Cvar_Get ("cl_http_proxy", "", 0);
+	cl_http_filelists = Cvar_Get ("cl_http_filelists", "1", 0);
+	cl_http_downloads = Cvar_Get ("cl_http_downloads", "1", 0);
+	cl_http_max_connections = Cvar_Get ("cl_http_max_connections", "2", 0);
+	cl_http_max_connections->changed = _cl_http_max_connections_changed;
 #endif
 
 	//haxx
@@ -3047,6 +3377,7 @@ void CL_InitLocal (void)
 
 	//r1: r1q2 stuff goes here so it never overrides autocomplete order for base q2 cmds
 	//r1: allow passive connects
+	Cmd_AddCommand ("indexstats", CL_IndexStats_f);
 	Cmd_AddCommand ("passive", CL_Passive_f);
 
 	//r1: toggle cvar
@@ -3186,6 +3517,7 @@ cheatvar_t	cheatvars[] = {
 	{"timedemo", 0, 0, NULL},
 	{"r_drawworld", 1, 1, NULL},
 	{"cl_testlights", 0, 0, NULL},
+	{"cl_testblend", 0, 0, NULL},
 	{"r_fullbright", 0, 0, NULL},
 	{"r_drawflat", 0, 0, NULL},
 	{"paused", 0, 0, NULL},
@@ -3284,10 +3616,6 @@ void CL_RefreshInputs (void)
 
 	// process packets from server
 	CL_ReadPackets();
-
-#ifdef _DEBUG
-	CL_RunDownloadQueue ();
-#endif
 
 	//jec - update usercmd state
 	if (cls.state > ca_connecting)
@@ -3395,6 +3723,10 @@ void CL_Synchronous_Frame (int msec)
 		cls.netchan.last_received = Sys_Milliseconds ();
 
 	send_packet_now = false;
+
+#ifdef USE_CURL
+	CL_RunHTTPDownloads ();
+#endif
 
 	// fetch results from server
 	CL_ReadPackets ();
@@ -3542,8 +3874,16 @@ void CL_Frame (int msec)
 	}
 
 	// don't flood packets out while connecting
-	if (cls.state == ca_connected && packet_delta < 100)
-		packet_frame = false;
+	if (cls.state == ca_connected)
+	{
+		if (packet_delta < 100)
+			packet_frame = false;
+
+#ifdef USE_CURL
+		//we run full speed when connecting
+		CL_RunHTTPDownloads ();
+#endif
+	}
 
 	//jec - update the inputs (keybd, mouse, server, etc)
 	CL_RefreshInputs ();
@@ -3569,6 +3909,11 @@ void CL_Frame (int msec)
 		packet_delta = 0;
 		CL_SendCommand ();
 		CL_LoadDeferredModels();
+
+#ifdef USE_CURL
+		//we run less often in game
+		CL_RunHTTPDownloads ();
+#endif
 	}
 
 	//jec- Render the display
@@ -3700,6 +4045,10 @@ void CL_Init (void)
 
 	CL_Loc_Init ();
 
+#ifdef USE_CURL
+	CL_InitHTTPDownloads ();
+#endif
+
 	FS_ExecConfig ("postinit.cfg");
 	Cbuf_Execute ();
 }
@@ -3723,6 +4072,10 @@ void CL_Shutdown(void)
 		return;
 	}
 	isdown = true;
+
+#ifdef USE_CURL
+	CL_HTTP_Cleanup (true);
+#endif
 
 	CL_FreeLocs ();
 	CL_WriteConfiguration (); 

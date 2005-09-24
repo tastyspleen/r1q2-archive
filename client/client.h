@@ -35,6 +35,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef USE_CURL
+#include <curl/curl.h>
+#endif
+
 #include "ref.h"
 
 #include "vid.h"
@@ -124,9 +128,44 @@ struct localent_s
 
 localent_t cl_localents[MAX_LOCAL_ENTS];
 
-void CL_RunDownloadQueue (void);
-
 void Le_Reset (void);
+
+#ifdef USE_CURL
+void CL_CancelHTTPDownloads (qboolean permKill);
+void CL_InitHTTPDownloads (void);
+qboolean CL_QueueHTTPDownload (const char *quakePath);
+void CL_RunHTTPDownloads (void);
+qboolean CL_PendingHTTPDownloads (void);
+void CL_SetHTTPServer (const char *URL);
+void CL_HTTP_Cleanup (qboolean fullShutdown);
+
+typedef enum
+{
+	DLQ_STATE_NOT_STARTED,
+	DLQ_STATE_RUNNING,
+	DLQ_STATE_DONE
+} dlq_state;
+
+typedef struct dlqueue_s
+{
+	struct dlqueue_s	*next;
+	char				quakePath[MAX_QPATH];
+	dlq_state			state;
+} dlqueue_t;
+
+typedef struct dlhandle_s
+{
+	CURL		*curl;
+	char		filePath[MAX_OSPATH];
+	FILE		*file;
+	dlqueue_t	*queueEntry;
+	size_t		fileSize;
+	unsigned	position;
+	double		speed;
+	char		URL[576];
+	char		*tempBuffer;
+} dlhandle_t;
+#endif
 
 /*typedef struct
 {
@@ -224,6 +263,14 @@ typedef struct client_state_s
 	clientinfo_t	baseclientinfo;
 
 	qboolean		enhancedServer;
+	qboolean		advancedDeltas;
+	qboolean		strafeHack;
+
+	//r1: defer rendering when realtime < this
+	uint32			defer_rendering;
+
+	byte			demoFrame[1400];
+	sizebuf_t		demoBuff;
 } client_state_t;
 
 extern	client_state_t	cl;
@@ -292,6 +339,7 @@ typedef struct client_static_s
 	qboolean	failed_download;
 	//dltype_t	downloadtype;
 	int			downloadsize;
+	unsigned	downloadposition;
 	int			downloadpercent;
 
 // demo recording info must be here, so it isn't cleared on level change
@@ -300,8 +348,21 @@ typedef struct client_static_s
 	qboolean	passivemode;
 	FILE		*demofile;
 
-	//r1: defer rendering when realtime < this
-	uint32		defer_rendering;
+#ifdef USE_CURL
+	dlqueue_t		downloadQueue;			//queue of paths we need
+	
+	dlhandle_t		HTTPHandles[4];			//actual download handles
+	//don't raise this!
+	//i use a hardcoded maximum of 4 simultaneous connections to avoid
+	//overloading the server. i'm all too familiar with assholes who set
+	//their IE or Firefox max connections to 16 and rape my Apache processes
+	//every time they load a page... i'd rather not have my q2 client also
+	//have the ability to do so - especially since we're possibly downloading
+	//large files.
+
+	char			downloadServer[512];	//base url prefix to download from
+	char			downloadReferer[32];	//libcurl requires a static string :(
+#endif
 } client_static_t;
 
 extern client_static_t	cls;
@@ -368,7 +429,6 @@ extern	cvar_t	*cl_defertimer;
 extern	cvar_t	*scr_sizegraph;
 extern	cvar_t	*fs_gamedirvar;
 
-extern	cvar_t	*cl_strafejump_hack;
 extern	cvar_t	*cl_nolerp;
 //extern	cvar_t	*cl_snaps;
 
@@ -378,6 +438,13 @@ extern	cvar_t	*cl_async;
 extern	cvar_t	*cl_protocol;
 extern	cvar_t	*cl_test;
 extern	cvar_t	*cl_test2;
+
+#ifdef USE_CURL
+extern	cvar_t	*cl_http_downloads;
+extern	cvar_t	*cl_http_filelists;
+extern	cvar_t	*cl_http_proxy;
+extern	cvar_t	*cl_http_max_connections;
+#endif
 
 extern cvar_t *vid_fullscreen;
 
@@ -409,6 +476,8 @@ extern	cdlight_t	cl_dlights[MAX_DLIGHTS];
 extern	entity_state_t	cl_parse_entities[MAX_PARSE_ENTITIES];
 
 //=============================================================================
+
+extern	qboolean os_winxp;
 
 extern	netadr_t	net_from;
 extern	sizebuf_t	net_message;
@@ -611,7 +680,8 @@ char *Key_KeynumToString (int keynum);
 //
 // cl_demo.c
 //
-void CL_WriteDemoMessage (void);
+void CL_WriteFullDemoMessage (void);
+void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush);
 void CL_Stop_f (void);
 void CL_Record_f (void);
 

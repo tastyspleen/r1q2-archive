@@ -158,6 +158,9 @@ keyname_t keynames[] =
 	{"SCROLLLOCK",		K_SCROLLLOCK },
 	{"CAPSLOCK",		K_CAPSLOCK },
 	{"PRINTSCREEN",		K_PRTSCR },
+	{"LWINKEY",			K_LWINKEY },
+	{"RWINKEY",			K_RWINKEY },
+	{"APP",				K_APP },
 
 	{"MWHEELUP", K_MWHEELUP },
 	{"MWHEELDOWN", K_MWHEELDOWN },
@@ -703,7 +706,9 @@ void Key_Console (int key)
 
 //============================================================================
 
-qboolean	chat_team;
+char		chat_custom_cmd[32];
+char		chat_custom_prompt[32];
+int			chat_mode;
 char		chat_buffer[8][MAXCMDLINE];
 int			chat_curbuffer = 0;
 int			chat_bufferlen = 0;
@@ -716,10 +721,22 @@ void Key_Message (int key)
 
 	if ( key == K_ENTER || key == K_KP_ENTER )
 	{
-		if (chat_team)
-			Cbuf_AddText ("say_team \"");
-		else
+		switch (chat_mode)
+		{
+		case CHAT_MODE_PUBLIC:
 			Cbuf_AddText ("say \"");
+			break;
+		case CHAT_MODE_TEAM:
+			Cbuf_AddText ("say_team \"");
+			break;
+		case CHAT_MODE_CUSTOM:
+			Cbuf_AddText (chat_custom_cmd);
+			Cbuf_AddText (" \"");
+			break;
+		default:
+			Com_Error (ERR_DROP, "Bad chat_mode");
+			break;
+		}
 		Cbuf_AddText(chat_buffer[chat_curbuffer]);
 		Cbuf_AddText("\"\n");
 

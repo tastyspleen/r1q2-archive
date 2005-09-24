@@ -29,8 +29,6 @@ extern	time_t	server_start_time;
 server_static_t	svs;				// persistant server info
 server_t		sv;					// local server
 
-int sv_download_socket = 0;
-
 /*
 ================
 SV_FindIndex
@@ -463,27 +461,6 @@ void SV_InitGame (void)
 	svs.last_heartbeat = -295000;		// send immediately (r1: give few secs for configs to run)
 
 	//NET_StringToAdr ("192.246.40.37:27900", &master_adr[0]);
-
-	//r1: tcp download port (off in release)
-#ifdef _DEBUG
-	sv_downloadport = Cvar_Get ("sv_downloadport", va("%d", server_port), 0);
-#else
-	sv_downloadport = Cvar_Get ("sv_downloadport", "0", CVAR_NOSET);
-#endif
-
-#ifdef _DEBUG
-	if (sv_downloadport->intvalue)
-	{
-		sv_download_socket = NET_Listen ((uint16)sv_downloadport->intvalue);
-		if (sv_download_socket == -1)
-		{
-			Com_Printf ("SV_InitGame: couldn't listen on TCP %d!\n", LOG_SERVER, (int)sv_downloadport->intvalue);
-			sv_download_socket = 0;
-		}
-
-		Com_Printf ("DownloadServer running on TCP port %d, socket %d\n", LOG_SERVER, (int)sv_downloadport->intvalue, sv_download_socket);
-	}
-#endif
 
 	//r1: ping masters now that the network is up
 	if (Cvar_IntValue ("public"))

@@ -24,7 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 edict_t	*sv_player;
 
 cvar_t	*sv_max_download_size;
-cvar_t	*sv_downloadwait;
 
 char	svConnectStuffString[1100];
 char	svBeginStuffString[1100];
@@ -267,10 +266,10 @@ This will be sent on the initial connection and upon each server load.
 */
 static void SV_New_f (void)
 {
-	const char	*gamedir;
-	int			playernum;
-	edict_t		*ent;
-	varban_t	*bans;
+	const char			*gamedir;
+	int					playernum;
+	edict_t				*ent;
+	varban_t			*bans;
 
 	//cvar chars that we can use without causing problems on clients.
 	//nocheat uses %var.
@@ -282,7 +281,20 @@ static void SV_New_f (void)
 
 	if (sv_client->state != cs_connected)
 	{
-		Com_DPrintf ("New from %s not valid -- already spawned\n", sv_client->name);
+		if (sv_client->state == cs_spawning)
+		{
+			//client typed 'reconnect/new' while connecting.
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString ("\ndisconnect\nreconnect\n");
+			SV_AddMessage (sv_client, true);
+			SV_DropClient (sv_client, true);
+			//SV_WriteReliableMessages (sv_client, sv_client->netchan.message.buffsize);
+		}
+		else
+		{
+			//shouldn't be here!
+			Com_DPrintf ("WARNING: Illegal 'new' from %s, client state %d. This shouldn't happen...\n", sv_client->name, sv_client->state);
+		}
 		return;
 	}
 
@@ -300,6 +312,9 @@ static void SV_New_f (void)
 	MSG_BeginWriting (svc_stufftext);
 	MSG_WriteString ("\n");
 	SV_AddMessage (sv_client, true);
+
+	if (SV_UserInfoBanned (sv_client))
+		return;
 
 	if (sv_force_reconnect->string[0] && !sv_client->reconnect_done && !NET_IsLANAddress (&sv_client->netchan.remote_address))
 	{
@@ -423,6 +438,9 @@ static void SV_New_f (void)
 
 		//forced protocol breakage for 34 fallback
 		MSG_WriteShort (CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+
+		MSG_WriteByte (sv_advanced_deltas->intvalue);
+		MSG_WriteByte (sv_strafejump_hack->intvalue);
 	}
 
 	SV_AddMessage (sv_client, true);
@@ -568,7 +586,7 @@ plainLines:
 			if (base->number)
 			{
 				MSG_BeginWriting (svc_spawnbaseline);
-				MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol);
+				MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol, sv_advanced_deltas->intvalue);
 				wrote += MSG_GetLength();
 				SV_AddMessage (sv_client, true);
 
@@ -620,7 +638,8 @@ plainLines:
 					if (base->number)
 					{
 						MSG_BeginWriting (svc_spawnbaseline);
-						MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol);
+						MSG_SetBit (8);
+						MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol, sv_advanced_deltas->intvalue);
 						MSG_EndWriting (&zBuff);
 
 						if (zBuff.cursize >= 300 || z.total_out > sv_client->netchan.message.buffsize - 300)
@@ -731,7 +750,7 @@ static void SV_Begin_f (void)
 	//r1: could be abused to respawn or cause spam/other mod-specific problems
 	if (sv_client->state != cs_spawning)
 	{
-		Com_Printf ("EXPLOIT: Illegal 'begin' from %s (already spawned), client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name);
+		Com_Printf ("EXPLOIT: Illegal 'begin' from %s[%s] (already spawned), client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
 		SV_DropClient (sv_client, false);
 		return;
 	}
@@ -745,19 +764,29 @@ static void SV_Begin_f (void)
 		return;
 	}
 
-	//r1: they didn't respond to version probe
 	if (!sv_client->versionString)
 	{
+		//r1: they didn't respond to version probe
 		Com_Printf ("WARNING: Didn't receive 'version' string from %s[%s], hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
 		SV_DropClient (sv_client, false);
 		return;
 	}
 	else if (sv_client->reconnect_var[0])
 	{
+		//r1: or the reconnect cvar...
 		Com_Printf ("WARNING: Client %s[%s] didn't respond to reconnect check, hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
 		SV_DropClient (sv_client, false);
 		return;
 	}
+	else if (sv_client->download)
+	{
+		//r1: they're still downloading? shouldn't be...
+		Com_Printf ("WARNING: Begin from %s[%s] while still downloading. Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
+		SV_DropClient (sv_client, false);
+		return;
+	}
+
+	sv_client->downloadsize = 0;
 
 	sv_client->state = cs_spawned;
 
@@ -966,6 +995,7 @@ olddownload:
 
 	FS_FreeFile (sv_client->download);
 	sv_client->download = NULL;
+	sv_client->downloadsize = 0;
 
 	Z_Free (sv_client->downloadFileName);
 	sv_client->downloadFileName = NULL;
@@ -993,6 +1023,16 @@ static void SV_BeginDownload_f(void)
 
 	//name is always filtered for security reasons
 	StripHighBits (name, 1);
+
+	//ugly hack to allow server to see clients who are using http dl.
+	if (!strcmp (name, "http"))
+	{
+		if (sv_client->download)
+			SV_DropClient (sv_client, false);
+		else
+			sv_client->downloadsize = 1;
+		return;
+	}
 
 	// hacked by zoid to allow more conrol over download
 	// first off, no .. or global allow check
@@ -1111,7 +1151,7 @@ static void SV_BeginDownload_f(void)
 		if (!(allow_download_players->intvalue & DL_UDP))
 			valid = false;
 	}
-	else if (strncmp(name, "models/", 7) == 0)
+	else if (strncmp(name, "models/", 7) == 0 || strncmp(name, "sprites/", 8) == 0)
 	{
 		if (!(allow_download_models->intvalue & DL_UDP))
 			valid = false;
@@ -1351,7 +1391,36 @@ static void SV_ShowServerinfo_f (void)
 
 static void SV_ClientServerinfo_f (void)
 {
-	SV_ClientPrintf (sv_client, PRINT_HIGH, "You are running at protocol %d, this server supports protocols %d and %d. Running an API version %d game.\n", sv_client->protocol, ORIGINAL_PROTOCOL_VERSION, ENHANCED_PROTOCOL_VERSION, ge->apiversion);
+	char	*strafejump_msg;
+	char	*delta_msg;
+	char	*optimize_msg;
+	char	*packetents_msg;
+	int		maxLen;
+
+	strafejump_msg = sv_strafejump_hack->intvalue == 2 ? "Forced" : sv_strafejump_hack->intvalue ? "Enabled (requires protocol 35 client)" : "Disabled";
+	delta_msg = sv_advanced_deltas->intvalue ? "Enabled (requires protocol 35 client)" : "Disabled";
+	optimize_msg = sv_optimize_deltas->intvalue == 2 ? "Forced" : sv_optimize_deltas->intvalue ? "Enabled" : "Disabled";
+	packetents_msg = sv_packetentities_hack->intvalue == 2 ? "Enabled (with protocol 35 zlib support)" : sv_packetentities_hack->intvalue ? "Enabled (without protocol 35 zlib support)" : "Disabled";
+
+	maxLen = Cvar_IntValue ("net_maxmsglen");
+	if (maxLen == 0)
+		maxLen = MAX_MSGLEN;
+
+	SV_ClientPrintf (sv_client, PRINT_HIGH, 
+		"Server Protocol Settings\n"
+		"------------------------\n"
+		"Your protocol  : %d\n"
+		"Your max packet: %d (server max allowed: %d)\n"
+		"Strafejump hack: %s\n"
+		"Advanced deltas: %s\n"
+		"Optimize deltas: %s\n"
+		"Packetents hack: %s\n",
+		sv_client->protocol,
+		sv_client->netchan.message.buffsize, maxLen,
+		strafejump_msg,
+		delta_msg,
+		optimize_msg,
+		packetents_msg);
 }
 
 static void SV_NoGameData_f (void)
@@ -1483,6 +1552,7 @@ static void SV_CvarResult_f (void)
 		return;
 	}
 
+	//cvar responses don't count as malicious
 	stringCmdCount--;
 
 	match = VarBanMatch (&cvarbans, Cmd_Argv(1), result);
@@ -1496,6 +1566,10 @@ static void SV_CvarResult_f (void)
 				break;
 			case CVARBAN_MESSAGE:
 				SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", match->message);
+				break;
+			case CVARBAN_EXEC:
+				Cbuf_AddText (match->message);
+				Cbuf_AddText ("\n");
 				break;
 			case CVARBAN_STUFF:
 				MSG_BeginWriting (svc_stufftext);
@@ -1611,6 +1685,42 @@ static ucmd_t ucmds[] =
 
 	{NULL, NULL}
 };
+
+//metavars
+const char *SV_GetClientID (void)
+{
+	static char	idBuff[4];
+
+	if (!sv_client)
+		return "";
+
+	sprintf (idBuff, "%d", (int)(sv_client - svs.clients));
+	return idBuff;
+}
+
+const char *SV_GetClientIP (void)
+{
+	char	*p;
+	char	*q;
+
+	if (!sv_client)
+		return "";
+
+	p = NET_AdrToString (&sv_client->netchan.remote_address);
+	q = strchr (p, ':');
+	if (q)
+		*q = 0;
+
+	return p;
+}
+
+const char *SV_GetClientName (void)
+{
+	if (!sv_client)
+		return "";
+
+	return sv_client->name;
+}
 
 /*
 ==================
@@ -2132,12 +2242,28 @@ void SV_ExecuteClientMessage (client_t *cl)
 				net_drop = cl->netchan.dropped;
 
 				//r1: server configurable command backup limit
-				if (net_drop < sv_max_netdrop->intvalue)
+				if (net_drop > sv_max_netdrop->intvalue)
+					net_drop = sv_max_netdrop->intvalue; 
+
+				if (net_drop)
 				{
 
 //if (net_drop > 2)
 
 //	Com_Printf ("drop %i\n", net_drop);
+					//if predicting, limit the amount of time they can catch up for
+					if (sv_predict_on_lag->intvalue)
+					{
+						if (net_drop > 2)
+							net_drop = 2;
+						if (oldest.msec > 25)
+							oldest.msec = 25;
+						if (oldcmd.msec > 25)
+							oldcmd.msec = 25;
+						if (newcmd.msec > 75)
+							newcmd.msec = 75;
+					}
+						
 					while (net_drop > 2)
 					{
 						SV_ClientThink (cl, &cl->lastcmd);
