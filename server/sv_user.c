@@ -1404,7 +1404,7 @@ static void SV_ClientServerinfo_f (void)
 
 	maxLen = Cvar_IntValue ("net_maxmsglen");
 	if (maxLen == 0)
-		maxLen = MAX_MSGLEN;
+		maxLen = MAX_USABLEMSG;
 
 	SV_ClientPrintf (sv_client, PRINT_HIGH, 
 		"Server Protocol Settings\n"

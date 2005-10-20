@@ -2083,14 +2083,14 @@ static void SV_CheckTimeouts (void)
 				cl->idletime++;
 
 				//icky test
-				if (sv_predict_on_lag->intvalue && cl->lastmessage < svs.realtime - 200)
+				if (sv_predict_on_lag->intvalue && (cl->lastmessage < svs.realtime - 200) && cl->moved)
 				{
-					//int old = cl->lastcmd.msec;
+					int old = cl->lastcmd.msec;
 					Com_DPrintf ("Lag predicting %s (lastMsg %d)\n", cl->name, svs.realtime - cl->lastmessage);
-					//cl->lastcmd.msec = 100;
+					cl->lastcmd.msec = 100;
 					//SV_ClientThink (cl, cl->lastcmd);
 					ge->ClientThink (cl->edict, &cl->lastcmd);
-					//cl->lastcmd.msec = old;
+					cl->lastcmd.msec = old;
 				}
 
 

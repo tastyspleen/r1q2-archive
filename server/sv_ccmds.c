@@ -161,7 +161,7 @@ static qboolean SV_SetPlayer (void)
 			if (cl->state <= cs_zombie)
 				continue;
 
-			if (!strstr(cl->name, s))
+			if (strstr(cl->name, s))
 			{
 				sv_client = cl;
 				sv_player = sv_client->edict;
