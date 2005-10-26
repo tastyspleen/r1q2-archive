@@ -1414,10 +1414,22 @@ void EXPORT GLimp_AppActivate( qboolean active )
 		if (IsIconic (glw_state.hWnd))
 			return;
 
-		if ( FLOAT_NE_ZERO(vid_fullscreen->value) && usingDesktopSettings )
+		if ( FLOAT_NE_ZERO(vid_fullscreen->value))
 		{
-			RestoreQ2Settings ();
-			usingDesktopSettings = false;
+			if (usingDesktopSettings)
+			{
+				RestoreQ2Settings ();
+				usingDesktopSettings = false;
+			}
+			else
+			{
+				static qboolean warned = false;
+				if (!warned)
+				{
+					ri.Con_Printf (PRINT_ALL, "\2NOTE: Set vid_flip_on_switch 1 if you would like R1GL to restore your desktop resolution when switching to another application.\n");
+					warned = true;
+				}
+			}
 		}
 
 		SetForegroundWindow( glw_state.hWnd );
@@ -1425,11 +1437,14 @@ void EXPORT GLimp_AppActivate( qboolean active )
 	}
 	else
 	{
-		if ( FLOAT_NE_ZERO(vid_fullscreen->value) && FLOAT_NE_ZERO (vid_restore_on_switch->value) )
+		if ( FLOAT_NE_ZERO(vid_fullscreen->value))
 		{
 			ShowWindow( glw_state.hWnd, SW_MINIMIZE );
-			RestoreDesktopSettings();
-			usingDesktopSettings = true;
+			if (FLOAT_NE_ZERO (vid_restore_on_switch->value) && !usingDesktopSettings)
+			{
+				RestoreDesktopSettings();
+				usingDesktopSettings = true;
+			}
 		}
 	}
 }

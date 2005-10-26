@@ -1,5 +1,5 @@
 /*
- * RCS $Id: redblack.h,v 1.4 2005/09/23 14:31:35 r1ch Exp $
+ * RCS $Id: redblack.h,v 1.5 2005/10/25 05:31:13 r1ch Exp $
  */
 
 /*
@@ -81,7 +81,7 @@ const struct RB_ENTRY(node) *nextp;
 struct RB_ENTRY(tree) {
 #ifndef RB_CUSTOMIZE
 		/* comparison routine */
-	int (*rb_cmp)(const void *, const void *);
+	int (EXPORT *rb_cmp)(const void *, const void *);
 		/* root of tree */
 #endif /* RB_CUSTOMIZE */
 	struct RB_ENTRY(node) *rb_root;
@@ -91,7 +91,7 @@ struct RB_ENTRY(tree) {
 };
 
 #ifndef RB_CUSTOMIZE
-RB_STATIC struct RB_ENTRY(tree) *rbinit(int (*)(const void *, const void *), int);
+RB_STATIC struct RB_ENTRY(tree) *rbinit(int (EXPORT *)(const void *, const void *), int);
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void);
 #endif /* RB_CUSTOMIZE */
@@ -138,6 +138,9 @@ RB_STATIC void RB_ENTRY(closelist)(RBLIST *);
 /*
  *
  * $Log: redblack.h,v $
+ * Revision 1.5  2005/10/25 05:31:13  r1ch
+ * Win32 exception handler
+ *
  * Revision 1.4  2005/09/23 14:31:35  r1ch
  * HTTP downloading, demotranslating, winkey shit, tons of goodies, oh my!
  *

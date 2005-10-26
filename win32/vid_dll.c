@@ -497,20 +497,23 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				xPos = (int16) LOWORD(lParam);    // horizontal position 
 				yPos = (int16) HIWORD(lParam);    // vertical position 
 
-				r.left   = 0;
-				r.top    = 0;
-				r.right  = 1;
-				r.bottom = 1;
+				if (!IsIconic (cl_hwnd))
+				{
+					r.left   = 0;
+					r.top    = 0;
+					r.right  = 1;
+					r.bottom = 1;
 
-				style = GetWindowLong( hWnd, GWL_STYLE );
-				AdjustWindowRect( &r, style, FALSE );
+					style = GetWindowLong( hWnd, GWL_STYLE );
+					AdjustWindowRect( &r, style, FALSE );
 
-				Cvar_SetValue( "vid_xpos", (float)(xPos + r.left));
-				Cvar_SetValue( "vid_ypos", (float)(yPos + r.top));
-				vid_xpos->modified = false;
-				vid_ypos->modified = false;
-				if (ActiveApp)
-					IN_Activate (true);
+					Cvar_SetValue( "vid_xpos", (float)(xPos + r.left));
+					Cvar_SetValue( "vid_ypos", (float)(yPos + r.top));
+					vid_xpos->modified = false;
+					vid_ypos->modified = false;
+					if (ActiveApp)
+						IN_Activate (true);
+				}
 			}
 		}
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
@@ -671,22 +674,23 @@ qboolean EXPORT VID_GetModeInfo( int *width, int *height, int mode )
 */
 void VID_UpdateWindowPosAndSize(void)
 {
-	RECT r;
-	int		style;
-	int		w, h;
+	RECT		r;
+	LONG_PTR	style;
+	int			w, h;
 
 	r.left   = 0;
 	r.top    = 0;
 	r.right  = viddef.width;
 	r.bottom = viddef.height;
 
-	style = GetWindowLong( cl_hwnd, GWL_STYLE );
-	AdjustWindowRect( &r, style, FALSE );
+	style = GetWindowLongPtr ( cl_hwnd, GWL_STYLE );
+	if (AdjustWindowRect ( &r, style, FALSE ))
+	{
+		w = r.right - r.left;
+		h = r.bottom - r.top;
 
-	w = r.right - r.left;
-	h = r.bottom - r.top;
-
-	MoveWindow( cl_hwnd, vid_xpos->intvalue, vid_ypos->intvalue, w, h, TRUE );
+		MoveWindow( cl_hwnd, vid_xpos->intvalue, vid_ypos->intvalue, w, h, TRUE );
+	}
 }
 
 /*

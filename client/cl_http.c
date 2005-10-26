@@ -62,7 +62,7 @@ libcurl callback to update progress info. Mainly just used as
 a way to cancel the transfer if required.
 ===============
 */
-static int CL_HTTP_Progress (void *clientp, double dltotal, double dlnow, double ultotal, double ulnow)
+static int EXPORT CL_HTTP_Progress (void *clientp, double dltotal, double dlnow, double ultotal, double ulnow)
 {
 	dlhandle_t *dl;
 
@@ -92,7 +92,7 @@ CL_HTTP_Header
 libcurl callback to update header info.
 ===============
 */
-static size_t CL_HTTP_Header (void *ptr, size_t size, size_t nmemb, void *stream)
+static size_t EXPORT CL_HTTP_Header (void *ptr, size_t size, size_t nmemb, void *stream)
 {
 	char	headerBuff[1024];
 	size_t	bytes;
@@ -182,7 +182,7 @@ CL_HTTP_Recv
 libcurl callback for filelists.
 ===============
 */
-static size_t CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *stream)
+static size_t EXPORT CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *stream)
 {
 	size_t		bytes;
 	dlhandle_t	*dl;
@@ -215,7 +215,7 @@ static size_t CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *stream)
 	return bytes;
 }
 
-int CL_CURL_Debug (CURL *c, curl_infotype type, char *data, size_t size, void * ptr)
+int EXPORT CL_CURL_Debug (CURL *c, curl_infotype type, char *data, size_t size, void * ptr)
 {
 	if (type == CURLINFO_TEXT)
 	{
@@ -308,7 +308,6 @@ static void CL_StartHTTPDownload (dlqueue_t *entry, dlhandle_t *dl)
 	curl_easy_setopt (dl->curl, CURLOPT_USERAGENT, Cvar_VariableString ("version"));
 	curl_easy_setopt (dl->curl, CURLOPT_REFERER, cls.downloadReferer);
 	curl_easy_setopt (dl->curl, CURLOPT_URL, dl->URL);
-
 
 	if (curl_multi_add_handle (multi, dl->curl) != CURLM_OK)
 	{

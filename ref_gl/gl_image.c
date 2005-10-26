@@ -1006,24 +1006,24 @@ NiceAss: Code from Q2Ice
 =================================================================
 */
 
-void __cdecl jpg_null(j_decompress_ptr cinfo)
+void EXPORT jpg_null(j_decompress_ptr cinfo)
 {
 }
 
-unsigned char __cdecl jpg_fill_input_buffer(j_decompress_ptr cinfo)
+unsigned char EXPORT jpg_fill_input_buffer(j_decompress_ptr cinfo)
 {
     ri.Con_Printf(PRINT_ALL, "Premature end of JPEG data\n");
     return 1;
 }
 
-void __cdecl jpg_skip_input_data(j_decompress_ptr cinfo, long num_bytes)
+void EXPORT jpg_skip_input_data(j_decompress_ptr cinfo, long num_bytes)
 {
         
     cinfo->src->next_input_byte += (size_t) num_bytes;
     cinfo->src->bytes_in_buffer -= (size_t) num_bytes;
 }
 
-void jpeg_mem_src(j_decompress_ptr cinfo, byte *mem, int len)
+void jpeg_mem_src (j_decompress_ptr cinfo, byte *mem, int len)
 {
     cinfo->src = (struct jpeg_source_mgr *)(*cinfo->mem->alloc_small)((j_common_ptr) cinfo, JPOOL_PERMANENT, sizeof(struct jpeg_source_mgr));
     cinfo->src->init_source = jpg_null;

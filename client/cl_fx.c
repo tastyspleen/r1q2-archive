@@ -1910,7 +1910,7 @@ void CL_FlyParticles (vec3_t origin, int count)
 			avelocities[0][i] = (randomMT()&255) * 0.01f;
 	}
 
-	ltime = time / 1000.0f;
+	ltime = (origin[0] + origin[1])/100.0f + time / 1000.0f;
 	for (i=0 ; i<count ; i+=2)
 	{
 		angle = ltime * avelocities[i][0];

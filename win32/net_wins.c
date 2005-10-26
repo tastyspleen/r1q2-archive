@@ -131,7 +131,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 			//       here and if any packets that didn't originate from the server
 			//       cause errors, silently ignore them.
 			if (err != WSAEMSGSIZE)
-				Com_Printf ("WARNING! NET_GetPacket: %s", LOG_NET, NET_ErrorString());
+				Com_Printf ("WARNING! NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 

@@ -401,6 +401,9 @@ void SV_InitGame (void)
 	// get any latched variable changes (maxclients, etc)
 	Cvar_GetLatchedVars ();
 
+	if (sv_advanced_deltas->intvalue)
+		MSG_initHuffman ();
+
 	if (Cvar_IntValue ("coop") && Cvar_IntValue ("deathmatch"))
 	{
 		Com_Printf("Deathmatch and Coop both set, disabling Coop\n", LOG_SERVER|LOG_NOTICE);

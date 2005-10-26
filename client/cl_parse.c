@@ -552,6 +552,9 @@ qboolean CL_ParseServerData (void)
 		{
 			cl.advancedDeltas = MSG_ReadByte (&net_message);
 			cl.strafeHack = MSG_ReadByte (&net_message);
+
+			if (cl.advancedDeltas)
+				MSG_initHuffman ();
 		}
 		else
 		{

@@ -816,7 +816,7 @@ Reads in all archived cvars
 */
 void Cvar_Init (void)
 {
-	cvartree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
+	cvartree = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, 0);
 
 	Cmd_AddCommand ("set", Cvar_Set_f);
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);

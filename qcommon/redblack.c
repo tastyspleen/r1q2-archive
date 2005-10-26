@@ -1,4 +1,4 @@
-//static char rcsid[]="$Id: redblack.c,v 1.11 2005/09/23 14:31:35 r1ch Exp $";
+//static char rcsid[]="$Id: redblack.c,v 1.12 2005/10/25 05:31:13 r1ch Exp $";
 
 /*
    Redblack balanced tree algorithm
@@ -162,7 +162,7 @@ static void RB_ENTRY(_closelist)(RBLIST *);
 
 #ifndef RB_CUSTOMIZE
 RB_STATIC struct RB_ENTRY(tree) *
-rbinit(int (*cmp)(const void *, const void *), int prealloc)
+rbinit(int (EXPORT *cmp)(const void *, const void *), int prealloc)
 #else
 RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void)
 #endif /* RB_CUSTOMIZE */
@@ -175,7 +175,7 @@ RB_STATIC struct RB_ENTRY(tree) *RB_ENTRY(init)(void)
 	if ((retval=(struct RB_ENTRY(tree) *) malloc(sizeof(struct RB_ENTRY(tree))))==NULL)
 #endif
 		return(NULL);
-	
+
 #ifndef RB_CUSTOMIZE
 	retval->rb_cmp=cmp;
 #endif /* RB_CUSTOMIZE */
@@ -1016,6 +1016,9 @@ RB_ENTRY(_free)(struct RB_ENTRY(node) *x)
 
 /*
  * $Log: redblack.c,v $
+ * Revision 1.12  2005/10/25 05:31:13  r1ch
+ * Win32 exception handler
+ *
  * Revision 1.11  2005/09/23 14:31:35  r1ch
  * HTTP downloading, demotranslating, winkey shit, tons of goodies, oh my!
  *

@@ -27,25 +27,32 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //===============================================================================
 
-int		hunkcount;
+//static int		hunkcount;
+//static int		tinyCount;
+//static int		tinyHunkCount;
 
-
-int		hunkmaxsize;
-int		cursize;
+static int		hunkmaxsize;
+static int		cursize;
 
 #define	VIRTUAL_ALLOC 1
 //#define CREATE_HEAP 1
 
 #if CREATE_HEAP
-HANDLE	membase;
+static HANDLE	membase;
 #else
-byte	*membase;
+static byte	*membase;
 #endif
+
+#define TBUFFERLEN 8192
+static BYTE *tempBuff;
+static int tempBuffSize;;
 
 void *Hunk_Begin (int maxsize)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
 	cursize = 0;
+	tempBuff = NULL;
+	tempBuffSize = TBUFFERLEN;
 	hunkmaxsize = maxsize;
 #if VIRTUAL_ALLOC
 	membase = VirtualAlloc (NULL, maxsize, MEM_RESERVE, PAGE_NOACCESS);
@@ -63,14 +70,15 @@ void *Hunk_Begin (int maxsize)
 	return (void *)membase;
 }
 
-void *Hunk_Alloc (int size)
+void *Hunk_Alloc (int realsize)
 {
+	int size;
 #if VIRTUAL_ALLOC || CREATE_HEAP
 	void	*buf;
 #endif
 
 	// round to cacheline
-	size = (size+31)&~31;
+	size = (realsize+31)&~31;
 
 #if CREATE_HEAP
 	buf = HeapAlloc (membase, HEAP_NO_SERIALIZE, size);
@@ -87,12 +95,32 @@ void *Hunk_Alloc (int size)
 
 #if VIRTUAL_ALLOC
 	// commit pages as needed
-//	buf = VirtualAlloc (membase+cursize, size, MEM_COMMIT, PAGE_READWRITE);
-	buf = VirtualAlloc (membase, cursize+size, MEM_COMMIT, PAGE_READWRITE);
-	if (!buf)
+	//buf = VirtualAlloc (membase+cursize, size, MEM_COMMIT, PAGE_READWRITE);
 	{
-		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
-		Sys_Error ("VirtualAlloc commit failed.\n%s", buf);
+		if (realsize < 256)
+		{
+			if (tempBuffSize + realsize > TBUFFERLEN)
+			{
+				tempBuff = VirtualAllocEx (GetCurrentProcess(), membase, cursize+TBUFFERLEN, MEM_COMMIT, PAGE_READWRITE);		
+				tempBuff += cursize;
+				tempBuffSize = 0;
+				//tinyHunkCount ++;
+				cursize += TBUFFERLEN;
+				if (cursize > hunkmaxsize)
+					Sys_Error ("Hunk_Alloc overflow");
+				//Com_Printf ("-- new TinyHunk --\n", PRINT_HIGH);
+			}
+			//Com_Printf ("TinyHunk (%d - %d - %d)\n", PRINT_HIGH, realsize, tinyCount, tinyHunkCount);
+			//tinyCount += size;
+			tempBuffSize += realsize;
+			return (void *)(tempBuff + tempBuffSize - realsize);
+		}
+		buf = VirtualAllocEx (GetCurrentProcess(), membase, cursize+size, MEM_COMMIT, PAGE_READWRITE);
+		if (!buf)
+		{
+			FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
+			Sys_Error ("VirtualAlloc commit failed.\n%s", buf);
+		}
 	}
 #endif
 	cursize += size;
@@ -122,7 +150,7 @@ int Hunk_End (void)
 		ri.Sys_Error (ERR_FATAL, "realloc (%p, %d) failed", membase, cursize);*/
 #endif
 
-	hunkcount++;
+	//hunkcount++;
 //Com_Printf ("hunkcount: %i\n", hunkcount);
 	return cursize;
 }
@@ -138,7 +166,7 @@ void Hunk_Free (void *base)
 		free (base);
 #endif
 
-	hunkcount--;
+//	hunkcount--;
 }
 
 //===============================================================================

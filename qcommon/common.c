@@ -166,8 +166,8 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
 };
 
-void (*Z_Free)(const void *buf);
-void *(*Z_TagMalloc)(int size, int tag);
+void (EXPORT *Z_Free)(const void *buf);
+void *(EXPORT *Z_TagMalloc)(int size, int tag);
 
 /*
 ============================================================================
@@ -2531,6 +2531,7 @@ typedef struct zhead_s
 	int16	magic;
 	int16	tag;			// for group free
 	int		size;
+	void	*allocationLocation;
 } zhead_t;
 
 typedef struct z_memloc_s
@@ -2539,6 +2540,7 @@ typedef struct z_memloc_s
 	uint32				time;
 	uint32				size;
 	struct	z_memloc_s	*next;
+	void				*allocationLocation;
 } z_memloc_t;
 
 static z_memloc_t	z_game_locations;
@@ -2595,18 +2597,18 @@ void EXPORT Z_FreeDebug (const void *ptr)
 	if (z->size <= 0 || z->size > 0x40000000)
 	{
 		if (z_allowcorruption->intvalue)
-			Com_Printf ("Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+			Com_Printf ("Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p, allocated at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z, z->allocationLocation);
 		else
-			Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+			Com_Error (ERR_DIE, "Z_Free: crazy block size %d (maybe tag %d (%s)) from %s at %p allocated at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z, z->allocationLocation);
 	}
 
 	//we could segfault here if size is invalid :(
 	if (z->magic == Z_MAGIC_DEBUG && (*(byte **)&z)[z->size-1] != 0xCC)
 	{
 		if (z_allowcorruption->intvalue)
-			Com_Printf ("Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+			Com_Printf ("Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p allocated at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z, z->allocationLocation);
 		else
-			Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z);
+			Com_Error (ERR_DIE, "Z_Free: buffer overrun detected in block sized %d (tagged as %d (%s)) from %s at %p allocated at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", free_from_game ? "GAME" : "EXECUTABLE", z, z->allocationLocation);
 	}
 
 	z->prev->next = z->next;
@@ -2734,26 +2736,26 @@ void Z_Verify (const char *format, ...)
 				if (z->size <= 0 || z->size > 0x40000000)
 				{
 					if (z_allowcorruption->intvalue)
-						Com_Printf ("Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+						Com_Printf ("Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p, allocated from %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z, z->allocationLocation);
 					else
-						Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+						Com_Error (ERR_DIE, "Z_Verify: crazy block size %d (maybe tag %d (%s)) during '%s' at %p, allocated from %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z, z->allocationLocation);
 				}
 
 				//we could segfault here if size is invalid :(
 				if ((*(byte **)&z)[z->size-1] != 0xCC)
 				{
 					if (z_allowcorruption->intvalue)
-						Com_Printf ("Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+						Com_Printf ("Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p, allocated from %p", LOG_ERROR, z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z, z->allocationLocation);
 					else
-						Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z);
+						Com_Error (ERR_DIE, "Z_Verify: buffer overrun detected in block sized %d (tagged as %d (%s)) during '%s' at %p, allocated from %p", z->size, z->tag, z->tag < TAGMALLOC_MAX_TAGS ? tagmalloc_tags[z->tag].name : "UNKNOWN TAG", string, z, z->allocationLocation);
 				}
 			}
 			else
 			{
 				if (z_allowcorruption->intvalue)
-					Com_Printf ("Z_Verify: memory corruption detected during '%s' in block %p", LOG_ERROR, string, (void *)(z+1));
+					Com_Printf ("Z_Verify: memory corruption detected during '%s' in block %p allocated from %p", LOG_ERROR, string, (void *)(z+1), z->allocationLocation);
 				else
-					Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p", string, (void *)(z+1));
+					Com_Error (ERR_DIE, "Z_Verify: memory corruption detected during '%s' in block %p allocated from %p", string, (void *)(z+1), z->allocationLocation);
 			}
 		}
 
@@ -2762,7 +2764,7 @@ void Z_Verify (const char *format, ...)
 	}
 }
 
-void *Z_TagMallocDebug (int size, int tag)
+void * EXPORT Z_TagMallocDebug (int size, int tag)
 {
 	zhead_t	*z;
 
@@ -2797,6 +2799,12 @@ void *Z_TagMallocDebug (int size, int tag)
 	z->magic = Z_MAGIC_DEBUG;
 	z->tag = tag;
 	z->size = size;
+#ifdef _WIN32
+	z->allocationLocation = _ReturnAddress ();
+#else
+	//FIXME linux
+	z->allocationLocation = 0;
+#endif
 
 	z->next = z_chain.next;
 	z->prev = &z_chain;
@@ -2813,7 +2821,7 @@ void *Z_TagMallocDebug (int size, int tag)
 Z_TagMalloc
 ========================
 */
-void *Z_TagMallocRelease (int size, int tag)
+void * EXPORT Z_TagMallocRelease (int size, int tag)
 {
 	zhead_t	*z;
 
@@ -2847,6 +2855,10 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 	z_memloc_t	*loc, *last, *newentry;
 	byte		*b;
 
+#ifdef _WIN32
+	void *retAddr = _ReturnAddress();
+#endif
+
 	//aieeeee.
 	if (z_buggygame->intvalue)
 		size *= z_buggygame->intvalue;
@@ -2860,7 +2872,7 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 		}
 		else
 		{
-			Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes!");
+			Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes at 0x%p!", retAddr);
 		}
 	}
 
@@ -2881,6 +2893,12 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 	newentry->size = size;
 	newentry->next = last;
 	newentry->time = curtime;
+#ifdef _WIN32
+	newentry->allocationLocation = retAddr;
+#else
+	//FIXME linux
+	newentry->allocationLocation = 0;
+#endif
 	loc->next = newentry;
 
 	return (void *)b;
@@ -2900,7 +2918,7 @@ void EXPORT Z_FreeGame (void *buf)
 			if (*(int *)((byte *)buf + loc->size) != 0xFDFEFDFE)
 			{
 				Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
+				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago at 0x%p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
 			}
 			free_from_game = true;
 			Z_Free (buf);

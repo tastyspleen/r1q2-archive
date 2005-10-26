@@ -234,9 +234,9 @@ void FS_InitCache (void)
 	rb = rbinit (_compare, 1);
 #else
 #ifdef LINUX
-	rb = rbinit ((int (*)(const void *, const void *))strcmp, 0);
+	rb = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, 0);
 #else
-	rb = rbinit ((int (*)(const void *, const void *))Q_stricmp, 0);
+	rb = rbinit ((int (EXPORT *)(const void *, const void *))Q_stricmp, 0);
 #endif
 #endif
 
@@ -995,7 +995,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 
 	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
 
-	pack->rb = rbinit ((int (*)(const void *, const void *))strcmp, numpackfiles);
+	pack->rb = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, numpackfiles);
 
 	//entry = Z_TagMalloc (sizeof(packfile_t) * numpackfiles, TAGMALLOC_FSLOADPAK);
 
@@ -1026,7 +1026,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
 	return pack;
 }
 
-static int pakcmp (const void *a, const void *b)
+static int EXPORT pakcmp (const void *a, const void *b)
 {
 	if (*(int *)a > *(int *)b)
 		return 1;
@@ -1125,7 +1125,7 @@ static void FS_AddGameDirectory (const char *dir)
 	Sys_FindClose ();
 
 	//sort for filenames designed to override earlier pak files
-	qsort (filenames, total, sizeof(filenames[0]), (int (*)(const void *, const void *))strcmp);
+	qsort (filenames, total, sizeof(filenames[0]), (int (EXPORT *)(const void *, const void *))strcmp);
 	qsort (pakfiles, totalpaks, sizeof(pakfiles[0]), pakcmp);
 
 	//r1: load pak*.pak first

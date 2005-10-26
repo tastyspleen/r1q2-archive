@@ -1208,8 +1208,8 @@ Cmd_Init
 */
 void Cmd_Init (void)
 {
-	cmdtree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
-	aliastree = rbinit ((int (*)(const void *, const void *))strcmp, 0);
+	cmdtree = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, 0);
+	aliastree = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, 0);
 //
 // register our commands
 //

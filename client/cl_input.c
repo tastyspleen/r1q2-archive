@@ -866,6 +866,7 @@ void CL_SendCmd (void)
 	//
 
 	Netchan_Transmit (&cls.netchan, buf.cursize, buf.data);	
+
 	CL_InitCmd(); //jec - init the next usercmd buffer.
 }
 

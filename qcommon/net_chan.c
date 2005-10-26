@@ -158,8 +158,6 @@ called to open a channel to a remote system
 void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport, unsigned msglen)
 {
 	memset (chan, 0, sizeof(*chan));
-
-	MSG_initHuffman ();
 	
 	chan->sock = sock;
 	chan->remote_address = *adr;

@@ -32,10 +32,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <io.h>
 #include <conio.h>
 #include <process.h>
+#include <dbghelp.h>
 
 #ifdef USE_OPENSSL
 #define OPENSSLEXPORT __cdecl
 #include <openssl/sha.h>
+#endif
+
+#ifdef USE_CURL
+#include <curl/curl.h>
 #endif
 
 #include "../win32/conproc.h"
@@ -77,6 +82,9 @@ uint32	sys_frame_time;
 #ifdef USE_PYROADMIN
 extern		cvar_t	*pyroadminport;
 #endif
+
+cvar_t		*win_disableexceptionhandler = &uninitialized_cvar;
+cvar_t		*win_silentexceptionhandler = &uninitialized_cvar;
 
 //static HANDLE		qwclsemaphore;
 
@@ -157,7 +165,7 @@ void Sys_Error (const char *error, ...)
 	text[sizeof(text)-1] = 0;
 
 	if (strlen(text) < 900)
-		strcat (text, "\n\nPress Retry to cause a debug breakpoint.\n");
+		strcat (text, "\n\nPress Retry to cause a debug break (DEVELOPERS ONLY!)\n");
 
 rebox:;
 
@@ -165,7 +173,7 @@ rebox:;
 
 	if (ret == IDRETRY)
 	{
-		ret = MessageBox(NULL, "Do you really know what a debug breakpoint is, and what will happen when you click Yes?", "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_YESNO);
+		ret = MessageBox(NULL, "Please attach your debugger now to prevent the built in exception handler from catching the breakpoint. When ready, press Yes to cause a breakpoint or No to cancel.", "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_YESNO | MB_DEFBUTTON2);
 		if (ret == IDYES)
 			Q_DEBUGBREAKPOINT;
 		else
@@ -753,6 +761,8 @@ void Sys_Init (void)
 	win_priority = Cvar_Get ("win_priority", "0", 0);
 	win_priority->changed = _priority_changed;
 	win_priority->changed (win_priority, "0", win_priority->string);
+	win_disableexceptionhandler = Cvar_Get ("win_disableexceptionhandler", "0", 0);
+	win_silentexceptionhandler = Cvar_Get ("win_silentexceptionhandler", "0", 0);
 #endif
 }
 
@@ -1279,13 +1289,607 @@ void FixWorkingDirectory (void)
 	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
 
 	if (strlen(curDir) > (MAX_OSPATH - MAX_QPATH))
-		Sys_Error ("Current directory is too deep. Please move your Quake II installation to a shorter path.");
+		Sys_Error ("Current path is too long. Please move your Quake II installation to a shorter path.");
 
 	p = strrchr (curDir, '\\');
 	*p = 0;
 
 	SetCurrentDirectory (curDir);
 }
+
+typedef BOOL (WINAPI *ENUMERATELOADEDMODULES64) (HANDLE hProcess, PENUMLOADED_MODULES_CALLBACK64 EnumLoadedModulesCallback, PVOID UserContext);
+typedef DWORD (WINAPI *SYMSETOPTIONS) (DWORD SymOptions);
+typedef BOOL (WINAPI *SYMINITIALIZE) (HANDLE hProcess, PSTR UserSearchPath, BOOL fInvadeProcess);
+typedef BOOL (WINAPI *SYMCLEANUP) (HANDLE hProcess);
+typedef BOOL (WINAPI *STACKWALK64) (
+								DWORD MachineType,
+								HANDLE hProcess,
+								HANDLE hThread,
+								LPSTACKFRAME64 StackFrame,
+								PVOID ContextRecord,
+								PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine,
+								PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine,
+								PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine,
+								PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress
+								);
+
+typedef PVOID	(WINAPI *SYMFUNCTIONTABLEACCESS64) (HANDLE hProcess, DWORD64 AddrBase);
+typedef DWORD64 (WINAPI *SYMGETMODULEBASE64) (HANDLE hProcess, DWORD64 dwAddr);
+typedef BOOL	(WINAPI *SYMFROMADDR) (HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFO Symbol);
+typedef BOOL	(WINAPI *SYMGETMODULEINFO64) (HANDLE hProcess, DWORD64 dwAddr, PIMAGEHLP_MODULE64 ModuleInfo);
+
+typedef DWORD64 (WINAPI *SYMLOADMODULE64) (HANDLE hProcess, HANDLE hFile, PSTR ImageName, PSTR ModuleName, DWORD64 BaseOfDll, DWORD SizeOfDll);
+
+typedef BOOL (WINAPI *MINIDUMPWRITEDUMP) (
+	HANDLE hProcess,
+	DWORD ProcessId,
+	HANDLE hFile,
+	MINIDUMP_TYPE DumpType,
+	PMINIDUMP_EXCEPTION_INFORMATION ExceptionParam,
+	PMINIDUMP_USER_STREAM_INFORMATION UserStreamParam,
+	PMINIDUMP_CALLBACK_INFORMATION CallbackParam
+	);
+
+typedef HINSTANCE (WINAPI *SHELLEXECUTEA) (HWND hwnd, LPCTSTR lpOperation, LPCTSTR lpFile, LPCTSTR lpParameters, LPCTSTR lpDirectory, INT nShowCmd);
+
+SYMGETMODULEINFO64	fnSymGetModuleInfo64;
+SYMLOADMODULE64		fnSymLoadModule64;
+
+typedef BOOL (WINAPI *VERQUERYVALUE) (const LPVOID pBlock, LPTSTR lpSubBlock, PUINT lplpBuffer, PUINT puLen);
+typedef DWORD (WINAPI *GETFILEVERSIONINFOSIZE) (LPTSTR lptstrFilename, LPDWORD lpdwHandle);
+typedef BOOL (WINAPI *GETFILEVERSIONINFO) (LPTSTR lptstrFilename, DWORD dwHandle, DWORD dwLen, LPVOID lpData);
+
+VERQUERYVALUE			fnVerQueryValue;
+GETFILEVERSIONINFOSIZE	fnGetFileVersionInfoSize;
+GETFILEVERSIONINFO		fnGetFileVersionInfo;
+
+BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBase, ULONG ModuleSize, PVOID UserContext)
+{
+	VS_FIXEDFILEINFO *fileVersion;
+	BYTE	*verInfo;
+	DWORD	dummy, len;
+	FILE	*fhReport = (FILE *)UserContext;
+	CHAR	verString[32];
+
+	if (fnGetFileVersionInfo && fnVerQueryValue && fnGetFileVersionInfoSize)
+	{
+		if (len = (fnGetFileVersionInfoSize (ModuleName, &dummy)))
+		{
+			verInfo = LocalAlloc (LPTR, len);
+			if (fnGetFileVersionInfo (ModuleName, dummy, len, verInfo))
+			{
+				if (fnVerQueryValue (verInfo, "\\", (LPVOID)&fileVersion, &dummy))
+					sprintf (verString, "%d.%d.%d.%d", HIWORD(fileVersion->dwFileVersionMS), LOWORD(fileVersion->dwFileVersionMS), HIWORD(fileVersion->dwFileVersionLS), LOWORD(fileVersion->dwFileVersionLS));
+				else
+					strcpy (verString, "unknown");
+			}
+			else
+			{
+				strcpy (verString, "unknown");
+			}
+
+			LocalFree (verInfo);
+		}
+		else
+		{
+			strcpy (verString, "unknown");
+		}	
+	}
+	else
+	{
+		strcpy (verString, "unknown");
+	}	
+
+	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%d bytes, version %s)\n", ModuleBase, ModuleBase + ModuleSize, ModuleName, ModuleSize, verString);
+	return TRUE;
+}
+
+BOOL CALLBACK EnumerateLoadedModulesProcSymInfo (PSTR ModuleName, DWORD64 ModuleBase, ULONG ModuleSize, PVOID UserContext)
+{
+	IMAGEHLP_MODULE64	symInfo = {0};
+	FILE				*fhReport = (FILE *)UserContext;
+	//CHAR				szImageName[512];
+	PCHAR				symType;
+
+	symInfo.SizeOfStruct = sizeof(symInfo);
+
+	if (fnSymGetModuleInfo64 (GetCurrentProcess(), ModuleBase, &symInfo))
+	{
+		//WideCharToMultiByte (CP_UTF8, 0, symInfo.LoadedImageName, -1, szImageName, sizeof(szImageName), 0, NULL);
+
+		switch (symInfo.SymType)
+		{
+		case SymCoff:
+			symType = "COFF";
+			break;
+		case SymCv:
+			symType = "CV";
+			break;
+		case SymExport:
+			symType = "Export";
+			break;
+		case SymPdb:
+			symType = "PDB";
+			break;
+		case SymNone:
+			symType = "No";
+			break;
+		default:
+			symType = "Unknown";
+			break;
+		}
+
+		fprintf (fhReport, "%s, %s symbols loaded.\n", symInfo.LoadedImageName, symType);
+	}
+	else
+	{
+		int i = GetLastError ();
+		fprintf (fhReport, "%s, couldn't check symbols (error %d, DBGHELP.DLL too old?)\n", ModuleName, i);
+	}
+	
+	return TRUE;
+}
+
+CHAR	szModuleName[MAX_PATH];
+
+BOOL CALLBACK EnumerateLoadedModulesProcInfo (PSTR ModuleName, DWORD64 ModuleBase, ULONG ModuleSize, PVOID UserContext)
+{
+	DWORD	addr = (DWORD)UserContext;
+	if (addr > ModuleBase && addr < ModuleBase + ModuleSize)
+	{
+		strcpy (szModuleName, ModuleName);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+#ifdef USE_CURL
+static int EXPORT R1Q2UploadProgress (void *clientp, double dltotal, double dlnow, double ultotal, double ulnow)
+{
+	char	progressBuff[512];
+	DWORD	len, ret;
+	double	speed;
+	int		percent;
+
+	if (ultotal <= 0)
+		return 0;
+
+	curl_easy_getinfo ((CURL *)clientp, CURLINFO_SPEED_UPLOAD, &speed);
+
+	percent = (int)((ulnow / ultotal)*100.0f);
+
+	len = snprintf (progressBuff, sizeof(progressBuff)-1, "[%d%%] %g / %g bytes, %g bytes/sec.\n", percent, ulnow, ultotal, speed);
+	WriteConsole(GetStdHandle (STD_OUTPUT_HANDLE), progressBuff, len, &ret, NULL);
+
+	snprintf (progressBuff, sizeof(progressBuff)-1, "[%d%%] R1Q2 Crash Dump Uploader", percent);
+	SetConsoleTitle (progressBuff);
+
+	return 0;
+}
+
+extern cvar_t	*cl_http_proxy;
+VOID R1Q2UploadCrashDump (LPCSTR crashDump, LPCSTR crashText)
+{
+	struct curl_httppost* post = NULL;
+	struct curl_httppost* last = NULL;
+
+	CURL	*curl;
+
+	DWORD	lenDmp;
+	DWORD	lenTxt;
+	DWORD	ret;
+
+	BOOL	console = FALSE;
+
+	__try
+	{
+		lenDmp = Sys_FileLength (crashDump);
+		lenTxt = Sys_FileLength (crashText);
+
+		if (lenTxt == -1)
+			return;
+
+		if (AllocConsole ())
+			console = TRUE;
+
+		SetConsoleTitle ("R1Q2 Crash Dump Uploader");
+
+		if (console)
+			WriteConsole(GetStdHandle (STD_OUTPUT_HANDLE), "Connecting...\n", 14, &ret, NULL);
+
+		curl = curl_easy_init ();
+
+		/* Add simple file section */
+		if (lenDmp > 0)
+			curl_formadd (&post, &last, CURLFORM_PTRNAME, "minidump", CURLFORM_FILE, crashDump, CURLFORM_END);
+
+		curl_formadd (&post, &last, CURLFORM_PTRNAME, "report", CURLFORM_FILE, crashText, CURLFORM_END);
+
+		/* Set the form info */
+		curl_easy_setopt (curl, CURLOPT_HTTPPOST, post);
+
+		if (cl_http_proxy && !IsBadStringPtr (cl_http_proxy->string, 256))
+			curl_easy_setopt (curl, CURLOPT_PROXY, cl_http_proxy->string);
+
+		//curl_easy_setopt (curl, CURLOPT_UPLOAD, 1);
+		if (console)
+		{
+			curl_easy_setopt (curl, CURLOPT_PROGRESSFUNCTION, R1Q2UploadProgress);
+			curl_easy_setopt (curl, CURLOPT_PROGRESSDATA, curl);
+			curl_easy_setopt (curl, CURLOPT_NOPROGRESS, 0);
+		}
+		else
+		{
+			curl_easy_setopt (curl, CURLOPT_NOPROGRESS, 1);
+		}
+
+		curl_easy_setopt (curl, CURLOPT_FOLLOWLOCATION, 1);
+		curl_easy_setopt (curl, CURLOPT_USERAGENT, R1Q2_VERSION_STRING);
+		curl_easy_setopt (curl, CURLOPT_URL, "http://www.r1ch.net/stuff/r1q2/receiveCrashDump.php");
+
+		if (curl_easy_perform (curl) != CURLE_OK)
+		{
+			if (!win_silentexceptionhandler->intvalue)
+				MessageBox (NULL, "An error occured while trying to upload the crash dump. Please post it manually on the R1Q2 forums.", "Upload Error", MB_ICONEXCLAMATION | MB_OK);
+		}
+		else
+		{
+			if (!win_silentexceptionhandler->intvalue)
+				MessageBox (NULL, "Upload completed. Thanks for submitting your crash report!\n\nIf you would like feedback on the cause of this crash, please post a brief note on the R1Q2 forums describing what you were doing at the time the exception occured. If possible, please also attach the R1Q2CrashLog.txt file.", "Upload Complete", MB_ICONINFORMATION | MB_OK);
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		if (!win_silentexceptionhandler->intvalue)
+			MessageBox (NULL, "An exception occured while trying to upload the crash dump. Please post it manually on the R1Q2 forums.", "Upload Error", MB_ICONEXCLAMATION | MB_OK);
+	}
+
+	if (console)
+		FreeConsole ();
+}
+#endif
+
+DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionInfo)
+{
+	FILE	*fhReport;
+
+	HANDLE	hProcess;
+
+	HMODULE	hDbgHelp, hVersion;
+
+	MINIDUMP_EXCEPTION_INFORMATION miniInfo;
+	STACKFRAME64	frame = {0};
+	CONTEXT			context = *exceptionInfo->ContextRecord;
+	SYMBOL_INFO		*symInfo;
+	DWORD64			fnOffset;
+	CHAR			tempPath[MAX_PATH];
+	CHAR			dumpPath[MAX_PATH];
+	OSVERSIONINFO	osInfo;
+	SYSTEMTIME		timeInfo;
+
+	ENUMERATELOADEDMODULES64	fnEnumerateLoadedModules64;
+	SYMSETOPTIONS				fnSymSetOptions;
+	SYMINITIALIZE				fnSymInitialize;
+	STACKWALK64					fnStackWalk64;
+	SYMFUNCTIONTABLEACCESS64	fnSymFunctionTableAccess64;
+	SYMGETMODULEBASE64			fnSymGetModuleBase64;
+	SYMFROMADDR					fnSymFromAddr;
+	SYMCLEANUP					fnSymCleanup;
+	MINIDUMPWRITEDUMP			fnMiniDumpWriteDump;
+
+	DWORD						ret, i;
+
+	CHAR						searchPath[MAX_PATH], *p, *gameMsg;
+
+	if (win_disableexceptionhandler->intvalue == 2)
+		return EXCEPTION_EXECUTE_HANDLER;
+	else if (win_disableexceptionhandler->intvalue)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+#ifndef DEDICATED_ONLY
+	ShowCursor (TRUE);
+	if (cl_hwnd)
+		DestroyWindow (cl_hwnd);
+#else
+	if (hwnd_Server)
+		EnableWindow (hwnd_Server, FALSE);
+#endif
+
+#ifdef _DEBUG
+	ret = MessageBox (NULL, "EXCEPTION_CONTINUE_SEARCH?", "Unhandled Exception", MB_ICONERROR | MB_YESNO);
+	if (ret == IDYES)
+		return EXCEPTION_CONTINUE_SEARCH;
+#endif
+
+#ifndef _DEBUG
+	if (IsDebuggerPresent ())
+		return EXCEPTION_CONTINUE_SEARCH;
+#endif
+
+	hDbgHelp = LoadLibrary ("DBGHELP");
+	hVersion = LoadLibrary ("VERSION");
+
+	if (!hDbgHelp)
+	{
+		if (!win_silentexceptionhandler->intvalue)
+			MessageBox (NULL, "R1Q2 has encountered an unhandled exception and must be terminated. No crash report could be generated since R1Q2 failed to load DBGHELP.DLL. Please obtain DBGHELP.DLL and place it in your R1Q2 directory to enable crash dump generation.", "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	if (hVersion)
+	{
+		fnVerQueryValue = (VERQUERYVALUE)GetProcAddress (hVersion, "VerQueryValueA");
+		fnGetFileVersionInfo = (GETFILEVERSIONINFO)GetProcAddress (hVersion, "GetFileVersionInfoA");
+		fnGetFileVersionInfoSize = (GETFILEVERSIONINFOSIZE)GetProcAddress (hVersion, "GetFileVersionInfoSizeA");
+	}
+
+	fnEnumerateLoadedModules64 = (ENUMERATELOADEDMODULES64)GetProcAddress (hDbgHelp, "EnumerateLoadedModules64");
+	fnSymSetOptions = (SYMSETOPTIONS)GetProcAddress (hDbgHelp, "SymSetOptions");
+	fnSymInitialize = (SYMINITIALIZE)GetProcAddress (hDbgHelp, "SymInitialize");
+	fnSymFunctionTableAccess64 = (SYMFUNCTIONTABLEACCESS64)GetProcAddress (hDbgHelp, "SymFunctionTableAccess64");
+	fnSymGetModuleBase64 = (SYMGETMODULEBASE64)GetProcAddress (hDbgHelp, "SymGetModuleBase64");
+	fnStackWalk64 = (STACKWALK64)GetProcAddress (hDbgHelp, "StackWalk64");
+	fnSymFromAddr = (SYMFROMADDR)GetProcAddress (hDbgHelp, "SymFromAddr");
+	fnSymCleanup = (SYMCLEANUP)GetProcAddress (hDbgHelp, "SymCleanup");
+	fnSymGetModuleInfo64 = (SYMGETMODULEINFO64)GetProcAddress (hDbgHelp, "SymGetModuleInfo64");
+	//fnSymLoadModule64 = (SYMLOADMODULE64)GetProcAddress (hDbgHelp, "SymLoadModule64");
+	fnMiniDumpWriteDump = (MINIDUMPWRITEDUMP)GetProcAddress (hDbgHelp, "MiniDumpWriteDump");
+
+	if (!fnEnumerateLoadedModules64 || !fnSymSetOptions || !fnSymInitialize || !fnSymFunctionTableAccess64 ||
+		!fnSymGetModuleBase64 || !fnStackWalk64 || !fnSymFromAddr || !fnSymCleanup || !fnSymGetModuleInfo64)// ||
+		//!fnSymLoadModule64)
+	{
+		FreeLibrary (hDbgHelp);
+		if (hVersion)
+			FreeLibrary (hVersion);
+		MessageBox (NULL, "R1Q2 has encountered an unhandled exception and must be terminated. No crash report could be generated since the version of DBGHELP.DLL in use is too old. Please obtain an up-to-date DBGHELP.DLL and place it in your R1Q2 directory to enable crash dump generation.", "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	if (!win_silentexceptionhandler->intvalue)
+		ret = MessageBox (NULL, "R1Q2 has encountered an unhandled exception and must be terminated. Would you like to generate a crash report?", "Unhandled Exception", MB_ICONEXCLAMATION | MB_YESNO);
+	else
+		ret = IDYES;
+
+	if (ret == IDNO)
+	{
+		FreeLibrary (hDbgHelp);
+		if (hVersion)
+			FreeLibrary (hVersion);
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	hProcess = GetCurrentProcess();
+
+	fnSymSetOptions (SYMOPT_UNDNAME | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_ANYTHING);
+
+	GetModuleFileName (NULL, searchPath, sizeof(searchPath));
+	p = strrchr (searchPath, '\\');
+	if (p)*p = 0;
+
+	GetSystemTime (&timeInfo);
+
+	i = 1;
+
+	for (;;)
+	{
+		snprintf (tempPath, sizeof(tempPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.txt", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+		if (Sys_FileLength (tempPath) == -1)
+			break;
+		i++;
+	}
+
+	fhReport = fopen (tempPath, "wb");
+
+	if (!fhReport)
+	{
+		FreeLibrary (hDbgHelp);
+		if (hVersion)
+			FreeLibrary (hVersion);
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+#ifdef _DEBUG
+	//strcat (searchPath, ";c:\\websyms");
+#endif
+
+	fnSymInitialize (hProcess, searchPath, TRUE);
+
+#ifdef _DEBUG
+	GetModuleFileName (NULL, searchPath, sizeof(searchPath));
+	p = strrchr (searchPath, '\\');
+	if (p)*p = 0;
+#endif
+
+	frame.AddrFrame.Offset = context.Ebp;
+	frame.AddrFrame.Mode = AddrModeFlat;
+
+	frame.AddrPC.Offset = context.Eip;
+	frame.AddrPC.Mode = AddrModeFlat;
+
+	frame.AddrStack.Offset = context.Esp;
+	frame.AddrStack.Mode = AddrModeFlat;
+
+	symInfo = LocalAlloc (LPTR, sizeof(*symInfo) + 128);
+	symInfo->SizeOfStruct = sizeof(SYMBOL_INFO);
+	symInfo->MaxNameLen = 128;
+	fnOffset = 0;
+
+	osInfo.dwOSVersionInfoSize = sizeof(osInfo);
+	GetVersionEx (&osInfo);
+
+	strcpy (szModuleName, "<unknown>");
+	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)context.Eip);
+
+	strlwr (szModuleName);
+
+	if (strstr (szModuleName, "gamex86"))
+		gameMsg = 
+			"\nIt is very likely that the Game DLL you are using for the mod you run is at fault.\n"
+			"Please send this crash report to the author(s) of the mod you are running.";
+	else if (strstr (szModuleName, "r1q2.exe") || strstr (szModuleName, "ref_r1gl.dll") || strstr (szModuleName, "dedicated.exe"))
+#ifdef USE_CURL
+		gameMsg = 
+		"\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\n"
+		"if when prompted, you submitted the crash report to r1ch.net. This will aid in\n"
+		"finding the fault that caused this exception.";
+#else
+		gameMsg = 
+		"\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\n"
+		"if you submitted the crash report to r1ch.net forums. This will aid in finding\n"
+		"the fault that caused this exception.";
+#endif
+	else
+		gameMsg = "";
+		
+#ifdef USE_CURL
+	fprintf (fhReport,
+		"R1Q2 encountered an unhandled exception and has terminated. If you are able to\n"
+		"reproduce this crash, please submit the crash report to r1ch.net when prompted or\n"
+		"post this file and the crash dump .dmp file (if available) on the R1Q2 forums at\n"
+		"http://www.r1ch.net/forum/index.php?board=8.0\n"
+		"\n"
+		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
+#else
+	fprintf (fhReport,
+		"R1Q2 encountered an unhandled exception and has terminated. If you are able to\n"
+		"reproduce this crash, please submit the crash report on the R1Q2 forums at\n"
+		"http://www.r1ch.net/forum/index.php?board=8.0 - include this .txt file and the\n"
+		".dmp file (if available)\n"
+		"\n"
+		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
+#endif
+
+	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\nFault address: %p (%s)\n", exceptionCode, context.Eip, szModuleName);
+
+	fprintf (fhReport, "R1Q2 module: %s (Version: %s)\n", binary_name, R1Q2_VERSION_STRING);
+	fprintf (fhReport, "Windows version: %d.%d (Build %d) %s\n\n", osInfo.dwMajorVersion, osInfo.dwMinorVersion, osInfo.dwBuildNumber, osInfo.szCSDVersion);
+
+	fprintf (fhReport, "Symbol information:\n");
+	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcSymInfo, (VOID *)fhReport);
+
+	fprintf (fhReport, "\nEnumerate loaded modules:\n");
+	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcDump, (VOID *)fhReport);
+
+	fprintf (fhReport, "\nStack trace:\n");
+	fprintf (fhReport, "Stack    EIP      Arg0     Arg1     Arg2     Arg3     Address\n");
+	while (fnStackWalk64 (IMAGE_FILE_MACHINE_I386, hProcess, GetCurrentThread(), &frame, &context, NULL, (PFUNCTION_TABLE_ACCESS_ROUTINE64)fnSymFunctionTableAccess64, (PGET_MODULE_BASE_ROUTINE64)fnSymGetModuleBase64, NULL))
+	{
+		strcpy (szModuleName, "<unknown>");
+		fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)(DWORD)frame.AddrPC.Offset);
+
+		p = strrchr (szModuleName, '\\');
+		if (p)
+		{
+			p++;
+		}
+		else
+		{
+			p = szModuleName;
+		}
+
+		if (fnSymFromAddr (hProcess, frame.AddrPC.Offset, &fnOffset, symInfo) && !(symInfo->Flags & SYMFLAG_EXPORT))
+		{
+			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!%s+0x%I64x\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, symInfo->Name, fnOffset, symInfo->Tag);
+		}
+		else
+		{
+			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!0x%I64p\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, frame.AddrPC.Offset);
+		}
+	}
+
+	if (fnMiniDumpWriteDump)
+	{
+		HANDLE	hFile;
+
+		GetTempPath (sizeof(dumpPath)-16, dumpPath);
+		strcat (dumpPath, "R1Q2CrashDump.dmp");
+
+		hFile = CreateFile (dumpPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile != INVALID_HANDLE_VALUE)
+		{
+			miniInfo.ClientPointers = TRUE;
+			miniInfo.ExceptionPointers = exceptionInfo;
+			miniInfo.ThreadId = GetCurrentThreadId ();
+			if (fnMiniDumpWriteDump (hProcess, GetCurrentProcessId(), hFile, MiniDumpWithDataSegs, &miniInfo, NULL, NULL))
+			{
+				gzFile	gz;
+				FILE	*fh;
+				BYTE	buff[0xFFFF];
+				int		len;
+
+				CloseHandle (hFile);
+
+				fh = fopen (dumpPath, "rb");
+				if (fh)
+				{
+					CHAR zPath[MAX_PATH];
+					snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.dmp.gz", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+					gz = gzopen (zPath, "wb");
+					if (gz)
+					{
+						while ((len = fread (buff, 1, sizeof(buff), fh)) > 0)
+						{
+							gzwrite (gz, buff, len);
+						}
+						gzclose (gz);
+						fclose (fh);
+						DeleteFile (dumpPath);
+						strcpy (dumpPath, zPath);
+					}
+				}
+				fprintf (fhReport, "\nA minidump was saved to %s.\nPlease include this file when posting a crash report.\n", dumpPath);
+			}
+			else
+			{
+				CloseHandle (hFile);
+				DeleteFile (dumpPath);
+			}
+		}
+	}
+	else
+	{
+		fprintf (fhReport, "\nA minidump could not be created. Minidumps are only available on Windows XP or later.\n");
+	}
+
+	fclose (fhReport);
+
+	LocalFree (symInfo);
+
+	fnSymCleanup (hProcess);
+
+	if (!win_silentexceptionhandler->intvalue)
+	{
+		HMODULE shell;
+		shell = LoadLibrary ("SHELL32");
+		if (shell)
+		{
+			SHELLEXECUTEA fncOpen = (SHELLEXECUTEA)GetProcAddress (shell, "ShellExecuteA");
+			if (fncOpen)
+                fncOpen (NULL, NULL, tempPath, NULL, searchPath, SW_SHOWDEFAULT);
+
+			FreeLibrary (shell);
+		}
+	}
+
+#ifdef USE_CURL
+	if (!win_silentexceptionhandler->intvalue)
+		ret = MessageBox (NULL, "Would you like to upload this crash report to r1ch.net for analysis? If you are able to reproduce this crash exactly, please do not submit multiple reports as this will only delay processing.", "Unhandled Exception", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2);
+	else
+		ret = IDYES;
+
+	if (ret == IDYES)
+		R1Q2UploadCrashDump (dumpPath, tempPath);
+#endif
+
+	FreeLibrary (hDbgHelp);
+	if (hVersion)
+		FreeLibrary (hVersion);
+
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
+
 
 /*
 ==================
@@ -1312,7 +1916,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
         return 0;
 
 	if (hInstance)
-		Q_strncpy (cmdline, lpCmdLine, sizeof(cmdline)-1);
+		strncpy (cmdline, lpCmdLine, sizeof(cmdline)-1);
 
 	global_hInstance = hInstance;
 
@@ -1333,50 +1937,57 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	}
 #endif
 
-	Qcommon_Init (argc, argv);
-
-	//_controlfp( _PC_24, _MCW_PC );
-
-	oldtime = Sys_Milliseconds ();
-	/* main window message loop */
-	for (;;)
+	__try
 	{
-		// if at a full screen console, don't update unless needed
-		//if (Minimized
-/*#ifndef NO_SERVER			
-			|| (dedicated->intvalue)
-#endif*/
-		//)
-		//{
-		//	Sleep (1);
-		//}
+		Qcommon_Init (argc, argv);
 
-		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
+		//_controlfp( _PC_24, _MCW_PC );
+
+		oldtime = Sys_Milliseconds ();
+		/* main window message loop */
+		for (;;)
 		{
-			//if (GetMessage (&msg, NULL, 0, 0) == -1)
-			//	Com_Quit ();
-			sys_msg_time = msg.time;
+			// if at a full screen console, don't update unless needed
+			//if (Minimized
+	/*#ifndef NO_SERVER			
+				|| (dedicated->intvalue)
+	#endif*/
+			//)
+			//{
+			//	Sleep (1);
+			//}
 
-#ifndef NO_SERVER
-			if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
+			while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 			{
-#endif
-				TranslateMessage (&msg);
-   				DispatchMessage (&msg);
-#ifndef NO_SERVER
+				//if (GetMessage (&msg, NULL, 0, 0) == -1)
+				//	Com_Quit ();
+				sys_msg_time = msg.time;
+
+	#ifndef NO_SERVER
+				if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
+				{
+	#endif
+					TranslateMessage (&msg);
+   					DispatchMessage (&msg);
+	#ifndef NO_SERVER
+				}
+	#endif
 			}
-#endif
+
+			do
+			{
+				newtime = Sys_Milliseconds ();
+				time = newtime - oldtime;
+			} while (time < 1);
+
+			Qcommon_Frame (time);
+
+			oldtime = newtime;
 		}
-
-		do
-		{
-			newtime = Sys_Milliseconds ();
-			time = newtime - oldtime;
-		} while (time < 1);
-
-		Qcommon_Frame (time);
-
-		oldtime = newtime;
+	}
+	__except (R1Q2ExceptionHandler(GetExceptionCode(), GetExceptionInformation()))
+	{
+		return 1;
 	}
 
 	return 0;

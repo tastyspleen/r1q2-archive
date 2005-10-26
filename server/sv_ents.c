@@ -170,7 +170,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	qboolean					enhanced;
 	player_state_new			*ps;
 	const player_state_new		*ops;
-	qboolean					noDeltaOptimize;
+	qboolean					needViewAngleDeltas;
 
 	ps = &to->ps;
 
@@ -272,11 +272,14 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 #endif
 	}
 
-
-	noDeltaOptimize = (sv_optimize_deltas->intvalue == 1 && client->protocol != ENHANCED_PROTOCOL_VERSION) || ps->pmove.pm_type >= PM_DEAD || client->settings[CLSET_RECORDING];
+	needViewAngleDeltas =
+		((client->settings[CLSET_RECORDING]) ||
+        (sv_optimize_deltas->intvalue == 1 && client->protocol != ENHANCED_PROTOCOL_VERSION) ||
+        (ps->pmove.pm_type >= PM_DEAD) ||
+		(sv_optimize_deltas->intvalue == 0));
 
 	//why are we even sending these back to client? optimize.
-	if (sv_optimize_deltas->intvalue == 0 || noDeltaOptimize)
+	if (needViewAngleDeltas)
 	{
 		/*qboolean	deltaHack;
 	

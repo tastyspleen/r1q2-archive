@@ -416,7 +416,6 @@ typedef enum
 	CLSET_NOGUN,
 	CLSET_NOBLEND,
 	CLSET_RECORDING,
-	CLSET_HTTP_DOWNLOADING,
 	CLSET_MAX
 } clientsetting_t;
 
@@ -994,7 +993,7 @@ int		EXPORT FS_LoadFile (const char *path, void /*@out@*/ /*@null@*/**buffer);
 // a null buffer will just return the file length without loading
 // a -1 length is not present
 
-void	FS_Read (void *buffer, int len, FILE *f);
+void	EXPORT FS_Read (void *buffer, int len, FILE *f);
 // properly handles partial reads
 
 void	EXPORT FS_FreeFile (void *buffer);
@@ -1109,8 +1108,8 @@ enum tagmalloc_tags_e
 };
 
 
-extern void (*Z_Free)(const void *buf);
-extern void *(*Z_TagMalloc)(int size, int tag);
+extern void (EXPORT *Z_Free)(const void *buf);
+extern void *(EXPORT *Z_TagMalloc)(int size, int tag);
 
 //void EXPORT Z_Free (void *ptr);
 //void *Z_TagMalloc (int size, int tag);
