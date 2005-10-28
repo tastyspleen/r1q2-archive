@@ -30,7 +30,7 @@ int16	*snd_out;
 
 void EXPORT S_WriteLinearBlastStereo16 (void);
 
-#ifndef _WIN32
+#if !defined _WIN32 || defined _M_AMD64
 void EXPORT S_WriteLinearBlastStereo16 (void)
 {
 	int		i;
@@ -363,8 +363,7 @@ void S_InitScaletable (void)
 	}
 }
 
-
-#ifndef _WIN32
+#if !defined _WIN32 || defined _M_AMD64
 void EXPORT S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	int 	data;

@@ -307,6 +307,11 @@ void Sys_Error (const char *error, ...)
 
 } 
 
+void Sys_DebugBreak (void)
+{
+	__asm ("int $3");
+}
+
 void Sys_Warn (char *warning, ...)
 { 
     va_list     argptr;

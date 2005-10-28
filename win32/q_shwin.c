@@ -43,16 +43,16 @@ static HANDLE	membase;
 static byte	*membase;
 #endif
 
-#define TBUFFERLEN 8192
-static BYTE *tempBuff;
-static int tempBuffSize;;
+//#define TBUFFERLEN 8192
+//static BYTE *tempBuff;
+//static int tempBuffSize;;
 
 void *Hunk_Begin (int maxsize)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
 	cursize = 0;
-	tempBuff = NULL;
-	tempBuffSize = TBUFFERLEN;
+//	tempBuff = NULL;
+//	tempBuffSize = TBUFFERLEN;
 	hunkmaxsize = maxsize;
 #if VIRTUAL_ALLOC
 	membase = VirtualAlloc (NULL, maxsize, MEM_RESERVE, PAGE_NOACCESS);
@@ -97,7 +97,7 @@ void *Hunk_Alloc (int realsize)
 	// commit pages as needed
 	//buf = VirtualAlloc (membase+cursize, size, MEM_COMMIT, PAGE_READWRITE);
 	{
-		if (realsize < 256)
+		/*if (realsize < 256)
 		{
 			if (tempBuffSize + realsize > TBUFFERLEN)
 			{
@@ -114,7 +114,7 @@ void *Hunk_Alloc (int realsize)
 			//tinyCount += size;
 			tempBuffSize += realsize;
 			return (void *)(tempBuff + tempBuffSize - realsize);
-		}
+		}*/
 		buf = VirtualAllocEx (GetCurrentProcess(), membase, cursize+size, MEM_COMMIT, PAGE_READWRITE);
 		if (!buf)
 		{
@@ -314,6 +314,11 @@ void _STOP_PERFORMANCE_TIMER (void)
 #endif
 #endif
 
+void Sys_DebugBreak (void)
+{
+	DebugBreak ();
+}
+
 /*
 ::/ \::::::.
 :/___\:::::::.
@@ -346,6 +351,7 @@ ____________________________________________________________________________
 
 //XXX: this breaks on strings that contain high ascii chars! not safe to use for measuring string
 //length to strcpy() into.
+#if !defined _M_AMD64
 size_t __cdecl fast_strlen(const char *s)
 {
     __asm
@@ -457,5 +463,6 @@ int __cdecl fast_tolower(int c)
 		finish1:
 	}
 }
+#endif
 //============================================
 

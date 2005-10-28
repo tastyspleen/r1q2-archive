@@ -299,7 +299,7 @@ void NET_Sleep(int msec)
 	FD_SET(ip_sockets[NS_SERVER], &fdset); // network socket
 	timeout.tv_sec = msec/1000;
 	timeout.tv_usec = (msec%1000)*1000;
-	select(ip_sockets[NS_SERVER]+1, &fdset, NULL, NULL, &timeout);
+	select ((int)(ip_sockets[NS_SERVER]+1), &fdset, NULL, NULL, &timeout);
 }
 #endif
 
@@ -388,5 +388,5 @@ int NET_Client_Sleep (int msec)
 
 	timeout.tv_sec = msec/1000;
 	timeout.tv_usec = (msec%1000)*1000;
-	return select(i+1, &fdset, NULL, NULL, &timeout);
+	return select ((int)(i+1), &fdset, NULL, NULL, &timeout);
 }

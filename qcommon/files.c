@@ -1183,7 +1183,7 @@ See if a file exists in the mod directory/paks (ignores baseq2)
 */
 qboolean FS_ExistsInGameDir (char *filename)
 {
-	int				len;
+	size_t			len;
 	char			*gamedir;
 	char			lowered[MAX_QPATH];
 	searchpath_t	*search;

@@ -1200,6 +1200,10 @@ void CM_ClipBoxToBrush (vec3_t mins, vec3_t maxs, vec3_t p1, vec3_t p2,
 		{
 			if (FLOAT_LT_ZERO(enterfrac))
 				enterfrac = 0;
+			
+			if (!leadside)
+				Com_Error (ERR_DROP, "CM_ClipBoxToBrush: missing leadside");
+
 			trace->fraction = enterfrac;
 			trace->plane = *clipplane;
 			trace->surface = &(leadside->surface->c);

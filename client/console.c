@@ -655,7 +655,7 @@ void Con_DrawNotify (void)
 				break;
 			case CHAT_MODE_CUSTOM:
 				DrawString (8, v, chat_custom_prompt);
-				skip = strlen (chat_custom_prompt)+1;
+				skip = (int)strlen (chat_custom_prompt)+1;
 				break;
 		}
 

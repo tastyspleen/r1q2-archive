@@ -419,6 +419,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	//r1: if we're stuck with udp, may as well make best use of the bandwidth...
 	if (dataIsCompressed)
 	{
+#ifndef NO_ZLIB
 		uint16		uncompressedLen;
 		byte		uncompressed[0xFFFF];
 
@@ -430,6 +431,9 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		ZLibDecompress (net_message_buffer + net_message.readcount, size, uncompressed, uncompressedLen, -15);
 		fwrite (uncompressed, 1, uncompressedLen, cls.download);
 		Com_DPrintf ("svc_zdownload(%s): %d -> %d\n", cls.downloadname, size, uncompressedLen);
+#else
+		Com_Error (ERR_DROP, "Received a unrequested compressed download");
+#endif
 	}
 	else
 	{
@@ -624,6 +628,7 @@ void CL_ParseBaseline (void)
 
 void CL_ParseZPacket (void)
 {
+#ifndef NO_ZLIB
 	byte buff_in[MAX_MSGLEN];
 	byte buff_out[0xFFFF];
 
@@ -649,6 +654,9 @@ void CL_ParseZPacket (void)
 	net_message = old;
 
 	Com_DPrintf ("Got a ZPacket, %d->%d\n", uncompressed_len + 4, compressed_len);
+#else
+	Com_Error (ERR_DROP, "Receied a zPacket but no zlib in this binary");
+#endif
 }
 
 
@@ -1121,7 +1129,7 @@ void CL_ParseServerMessage (void)
 
 #ifdef _DEBUG
 		if (cmd == 31)
-			DEBUGBREAKPOINT;
+			Q_DEBUGBREAKPOINT;
 #endif
 
 		//r1: more hacky bit stealing in the name of bandwidth
@@ -1282,7 +1290,7 @@ void CL_ParseServerMessage (void)
 		case svc_packetentities:
 		case svc_deltapacketentities:
 #ifdef _DEBUG
-			DEBUGBREAKPOINT;
+			Q_DEBUGBREAKPOINT;
 #endif
 			Com_Error (ERR_DROP, "Out of place frame data");
 			break;
@@ -1306,7 +1314,7 @@ void CL_ParseServerMessage (void)
 
 		default:
 #ifdef _DEBUG
-			DEBUGBREAKPOINT;
+			Q_DEBUGBREAKPOINT;
 #endif
 			if (developer->intvalue)
 			{

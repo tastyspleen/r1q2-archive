@@ -23,11 +23,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef _QCOMMON_H
 
 #ifdef NDEBUG
-#include "../build.h"
-#define	VERSION		"b"BUILD
+	#include "../build.h"
+	#define	VERSION		"b"BUILD
 #else
-#define BUILD "DEBUG BUILD"
-#define	VERSION		BUILD
+	#define BUILD "DEBUG BUILD"
+	#define	VERSION		BUILD
 #endif
 
 #include "../game/q_shared.h"
@@ -35,69 +35,70 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	BASEDIRNAME	"baseq2"
 
 #ifdef _WIN32
-#ifdef _WIN64
-#ifdef NDEBUG
-#define BUILDSTRING "Win64 RELEASE"
-#else
-#define BUILDSTRING "Win64 DEBUG"
-#endif
-#else
-#ifdef NDEBUG
-#define BUILDSTRING "Win32 RELEASE"
-#else
-#define BUILDSTRING "Win32 DEBUG"
-#endif
-#endif
+	#ifdef _WIN64
+		#ifdef NDEBUG
+			#define BUILDSTRING "Win64 RELEASE"
+		#else
+			#define BUILDSTRING "Win64 DEBUG"
+		#endif
+	#else
+		#ifdef NDEBUG
+			#define BUILDSTRING "Win32 RELEASE"
+		#else
+			#define BUILDSTRING "Win32 DEBUG"
+		#endif
+	#endif
 
-#ifdef _WIN64
-#define	CPUSTRING	"IA64"
-#elif defined _M_IX86
-#define	CPUSTRING	"x86"
-#elif defined _M_ALPHA
-#define	CPUSTRING	"AXP"
-#endif
+	#ifdef _M_AMD64 
+		#define	CPUSTRING	"AMD64"
+	#elif defined _M_IX86
+		#define	CPUSTRING	"x86"
+	#elif defined _M_IA64
+		#define	CPUSTRING	"IA64"
+	#elif defined _M_ALPHA
+		#define	CPUSTRING	"AXP"
+	#endif
 
 #elif defined __linux__
 
-#define BUILDSTRING "Linux"
-#define __cdecl
+	#define BUILDSTRING "Linux"
+	#define __cdecl
 
-#ifdef __i386__
-#define CPUSTRING "i386"
-#elif defined __alpha__
-#define CPUSTRING "axp"
-#elif defined __x86_64__
-#define CPUSTRING "x86_64"
-#else
-#define CPUSTRING "Unknown"
-#endif
+	#ifdef __i386__
+		#define CPUSTRING "i386"
+	#elif defined __alpha__
+		#define CPUSTRING "axp"
+	#elif defined __x86_64__
+		#define CPUSTRING "x86-64"
+	#else
+		#define CPUSTRING "Unknown"
+	#endif
 
 #elif defined __sun__
 
-#define BUILDSTRING "Solaris"
+	#define BUILDSTRING "Solaris"
 
-#ifdef __i386__
-#define CPUSTRING "i386"
-#else
-#define CPUSTRING "sparc"
-#endif
+	#ifdef __i386__
+		#define CPUSTRING "i386"
+	#else
+		#define CPUSTRING "sparc"
+	#endif
 
 #elif defined __FreeBSD__
 
 #define BUILDSTRING "FreeBSD"
 
-#ifdef __i386__
-#define CPUSTRING "i386"
-#elif defined __x86_64__
-#define CPUSTRING "x86_64"
-#else
-#define CPUSTRING "Unknown"
-#endif
+	#ifdef __i386__
+		#define CPUSTRING "i386"
+	#elif defined __x86_64__
+		#define CPUSTRING "x86_64"
+	#else
+		#define CPUSTRING "Unknown"
+	#endif
 
 #else	// !WIN32
 
-#define BUILDSTRING "NON-WIN32"
-#define	CPUSTRING	"NON-WIN32"
+	#error Unknown architecture, please update qcommon.h!
 
 #endif
 
@@ -105,19 +106,25 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //in the SIGSEGV handler to help me determine build info
 //from crash reports. Users will never see this.
 #ifdef R1RELEASE
-#define RELEASESTRING "Binary Build (" __DATE__ ")"
-#if R1RELEASE == 1
-#define R1BINARY "r1q2ded"
-#elif R1RELEASE == 2
-#define R1BINARY "r1q2ded-old"
-#elif R1RELEASE == 3
-#define R1BINARY "r1q2ded-x86_64"
+	#define RELEASESTRING "Binary Build (" __DATE__ ")"
+	#if R1RELEASE == 1
+		#define R1BINARY "r1q2ded"
+	#elif R1RELEASE == 2
+		#define R1BINARY "r1q2ded-old"
+	#elif R1RELEASE == 3
+		#define R1BINARY "r1q2ded-x86_64"
+	#elif R1RELEASE == 4
+		#define R1BINARY "DEDICATED-x86"
+	#elif R1RELEASE == 5
+		#define R1BINARY "R1Q2-x86"
+	#elif R1RELEASE == 6
+		#define R1BINARY "R1Q2-AMD64"
+	#else
+		#error What the hell is going on here
+	#endif
 #else
-#error What the hell is going on here
-#endif
-#else
-#define R1BINARY "R1Q2"
-#define RELEASESTRING "Source Build"
+	#define R1BINARY "R1Q2"
+	#define RELEASESTRING "Source Build"
 #endif
 
 #define R1Q2_VERSION_STRING "R1Q2 " VERSION " " CPUSTRING " " __DATE__ " " BUILDSTRING
@@ -318,7 +325,7 @@ char *CopyString (const char *in, int tag);
 
 void StripHighBits (char *string, int highbits);
 void ExpandNewLines (char *string);
-const char *MakePrintable (const void *s, unsigned numchars);
+const char *MakePrintable (const void *s, size_t numchars);
 qboolean isvalidchar (int c);
 
 //============================================================================
@@ -1124,7 +1131,7 @@ void Qcommon_Init (int argc, char **argv);
 void Qcommon_Frame (int msec);
 void Qcommon_Shutdown (void);
 
-#ifdef _WIN32
+#if defined _WIN32 && !defined _M_AMD64
 size_t __cdecl fast_strlen(const char *s);
 void __cdecl fast_strlwr(char *s);
 int __cdecl fast_tolower(int c);

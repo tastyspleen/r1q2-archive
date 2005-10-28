@@ -27,7 +27,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <openssl/md4.h>
 #endif
 
+#ifndef _M_AMD64
 #include <setjmp.h>
+#endif
 
 #define	MAXPRINTMSG	4096
 
@@ -49,7 +51,9 @@ static char	*com_argv[MAX_NUM_ARGVS+1];
 char	*binary_name;
 
 //int		realtime;
+#ifndef _M_AMD64
 jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
+#endif
 
 //static FILE	*log_stats_file;
 
@@ -413,7 +417,11 @@ void Com_Error (int code, const char *fmt, ...)
 		CL_Drop (false, true);
 #endif
 		recursive = false;
+#ifdef _M_AMD64
+		Sys_Error ("AMD64 does not support longjmp, try not to cause any errors");
+#else
 		longjmp (abortframe, -1);
+#endif
 	}
 	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET || code == ERR_HARD)
 	{
@@ -437,7 +445,11 @@ void Com_Error (int code, const char *fmt, ...)
 			if (resmap[0])
 				Cmd_ExecuteString (va ("map %s", resmap));
 		}
+#ifdef _M_AMD64
+		Sys_Error ("AMD64 does not support longjmp, try not to cause any errors");
+#else
 		longjmp (abortframe, -1);
+#endif
 	}
 	else
 	{
@@ -3225,8 +3237,10 @@ void Qcommon_Init (int argc, char **argv)
 {
 //	char	*s;
 
+#ifndef _M_AMD64
 	if (setjmp (abortframe) )
 		Sys_Error ("Error during initialization");
+#endif
 
 	seedMT((uint32)time(0));
 
@@ -3391,8 +3405,10 @@ void Qcommon_Frame (int msec)
 	int		time_before, time_between, time_after;
 #endif
 
+#ifndef _M_AMD64
 	if (setjmp (abortframe) )
 		return;			// an ERR_DROP was thrown
+#endif
 
 	/*if ( log_stats->modified )
 	{
@@ -3649,7 +3665,7 @@ char *StripQuotes (char *string)
 	return string;
 }
 
-const char *MakePrintable (const void *subject, unsigned numchars)
+const char *MakePrintable (const void *subject, size_t numchars)
 {
 	int			len;
 	static char printable[4096];

@@ -321,12 +321,12 @@ int NET_IPSocket (char *net_interface, int port)
 		return 0;
 	}
 
-	return newsocket;
+	return (int)newsocket;
 }
 
 void Net_Stats_f (void)
 {
-	unsigned int now = time(NULL);
+	unsigned int now = (unsigned int)time(NULL);
 	unsigned int diff = now - net_inittime;
 
 	Com_Printf ("Network up for %u seconds.\n"

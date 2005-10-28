@@ -189,17 +189,10 @@ static void ApplyChanges( void *unused )
 				vid_ref->modified = true;
 
 				g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
-#if _MSC_VER >= 1400
-				Com_sprintf (envbuffer, sizeof(envbuffer), "%f", g);
-				_putenv_s ("SSTV2_GAMMA", envbuffer);
-				_putenv_s ("SST_GAMMA", envbuffer);
-#else
 				Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
 				putenv( envbuffer );
 				Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
 				putenv( envbuffer );
-#endif
-
 				vid_gamma->modified = false;
 			}
 		}

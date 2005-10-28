@@ -96,7 +96,7 @@ static size_t EXPORT CL_HTTP_Header (void *ptr, size_t size, size_t nmemb, void 
 {
 	char	headerBuff[1024];
 	size_t	bytes;
-	int		len;
+	size_t	len;
 
 	bytes = size * nmemb;
 
@@ -105,7 +105,11 @@ static size_t EXPORT CL_HTTP_Header (void *ptr, size_t size, size_t nmemb, void 
 
 	//memset (headerBuff, 0, sizeof(headerBuff));
 	//memcpy (headerBuff, ptr, min(bytes, sizeof(headerBuff)-1));
-	len =  min(bytes, sizeof(headerBuff)-1);
+	if (bytes < sizeof(headerBuff)-1)
+		len = bytes;
+	else
+		len = sizeof(headerBuff)-1;
+
 	Q_strncpy (headerBuff, ptr, len);
 
 	if (!Q_strncasecmp (headerBuff, "Content-Length: ", 16))
@@ -138,7 +142,7 @@ the entire URL...
 static void CL_EscapeHTTPPath (const char *filePath, char *escaped)
 {
 	int		i;
-	int		len;
+	size_t	len;
 	char	*p;
 
 	p = escaped;
@@ -193,8 +197,8 @@ static size_t EXPORT CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *s
 
 	if (!dl->fileSize)
 	{
-		dl->fileSize = max (bytes, 131072);
-		dl->tempBuffer = Z_TagMalloc (dl->fileSize, TAGMALLOC_CLIENT_DOWNLOAD);
+		dl->fileSize = bytes > 131072 ? bytes : 131072;
+		dl->tempBuffer = Z_TagMalloc ((int)dl->fileSize, TAGMALLOC_CLIENT_DOWNLOAD);
 	}
 	else if (dl->position + bytes >= dl->fileSize - 1)
 	{
@@ -202,7 +206,7 @@ static size_t EXPORT CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *s
 
 		tmp = dl->tempBuffer;
 
-		dl->tempBuffer = Z_TagMalloc (dl->fileSize*2, TAGMALLOC_CLIENT_DOWNLOAD);
+		dl->tempBuffer = Z_TagMalloc ((int)(dl->fileSize*2), TAGMALLOC_CLIENT_DOWNLOAD);
 		memcpy (dl->tempBuffer, tmp, dl->fileSize);
 		Z_Free (tmp);
 		dl->fileSize *= 2;
@@ -239,7 +243,7 @@ handle.
 */
 static void CL_StartHTTPDownload (dlqueue_t *entry, dlhandle_t *dl)
 {
-	int			len;
+	size_t		len;
 	char		tempFile[MAX_OSPATH];
 	char		escapedFilePath[MAX_QPATH*4];
 	
@@ -422,7 +426,7 @@ false will cause standard UDP downloading to be used instead.
 */
 qboolean CL_QueueHTTPDownload (const char *quakePath)
 {
-	int			len;
+	size_t		len;
 	dlqueue_t	*q;
 	qboolean	needList;
 
@@ -524,7 +528,7 @@ Validate a path supplied by a filelist.
 */
 static void CL_CheckAndQueueDownload (char *path)
 {
-	int			length;
+	size_t		length;
 	char		*ext;
 	qboolean	pak;
 	qboolean	gameLocal;
@@ -775,7 +779,7 @@ if so, how severe. If none, rename file and other such stuff.
 */
 static void CL_FinishHTTPDownload (void)
 {
-	int			i;
+	size_t		i;
 	int			msgs_in_queue;
 	CURLMsg		*msg;
 	CURLcode	result;
@@ -994,7 +998,7 @@ static void CL_StartNextHTTPDownload (void)
 		q = q->next;
 		if (q->state == DLQ_STATE_NOT_STARTED)
 		{
-			int			len;
+			size_t		len;
 
 			dlhandle_t	*dl;
 

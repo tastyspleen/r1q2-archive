@@ -160,7 +160,7 @@ typedef struct dlhandle_s
 	FILE		*file;
 	dlqueue_t	*queueEntry;
 	size_t		fileSize;
-	unsigned	position;
+	size_t		position;
 	double		speed;
 	char		URL[576];
 	char		*tempBuffer;
@@ -339,7 +339,7 @@ typedef struct client_static_s
 	qboolean	failed_download;
 	//dltype_t	downloadtype;
 	int			downloadsize;
-	unsigned	downloadposition;
+	size_t		downloadposition;
 	int			downloadpercent;
 
 // demo recording info must be here, so it isn't cleared on level change

@@ -814,7 +814,9 @@ static qboolean SV_SendClientDatagram (client_t *client)
 		if (sv_packetentities_hack->intvalue == 1 || client->protocol == ORIGINAL_PROTOCOL_VERSION)
 			frame.maxsize = msg.maxsize;
 
+#ifndef NO_ZLIB
 retryframe:
+#endif
 
 		// send over all the relevant entity_state_t
 		// and the player_state_t
@@ -826,6 +828,7 @@ retryframe:
 			//try to fit it into one udp packet if at all possible
 			if (frame.cursize > msg.maxsize || frame.cursize > 1490)
 			{
+#ifndef NO_ZLIB
 				//r1q2 clients get compressed frame, normal clients get nothing
 				byte	compressed_frame[4096];
 				int		compressed_frame_len;
@@ -853,6 +856,7 @@ retryframe:
 						goto retryframe;
 					}
 				}
+#endif
 			}
 			else
 			{

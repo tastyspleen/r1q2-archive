@@ -113,9 +113,13 @@ static void SV_AddConfigstrings (void)
 	wrote = 0;
 
 	// write a packet full of data
+#ifndef NO_ZLIB
 	if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION)
+#endif
 	{
+#ifndef NO_ZLIB
 plainStrings:
+#endif
 		while (start < MAX_CONFIGSTRINGS)
 		{
 			if (sv.configstrings[start][0])
@@ -144,6 +148,7 @@ plainStrings:
 			start++;
 		}
 	}
+#ifndef NO_ZLIB
 	else
 	{
 		int			index;
@@ -250,7 +255,8 @@ plainStrings:
 #endif
 		}
 	}
-	
+#endif
+
 	// send next command
 
 	SV_BaselinesMessage (false);
@@ -576,9 +582,13 @@ static void SV_BaselinesMessage (qboolean userCmd)
 
 	// write a packet full of data
 	//r1: use new per-client baselines
+#ifndef NO_ZLIB
 	if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION)
+#endif
 	{
+#ifndef NO_ZLIB
 plainLines:
+#endif
 		start = startPos;
 		while (start < MAX_EDICTS)
 		{
@@ -604,6 +614,7 @@ plainLines:
 			start++;
 		}
 	}
+#ifndef NO_ZLIB
 	else
 	{
 		uint32		realBytes;
@@ -704,6 +715,7 @@ plainLines:
 #endif
 		}
 	}
+#endif
 
 	// send next command
 	MSG_BeginWriting (svc_stufftext);
@@ -846,6 +858,7 @@ static void SV_NextDownload_f (void)
 
 	remaining = sv_client->downloadsize - sv_client->downloadcount;
 	
+#ifndef NO_ZLIB
 	if (sv_client->downloadCompressed)
 	{
 		byte		zOut[0xFFFF];
@@ -964,8 +977,11 @@ static void SV_NextDownload_f (void)
 #endif
 	}
 	else
+#endif
 	{
+#ifndef NO_ZLIB
 olddownload:
+#endif
 		//r1: use message queue so other reliable messages put in the stream perhaps by game won't cause overflow
 		//queue = MSGQueueAlloc (sv_client, 4 + r, svc_zdownload);
 
@@ -1316,9 +1332,11 @@ static void SV_BeginDownload_f(void)
 	}
 
 	//r1: r1q2 zlib udp downloads?
+#ifndef NO_ZLIB
 	if (!Q_stricmp (Cmd_Argv(3), "udp-zlib"))
 		sv_client->downloadCompressed = true;
 	else
+#endif
 		sv_client->downloadCompressed = false;
 
 	sv_client->downloadFileName = CopyString (name, TAGMALLOC_CLIENT_DOWNLOAD);

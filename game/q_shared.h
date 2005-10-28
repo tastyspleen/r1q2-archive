@@ -88,8 +88,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define putenv _putenv
 #define EXPORT __cdecl
 #define IMPORT __cdecl
-#define DEBUGBREAKPOINT _asm int 3
-#define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
+//#if !defined _M_AMD64
+ //#define DEBUGBREAKPOINT __asm int 3
+//#else
+ //#define DEBUGBREAKPOINT DebugBreak
+//#endif
+#define	Q_DEBUGBREAKPOINT Sys_DebugBreak()
 #define __attribute__(x) 
 #define PACKED_STRUCT
 typedef __int32 int32;
@@ -117,7 +121,7 @@ int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
 //int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
 #ifdef LINUX
 #define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
-#define DEBUGBREAKPOINT __asm ("int $3")
+//#define DEBUGBREAKPOINT __asm ("int $3")
 #else
 #define	Q_DEBUGBREAKPOINT ((void)0)
 #define DEBUGBREAKPOINT ((void)0)
@@ -444,6 +448,7 @@ extern	int	curtime;		// time returned by last Sys_Milliseconds
 
 int		Sys_Milliseconds (void);
 void	Sys_Mkdir (char *path);
+void	Sys_DebugBreak (void);
 
 // large block stack allocation routines
 void	*Hunk_Begin (int maxsize);

@@ -165,32 +165,29 @@ void Sys_Error (const char *error, ...)
 	text[sizeof(text)-1] = 0;
 
 	if (strlen(text) < 900)
-		strcat (text, "\n\nPress Retry to cause a debug break (DEVELOPERS ONLY!)\n");
+		strcat (text, "\n\nWould you like to debug? (DEVELOPERS ONLY!)\n");
 
 rebox:;
 
-	ret = MessageBox(NULL, text, "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_ABORTRETRYIGNORE);
+	ret = MessageBox(NULL, text, "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_YESNO);
 
-	if (ret == IDRETRY)
+	if (ret == IDYES)
 	{
 		ret = MessageBox(NULL, "Please attach your debugger now to prevent the built in exception handler from catching the breakpoint. When ready, press Yes to cause a breakpoint or No to cancel.", "Quake II Fatal Error", MB_ICONEXCLAMATION | MB_YESNO | MB_DEFBUTTON2);
 		if (ret == IDYES)
-			Q_DEBUGBREAKPOINT;
-		else
-			goto rebox;
-	}
-	else if (ret == IDIGNORE)
-	{
-#ifndef DEDICATED_ONLY
-		if (!dedicated->intvalue)
 		{
-			VID_Restart_f ();
-			S_Init (true);
-			Cbuf_AddText ("precache\n");
-		}
+#ifndef _DEBUG
+			if (!IsDebuggerPresent ())
+			{
+				ExitProcess (0x1d107);
+			}
 #endif
-		NET_Init ();
-		return;
+			Q_DEBUGBREAKPOINT;
+		}
+		else
+		{
+			goto rebox;
+		}
 	}
 
 	ExitProcess (0xDEAD);
@@ -1578,6 +1575,9 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	MINIDUMPWRITEDUMP			fnMiniDumpWriteDump;
 
 	DWORD						ret, i;
+	DWORD64						InstructionPtr;
+
+	BOOL						wantUpload = TRUE;
 
 	CHAR						searchPath[MAX_PATH], *p, *gameMsg;
 
@@ -1701,13 +1701,21 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	if (p)*p = 0;
 #endif
 
+
+#ifdef _M_AMD64
+	InstructionPtr = context.Rip;
+	frame.AddrPC.Offset = InstructionPtr;
+	frame.AddrFrame.Offset = context.Rbp;
+	frame.AddrPC.Offset = context.Rsp;
+#else
+	InstructionPtr = context.Eip;
+	frame.AddrPC.Offset = InstructionPtr;
 	frame.AddrFrame.Offset = context.Ebp;
-	frame.AddrFrame.Mode = AddrModeFlat;
-
-	frame.AddrPC.Offset = context.Eip;
-	frame.AddrPC.Mode = AddrModeFlat;
-
 	frame.AddrStack.Offset = context.Esp;
+#endif
+
+	frame.AddrFrame.Mode = AddrModeFlat;
+	frame.AddrPC.Mode = AddrModeFlat;
 	frame.AddrStack.Mode = AddrModeFlat;
 
 	symInfo = LocalAlloc (LPTR, sizeof(*symInfo) + 128);
@@ -1719,15 +1727,26 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	GetVersionEx (&osInfo);
 
 	strcpy (szModuleName, "<unknown>");
-	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)context.Eip);
+	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)InstructionPtr);
 
 	strlwr (szModuleName);
 
 	if (strstr (szModuleName, "gamex86"))
+	{
 		gameMsg = 
 			"\nIt is very likely that the Game DLL you are using for the mod you run is at fault.\n"
 			"Please send this crash report to the author(s) of the mod you are running.";
+	}
+	else if (strstr (szModuleName, "ref_soft"))
+	{
+		gameMsg = 
+			"\nIt is very likely that the software renderer (ref_soft) is at fault. Software.\n"
+			"rendering in Q2 has always been unreliable. If possible, please use OpenGL to avoid\n"
+			"crashes.";
+		wantUpload = FALSE;
+	}
 	else if (strstr (szModuleName, "r1q2.exe") || strstr (szModuleName, "ref_r1gl.dll") || strstr (szModuleName, "dedicated.exe"))
+	{
 #ifdef USE_CURL
 		gameMsg = 
 		"\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\n"
@@ -1739,9 +1758,15 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		"if you submitted the crash report to r1ch.net forums. This will aid in finding\n"
 		"the fault that caused this exception.";
 #endif
+	}
 	else
-		gameMsg = "";
-		
+	{
+		gameMsg =
+		"\nPlease note, unless you are using both R1Q2 and R1GL, any crashes will be much\n"
+		"harder to diagnose. If you are still using ref_gl, please consider using R1GL for\n"
+		"an accurate crash report.";
+	}
+
 #ifdef USE_CURL
 	fprintf (fhReport,
 		"R1Q2 encountered an unhandled exception and has terminated. If you are able to\n"
@@ -1760,9 +1785,9 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
 #endif
 
-	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\nFault address: %p (%s)\n", exceptionCode, context.Eip, szModuleName);
+	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\nFault address: %p (%s)\n", exceptionCode, InstructionPtr, szModuleName);
 
-	fprintf (fhReport, "R1Q2 module: %s (Version: %s)\n", binary_name, R1Q2_VERSION_STRING);
+	fprintf (fhReport, "R1Q2 module: %s(%s) (Version: %s)\n", binary_name, R1BINARY, R1Q2_VERSION_STRING);
 	fprintf (fhReport, "Windows version: %d.%d (Build %d) %s\n\n", osInfo.dwMajorVersion, osInfo.dwMinorVersion, osInfo.dwBuildNumber, osInfo.szCSDVersion);
 
 	fprintf (fhReport, "Symbol information:\n");
@@ -1813,31 +1838,39 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 			miniInfo.ThreadId = GetCurrentThreadId ();
 			if (fnMiniDumpWriteDump (hProcess, GetCurrentProcessId(), hFile, MiniDumpWithDataSegs, &miniInfo, NULL, NULL))
 			{
-				gzFile	gz;
+#ifndef NO_ZLIB
 				FILE	*fh;
-				BYTE	buff[0xFFFF];
-				int		len;
+#endif
+				CHAR	zPath[MAX_PATH];
 
 				CloseHandle (hFile);
-
+#ifndef NO_ZLIB
 				fh = fopen (dumpPath, "rb");
 				if (fh)
 				{
-					CHAR zPath[MAX_PATH];
+					
+					BYTE	buff[0xFFFF];
+					size_t	len;
+					gzFile	gz;
+
 					snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.dmp.gz", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
 					gz = gzopen (zPath, "wb");
 					if (gz)
 					{
 						while ((len = fread (buff, 1, sizeof(buff), fh)) > 0)
 						{
-							gzwrite (gz, buff, len);
+							gzwrite (gz, buff, (unsigned int)len);
 						}
 						gzclose (gz);
 						fclose (fh);
-						DeleteFile (dumpPath);
-						strcpy (dumpPath, zPath);
 					}
 				}
+#else
+				snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.dmp", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+				CopyFile (dumpPath, zPath, FALSE);
+#endif			
+				DeleteFile (dumpPath);
+				strcpy (dumpPath, zPath);
 				fprintf (fhReport, "\nA minidump was saved to %s.\nPlease include this file when posting a crash report.\n", dumpPath);
 			}
 			else
@@ -1873,13 +1906,16 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	}
 
 #ifdef USE_CURL
-	if (!win_silentexceptionhandler->intvalue)
-		ret = MessageBox (NULL, "Would you like to upload this crash report to r1ch.net for analysis? If you are able to reproduce this crash exactly, please do not submit multiple reports as this will only delay processing.", "Unhandled Exception", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2);
-	else
-		ret = IDYES;
+	if (wantUpload)
+	{
+		if (!win_silentexceptionhandler->intvalue)
+			ret = MessageBox (NULL, "Would you like to upload this crash report to r1ch.net for analysis? If you are able to reproduce this crash exactly, please do not submit multiple reports as this will only delay processing.", "Unhandled Exception", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2);
+		else
+			ret = IDYES;
 
-	if (ret == IDYES)
-		R1Q2UploadCrashDump (dumpPath, tempPath);
+		if (ret == IDYES)
+			R1Q2UploadCrashDump (dumpPath, tempPath);
+	}
 #endif
 
 	FreeLibrary (hDbgHelp);

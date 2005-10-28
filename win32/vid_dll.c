@@ -684,7 +684,7 @@ void VID_UpdateWindowPosAndSize(void)
 	r.bottom = viddef.height;
 
 	style = GetWindowLongPtr ( cl_hwnd, GWL_STYLE );
-	if (AdjustWindowRect ( &r, style, FALSE ))
+	if (AdjustWindowRect ( &r, (DWORD)style, FALSE ))
 	{
 		w = r.right - r.left;
 		h = r.bottom - r.top;
@@ -778,56 +778,66 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 
 	Com_DPrintf ("refimport_t set.\n");
 
-	if ( ( GetRefAPI = (GetRefAPI_t)GetProcAddress( reflib_library, "GetRefAPI" ) ) == 0 )
+	__try
 	{
-		strcpy (errstr, "GetProcAddress() failed");
-		//Com_Error( ERR_FATAL, "GetProcAddress failed on %s", name );
-		return false;
+		if ( ( GetRefAPI = (GetRefAPI_t)GetProcAddress( reflib_library, "GetRefAPI" ) ) == 0 )
+		{
+			VID_FreeReflib ();
+			strcpy (errstr, "GetProcAddress() failed");
+			//Com_Error( ERR_FATAL, "GetProcAddress failed on %s", name );
+			return false;
+		}
+
+		Com_DPrintf ("got RefAPI.\n");
+
+		if ( ( GetExtraAPI = (GetExtraAPI_t)GetProcAddress( reflib_library, "GetExtraAPI" ) ) == 0 )
+		{
+			Com_DPrintf ("No ExtraAPI found.\n");
+		}
+		else
+		{
+			Com_DPrintf ("Initializing ExtraAPI...");
+			GetExtraAPI (rx);
+			Com_DPrintf ("done.\n");
+		}
+
+		re = GetRefAPI( ri );
+
+		switch (re.api_version) {
+			case 3:
+				Com_DPrintf ("api version = %d, ok.\n", re.api_version);
+				break;
+			default:
+				{
+					int version = re.api_version;
+					Com_DPrintf ("api version = %d, bad.\n", re.api_version);
+					VID_FreeReflib ();
+					sprintf (errstr, "incompatible api_version %d", version);
+					return false;
+					//Com_Error (ERR_FATAL, "R1Q2 doesn't support your current renderer (%s).\n\nRequired: API Version 3\nFound: API Version %d", name, version);
+				}
+		}
+
+		/*if (re.api_version != API_VERSION)
+		{
+			VID_FreeReflib ();
+			Com_Error (ERR_FATAL, "%s has incompatible api_version", name);
+		}*/
+
+		if ( re.Init( global_hInstance, MainWndProc ) == -1 )
+		{
+			Com_DPrintf ("re.Init failed :(\n");
+			Com_DPrintf ("gl_driver: %s\n", Cvar_VariableString ("gl_driver"));
+			//re.Shutdown();
+			VID_FreeReflib ();
+			strcpy (errstr, "re.Init() failed");
+			return false;
+		}
 	}
-
-	Com_DPrintf ("got RefAPI.\n");
-
-	if ( ( GetExtraAPI = (GetExtraAPI_t)GetProcAddress( reflib_library, "GetExtraAPI" ) ) == 0 )
-	{
-		Com_DPrintf ("No ExtraAPI found.\n");
-	}
-	else
-	{
-		Com_DPrintf ("Initializing ExtraAPI...");
-		GetExtraAPI (rx);
-		Com_DPrintf ("done.\n");
-	}
-
-	re = GetRefAPI( ri );
-
-	switch (re.api_version) {
-		case 3:
-			Com_DPrintf ("api version = %d, ok.\n", re.api_version);
-			break;
-		default:
-			{
-				int version = re.api_version;
-				Com_DPrintf ("api version = %d, bad.\n", re.api_version);
-				VID_FreeReflib ();
-				sprintf (errstr, "incompatible api_version %d", version);
-				return false;
-				//Com_Error (ERR_FATAL, "R1Q2 doesn't support your current renderer (%s).\n\nRequired: API Version 3\nFound: API Version %d", name, version);
-			}
-	}
-
-	/*if (re.api_version != API_VERSION)
+	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 		VID_FreeReflib ();
-		Com_Error (ERR_FATAL, "%s has incompatible api_version", name);
-	}*/
-
-	if ( re.Init( global_hInstance, MainWndProc ) == -1 )
-	{
-		Com_DPrintf ("re.Init failed :(\n");
-		Com_DPrintf ("gl_driver: %s\n", Cvar_VariableString ("gl_driver"));
-		re.Shutdown();
-		VID_FreeReflib ();
-		strcpy (errstr, "re.Init() failed");
+		sprintf (errstr, "Exception 0x%8x while initializing", GetExceptionCode ());
 		return false;
 	}
 
@@ -976,6 +986,8 @@ HHOOK		g_hKeyboardHook;
 
 cvar_t		*win_disablewinkey;
 
+//amd64 cc defines higher _WIN32 
+#ifndef _M_AMD64
 typedef struct tagKBDLLHOOKSTRUCT {
     DWORD   vkCode;
     DWORD   scanCode;
@@ -983,6 +995,7 @@ typedef struct tagKBDLLHOOKSTRUCT {
     DWORD   time;
     ULONG_PTR dwExtraInfo;
 } KBDLLHOOKSTRUCT, FAR *LPKBDLLHOOKSTRUCT, *PKBDLLHOOKSTRUCT;
+#endif
 
 //FIXME: Nt4+ only :E
 LRESULT CALLBACK LowLevelKeyboardProc( int nCode, WPARAM wParam, LPARAM lParam )
