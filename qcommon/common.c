@@ -229,7 +229,7 @@ void Com_Printf (const char *fmt, int level, ...)
 	if ((level & con_filterlevel->intvalue) && (level & logfile_filterlevel->intvalue))
 		return;
 
-	va_start (argptr,level);
+	va_start (argptr, level);
 	if (Q_vsnprintf (msg, sizeof(msg)-1, fmt, argptr) < 0)
 		Com_Printf ("WARNING: Com_Printf: message overflow.\n", LOG_GENERAL);
 	va_end (argptr);

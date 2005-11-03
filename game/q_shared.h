@@ -76,8 +76,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	Q_strlwr _strlwr
 //#define Q_snprintf _snprintf
 #define Q_vsnprintf _vsnprintf
-#define Q_strncasecmp strnicmp
-#define Q_stricmp _strcmpi
+#ifndef _M_AMD64
+#define Q_stricmp _strcmpi	//odd, amd64 libc is missing this...
+#define Q_strncasecmp _strnicmp
+#endif
 #define strdup _strdup
 #ifndef fileno
 #define fileno _fileno
@@ -399,11 +401,11 @@ void Com_PageInMemory (byte *buffer, int size);
 
 // portable case insensitive compare
 #ifndef Q_stricmp
-int Q_stricmp (char *s1, char *s2);
+int Q_stricmp (const char *s1, const char *s2);
 #endif
 
 #ifndef Q_strncasecmp
-int Q_strncasecmp (char *s1, char *s2, int n);
+int Q_strncasecmp (const char *s1, const char *s2, size_t n);
 #endif
 
 //=============================================

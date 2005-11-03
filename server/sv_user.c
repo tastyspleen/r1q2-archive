@@ -1996,7 +1996,7 @@ void SV_RunMultiMoves (client_t *cl)
 	usercmd_t	move;
 	usercmd_t	*oldcmd;
 
-	bits = MSG_ReadShort (&net_message);
+	bits = MSG_ReadByte (&net_message);
 
 	//3 bits   5 bits
 	//[xxx]    [xxxxx]
@@ -2360,7 +2360,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			break;
 
 #ifdef _DEBUG
-		case clc_moves:
+		case clc_multimoves:
 			SV_RunMultiMoves (cl);
 			break;
 #endif

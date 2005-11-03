@@ -439,7 +439,7 @@ enum clc_ops_e
 	clc_userinfo,			// [[userinfo string]
 	clc_stringcmd,			// [string] message
 	clc_setting,			// [setting][value] R1Q2 settings support.
-	clc_moves
+	clc_multimoves
 };
 
 //==============================================

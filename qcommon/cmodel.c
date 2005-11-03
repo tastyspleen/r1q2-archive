@@ -667,9 +667,9 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 	{
 		if (!developer->intvalue || !clientload)
 		{
-			Com_Error (ERR_DROP, "Couldn't load %s", name);
-			//r1: ugly, but flush fs cache in case they install it
+			//r1: ugly, but flush fs cache in case they install it (now with right place!)
 			FS_FlushCache ();
+			Com_Error (ERR_DROP, "Couldn't load %s", name);
 		}
 		else
 		{

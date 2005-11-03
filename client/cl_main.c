@@ -145,7 +145,7 @@ cvar_t	*cl_instantack;
 cvar_t	*cl_autorecord;
 
 cvar_t	*cl_railtrail;
-cvar_t	*cl_test;
+cvar_t	*cl_test = &uninitialized_cvar;
 cvar_t	*cl_test2;
 
 #ifdef NO_SERVER

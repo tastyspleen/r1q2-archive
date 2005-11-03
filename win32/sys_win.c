@@ -242,7 +242,7 @@ void WinError (void)
 
 #ifdef DEDICATED_ONLY
 
-void Sys_ServiceCtrlHandler (DWORD Opcode) 
+void EXPORT Sys_ServiceCtrlHandler (DWORD Opcode) 
 {
     switch(Opcode) 
     { 
@@ -263,7 +263,7 @@ void Sys_ServiceCtrlHandler (DWORD Opcode)
     SetServiceStatus (MyServiceStatusHandle,  &MyServiceStatus);
 } 
 
-void Sys_ServiceStart (DWORD argc, LPTSTR *argv) 
+void EXPORT Sys_ServiceStart (DWORD argc, LPTSTR *argv) 
 { 
     MyServiceStatus.dwServiceType        = SERVICE_WIN32; 
     MyServiceStatus.dwCurrentState       = SERVICE_START_PENDING; 
@@ -1561,7 +1561,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	DWORD64			fnOffset;
 	CHAR			tempPath[MAX_PATH];
 	CHAR			dumpPath[MAX_PATH];
-	OSVERSIONINFO	osInfo;
+	OSVERSIONINFOEX	osInfo;
 	SYSTEMTIME		timeInfo;
 
 	ENUMERATELOADEDMODULES64	fnEnumerateLoadedModules64;
@@ -1723,8 +1723,14 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	symInfo->MaxNameLen = 128;
 	fnOffset = 0;
 
-	osInfo.dwOSVersionInfoSize = sizeof(osInfo);
-	GetVersionEx (&osInfo);
+	memset (&osInfo, 0, sizeof(osInfo));
+	osInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+
+	if (!GetVersionEx ((OSVERSIONINFO *)&osInfo))
+	{
+		osInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+		GetVersionEx ((OSVERSIONINFO *)&osInfo);
+	}
 
 	strcpy (szModuleName, "<unknown>");
 	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)InstructionPtr);
@@ -1773,6 +1779,8 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		"reproduce this crash, please submit the crash report to r1ch.net when prompted or\n"
 		"post this file and the crash dump .dmp file (if available) on the R1Q2 forums at\n"
 		"http://www.r1ch.net/forum/index.php?board=8.0\n"
+		"\n"
+		"\n    PLEASE MAKE SURE YOU ARE USING THE LATEST VERSIONS OF R1Q2/R1GL/ETC!\n"
 		"\n"
 		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
 #else

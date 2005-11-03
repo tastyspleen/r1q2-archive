@@ -1377,12 +1377,18 @@ void EXPORT GLimp_EndFrame (void)
 		if (gl_config.wglPFD)
 		{
 			if ( !qwglSwapBuffers( glw_state.hDC ) )
-				ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+			{
+				if (!IsIconic (glw_state.hWnd))
+					ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+			}
 		}
 		else
 		{
 			if ( !SwapBuffers( glw_state.hDC ) )
-				ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+			{
+				if (!IsIconic (glw_state.hWnd))
+					ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+			}
 		}
 	}
 }
