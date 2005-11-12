@@ -60,6 +60,12 @@ cvar_t		*scr_graphheight;
 cvar_t		*scr_graphscale;
 cvar_t		*scr_graphshift;
 cvar_t		*scr_drawall;
+cvar_t		*scr_chathud;
+cvar_t		*scr_chathud_lines;
+cvar_t		*scr_chathud_ignore_duplicates;
+cvar_t		*scr_chathud_colored;
+cvar_t		*scr_chathud_x;
+cvar_t		*scr_chathud_y;
 
 typedef struct
 {
@@ -451,6 +457,66 @@ void SCR_Sky_f (void)
 
 //============================================================================
 
+
+#define CHATHUD_MAX_LINES 32
+
+static char	chathud_messages[CHATHUD_MAX_LINES][512];
+static int	chathud_index = 0;
+
+void SCR_ClearChatMessages (void)
+{
+	int	i;
+
+	for (i = 0; i < CHATHUD_MAX_LINES; i++)
+		chathud_messages[i][0] = 0;
+
+	chathud_index = 0;
+}
+
+void SCR_Chathud_Changed (cvar_t *self, char *old, char *newValue)
+{
+	if (self->intvalue >= CHATHUD_MAX_LINES)
+		Cvar_Set (self->name, "32");
+	else if (self->intvalue < 1)
+		Cvar_Set (self->name, "1");
+
+	SCR_ClearChatMessages ();
+}
+
+void SCR_DrawChatHud (void)
+{
+	int		x, v;
+	int		i, j;
+	int		or;
+
+	if (!scr_chathud_y->intvalue)
+		v = cl.refdef.height - (8 * (scr_chathud_lines->intvalue + 4));
+	else
+		v = scr_chathud_y->intvalue;
+
+	if (scr_chathud_colored->intvalue)
+		or = 128;
+	else
+		or = 0;
+
+	for (i = chathud_index, j = 0; j <  scr_chathud_lines->intvalue; i++, j++)
+	{
+		for (x = 0; chathud_messages[i % scr_chathud_lines->intvalue][x] ; x++)
+			re.DrawChar ( (x+scr_chathud_x->intvalue)<<3, v, chathud_messages[i % scr_chathud_lines->intvalue][x] | or);
+
+		v += 8;
+	}
+}
+
+void SCR_AddChatMessage (const char *chat)
+{
+	if (scr_chathud_ignore_duplicates->intvalue && chathud_index && !strcmp (chat, chathud_messages[chathud_index-1 % scr_chathud_lines->intvalue]))
+		return;
+
+	strncpy (chathud_messages[chathud_index % scr_chathud_lines->intvalue], chat, sizeof(chathud_messages[chathud_index % scr_chathud_lines->intvalue]));
+	chathud_index++;
+}
+
 void SCR_Conheight_Changed (cvar_t *self, char *old, char *newValue)
 {
 	if (self->value > 1.0)
@@ -497,6 +563,15 @@ void SCR_Init (void)
 	scr_graphshift = Cvar_Get ("graphshift", "0", 0);
 	scr_drawall = Cvar_Get ("scr_drawall", "0", 0);
 
+	scr_chathud = Cvar_Get ("scr_chathud", "0", 0);
+	scr_chathud_lines = Cvar_Get ("scr_chathud_lines", "4", 0);
+	scr_chathud_colored = Cvar_Get ("scr_chathud_colored", "0", 0);
+	scr_chathud_ignore_duplicates = Cvar_Get ("scr_chathud_ignore_duplicates", "1", 0);
+	scr_chathud_x = Cvar_Get ("scr_chathud_x", "0", 0);
+	scr_chathud_y = Cvar_Get ("scr_chathud_y", "0", 0);
+
+	scr_chathud_lines->changed = SCR_Chathud_Changed;
+
 	scr_conheight->changed = SCR_Conheight_Changed;
 	scr_conheight->changed (scr_conheight, scr_conheight->string, scr_conheight->string);
 
@@ -511,6 +586,7 @@ void SCR_Init (void)
 	Cmd_AddCommand ("sizeup",SCR_SizeUp_f);
 	Cmd_AddCommand ("sizedown",SCR_SizeDown_f);
 	Cmd_AddCommand ("sky",SCR_Sky_f);
+	Cmd_AddCommand ("clearchathud", SCR_ClearChatMessages);
 
 	scr_initialized = true;
 }
@@ -629,7 +705,9 @@ void SCR_DrawConsole (void)
 	else
 	{
 		if (cls.key_dest == key_game || cls.key_dest == key_message)
+		{
 			Con_DrawNotify ();	// only draw notify in game
+		}
 	}
 }
 
@@ -1558,6 +1636,9 @@ void SCR_UpdateScreen (void)
 			SCR_DrawPause ();
 
 			SCR_DrawConsole ();
+
+			if (scr_chathud->intvalue)
+				SCR_DrawChatHud ();
 
 			M_Draw ();
 

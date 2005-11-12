@@ -667,7 +667,7 @@ void CL_Pause_f (void)
 CL_Quit_f
 ==================
 */
-void CL_Quit_f (void)
+NORETURN void CL_Quit_f (void)
 {
 	CL_Disconnect (false);
 	Com_Quit ();

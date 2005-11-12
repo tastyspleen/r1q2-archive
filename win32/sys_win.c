@@ -40,6 +40,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 #ifdef USE_CURL
+#define CURL_STATICLIB
 #include <curl/curl.h>
 #endif
 
@@ -193,7 +194,7 @@ rebox:;
 	ExitProcess (0xDEAD);
 }
 
-void Sys_Quit (void)
+NORETURN void Sys_Quit (void)
 {
 	timeEndPeriod( 1 );
 
@@ -1062,7 +1063,7 @@ Sys_UnloadGame
 void Sys_UnloadGame (void)
 {
 	if (!FreeLibrary (game_library))
-		Com_Error (ERR_FATAL, "FreeLibrary failed for game library");
+		Sys_Error ("FreeLibrary failed for game library (%d)", GetLastError());
 	game_library = NULL;
 }
 
@@ -1126,7 +1127,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 	{
 		Com_DPrintf ("%s.new found, moving to %s...\n", gamename, gamename);
 		fclose (newExists);
-		unlink (name);
+		remove (name);
 		rename (newname, name);
 	}
 	game_library = LoadLibrary ( name );
@@ -1145,7 +1146,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 		{
 			Com_DPrintf ("%s.new found, moving to %s...\n", gamename, gamename);
 			fclose (newExists);
-			unlink (name);
+			remove (name);
 			rename (newname, name);
 		}
 		game_library = LoadLibrary ( name );
@@ -1177,7 +1178,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 					{
 						Com_DPrintf ("%s.new found, moving to %s...\n", gamename, gamename);
 						fclose (newExists);
-						unlink (name);
+						remove (name);
 						rename (newname, name);
 					}
 					game_library = LoadLibrary (name);
@@ -1377,7 +1378,7 @@ BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBas
 		strcpy (verString, "unknown");
 	}	
 
-	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%d bytes, version %s)\n", ModuleBase, ModuleBase + ModuleSize, ModuleName, ModuleSize, verString);
+	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%ul bytes, version %s)\n", ModuleBase, ModuleBase + ModuleSize, ModuleName, ModuleSize, verString);
 	return TRUE;
 }
 
@@ -1780,7 +1781,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		"post this file and the crash dump .dmp file (if available) on the R1Q2 forums at\n"
 		"http://www.r1ch.net/forum/index.php?board=8.0\n"
 		"\n"
-		"\n    PLEASE MAKE SURE YOU ARE USING THE LATEST VERSIONS OF R1Q2/R1GL/ETC!\n"
+		"     PLEASE MAKE SURE YOU ARE USING THE LATEST VERSIONS OF R1Q2/R1GL/ETC!\n"
 		"\n"
 		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
 #else
@@ -1793,7 +1794,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
 #endif
 
-	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\nFault address: %p (%s)\n", exceptionCode, InstructionPtr, szModuleName);
+	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\nFault address: %I64p (%s)\n", exceptionCode, InstructionPtr, szModuleName);
 
 	fprintf (fhReport, "R1Q2 module: %s(%s) (Version: %s)\n", binary_name, R1BINARY, R1Q2_VERSION_STRING);
 	fprintf (fhReport, "Windows version: %d.%d (Build %d) %s\n\n", osInfo.dwMajorVersion, osInfo.dwMinorVersion, osInfo.dwBuildNumber, osInfo.szCSDVersion);

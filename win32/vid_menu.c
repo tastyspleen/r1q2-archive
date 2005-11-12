@@ -20,13 +20,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/client.h"
 #include "../client/qmenu.h"
 
-#define REF_SOFT	0
-#define REF_OPENGL	1
-#define REF_3DFX	2
-#define REF_POWERVR	3
-//#define REF_VERITE	4
-#define	REF_R1GL	4
-#define	REF_NCGL	5
+enum
+{
+	REF_SOFT,
+	REF_OPENGL,
+	REF_3DFX,
+	REF_POWERVR,
+	REF_R1GL,
+	REF_NCGL
+};
 
 extern cvar_t *vid_ref;
 extern cvar_t *vid_gamma;

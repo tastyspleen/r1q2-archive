@@ -215,7 +215,7 @@ void Sys_Mkdir (char *path)
 
 char	findbase[MAX_OSPATH];
 char	findpath[MAX_OSPATH];
-HANDLE	findhandle;
+HANDLE	findhandle = INVALID_HANDLE_VALUE;
 
 static qboolean CompareAttributes( DWORD found, uint32 musthave, uint32 canthave )
 {
@@ -248,7 +248,7 @@ char *Sys_FindFirst (char *path, uint32 musthave, uint32 canthave )
 {
 	WIN32_FIND_DATA	findinfo;
 
-	if (findhandle)
+	if (findhandle != INVALID_HANDLE_VALUE)
 		Sys_Error ("Sys_BeginFind without close");
 
 	COM_FilePath (path, findbase);
@@ -286,7 +286,7 @@ void Sys_FindClose (void)
 	if (findhandle != INVALID_HANDLE_VALUE)
 		FindClose (findhandle);
 
-	findhandle = 0;
+	findhandle = INVALID_HANDLE_VALUE;
 }
 
 #ifdef _WIN32

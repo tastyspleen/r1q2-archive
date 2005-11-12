@@ -1019,7 +1019,7 @@ MISC
 
 
 //r1: use variadic macros where possible to avoid overhead of evaluations and va
-#if __STDC_VERSION__ == 199901L
+#if __STDC_VERSION__ == 199901L || _MSC_VER >= 1400
 #define		Com_DPrintf(...)	\
 do { \
 	if (developer->intvalue) \
@@ -1034,7 +1034,7 @@ void		Com_EndRedirect (qboolean flush);
 void 		_Com_DPrintf (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void 		Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
 void 		Com_Error (int code, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
-void 		Com_Quit (void);
+NORETURN void 		Com_Quit (void);
 
 //extern __inline int			Com_ServerState (void);		// this should have just been a cvar...
 //extern __inline void		Com_SetServerState (int state);
@@ -1122,7 +1122,7 @@ extern void *(EXPORT *Z_TagMalloc)(int size, int tag);
 //void *Z_TagMalloc (int size, int tag);
 
 void EXPORT Z_FreeGame (void *buf);
-void * EXPORT Z_TagMallocGame (int size, int tag);
+void RESTRICT * EXPORT Z_TagMallocGame (int size, int tag);
 void EXPORT Z_FreeTagsGame (int tag);
 void Z_Verify (const char *format, ...);
 void Z_CheckGameLeaks (void);
@@ -1190,7 +1190,7 @@ void	Sys_ConsoleOutput (const char *string);
 #endif
 void	Sys_SendKeyEvents (void);
 void	Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
-void	Sys_Quit (void);
+NORETURN void	Sys_Quit (void);
 char	*Sys_GetClipboardData( void );
 void	Sys_CopyProtect (void);
 void	Sys_SetWindowText(char *buff);

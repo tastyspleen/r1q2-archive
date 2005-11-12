@@ -1227,6 +1227,8 @@ void CL_ParseServerMessage (void)
 				}
 				con.ormask = 128;
 
+				SCR_AddChatMessage (s);
+
 				//r1: change !p_version to !version since p is for proxies
 				if ((strstr (s, "!r1q2_version") || strstr (s, "!version")) &&
 					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
@@ -1257,7 +1259,12 @@ void CL_ParseServerMessage (void)
 		case svc_stufftext:
 			s = MSG_ReadString (&net_message);
 			Com_DPrintf ("stufftext: %s\n", s);
-			Cbuf_AddText (s);
+
+			//ugly, but necessary :(
+			if (!cl.attractloop || !strcmp(s, "precache\n"))
+				Cbuf_AddText (s);
+			else
+				Com_DPrintf ("WARNING: Demo tried to execute command '%s', ignored.\n", MakePrintable(s, 0));
 			break;
 			
 		case svc_serverdata:

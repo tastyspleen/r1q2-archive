@@ -529,6 +529,7 @@ void S_EndRegistration (void)
 			if (sfx->truename)
 				Z_Free (sfx->truename); // memleak fix from echon
 			rbdelete (sfx->name, knownsounds);
+			sfx->cache = NULL;
 			sfx->name[0] = 0;
 #ifdef USE_OPENAL
 			sfx->loaded = false;
@@ -1167,9 +1168,7 @@ void S_AddLoopSounds (void)
 	for (i=0 ; i<cl.frame.num_entities ; i++)
 	{
 		if (!sounds[i])
-			continue;
-
-		
+			continue;		
 
 		sfx = cl.sound_precache[sounds[i]];
 		if (!sfx)

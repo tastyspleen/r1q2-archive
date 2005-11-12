@@ -143,7 +143,7 @@ Con_Clear_f
 */
 static void Con_Clear_f (void)
 {
-	memset (con.text, ' ', CON_TEXTSIZE);
+	memset (con.text, ' ', sizeof(con.text));
 }
 
 						
@@ -378,8 +378,8 @@ void Con_CheckResize (void)
 	{
 		width = 38;
 		con.linewidth = width;
-		con.totallines = CON_TEXTSIZE / con.linewidth;
-		memset (con.text, ' ', CON_TEXTSIZE);
+		con.totallines = sizeof(con.text) / con.linewidth;
+		memset (con.text, ' ', sizeof(con.text));
 	}
 	else
 	{

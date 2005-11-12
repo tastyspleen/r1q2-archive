@@ -36,6 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <stdlib.h>
 
 #ifdef USE_CURL
+#define CURL_STATICLIB
 #include <curl/curl.h>
 #endif
 
@@ -616,7 +617,7 @@ void CL_AddLightStyles (void);
 void CL_PrepRefresh (void);
 void CL_RegisterSounds (void);
 
-void CL_Quit_f (void);
+NORETURN void CL_Quit_f (void);
 
 void IN_Accumulate (void);
 

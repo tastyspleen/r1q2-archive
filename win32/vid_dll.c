@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // Quake refresh engine.
 
 #define WIN32_LEAN_AND_MEAN
-
+#define _WIN32_WINNT 0x0400
 #include "resource.h"
 #include "..\client\client.h"
 #include "winquake.h"
@@ -985,17 +985,6 @@ void VID_XY_Modified (cvar_t *cvar, char *old, char *newv)
 HHOOK		g_hKeyboardHook;
 
 cvar_t		*win_disablewinkey;
-
-//amd64 cc defines higher _WIN32 
-#ifndef _M_AMD64
-typedef struct tagKBDLLHOOKSTRUCT {
-    DWORD   vkCode;
-    DWORD   scanCode;
-    DWORD   flags;
-    DWORD   time;
-    ULONG_PTR dwExtraInfo;
-} KBDLLHOOKSTRUCT, FAR *LPKBDLLHOOKSTRUCT, *PKBDLLHOOKSTRUCT;
-#endif
 
 //FIXME: Nt4+ only :E
 LRESULT CALLBACK LowLevelKeyboardProc( int nCode, WPARAM wParam, LPARAM lParam )

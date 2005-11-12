@@ -240,7 +240,7 @@ void ( APIENTRY * qglMatrixMode )(GLenum mode);
 void ( APIENTRY * qglMultMatrixd )(const GLdouble *m);
 void ( APIENTRY * qglMultMatrixf )(const GLfloat *m);
 void ( APIENTRY * qglNewList )(GLuint list, GLenum mode);
-void ( APIENTRY * qglNormal3b )(GLbyte nx, GLbyte ny, GLbyte nz);
+/*void ( APIENTRY * qglNormal3b )(GLbyte nx, GLbyte ny, GLbyte nz);
 void ( APIENTRY * qglNormal3bv )(const GLbyte *v);
 void ( APIENTRY * qglNormal3d )(GLdouble nx, GLdouble ny, GLdouble nz);
 void ( APIENTRY * qglNormal3dv )(const GLdouble *v);
@@ -249,7 +249,7 @@ void ( APIENTRY * qglNormal3fv )(const GLfloat *v);
 void ( APIENTRY * qglNormal3i )(GLint nx, GLint ny, GLint nz);
 void ( APIENTRY * qglNormal3iv )(const GLint *v);
 void ( APIENTRY * qglNormal3s )(GLshort nx, GLshort ny, GLshort nz);
-void ( APIENTRY * qglNormal3sv )(const GLshort *v);
+void ( APIENTRY * qglNormal3sv )(const GLshort *v);*/
 void ( APIENTRY * qglNormalPointer )(GLenum type, GLsizei stride, const GLvoid *pointer);
 void ( APIENTRY * qglOrtho )(GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar);
 void ( APIENTRY * qglPassThrough )(GLfloat token);
@@ -839,9 +839,9 @@ void QGL_Shutdown( void )
 	qglDrawBuffer                = NULL;
 	qglDrawElements              = NULL;
 	qglDrawPixels                = NULL;
-	qglEdgeFlag                  = NULL;
-	qglEdgeFlagPointer           = NULL;
-	qglEdgeFlagv                 = NULL;
+	//qglEdgeFlag                  = NULL;
+	//qglEdgeFlagPointer           = NULL;
+	//qglEdgeFlagv                 = NULL;
 	qglEnable                    = NULL;
 	qglEnableClientState         = NULL;
 	qglEnd                       = NULL;
@@ -948,7 +948,7 @@ void QGL_Shutdown( void )
 	qglMultMatrixd               = NULL;
 	qglMultMatrixf               = NULL;
 	qglNewList                   = NULL;
-	qglNormal3b                  = NULL;
+	/*qglNormal3b                  = NULL;
 	qglNormal3bv                 = NULL;
 	qglNormal3d                  = NULL;
 	qglNormal3dv                 = NULL;
@@ -957,7 +957,7 @@ void QGL_Shutdown( void )
 	qglNormal3i                  = NULL;
 	qglNormal3iv                 = NULL;
 	qglNormal3s                  = NULL;
-	qglNormal3sv                 = NULL;
+	qglNormal3sv                 = NULL;*/
 	qglNormalPointer             = NULL;
 	qglOrtho                     = NULL;
 	qglPassThrough               = NULL;
@@ -1151,19 +1151,17 @@ void QGL_Shutdown( void )
 */
 qboolean QGL_Init( const char *dllname )
 {
-	// update 3Dfx gamma irrespective of underlying DLL
-	char envbuffer[1024];
+	char envbuffer[16];
 	float g;
 	char pathbuff[MAX_PATH];
 	WIN32_FILE_ATTRIBUTE_DATA	fileData;
 
 	g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
 
-	Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
-	putenv( envbuffer );
+	Com_sprintf( envbuffer, sizeof(envbuffer), "%g", g );
 
-	Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
-	putenv( envbuffer );
+	SetEnvironmentVariable ("SSTV2_GAMMA", envbuffer);
+	SetEnvironmentVariable ("SST_GAMMA", envbuffer);
 
 	GetCurrentDirectory (sizeof(pathbuff)-16, pathbuff);
 	strcat (pathbuff, "\\opengl32.dll");
@@ -1256,9 +1254,9 @@ qboolean QGL_Init( const char *dllname )
 	qglDrawBuffer                = GPA( "glDrawBuffer" );
 	qglDrawElements              = GPA( "glDrawElements" );
 	qglDrawPixels                = GPA( "glDrawPixels" );
-	qglEdgeFlag                  = GPA( "glEdgeFlag" );
-	qglEdgeFlagPointer           = GPA( "glEdgeFlagPointer" );
-	qglEdgeFlagv                 = GPA( "glEdgeFlagv" );
+	//qglEdgeFlag                  = GPA( "glEdgeFlag" );
+	//qglEdgeFlagPointer           = GPA( "glEdgeFlagPointer" );
+	//qglEdgeFlagv                 = GPA( "glEdgeFlagv" );
 	qglEnable                    = 	GPA( "glEnable" );
 	/*qglEnable = R1LogEnable;
 	GPA( "glEnable" );*/
@@ -1367,7 +1365,7 @@ qboolean QGL_Init( const char *dllname )
 	qglMultMatrixd               = 	GPA( "glMultMatrixd" );
 	qglMultMatrixf               = 	GPA( "glMultMatrixf" );
 	qglNewList                   = 	GPA( "glNewList" );
-	qglNormal3b                  = 	GPA( "glNormal3b" );
+	/*qglNormal3b                  = 	GPA( "glNormal3b" );
 	qglNormal3bv                 = 	GPA( "glNormal3bv" );
 	qglNormal3d                  = 	GPA( "glNormal3d" );
 	qglNormal3dv                 = 	GPA( "glNormal3dv" );
@@ -1376,7 +1374,7 @@ qboolean QGL_Init( const char *dllname )
 	qglNormal3i                  = 	GPA( "glNormal3i" );
 	qglNormal3iv                 = 	GPA( "glNormal3iv" );
 	qglNormal3s                  = 	GPA( "glNormal3s" );
-	qglNormal3sv                 = 	GPA( "glNormal3sv" );
+	qglNormal3sv                 = 	GPA( "glNormal3sv" );*/
 	qglNormalPointer             = 	GPA( "glNormalPointer" );
 	qglOrtho                     = 	GPA( "glOrtho" );
 	qglPassThrough               = 	GPA( "glPassThrough" );

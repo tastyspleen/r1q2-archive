@@ -66,9 +66,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #pragma warning(3 : 4056)
 #pragma warning(3 : 4191)
 #pragma warning(3 : 4254)
-#pragma warning(disable: 4996)		// deprecated functions
+//#pragma warning(disable: 4996)		// deprecated functions
 
 #pragma intrinsic(memcmp)
+
+#define NORETURN __declspec(noreturn)
+#define RESTRICT __declspec(restrict)
+#define NOALIAS __declspec(noalias)
 
 #define alloca _alloca
 #define snprintf _snprintf
@@ -106,6 +110,9 @@ typedef unsigned __int16 uint16;
 typedef unsigned __int64 uint64;
 #else /* NON-WIN32 */
 #include <stdint.h>
+#define RESTRICT
+#define NORETURN
+#define NOALIAS
 typedef int32_t int32;
 typedef int16_t int16;
 typedef int64_t int64;
@@ -387,8 +394,8 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 char *COM_SkipPath (char *pathname);
 void COM_StripExtension (const char *in, char *out);
 void COM_FileBase (char *in, char *out);
-void COM_FilePath (char *in, char *out);
-void COM_DefaultExtension (char *path, char *extension);
+void COM_FilePath (const char *in, char *out);
+void COM_DefaultExtension (char *path, const char *extension);
 
 const char *COM_Parse (char **data_p);
 // data is an in/out parm, returns a parsed out token

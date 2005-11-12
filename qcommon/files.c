@@ -1293,7 +1293,7 @@ void FS_SetGamedir (const char *dir)
 	if (strstr(dir, "..") || strchr(dir, '/')
 		|| strchr(dir, '\\') || strchr(dir, ':') )
 	{
-		Com_Printf ("Gamedir should be a single filename, not a path\n", LOG_GENERAL);
+		Com_Printf ("Gamedir '%s' should be a single filename, not a path\n", LOG_GENERAL, dir);
 		return;
 	}
 

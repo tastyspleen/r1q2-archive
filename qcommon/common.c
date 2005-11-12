@@ -171,7 +171,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 };
 
 void (EXPORT *Z_Free)(const void *buf);
-void *(EXPORT *Z_TagMalloc)(int size, int tag);
+RESTRICT void *(EXPORT *Z_TagMalloc)(int size, int tag);
 
 /*
 ============================================================================
@@ -362,11 +362,13 @@ A Com_Printf that only shows up if the "developer" cvar is set
 */
 void _Com_DPrintf (char const *fmt, ...)
 {
+#if !(__STDC_VERSION__ == 199901L || _MSC_VER >= 1400)
 	if (!developer->intvalue)
 	{
 		return;
 	}
 	else
+#endif
 	{
 		va_list		argptr;
 		char		msg[MAXPRINTMSG];
@@ -492,7 +494,7 @@ Both client and server can use this, and it will
 do the apropriate things.
 =============
 */
-void Com_Quit (void)
+NORETURN void Com_Quit (void)
 {
 	//r1: optional quit message, reworded "Server quit"
 #ifndef NO_SERVER
@@ -2776,7 +2778,7 @@ void Z_Verify (const char *format, ...)
 	}
 }
 
-void * EXPORT Z_TagMallocDebug (int size, int tag)
+RESTRICT void * EXPORT Z_TagMallocDebug (int size, int tag)
 {
 	zhead_t	*z;
 
@@ -2811,10 +2813,13 @@ void * EXPORT Z_TagMallocDebug (int size, int tag)
 	z->magic = Z_MAGIC_DEBUG;
 	z->tag = tag;
 	z->size = size;
-#ifdef _WIN32
+
+#if defined _WIN32
 	z->allocationLocation = _ReturnAddress ();
+#elif defined LINUX
+	z->allocationLocation = __builtin_return_address ();
 #else
-	//FIXME linux
+	//FIXME: other OSes/CCs
 	z->allocationLocation = 0;
 #endif
 
@@ -2833,7 +2838,7 @@ void * EXPORT Z_TagMallocDebug (int size, int tag)
 Z_TagMalloc
 ========================
 */
-void * EXPORT Z_TagMallocRelease (int size, int tag)
+RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 {
 	zhead_t	*z;
 
@@ -2862,13 +2867,20 @@ void * EXPORT Z_TagMallocRelease (int size, int tag)
 	return (void *)(z+1);
 }
 
-void * EXPORT Z_TagMallocGame (int size, int tag)
+RESTRICT void * EXPORT Z_TagMallocGame (int size, int tag)
 {
 	z_memloc_t	*loc, *last, *newentry;
 	byte		*b;
 
-#ifdef _WIN32
-	void *retAddr = _ReturnAddress();
+	void		*retAddr;
+
+#if defined _WIN32
+	retAddr = _ReturnAddress ();
+#elif defined LINUX
+	retAddr = __builtin_return_address ();
+#else
+	//FIXME: other OSes/CCs
+	retAddr = 0;
 #endif
 
 	//aieeeee.
@@ -2884,7 +2896,7 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 		}
 		else
 		{
-			Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes at 0x%p!", retAddr);
+			Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes from code at 0x%p!", retAddr);
 		}
 	}
 
@@ -2905,12 +2917,7 @@ void * EXPORT Z_TagMallocGame (int size, int tag)
 	newentry->size = size;
 	newentry->next = last;
 	newentry->time = curtime;
-#ifdef _WIN32
 	newentry->allocationLocation = retAddr;
-#else
-	//FIXME linux
-	newentry->allocationLocation = 0;
-#endif
 	loc->next = newentry;
 
 	return (void *)b;
@@ -2930,7 +2937,7 @@ void EXPORT Z_FreeGame (void *buf)
 			if (*(int *)((byte *)buf + loc->size) != 0xFDFEFDFE)
 			{
 				Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago at 0x%p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
+				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago from code at 0x%p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
 			}
 			free_from_game = true;
 			Z_Free (buf);
@@ -2969,7 +2976,7 @@ void EXPORT Z_FreeTagsGame (int tag)
 		if (*(int *)((byte *)loc->address + loc->size) != 0xFDFEFDFE)
 		{
 			Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago)", loc->size, loc->address, curtime - loc->time);
+			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago from code at %p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
 		}
 	}
 

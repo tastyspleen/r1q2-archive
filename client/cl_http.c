@@ -738,7 +738,7 @@ void CL_HTTP_Cleanup (qboolean fullShutdown)
 		if (dl->file)
 		{
 			fclose (dl->file);
-			unlink (dl->filePath);
+			remove (dl->filePath);
 			dl->file = NULL;
 		}
 
@@ -862,7 +862,7 @@ static void CL_FinishHTTPDownload (void)
 						downloading_pak = false;
 
 					if (isFile)
-						unlink (dl->filePath);
+						remove (dl->filePath);
 					Com_Printf ("HTTP(%s): 404 File Not Found [%d remaining files]\n", LOG_CLIENT, dl->queueEntry->quakePath, pendingCount);
 					curl_easy_getinfo (curl, CURLINFO_SIZE_DOWNLOAD, &fileSize);
 					if (fileSize > 512)
@@ -892,7 +892,7 @@ static void CL_FinishHTTPDownload (void)
 			case CURLE_COULDNT_CONNECT:
 			case CURLE_COULDNT_RESOLVE_PROXY:
 				if (isFile)
-					unlink (dl->filePath);
+					remove (dl->filePath);
 				Com_Printf ("Fatal HTTP error: %s\n", LOG_CLIENT|LOG_WARNING, curl_easy_strerror (result));
 				curl_multi_remove_handle (multi, dl->curl);
 				if (abortDownloads)
@@ -904,7 +904,7 @@ static void CL_FinishHTTPDownload (void)
 				if (!strcmp (dl->queueEntry->quakePath + i - 4, ".pak"))
 					downloading_pak = false;
 				if (isFile)
-					unlink (dl->filePath);
+					remove (dl->filePath);
 				Com_Printf ("HTTP download failed: %s\n", LOG_CLIENT|LOG_WARNING, curl_easy_strerror (result));
 				curl_multi_remove_handle (multi, dl->curl);
 				continue;

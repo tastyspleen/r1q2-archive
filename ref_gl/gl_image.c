@@ -2105,7 +2105,7 @@ image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagety
 				}
 				fclose (dump);
 			}
-			ri.Sys_Error (ERR_DROP, "MAX_GLTEXTURES");
+			ri.Sys_Error (ERR_FATAL, "MAX_GLTEXTURES");
 		}
 		numgltextures++;
 	}

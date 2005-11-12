@@ -48,15 +48,16 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 	stepscale = (float)inrate / dma.speed;	// this is usually 0.5, 1, or 2
 
 	outcount = (int)(sc->length / stepscale);
-	sc->length = outcount;
-
-	if (sc->length == 0)
+	
+	if (outcount == 0)
 	{
-		Com_Printf ("ResampleSfx: Resampling %s results in empty sound!\n", LOG_CLIENT|LOG_WARNING, sfx->name);
+		Com_Error (ERR_DROP, "ResampleSfx: 0 length sound encountered when resampling '%s'! (%d -> %d, %d, %d, %g)\nPlease post these details on the R1Q2 forum as well as a description of how you encountered this error.", LOG_CLIENT|LOG_WARNING, sfx->name, sc->length, outcount, inrate, dma.speed, stepscale);
 		//free at next opportunity
-		sfx->registration_sequence = 0;
-		return;
+		//sfx->registration_sequence = 0;
+		//return;
 	}
+
+	sc->length = outcount;
 
 	if (sc->loopstart != -1)
 		sc->loopstart = (int)(sc->loopstart / stepscale);

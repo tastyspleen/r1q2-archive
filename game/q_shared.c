@@ -964,16 +964,16 @@ COM_FilePath
 Returns the path up to, but not including the last /
 ============
 */
-void COM_FilePath (char *in, char *out)
+void COM_FilePath (const char *in, char *out)
 {
-	char *s;
+	const char *s;
 	
 	s = in + strlen(in) - 1;
 	
 	while (s != in && *s != '/')
 		s--;
 
-	strncpy (out,in, s-in);
+	strncpy (out, in, s-in);
 	out[s-in] = 0;
 }
 
@@ -983,7 +983,7 @@ void COM_FilePath (char *in, char *out)
 COM_DefaultExtension
 ==================
 */
-void COM_DefaultExtension (char *path, char *extension)
+void COM_DefaultExtension (char *path, const char *extension)
 {
 	char    *src;
 //

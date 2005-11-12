@@ -158,8 +158,13 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 	GL_LerpVerts( paliashdr->num_xyz, v, ov, verts, lerp, move, frontv, backv );
 
 	//TODO: use this somehow
-	/*qglEnableClientState (GL_VERTEX_ARRAY);	qglEnableClientState (GL_NORMAL_ARRAY);	qglEnableClientState (GL_TEXTURE_COORD_ARRAY);
-	qglVertexPointer (3, GL_FLOAT, 0, inVertexArray);	qglNormalPointer (GL_FLOAT, 12, inNormalsArray);	qglTexCoordPointer (2, GL_FLOAT, 0, inCoordArray);
+	/*qglEnableClientState (GL_VERTEX_ARRAY);
+	qglEnableClientState (GL_NORMAL_ARRAY);
+	qglEnableClientState (GL_TEXTURE_COORD_ARRAY);
+
+	qglVertexPointer (3, GL_FLOAT, 0, inVertexArray);
+	qglNormalPointer (GL_FLOAT, 12, inNormalsArray);
+	qglTexCoordPointer (2, GL_FLOAT, 0, inCoordArray);
 
 	qglDrawElements (GL_TRIANGLES, inNumIndexes, GL_UNSIGNED_INT, inIndexArray);*/
 
@@ -390,20 +395,6 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 
 	paliashdr = (dmdl_t *)currentmodel->extradata;
 
-	if ( ( e->frame >= paliashdr->num_frames ) || ( e->frame < 0 ) )
-	{
-		ri.Con_Printf (PRINT_DEVELOPER, "R_CullAliasModel %s: no such frame %d\n", 
-			currentmodel->name, e->frame);
-		e->frame = 0;
-	}
-
-	if ( ( e->oldframe >= paliashdr->num_frames ) || ( e->oldframe < 0 ) )
-	{
-		ri.Con_Printf (PRINT_DEVELOPER, "R_CullAliasModel %s: no such oldframe %d\n", 
-			currentmodel->name, e->oldframe);
-		e->oldframe = 0;
-	}
-
 	pframe = ( daliasframe_t * ) ( ( byte * ) paliashdr + 
 		                              paliashdr->ofs_frames +
 									  e->frame * paliashdr->framesize);
@@ -536,6 +527,23 @@ void R_DrawAliasModel (entity_t *e)
 	vec3_t		bbox[8];
 	image_t		*skin;
 
+	paliashdr = (dmdl_t *)currentmodel->extradata;
+
+	//r1: always test, even for weapon models
+	if ( ( e->frame >= paliashdr->num_frames ) || ( e->frame < 0 ) )
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "R_DrawAliasModel %s: no such frame %d\n", 
+			currentmodel->name, e->frame);
+		e->frame = 0;
+	}
+
+	if ( ( e->oldframe >= paliashdr->num_frames ) || ( e->oldframe < 0 ) )
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "R_DrawAliasModel %s: no such oldframe %d\n", 
+			currentmodel->name, e->oldframe);
+		e->oldframe = 0;
+	}
+
 	if ( !( e->flags & RF_WEAPONMODEL ) )
 	{
 		if ( R_CullAliasModel( bbox, e ) )
@@ -547,8 +555,6 @@ void R_DrawAliasModel (entity_t *e)
 		if ( r_lefthand->value == 2 )
 			return;
 	}
-
-	paliashdr = (dmdl_t *)currentmodel->extradata;
 
 	//
 	// get lighting information
