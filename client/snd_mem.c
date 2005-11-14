@@ -51,7 +51,7 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 	
 	if (outcount == 0)
 	{
-		Com_Error (ERR_DROP, "ResampleSfx: 0 length sound encountered when resampling '%s'! (%d -> %d, %d, %d, %g)\nPlease post these details on the R1Q2 forum as well as a description of how you encountered this error.", LOG_CLIENT|LOG_WARNING, sfx->name, sc->length, outcount, inrate, dma.speed, stepscale);
+		Com_Error (ERR_DROP, "ResampleSfx: 0 length sound encountered when resampling '%s'! (%d -> %d, %d, %d, %g). Please post these details on the R1Q2 forum as well as a description of how you encountered this error and include the .wav if possible.", sfx->name, sc->length, outcount, inrate, dma.speed, stepscale);
 		//free at next opportunity
 		//sfx->registration_sequence = 0;
 		//return;

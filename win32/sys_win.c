@@ -1378,7 +1378,7 @@ BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBas
 		strcpy (verString, "unknown");
 	}	
 
-	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%ul bytes, version %s)\n", ModuleBase, ModuleBase + ModuleSize, ModuleName, ModuleSize, verString);
+	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%lu bytes, version %s)\n", ModuleBase, ModuleBase + (DWORD64)ModuleSize, ModuleName, ModuleSize, verString);
 	return TRUE;
 }
 
@@ -1435,7 +1435,7 @@ BOOL CALLBACK EnumerateLoadedModulesProcInfo (PSTR ModuleName, DWORD64 ModuleBas
 	DWORD	addr = (DWORD)UserContext;
 	if (addr > ModuleBase && addr < ModuleBase + ModuleSize)
 	{
-		strcpy (szModuleName, ModuleName);
+		strncpy (szModuleName, ModuleName, sizeof(szModuleName)-1);
 		return FALSE;
 	}
 	return TRUE;
