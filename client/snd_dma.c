@@ -23,6 +23,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/redblack.h"
 #include "snd_loc.h"
 
+//FIXME OpenAL
+#ifdef _WIN32
+extern qboolean ActiveApp;
+#endif
+
 void S_Play(void);
 void S_SoundList_f (void);
 void S_Update_(void);
@@ -814,7 +819,7 @@ struct sfx_s *S_RegisterSexedSound (char *base, int entnum)
 			Q_strncpy(model, p, sizeof(model)-1);
 			p = strchr(model, '/');
 			if (p)
-				*p = 0;
+				p[0] = 0;
 		}
 	}
 
@@ -1650,7 +1655,7 @@ void S_Update_OpenAL (vec3_t position, const vec3_t velocity, const vec3_t at, c
 		if (eaxEnv != alConfig.eaxState)
 		{
 			alConfig.eaxState = eaxEnv;
-			qalEAXSet (&DSPROPSETID_EAX20_ListenerProperties, DSPROPERTY_EAXLISTENER_ENVIRONMENT | DSPROPERTY_EAXLISTENER_DEFERRED, 0, &eaxEnv, sizeof(eaxEnv));
+			qalEAXSet (&DSPROPSETID_EAX20_ListenerProperties, DSPROPERTY_EAXLISTENER_ENVIRONMENT | DSPROPERTY_EAXLISTENER_IMMEDIATE, 0, &eaxEnv, sizeof(eaxEnv));
 		}
 	}
 #endif

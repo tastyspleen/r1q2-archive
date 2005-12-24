@@ -1034,7 +1034,7 @@ void		Com_EndRedirect (qboolean flush);
 void 		_Com_DPrintf (const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void 		Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
 void 		Com_Error (int code, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
-NORETURN void 		Com_Quit (void);
+void 		Com_Quit (void);
 
 //extern __inline int			Com_ServerState (void);		// this should have just been a cvar...
 //extern __inline void		Com_SetServerState (int state);
@@ -1189,8 +1189,8 @@ char	*Sys_ConsoleInput (void);
 void	Sys_ConsoleOutput (const char *string);
 #endif
 void	Sys_SendKeyEvents (void);
-void	Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
-NORETURN void	Sys_Quit (void);
+NORETURN void	Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
+void	Sys_Quit (void);
 char	*Sys_GetClipboardData( void );
 void	Sys_CopyProtect (void);
 void	Sys_SetWindowText(char *buff);

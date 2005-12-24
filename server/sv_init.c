@@ -45,7 +45,7 @@ int SV_FindIndex (const char *name, int start, int maxIndex, qboolean create)
 			Com_Printf ("GAME WARNING: SV_FindIndex: NULL or empty name, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 3)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return 0;
 	}
 
@@ -302,7 +302,7 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 		p = strrchr(sv.name, '.');
 		if (!p)
 			Com_Error (ERR_DROP, "Aiee, sv.name is missing it's period: %s", sv.name);
-		*p = 0;
+		p[0] = 0;
 	}
 
 	Com_sprintf (sv.configstrings[CS_MAPCHECKSUM],sizeof(sv.configstrings[CS_MAPCHECKSUM]),
@@ -452,7 +452,7 @@ void SV_InitGame (void)
 	// r1: spam warning for those stupid servers that run 250 maxclients and 32 player slots
 	if (maxclients->intvalue > 64)
 		Com_Printf ("WARNING: Setting maxclients higher than the maximum number of players you intend to have playing can negatively affect server performance and bandwidth use.\n", LOG_SERVER|LOG_WARNING);
-
+	
 	// init network stuff
 	if (maxclients->intvalue > 1)
 		NET_Config (NET_SERVER);

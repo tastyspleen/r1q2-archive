@@ -913,7 +913,7 @@ void CL_Connect_f (void)
 
 	p = strchr (server, '/');
 	if (p)
-		*p = 0;
+		p[0] = 0;
 
 	NET_Config (NET_CLIENT);		// allow remote
 
@@ -1595,7 +1595,7 @@ safe:
 
 		p = strchr (buff, ':');
 		if (p)
-			*p = 0;
+			p[0] = 0;
 		Cvar_ForceSet ("$serverip", buff);
 
 		MSG_WriteByte (clc_stringcmd);
@@ -1686,7 +1686,7 @@ safe:
 							{
 								while (*p && *p == '\n')
 								{
-									*p = 0;
+									p[0] = 0;
 									p++;
 								}
 								break;
@@ -1715,7 +1715,7 @@ safe:
 							p = strchr (player_score, ' ');
 							if (p)
 							{
-								*p = 0;
+								p[0] = 0;
 								p++;
 								if (isdigit (*p))
 								{
@@ -1723,7 +1723,7 @@ safe:
 									p = strchr (player_ping, ' ');
 									if (p)
 									{
-										*p = 0;
+										p[0] = 0;
 										p++;
 										if (*p == '"')
 										{
@@ -1731,7 +1731,7 @@ safe:
 											p = strchr (player_name, '"');
 											if (p)
 											{
-												*p = 0;
+												p[0] = 0;
 												p++;
 												if (*p == '\n')
 												{
@@ -1780,7 +1780,7 @@ safe:
 	// challenge from the server we are connecting to
 	if (!strcmp(c, "challenge"))
 	{
-		int		protocol = 0;
+		int		protocol = ORIGINAL_PROTOCOL_VERSION;
 		int		i;
 		char	*p;
 
@@ -1793,6 +1793,8 @@ safe:
 			if (!strncmp (p, "p=", 2))
 			{
 				p += 2;
+				if (!p[0])
+					continue;
 				for (;;)
 				{
 					i = atoi (p);
@@ -1807,6 +1809,17 @@ safe:
 				}
 				break;
 			}
+#ifdef ANTICHEAT
+			else if (!strncmp (p, "ac=", 3))
+			{
+				p+= 3;
+				if (!p[0])
+					continue;
+				i = atoi (p);
+				if (i)
+					Sys_GetAntiCheatAPI ();
+			}
+#endif
 		}
 
 		//r1: reset the timer so we don't send dup. getchallenges
@@ -1951,7 +1964,7 @@ void CL_FixUpGender(void)
 
 		Q_strncpy(sk, skin->string, sizeof(sk) - 1);
 		if ((p = strchr(sk, '/')) != NULL)
-			*p = 0;
+			p[0] = 0;
 		if (Q_stricmp(sk, "male") == 0 || Q_stricmp(sk, "cyborg") == 0)
 			Cvar_Set ("gender", "male");
 		else if (Q_stricmp(sk, "female") == 0 || Q_stricmp(sk, "crackhor") == 0)
@@ -3357,7 +3370,7 @@ void CL_InitLocal (void)
 
 	//haxx
 	glVersion = Cvar_VariableString ("cl_version");
-	(Cvar_ForceSet ("cl_version", va("R1Q2 %s; %s", VERSION, *glVersion ? glVersion : "unknown renderer" )))->changed = version_update;
+	(Cvar_ForceSet ("cl_version", va("R1Q2 %s; %s", VERSION, glVersion[0] ? glVersion : "unknown renderer" )))->changed = version_update;
 
 	name->changed = _name_changed;
 
@@ -3606,7 +3619,7 @@ void CL_RefreshInputs (void)
 	// process new key events
 	Sys_SendKeyEvents ();
 
-#if (defined JOYSTICK) || (defined __linux__)
+#if (defined JOYSTICK) || (defined LINUX)
 	// process mice & joystick events
 	IN_Commands ();
 #endif
@@ -4005,7 +4018,7 @@ void CL_Init (void)
 	Cbuf_Execute ();
 
 	Con_Init ();	
-#if defined __linux__ || defined __sgi
+#if defined __linux__ || defined __sgi || defined __FreeBSD__
 	S_Init (true);	
 
 	VID_Init ();

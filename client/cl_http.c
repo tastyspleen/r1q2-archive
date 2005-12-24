@@ -166,7 +166,7 @@ static void CL_EscapeHTTPPath (const char *filePath, char *escaped)
 			p++;
 		}
 	}
-	*p = 0;
+	p[0] = 0;
 
 	//using ./ in a url is legal, but all browsers condense the path and some IDS / request
 	//filtering systems act a bit funky if http requests come in with uncondensed paths.
@@ -257,9 +257,9 @@ static void CL_StartHTTPDownload (dlqueue_t *entry, dlhandle_t *dl)
 	}
 	else
 	{
-		strcpy (tempFile, entry->quakePath);
-		Com_sprintf (dl->filePath, sizeof(dl->filePath), "%s/%s", FS_Gamedir(), tempFile);
+		Com_sprintf (dl->filePath, sizeof(dl->filePath), "%s/%s", FS_Gamedir(), entry->quakePath);
 
+		Com_sprintf (tempFile, sizeof(tempFile), "%s/%s", Cvar_VariableString ("gamedir"), entry->quakePath);
 		CL_EscapeHTTPPath (dl->filePath, escapedFilePath);
 
 		strcat (dl->filePath, ".tmp");
@@ -461,7 +461,7 @@ qboolean CL_QueueHTTPDownload (const char *quakePath)
 	if (needList)
 	{
 		//grab the filelist
-		CL_QueueHTTPDownload (va("%s.filelist", FS_Gamedir()));
+		CL_QueueHTTPDownload (va("%s.filelist", Cvar_VariableString ("gamedir")));
 
 		//this is a nasty hack to let the server know what we're doing so admins don't
 		//get confused by a ton of people stuck in CNCT state. it's assumed the server
@@ -477,8 +477,13 @@ qboolean CL_QueueHTTPDownload (const char *quakePath)
 	if (cl_http_filelists->intvalue && len > 4 && !Q_stricmp (quakePath + len - 4, ".bsp"))
 	{
 		char	listPath[MAX_OSPATH];
-		COM_StripExtension (quakePath, listPath);
+		char	filePath[MAX_OSPATH];
+
+		Com_sprintf (filePath, sizeof(filePath), "%s/%s", Cvar_VariableString ("gamedir"), quakePath);
+
+		COM_StripExtension (filePath, listPath);
 		strcat (listPath, ".filelist");
+		
 		CL_QueueHTTPDownload (listPath);
 	}
 
@@ -670,7 +675,7 @@ static void CL_ParseFileList (dlhandle_t *dl)
 		p = strchr (list, '\n');
 		if (p)
 		{
-			*p = 0;
+			p[0] = 0;
 			if (list[0])
 				CL_CheckAndQueueDownload (list);
 			list = p + 1;

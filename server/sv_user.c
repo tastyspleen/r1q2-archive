@@ -893,7 +893,7 @@ static void SV_NextDownload_f (void)
 		//	r = MAX_USABLEMSG - sv_client->datagram.cursize - 400;
 
 		//if (sv_client->downloadcount >= 871224)
-		//	Q_DEBUGBREAKPOINT;
+		//	Sys_DebugBreak ();
 
 		while ( z.total_out < r )
 		{
@@ -1727,7 +1727,7 @@ const char *SV_GetClientIP (void)
 	p = NET_AdrToString (&sv_client->netchan.remote_address);
 	q = strchr (p, ':');
 	if (q)
-		*q = 0;
+		q[0] = 0;
 
 	return p;
 }

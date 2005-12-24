@@ -735,6 +735,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 		}
 		else if (!fs_noextern->intvalue)
 		{
+			struct stat	statInfo;
 			int filelen;
 			// check a file in the directory tree
 			
@@ -750,6 +751,17 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 					FS_AddToCache (netpath, filelen, 0, filename, NULL);
 
 				return filelen;
+			}
+
+			//fix for moronic implementations that allow fopen (FILE OPEN) to open a directory
+			//(this means you linux and krew)
+			if (stat (netpath, &statInfo))
+				continue;
+
+			if (statInfo.st_mode & S_IFDIR)
+			{
+				Com_Printf ("WARNING: Tried to open a directory as a file: %s\n", LOG_WARNING, netpath);
+				continue;
 			}
 
 			*file = fopen (netpath, "rb");

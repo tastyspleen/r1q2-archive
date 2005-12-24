@@ -1454,7 +1454,7 @@ static void SV_Addhole_f (void)
 	s = strchr (Cmd_Argv(1), '/');
 	if (s)
 	{
-		*s = 0;
+		s[0] = 0;
 		s++;
 		if (!*s)
 		{
@@ -1641,7 +1641,7 @@ static void SV_ListStuffedCommands_f (void)
 	Com_Printf ("On Connect:\n", LOG_GENERAL);
 	while (s)
 	{
-		*s = 0;
+		s[0] = 0;
 		Com_Printf ("%d: %s\n", LOG_GENERAL, i, p);
 		i++;
 		s++;
@@ -1658,7 +1658,7 @@ static void SV_ListStuffedCommands_f (void)
 	Com_Printf ("\nOn Begin:\n", LOG_GENERAL);
 	while (s)
 	{
-		*s = 0;
+		s[0] = 0;
 		Com_Printf ("%d: %s\n", LOG_GENERAL, i, p);
 		i++;
 		s++;

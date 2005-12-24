@@ -66,13 +66,31 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #pragma warning(3 : 4056)
 #pragma warning(3 : 4191)
 #pragma warning(3 : 4254)
+#pragma warning(3 : 4287)
+#pragma warning(3 : 4296)
+#pragma warning(3 : 4514)
+#pragma warning(3 : 4545)
+#pragma warning(3 : 4546)
+#pragma warning(3 : 4547)
+#pragma warning(3 : 4548)
+#pragma warning(3 : 4549)
+#pragma warning(3 : 4555)
+#pragma warning(3 : 4905)
+#pragma warning(3 : 4906)
+#pragma warning(3 : 4245)
 //#pragma warning(disable: 4996)		// deprecated functions
 
 #pragma intrinsic(memcmp)
 
+#if _MSC_VER > 14000
 #define NORETURN __declspec(noreturn)
 #define RESTRICT __declspec(restrict)
 #define NOALIAS __declspec(noalias)
+#else
+#define RESTRICT
+#define NORETURN
+#define NOALIAS
+#endif
 
 #define alloca _alloca
 #define snprintf _snprintf
@@ -99,7 +117,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#else
  //#define DEBUGBREAKPOINT DebugBreak
 //#endif
-#define	Q_DEBUGBREAKPOINT Sys_DebugBreak()
 #define __attribute__(x) 
 #define PACKED_STRUCT
 typedef __int32 int32;
@@ -110,6 +127,7 @@ typedef unsigned __int16 uint16;
 typedef unsigned __int64 uint64;
 #else /* NON-WIN32 */
 #include <stdint.h>
+#define WINAPI
 #define RESTRICT
 #define NORETURN
 #define NOALIAS
@@ -128,13 +146,6 @@ typedef uint64_t uint64;
 void Q_strlwr (char *str);
 int Q_vsnprintf (char *buff, size_t len, const char *fmt, va_list va);
 //int Q_snprintf (char *buff, size_t len, const char *fmt, ...);
-#ifdef LINUX
-#define	Q_DEBUGBREAKPOINT _Q_DEBUGBREAKPOINT()
-//#define DEBUGBREAKPOINT __asm ("int $3")
-#else
-#define	Q_DEBUGBREAKPOINT ((void)0)
-#define DEBUGBREAKPOINT ((void)0)
-#endif
 
 #endif
 
@@ -404,6 +415,10 @@ int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...) __attribut
 
 void Com_PageInMemory (byte *buffer, int size);
 
+#ifdef ANTICHEAT
+void Sys_GetAntiCheatAPI (void);
+#endif
+
 //=============================================
 
 // portable case insensitive compare
@@ -501,7 +516,7 @@ void Sys_Sleep (int msec);
 #define	LOG_GAMEDEBUG	0x8000
 
 // this is only here so the functions in q_shared.c and q_shwin.c can link
-void Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
+NORETURN void Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
 void Com_Printf (const char *fmt, int level, ...) __attribute__ ((format (printf, 1, 3)));
 
 

@@ -96,12 +96,16 @@ V_AddParticle
 
 =====================
 */
-void V_AddParticle (vec3_t org, int color, float alpha)
+void V_AddParticle (vec3_t org, unsigned color, float alpha)
 {
 	particle_t	*p;
 
 	if (r_numparticles >= MAX_PARTICLES)
 		return;
+
+	if (color > 0xFF)
+		Com_Error (ERR_DROP, "V_AddParticle: bad color %d", color);
+
 	p = &r_particles[r_numparticles++];
 	VectorCopy (org, p->origin);
 	p->color = color;

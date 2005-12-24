@@ -1,13 +1,9 @@
 #include "../qcommon/qcommon.h"
 
-#ifdef _WIN32
-#include "../win32/winquake.h"
-#endif
-
 #ifdef USE_OPENAL
-#include "AL/al.h"
-#include "AL/alc.h"
-#include "AL/altypes.h"
+#include <AL/al.h>
+#include <AL/alc.h>
+#include <AL/altypes.h>
 
 #include "client.h"
 

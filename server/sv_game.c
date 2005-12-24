@@ -46,7 +46,7 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 			Com_Printf ("GAME WARNING: Unicast to illegal entity index %d.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, p);
 
 		if (sv_gamedebug->intvalue >= 3)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 
@@ -58,7 +58,7 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 		Com_Printf ("GAME ERROR: Attempted to write %d byte %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, MSG_GetLength(), svc_strings[MSG_GetType()], p-1);
 		
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 
 		MSG_FreeData();
 		return;
@@ -87,7 +87,7 @@ void EXPORT PF_dprintf (const char *fmt, ...)
 			Com_Printf ("GAME WARNING: dprintf: message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 	}
 	va_end (argptr);
 
@@ -121,7 +121,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 		Com_Printf ("GAME ERROR: cprintf: message overflow.\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 
@@ -138,7 +138,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 				Com_Printf ("GAME WARNING: cprintf to a non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
 
 			if (sv_gamedebug->intvalue >= 3)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 			return;
 		}
 
@@ -149,7 +149,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 			Com_Printf ("GAME ERROR: cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
 
 			if (sv_gamedebug->intvalue >= 2)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 			return;
 		}
 
@@ -185,7 +185,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 			Com_Printf ("GAME WARNING: centerprintf to NULL ent, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 3)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 
@@ -198,7 +198,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 			Com_Printf ("GAME WARNING: centerprintf to non-client entity %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n);
 
 		if (sv_gamedebug->intvalue >= 3)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 
@@ -208,7 +208,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 		Com_Printf ("GAME ERROR: centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
 
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 
@@ -219,7 +219,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 			Com_Printf ("GAME WARNING: centerprintf message overflow.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 3)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 	}
 	va_end (argptr);
 
@@ -339,7 +339,7 @@ void EXPORT PF_Configstring (int index, char *val)
 			goto fixed;
 		}
 
-		*p = 0;
+		p[0] = 0;
 		p++;
 		model_name = p;
 		if (!*model_name)
@@ -358,7 +358,7 @@ void EXPORT PF_Configstring (int index, char *val)
 			goto fixed;
 		}
 
-		*p = 0;
+		p[0] = 0;
 		p++;
 		skin_name = p;
 
@@ -497,7 +497,7 @@ fixed:
 			Com_Printf ("GAME WARNING: Redundant update of configstring index %d (%s).\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
 
 		if (sv_gamedebug->intvalue >= 3)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 
 		return;
 	}
@@ -527,7 +527,7 @@ void EXPORT PF_WriteChar (int c)
 		{
 			Com_Printf ("GAME WARNING: Called gi.WriteChar (%d) which exceeds range for char.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, c);
 			if (sv_gamedebug->intvalue > 1)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 		}
 	}
 	MSG_WriteChar (c);
@@ -541,7 +541,7 @@ void EXPORT PF_WriteByte (int c)
 		{
 			Com_Printf ("GAME WARNING: Called gi.WriteByte (%d) which exceeds range for byte.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, c);
 			if (sv_gamedebug->intvalue > 1)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 		}
 	}
 	MSG_WriteByte (c & 0xFF);
@@ -647,7 +647,7 @@ void EXPORT PF_StartSound (edict_t *entity, int channel, int sound_num, float vo
 			Com_Printf ("GAME WARNING: PF_StartSound: NULL entity, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 	SV_StartSound (NULL, entity, channel, sound_num, volume, attenuation, timeofs);

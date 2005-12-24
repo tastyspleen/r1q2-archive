@@ -909,7 +909,7 @@ static void PM_FlyMove (void)
 	{
 		drop = 0;
 
-		friction = pm_friction*1.5;	// extra friction
+		friction = pm_friction*1.5f;	// extra friction
 		control = speed < pm_stopspeed ? pm_stopspeed : speed;
 		drop += control*friction*pml.frametime;
 

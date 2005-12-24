@@ -390,7 +390,7 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 		{
 			Com_Printf ("GAME ERROR: SV_Multicast called with NULL origin but not with MULTICAST_ALL, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 			if (sv_gamedebug->intvalue >= 2)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 			return;
 		}
 		leafnum = CM_PointLeafnum (origin);
@@ -409,7 +409,7 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 		{
 			Com_Printf ("GAME WARNING: SV_Multicast called with no data in multicast buffer, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 			if (sv_gamedebug->intvalue >= 2)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 		}
 		return;
 	}
@@ -447,7 +447,7 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 		mask = NULL;
 		Com_Printf ("GAME ERROR: SV_Multicast called with bad multicast_t to, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		return;
 	}
 

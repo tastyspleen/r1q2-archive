@@ -1,6 +1,6 @@
 VPATH=../../game ../../linux ../../qcommon ../../server
 
-CFLAGS=-DDEDICATED_ONLY
+CFLAGS+=-DDEDICATED_ONLY
 
 r1q2ded_SRC:=cmd.c cmodel.c common.c crc.c cvar.c files.c md4.c net_chan.c \
 	     mersennetwister.c redblack.c sv_ccmds.c sv_ents.c sv_game.c \
@@ -12,8 +12,19 @@ ALLSRC:=$(r1q2ded_SRC)
 
 default: r1q2ded
 
+LDFLAGS=-lm -lz
+
+ifeq ($(shell uname),Linux)
+LDFLAGS+=-ldl
+endif
+
+ifeq ($(shell uname),FreeBSD)
+LDFLAGS+=-lexecinfo
+endif
+
+
 r1q2ded: $(r1q2ded_OBJ)
-	gcc -o $@ $^ -lm -lz -ldl
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 TARGETS:=r1q2ded
 

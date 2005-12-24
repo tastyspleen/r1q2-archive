@@ -88,7 +88,7 @@ int Sys_FileLength (const char *path)
 {
 	struct stat st;
 
-	if (stat (path, &st))
+	if (stat (path, &st) || (st.st_mode & S_IFDIR))
 		return -1;
 
 	return st.st_size;

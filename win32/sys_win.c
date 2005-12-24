@@ -111,6 +111,12 @@ SERVICE_STATUS_HANDLE   MyServiceStatusHandle;
 //original game command line
 char	cmdline[4096];
 char	bname[MAX_QPATH];
+
+#ifndef DEDICATED_ONLY
+#ifdef ANTICHEAT
+anticheat_export_t	*anticheat;
+#endif
+#endif
 /*
 ===============================================================================
 
@@ -147,7 +153,7 @@ int Sys_FileLength (const char *path)
 
 void VID_Restart_f (void);
 void S_Init (int fullInit);
-void Sys_Error (const char *error, ...)
+NORETURN void Sys_Error (const char *error, ...)
 {
 	va_list		argptr;
 	char		text[1024];
@@ -183,7 +189,7 @@ rebox:;
 				ExitProcess (0x1d107);
 			}
 #endif
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 		}
 		else
 		{
@@ -194,7 +200,7 @@ rebox:;
 	ExitProcess (0xDEAD);
 }
 
-NORETURN void Sys_Quit (void)
+void Sys_Quit (void)
 {
 	timeEndPeriod( 1 );
 
@@ -1290,10 +1296,71 @@ void FixWorkingDirectory (void)
 		Sys_Error ("Current path is too long. Please move your Quake II installation to a shorter path.");
 
 	p = strrchr (curDir, '\\');
-	*p = 0;
+	p[0] = 0;
 
 	SetCurrentDirectory (curDir);
 }
+
+#ifdef ANTICHEAT
+#ifndef NO_SERVER
+void *Sys_GetAntiCheatServerAPI (void)
+{
+	VOID		*ret;
+	qboolean	updated = false;
+	FARPROC		fnInit;
+	HMODULE		hAC;
+
+reInit:
+
+	hAC = LoadLibrary ("anticheatserver");
+	if (!hAC)
+		return NULL;
+
+	fnInit = GetProcAddress (hAC, "Initialize");
+	ret = (void *)fnInit ();
+
+	if (!updated && !ret)
+	{
+		updated = true;
+		FreeLibrary (hAC);
+		goto reInit;
+	}
+
+	return ret;
+}
+#endif
+
+#ifndef DEDICATED_ONLY
+
+typedef VOID * (*FNINIT) (VOID);
+
+void Sys_GetAntiCheatAPI (void)
+{
+	qboolean	updated = false;
+	HMODULE		hAC;
+	FNINIT		init;
+
+reInit:
+
+	hAC = LoadLibrary ("anticheat");
+	if (!hAC)
+		Com_Error (ERR_DROP, "Unable to load anticheat module. Please check you have installed anticheat.dll");
+
+	init = (FNINIT)GetProcAddress (hAC, "Initialize");
+	anticheat = (anticheat_export_t *)init ();
+
+	if (!updated && !anticheat)
+	{
+		updated = true;
+		FreeLibrary (hAC);
+		goto reInit;
+	}
+
+	if (!anticheat)
+		Com_Error (ERR_DROP, "Unable to load anticheat module.");
+}
+#endif
+#endif
 
 typedef BOOL (WINAPI *ENUMERATELOADEDMODULES64) (HANDLE hProcess, PENUMLOADED_MODULES_CALLBACK64 EnumLoadedModulesCallback, PVOID UserContext);
 typedef DWORD (WINAPI *SYMSETOPTIONS) (DWORD SymOptions);
@@ -1666,7 +1733,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 	GetModuleFileName (NULL, searchPath, sizeof(searchPath));
 	p = strrchr (searchPath, '\\');
-	if (p)*p = 0;
+	if (p) p[0] = 0;
 
 	GetSystemTime (&timeInfo);
 
@@ -1699,7 +1766,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 #ifdef _DEBUG
 	GetModuleFileName (NULL, searchPath, sizeof(searchPath));
 	p = strrchr (searchPath, '\\');
-	if (p)*p = 0;
+	if (p) p[0] = 0;
 #endif
 
 

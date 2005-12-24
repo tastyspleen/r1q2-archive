@@ -51,10 +51,12 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 	
 	if (outcount == 0)
 	{
-		Com_Error (ERR_DROP, "ResampleSfx: 0 length sound encountered when resampling '%s'! (%d -> %d, %d, %d, %g). Please post these details on the R1Q2 forum as well as a description of how you encountered this error and include the .wav if possible.", sfx->name, sc->length, outcount, inrate, dma.speed, stepscale);
+		Com_Printf ("ResampleSfx: Invalid sound file '%s' (zero length)\n", LOG_CLIENT|LOG_WARNING, sfx->name);
 		//free at next opportunity
 		//sfx->registration_sequence = 0;
-		//return;
+		Z_Free (sfx->cache);
+		sfx->cache = NULL;
+		return;
 	}
 
 	sc->length = outcount;
@@ -216,6 +218,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 
 	if (!data)
 	{
+		s->cache = NULL;
 		Com_DPrintf ("Couldn't load %s\n", namebuffer);
 		return NULL;
 	}
@@ -233,6 +236,13 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 
 		stepscale = (float)info.rate / dma.speed;	
 		len = (int)(info.samples / stepscale);
+
+		if (info.samples == 0 || len == 0)
+		{
+			Com_Printf ("WARNING: Zero length sound encountered: %s\n", LOG_CLIENT|LOG_WARNING, s->name);
+			FS_FreeFile (data);
+			return NULL;
+		}
 
 		len = len * info.width * info.channels;
 		sc = s->cache = Z_TagMalloc (len + sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);

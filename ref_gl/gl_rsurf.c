@@ -977,7 +977,7 @@ void R_DrawBrushModel (entity_t *e)
 		return;
 
 	currententity = e;
-	gl_state.currenttextures[0] = gl_state.currenttextures[1] = -1;
+	gl_state.currenttextures[0] = gl_state.currenttextures[1] = 0xFFFFFFFF;
 
 	if (e->angles[0] || e->angles[1] || e->angles[2])
 	{
@@ -1228,7 +1228,7 @@ void R_DrawWorld (void)
 	ent.frame = (int)(r_newrefdef.time*2);
 	currententity = &ent;
 
-	gl_state.currenttextures[0] = gl_state.currenttextures[1] = -1;
+	gl_state.currenttextures[0] = gl_state.currenttextures[1] = 0xFFFFFFFF;
 
 	qglColor3f (1,1,1);
 	memset (gl_lms.lightmap_surfaces, 0, sizeof(gl_lms.lightmap_surfaces));

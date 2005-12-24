@@ -515,7 +515,7 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 	VectorScale (vec, step, vec);
 
 //	Com_Printf ("%f\n", ltime);
-	rstep = M_PI/10.0;
+	rstep = M_PI/10.0f;
 	for (i=start_pt ; i<len ; i+=step)
 	{
 		if (i>step*5) // don't bother after the 5th ring

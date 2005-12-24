@@ -457,7 +457,7 @@ void Com_Error (int code, const char *fmt, ...)
 	{
 		printf ("%s\n", msg);
 		if (dbg_crash_on_fatal_error->intvalue)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 
 		//an err_die means the whole game is about to explode, avoid running any extra code if possible
 		if (code != ERR_DIE)
@@ -494,7 +494,7 @@ Both client and server can use this, and it will
 do the apropriate things.
 =============
 */
-NORETURN void Com_Quit (void)
+void Com_Quit (void)
 {
 	//r1: optional quit message, reworded "Server quit"
 #ifndef NO_SERVER
@@ -2817,7 +2817,7 @@ RESTRICT void * EXPORT Z_TagMallocDebug (int size, int tag)
 #if defined _WIN32
 	z->allocationLocation = _ReturnAddress ();
 #elif defined LINUX
-	z->allocationLocation = __builtin_return_address ();
+	z->allocationLocation = __builtin_return_address (0);
 #else
 	//FIXME: other OSes/CCs
 	z->allocationLocation = 0;
@@ -2877,7 +2877,7 @@ RESTRICT void * EXPORT Z_TagMallocGame (int size, int tag)
 #if defined _WIN32
 	retAddr = _ReturnAddress ();
 #elif defined LINUX
-	retAddr = __builtin_return_address ();
+	retAddr = __builtin_return_address (0);
 #else
 	//FIXME: other OSes/CCs
 	retAddr = 0;
@@ -3336,6 +3336,7 @@ void Qcommon_Init (int argc, char **argv)
 	dedicated = Cvar_Get ("dedicated", "0", CVAR_NOSET);
 #endif
 #endif
+	
 	err_fatal = Cvar_Get ("err_fatal", "0", 0);
 
 	//s = va("R1Q2 %s %s %s %s", VERSION, CPUSTRING, __DATE__, BUILDSTRING);

@@ -169,6 +169,11 @@ cvar_t	*sv_advanced_deltas;
 
 cvar_t	*sv_predict_on_lag;
 
+#ifdef ANTICHEAT
+cvar_t	*sv_require_anticheat;
+cvar_t	*sv_anticheat_message;
+#endif
+
 //r1: not needed
 //cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
 
@@ -1324,7 +1329,7 @@ gotnewcl:
 		{
 			Com_Printf ("GAME ERROR: Userinfo string corrupted after ClientConnect\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG); 
 			if (sv_gamedebug->intvalue > 1)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 		}
 	}
 
@@ -1404,7 +1409,7 @@ static uint32 CalcMask (int32 bits)
 	int				i;
 	uint32			mask;
 
-	mask = -1;
+	mask = 0xFFFFFFFF;
 
 	for (i = 0; i < 32; i++)
 	{
@@ -1492,7 +1497,7 @@ static const char *FindPlayer (netadr_t *from)
 		if (cl->state == cs_free)
 			continue;
 
-		if (!NET_CompareBaseAdr (&net_from, &cl->netchan.remote_address))
+		if (!NET_CompareBaseAdr (from, &cl->netchan.remote_address))
 			continue;
 
 		return cl->name;
@@ -2095,7 +2100,10 @@ static void SV_CheckTimeouts (void)
 
 
 				if (sv_idlekick->intvalue && cl->idletime >= sv_idlekick->intvalue * 10)
+				{
 					SV_KickClient (cl, "idling", "You have been disconnected due to inactivity.\n");
+					continue;
+				}
 			}
 
 			if (cl->lastmessage < droppoint)
@@ -2766,6 +2774,11 @@ void SV_Init (void)
 
 	//r1: test lag stuff
 	sv_predict_on_lag = Cvar_Get ("sv_predict_on_lag", "0", 0);
+
+#ifdef ANTICHEAT
+	sv_require_anticheat = Cvar_Get ("sv_require_anticheat", "0", CVAR_LATCH);
+	sv_anticheat_message = Cvar_Get ("sv_anticheat_message", "This server requires the r1ch.net anticheat module. Please see http://www.r1ch.net/stuff/r1q2/anticheat/ for more details.", 0);
+#endif
 
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN

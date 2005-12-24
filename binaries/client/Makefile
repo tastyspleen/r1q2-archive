@@ -12,7 +12,7 @@ quake2_SRC:=cl_cin.c cl_ents.c cl_fx.c cl_input.c cl_inv.c cl_main.c\
 	    le_physics.c redblack.c cd_linux.c snd_linux.c qal_linux.c\
 	    al_linux.c huffman.c
 
-CFLAGS=-DUSE_OPENAL
+CFLAGS+=-DUSE_OPENAL
 quake2_OBJ:=$(quake2_SRC:.c=.o)
 ALLSRC:=$(quake2_SRC)
 
@@ -24,7 +24,18 @@ TARGETS:=quake2
 
 include ../make.inc
 
+LDFLAGS+=-lm -lz
+
+ifeq ($(shell uname),Linux)
+LDFLAGS+=-ldl
+endif
+
+ifeq ($(shell uname),FreeBSD)
+LDFLAGS+=-lexecinfo
+endif
+
+
 quake2: $(quake2_OBJ)
-	gcc -g -o $@ $^ -lm -lz -ldl
+	$(CC) -g -o $@ $^ $(LDFLAGS)
 
 -include .depends/*.d

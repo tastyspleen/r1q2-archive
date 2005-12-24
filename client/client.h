@@ -178,6 +178,7 @@ typedef struct dlhandle_s
 // the client_state_t structure is wiped completely at every
 // server map change
 //
+
 typedef struct client_state_s
 {
 	int			timeoutcount;
@@ -324,7 +325,7 @@ typedef struct client_static_s
 // connection information
 	char			servername[MAX_OSPATH];	// name of server from original connect
 	char			lastservername[MAX_OSPATH];	// name of server from original connect
-	uint32			connect_time;		// for connection retransmits
+	int				connect_time;		// for connection retransmits
 
 	int			quakePort;			// a 16 bit value that allows quake servers
 									// to work around address translating routers
@@ -712,7 +713,7 @@ void V_RenderView( float stereo_separation );
 void V_RenderView( void );
 #endif
 void V_AddEntity (entity_t *ent);
-void V_AddParticle (vec3_t org, int color, float alpha);
+void V_AddParticle (vec3_t org, unsigned color, float alpha);
 void V_AddLight (vec3_t org, float intensity, float r, float g, float b);
 void V_AddLightStyle (int style, float r, float g, float b);
 

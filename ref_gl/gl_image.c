@@ -170,7 +170,7 @@ void GL_SelectTexture( GLenum texture )
 
 void GL_TexEnv( GLenum mode )
 {
-	static GLenum lastmodes[2] = { -1, -1 };
+	static GLenum lastmodes[2] = { 0xFFFFFFFF, 0xFFFFFFFF };
 
 	if ( mode != lastmodes[gl_state.currenttmu] )
 	{

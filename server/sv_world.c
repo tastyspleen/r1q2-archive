@@ -158,7 +158,7 @@ void EXPORT SV_UnlinkEdict (edict_t *ent)
 				Com_Printf ("GAME WARNING: SV_UnlinkEdict: unlinking entity %d that isn't linked\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, NUM_FOR_EDICT(ent));
 
 				if (sv_gamedebug->intvalue >= 4)
-					Q_DEBUGBREAKPOINT;
+					Sys_DebugBreak ();
 			}
 		}
 		return;		// not linked in anywhere
@@ -199,7 +199,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 			Com_Printf ("GAME WARNING: SV_LinkEdict: linking entity %d that isn't in use\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, NUM_FOR_EDICT(ent));
 
 			if (sv_gamedebug->intvalue >= 4)
-				Q_DEBUGBREAKPOINT;
+				Sys_DebugBreak ();
 		}
 		return;
 	}
@@ -673,7 +673,7 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	{
 		Com_Printf ("GAME ERROR: Bad SV_Trace: %u calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
 		if (sv_gamedebug->intvalue >= 2)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 
 		clip.trace.fraction = 1.0;
 		clip.trace.ent = ge->edicts;

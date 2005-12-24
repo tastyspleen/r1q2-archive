@@ -1180,7 +1180,7 @@ void CL_ItemRespawnParticles (vec3_t org)
 			p->vel[j] = crand()*8;
 
 		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = -PARTICLE_GRAVITY*0.2;
+		p->accel[2] = -PARTICLE_GRAVITY*0.2f;
 		p->alpha = 1.0;
 
 		p->alphavel = -1.0f / (1.0f + frand()*0.3f);

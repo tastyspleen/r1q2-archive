@@ -46,53 +46,6 @@ END
 
 #endif    // APSTUDIO_INVOKED
 
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Icon
-//
-
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-IDI_ICON1               ICON                    "q2.ico"
-IDI_ICON2               ICON                    "icon2.ico"
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Dialog
-//
-
-IDD_SERVER_GUI DIALOGEX 0, 0, 357, 222
-STYLE DS_SETFONT | DS_CENTER | WS_MINIMIZEBOX | WS_VISIBLE | WS_CAPTION | 
-    WS_SYSMENU
-EXSTYLE WS_EX_APPWINDOW
-CAPTION "r1q2 server console (hostname)"
-FONT 10, "Courier New", 0, 0, 0x0
-BEGIN
-    EDITTEXT        IDC_COMMAND,0,209,305,12,ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "Send",IDOK,307,209,50,12
-    EDITTEXT        IDC_CONSOLE,0,0,354,207,ES_MULTILINE | WS_VSCROLL
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// DESIGNINFO
-//
-
-#ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO 
-BEGIN
-    IDD_SERVER_GUI, DIALOG
-    BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 354
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 215
-    END
-END
-#endif    // APSTUDIO_INVOKED
-
 #endif    // English (U.S.) resources
 /////////////////////////////////////////////////////////////////////////////
 
@@ -112,8 +65,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 6,3,5,9
- PRODUCTVERSION 6,3,5,9
+ FILEVERSION 0,1,5,32
+ PRODUCTVERSION 0,1,5,32
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x3L
@@ -121,21 +74,21 @@ VS_VERSION_INFO VERSIONINFO
  FILEFLAGS 0x2L
 #endif
  FILEOS 0x4L
- FILETYPE 0x1L
+ FILETYPE 0x2L
  FILESUBTYPE 0x0L
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
         BLOCK "040004b0"
         BEGIN
-            VALUE "Comments", "http://www.r1ch.net/stuff/r1q2/"
+            VALUE "Comments", "http://www.r1ch.net/stuff/r1gl/"
             VALUE "CompanyName", "r1ch.net"
-            VALUE "FileDescription", "R1Q2 - Enhanced Quake II Client/Server"
-            VALUE "FileVersion", "6, 3, 5, 9"
-            VALUE "InternalName", "r1q2"
-            VALUE "LegalCopyright", "Copyright (C) 2002-2004"
-            VALUE "OriginalFilename", "r1q2.exe"
-            VALUE "ProductName", "Quake II"
+            VALUE "FileDescription", "R1GL - Enhanced OpenGL Renderer for Quake II"
+            VALUE "FileVersion", "0, 1, 5, 32"
+            VALUE "InternalName", "r1gl"
+            VALUE "LegalCopyright", "Copyright (C) 2002-2005"
+            VALUE "OriginalFilename", "ref_r1gl.dll"
+            VALUE "ProductName", "R1GL"
             VALUE "ProductVersion", "Release"
         END
     END

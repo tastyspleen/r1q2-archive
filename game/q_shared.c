@@ -96,7 +96,7 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 void _Q_assert (char *expression, char *function, uint32 line)
 {
 	Com_Printf ("Q_assert: Assertion '%s' failed on %s:%u\n", LOG_GENERAL, expression, function, line);
-	Q_DEBUGBREAKPOINT;
+	Sys_DebugBreak ();
 }
 
 void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@out@*//*@null@*/right, vec3_t /*@out@*//*@null@*/up)
@@ -846,7 +846,7 @@ vec_t VectorLength(vec3_t v)
 	length += v[1]*v[1];
 	length += v[2]*v[2];
 
-	length = (float)sqrt (length);		// FIXME
+	length = (float)sqrtf (length);		// FIXME
 
 	return length;
 }
@@ -1540,7 +1540,7 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 		if (c >= 32 && c < 127)
 			*s++ = c;
 	}
-	*s = 0;
+	s[0] = 0;
 }
 
 //====================================================================

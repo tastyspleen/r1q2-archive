@@ -66,6 +66,7 @@ cvar_t		*scr_chathud_ignore_duplicates;
 cvar_t		*scr_chathud_colored;
 cvar_t		*scr_chathud_x;
 cvar_t		*scr_chathud_y;
+cvar_t		*scr_chathud_highlight;
 
 typedef struct
 {
@@ -487,22 +488,16 @@ void SCR_DrawChatHud (void)
 {
 	int		x, v;
 	int		i, j;
-	int		or;
 
 	if (!scr_chathud_y->intvalue)
 		v = cl.refdef.height - (8 * (scr_chathud_lines->intvalue + 4));
 	else
 		v = scr_chathud_y->intvalue;
 
-	if (scr_chathud_colored->intvalue)
-		or = 128;
-	else
-		or = 0;
-
 	for (i = chathud_index, j = 0; j <  scr_chathud_lines->intvalue; i++, j++)
 	{
 		for (x = 0; chathud_messages[i % scr_chathud_lines->intvalue][x] ; x++)
-			re.DrawChar ( (x+scr_chathud_x->intvalue)<<3, v, chathud_messages[i % scr_chathud_lines->intvalue][x] | or);
+			re.DrawChar ( (x+scr_chathud_x->intvalue)<<3, v, chathud_messages[i % scr_chathud_lines->intvalue][x]);
 
 		v += 8;
 	}
@@ -510,10 +505,71 @@ void SCR_DrawChatHud (void)
 
 void SCR_AddChatMessage (const char *chat)
 {
+	unsigned	i, j, length, index;
+
 	if (scr_chathud_ignore_duplicates->intvalue && chathud_index && !strcmp (chat, chathud_messages[chathud_index-1 % scr_chathud_lines->intvalue]))
 		return;
 
-	strncpy (chathud_messages[chathud_index % scr_chathud_lines->intvalue], chat, sizeof(chathud_messages[chathud_index % scr_chathud_lines->intvalue]));
+	index = chathud_index % scr_chathud_lines->intvalue;
+
+	strncpy (chathud_messages[index], chat, sizeof(chathud_messages[index]));
+	
+	if (scr_chathud_colored->intvalue)
+	{
+		for (j = 0; chathud_messages[index][j]; j++)
+			chathud_messages[index][j] |= 128;
+	}
+
+	if (scr_chathud_highlight->intvalue)
+	{
+		for (i = 0; i < cl.maxclients; i++)
+		{
+			if (cl.configstrings[CS_PLAYERSKINS + i][0])
+			{
+				char	player_name[MAX_QPATH], *separator, *foundname;
+				
+				separator = strchr (cl.configstrings[CS_PLAYERSKINS + i], '\\');
+				if (!separator)
+					continue;
+				
+				Q_strncpy (player_name, cl.configstrings[CS_PLAYERSKINS + i], (separator - cl.configstrings[CS_PLAYERSKINS + i]) >= sizeof(player_name)-1 ? sizeof(player_name) - 1 : (separator - cl.configstrings[CS_PLAYERSKINS + i]));
+
+				foundname = strstr (chat, player_name);
+				if (foundname != NULL)
+				{
+					unsigned start;
+
+					length = strlen (player_name);
+
+					if (scr_chathud_highlight->intvalue & 4)
+						length++;
+
+					if (scr_chathud_highlight->intvalue & 2)
+					{
+						length += (foundname - chat);
+						start = 0;
+					}
+					else
+					{
+						start = (foundname - chat);
+					}
+
+					if (scr_chathud_colored->intvalue)
+					{
+						for (j = start; j < start + length; j++)
+							chathud_messages[index][j] &= ~128;
+					}
+					else
+					{
+						for (j = start; j < length; j++)
+							chathud_messages[index][j] |= 128;
+					}
+					break;
+				}
+			}
+		}
+	}
+
 	chathud_index++;
 }
 
@@ -569,6 +625,7 @@ void SCR_Init (void)
 	scr_chathud_ignore_duplicates = Cvar_Get ("scr_chathud_ignore_duplicates", "1", 0);
 	scr_chathud_x = Cvar_Get ("scr_chathud_x", "0", 0);
 	scr_chathud_y = Cvar_Get ("scr_chathud_y", "0", 0);
+	scr_chathud_highlight = Cvar_Get ("scr_chathud_highlight", "0", 0);
 
 	scr_chathud_lines->changed = SCR_Chathud_Changed;
 

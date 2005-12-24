@@ -747,7 +747,7 @@ badskin:
 		}
 		else
 		{
-			*t = 0;
+			t[0] = 0;
 		}
 
 		//strcpy (original_model_name, model_name);
@@ -1129,7 +1129,7 @@ void CL_ParseServerMessage (void)
 
 #ifdef _DEBUG
 		if (cmd == 31)
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 #endif
 
 		//r1: more hacky bit stealing in the name of bandwidth
@@ -1178,7 +1178,7 @@ void CL_ParseServerMessage (void)
 			
 		case svc_disconnect:
 			//uuuuugly...
-			if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && !cl.attractloop && cls.realtime - cls.connect_time < 30000)
+			/*if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && !cl.attractloop && cls.realtime - cls.connect_time < 30000)
 			{
 				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT);
 				CL_Disconnect(false);
@@ -1186,7 +1186,7 @@ void CL_ParseServerMessage (void)
 				CL_Reconnect_f ();
 				return;
 			}
-			else
+			else*/
 			{
 				Com_Error (ERR_DISCONNECT, "Server disconnected\n");
 			}
@@ -1297,7 +1297,7 @@ void CL_ParseServerMessage (void)
 		case svc_packetentities:
 		case svc_deltapacketentities:
 #ifdef _DEBUG
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 #endif
 			Com_Error (ERR_DROP, "Out of place frame data");
 			break;
@@ -1321,7 +1321,7 @@ void CL_ParseServerMessage (void)
 
 		default:
 #ifdef _DEBUG
-			Q_DEBUGBREAKPOINT;
+			Sys_DebugBreak ();
 #endif
 			if (developer->intvalue)
 			{
@@ -1329,14 +1329,14 @@ void CL_ParseServerMessage (void)
 			}
 			else
 			{
-				if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
+				/*if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
 				{
 					Com_Printf ("Unknown command byte %d, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT, cmd);
 					CL_Disconnect(false);
 					cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 					CL_Reconnect_f ();
 					return;
-				}
+				}*/
 				Com_Error (ERR_DROP,"CL_ParseServerMessage: Unknown command byte %d (0x%.2x)", cmd, cmd);
 			}
 			break;

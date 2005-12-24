@@ -248,7 +248,6 @@ typedef struct
 	uint32	 	time;
 } challenge_t;
 
-
 typedef struct
 {
 	qboolean	initialized;				// sv_init has completed
@@ -356,6 +355,10 @@ extern	edict_t		*sv_player;
 extern	cvar_t		*sv_enhanced_setplayer;
 
 extern	cvar_t		*sv_predict_on_lag;
+
+#ifdef ANTICHEAT
+extern	cvar_t		*sv_require_anticheat;
+#endif
 
 extern	cvar_t	*allow_download;
 extern	cvar_t	*allow_download_players;
