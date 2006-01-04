@@ -3224,6 +3224,15 @@ void _gun_changed (cvar_t *c, char *old, char *new)
 	}
 }
 
+#ifdef _DEBUG
+void CL_LoadAntiCheat_f (void)
+{
+	Com_Printf ("Loading anticheat module. Please wait, this may take a few moments...\n", LOG_GENERAL);
+	SCR_UpdateScreen ();
+	Sys_GetAntiCheatAPI ();
+}
+#endif
+
 /*
 =================
 CL_InitLocal
@@ -3409,6 +3418,7 @@ void CL_InitLocal (void)
 #ifdef _DEBUG
 	Cmd_AddCommand ("packet", CL_Packet_f);
 	Cmd_AddCommand ("spam", CL_Spam_f);
+	Cmd_AddCommand ("initanticheat", CL_LoadAntiCheat_f);
 #endif
 
 #ifdef CLIENT_DLL

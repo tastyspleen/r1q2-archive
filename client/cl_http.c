@@ -259,7 +259,7 @@ static void CL_StartHTTPDownload (dlqueue_t *entry, dlhandle_t *dl)
 	{
 		Com_sprintf (dl->filePath, sizeof(dl->filePath), "%s/%s", FS_Gamedir(), entry->quakePath);
 
-		Com_sprintf (tempFile, sizeof(tempFile), "%s/%s", Cvar_VariableString ("gamedir"), entry->quakePath);
+		Com_sprintf (tempFile, sizeof(tempFile), "%s/%s", cl.gamedir, entry->quakePath);
 		CL_EscapeHTTPPath (dl->filePath, escapedFilePath);
 
 		strcat (dl->filePath, ".tmp");
@@ -461,7 +461,7 @@ qboolean CL_QueueHTTPDownload (const char *quakePath)
 	if (needList)
 	{
 		//grab the filelist
-		CL_QueueHTTPDownload (va("%s.filelist", Cvar_VariableString ("gamedir")));
+		CL_QueueHTTPDownload (va("%s.filelist", cl.gamedir));
 
 		//this is a nasty hack to let the server know what we're doing so admins don't
 		//get confused by a ton of people stuck in CNCT state. it's assumed the server
@@ -479,7 +479,7 @@ qboolean CL_QueueHTTPDownload (const char *quakePath)
 		char	listPath[MAX_OSPATH];
 		char	filePath[MAX_OSPATH];
 
-		Com_sprintf (filePath, sizeof(filePath), "%s/%s", Cvar_VariableString ("gamedir"), quakePath);
+		Com_sprintf (filePath, sizeof(filePath), "%s/%s", cl.gamedir, quakePath);
 
 		COM_StripExtension (filePath, listPath);
 		strcat (listPath, ".filelist");

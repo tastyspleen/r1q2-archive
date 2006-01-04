@@ -145,33 +145,33 @@ static void ApplyChanges( void *unused )
 
 	switch ( s_ref_list[s_current_menu_index].curvalue )
 	{
-	case REF_SOFT:
-		Cvar_Set( "vid_ref", "soft" );
-		break;
-	case REF_OPENGL:
-		Cvar_Set( "vid_ref", "gl" );
-		Cvar_Set( "gl_driver", "opengl32" );
-		break;
-	case REF_3DFX:
-		Cvar_Set( "vid_ref", "gl" );
-		Cvar_Set( "gl_driver", "3dfxgl" );
-		break;
-	case REF_POWERVR:
-		Cvar_Set( "vid_ref", "gl" );
-		Cvar_Set( "gl_driver", "pvrgl" );
-		break;
-	/*case REF_VERITE:
-		Cvar_Set( "vid_ref", "gl" );
-		Cvar_Set( "gl_driver", "veritegl" );
-		break;*/
-	case REF_R1GL:
-		Cvar_Set ( "vid_ref", "r1gl" );
-		Cvar_Set ( "gl_driver", "opengl32" );
-		break;
-	case REF_NCGL:
-		Cvar_Set ( "vid_ref", "ncgl" );
-		Cvar_Set ( "gl_driver", "opengl32" );
-		break;
+		case REF_SOFT:
+			Cvar_Set( "vid_ref", "soft" );
+			break;
+		case REF_OPENGL:
+			Cvar_Set( "vid_ref", "gl" );
+			Cvar_Set( "gl_driver", "opengl32" );
+			break;
+		case REF_3DFX:
+			Cvar_Set( "vid_ref", "gl" );
+			Cvar_Set( "gl_driver", "3dfxgl" );
+			break;
+		case REF_POWERVR:
+			Cvar_Set( "vid_ref", "gl" );
+			Cvar_Set( "gl_driver", "pvrgl" );
+			break;
+		/*case REF_VERITE:
+			Cvar_Set( "vid_ref", "gl" );
+			Cvar_Set( "gl_driver", "veritegl" );
+			break;*/
+		case REF_R1GL:
+			Cvar_Set ( "vid_ref", "r1gl" );
+			Cvar_Set ( "gl_driver", "opengl32" );
+			break;
+		case REF_NCGL:
+			Cvar_Set ( "vid_ref", "ncgl" );
+			Cvar_Set ( "gl_driver", "opengl32" );
+			break;
 	}
 
 	/*

@@ -890,8 +890,8 @@ update the rendering DLL and/or video mode to match.
 void VID_ReloadRefresh (void)
 {
 	char errMessage[256];
-	char attempted[256];
-	char name[100];
+	char attempted[512];
+	char name[MAX_OSPATH];
 	static HWND old_hwnd = 0;
 
 	attempted[0] = 0;
@@ -918,6 +918,8 @@ void VID_ReloadRefresh (void)
 			Com_Error (ERR_FATAL, "Bad vid_ref '%s'", vid_ref->string);
 
 		Com_sprintf( name, sizeof(name), "ref_%s.dll", vid_ref->string );
+
+		errMessage[0] = 0;
 		if ( !VID_LoadRefresh( name, errMessage ) )
 		{
 			if (attempted[0])

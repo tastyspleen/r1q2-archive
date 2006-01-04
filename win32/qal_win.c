@@ -310,6 +310,11 @@ qboolean QAL_Init (const char *driver){
 	qalEAXGet					= NULL;
 	qalEAXSet					= NULL;
 
+	if (!qalcIsExtensionPresent || !qalcOpenDevice || !qalcCloseDevice || !qalcCreateContext || !qalcDestroyContext)
+	{
+		Com_Error (ERR_DROP, "Unsupported OpenAL driver '%s' (missing exports). Please check you have a current version of OpenAL installed.", driver);
+	}
+
 	openal_active = true;
 
 	return true;

@@ -506,18 +506,21 @@ void SCR_DrawChatHud (void)
 void SCR_AddChatMessage (const char *chat)
 {
 	unsigned	i, j, length, index;
-
-	if (scr_chathud_ignore_duplicates->intvalue && chathud_index && !strcmp (chat, chathud_messages[chathud_index-1 % scr_chathud_lines->intvalue]))
-		return;
+	char		*p;
+	char		tempchat[512];
 
 	index = chathud_index % scr_chathud_lines->intvalue;
 
-	strncpy (chathud_messages[index], chat, sizeof(chathud_messages[index]));
+	Q_strncpy (tempchat, chat, sizeof(tempchat)-1);
+
+	p = strchr (tempchat, '\n');
+	if (p)
+		p[0] = 0;
 	
 	if (scr_chathud_colored->intvalue)
 	{
-		for (j = 0; chathud_messages[index][j]; j++)
-			chathud_messages[index][j] |= 128;
+		for (j = 0; tempchat[j]; j++)
+			tempchat[j] |= 128;
 	}
 
 	if (scr_chathud_highlight->intvalue)
@@ -534,7 +537,7 @@ void SCR_AddChatMessage (const char *chat)
 				
 				Q_strncpy (player_name, cl.configstrings[CS_PLAYERSKINS + i], (separator - cl.configstrings[CS_PLAYERSKINS + i]) >= sizeof(player_name)-1 ? sizeof(player_name) - 1 : (separator - cl.configstrings[CS_PLAYERSKINS + i]));
 
-				foundname = strstr (chat, player_name);
+				foundname = strstr (tempchat, player_name);
 				if (foundname != NULL)
 				{
 					unsigned start;
@@ -546,23 +549,23 @@ void SCR_AddChatMessage (const char *chat)
 
 					if (scr_chathud_highlight->intvalue & 2)
 					{
-						length += (foundname - chat);
+						length += (foundname - tempchat);
 						start = 0;
 					}
 					else
 					{
-						start = (foundname - chat);
+						start = (foundname - tempchat);
 					}
 
 					if (scr_chathud_colored->intvalue)
 					{
 						for (j = start; j < start + length; j++)
-							chathud_messages[index][j] &= ~128;
+							tempchat[j] &= ~128;
 					}
 					else
 					{
 						for (j = start; j < length; j++)
-							chathud_messages[index][j] |= 128;
+							tempchat[j] |= 128;
 					}
 					break;
 				}
@@ -570,6 +573,14 @@ void SCR_AddChatMessage (const char *chat)
 		}
 	}
 
+	//unfortunate way of doing this but necessary
+	if (scr_chathud_ignore_duplicates->intvalue && chathud_index &&
+		!strcmp (tempchat, chathud_messages[chathud_index-1 % scr_chathud_lines->intvalue]))
+	{
+		return;
+	}
+
+	strncpy (chathud_messages[chathud_index % scr_chathud_lines->intvalue], tempchat, sizeof(chathud_messages[0])-1);
 	chathud_index++;
 }
 

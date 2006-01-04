@@ -1741,7 +1741,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 	for (;;)
 	{
-		snprintf (tempPath, sizeof(tempPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.txt", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+		snprintf (tempPath, sizeof(tempPath)-1, "%s\\R1Q2CrashLog%.4d-%.2d-%.2d_%d.txt", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
 		if (Sys_FileLength (tempPath) == -1)
 			break;
 		i++;
@@ -1912,7 +1912,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 			miniInfo.ClientPointers = TRUE;
 			miniInfo.ExceptionPointers = exceptionInfo;
 			miniInfo.ThreadId = GetCurrentThreadId ();
-			if (fnMiniDumpWriteDump (hProcess, GetCurrentProcessId(), hFile, MiniDumpWithDataSegs, &miniInfo, NULL, NULL))
+			if (fnMiniDumpWriteDump (hProcess, GetCurrentProcessId(), hFile, MiniDumpWithIndirectlyReferencedMemory|MiniDumpWithDataSegs, &miniInfo, NULL, NULL))
 			{
 #ifndef NO_ZLIB
 				FILE	*fh;
@@ -1929,7 +1929,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 					size_t	len;
 					gzFile	gz;
 
-					snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.dmp.gz", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+					snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%.4d-%.2d-%.2d_%d.dmp.gz", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
 					gz = gzopen (zPath, "wb");
 					if (gz)
 					{
@@ -1942,7 +1942,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 					}
 				}
 #else
-				snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%d-%d-%d_%d.dmp", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+				snprintf (zPath, sizeof(zPath)-1, "%s\\R1Q2CrashLog%.4d-%.2d-%.2d_%d.dmp", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
 				CopyFile (dumpPath, zPath, FALSE);
 #endif			
 				DeleteFile (dumpPath);
