@@ -335,11 +335,11 @@ static void SV_New_f (void)
 			int		realIndex;
 			int		serverIndex;
 
-			char	aliasConnect[4][10];
-			char	aliasSet[4][10];
+			char	aliasConnect[4][8];
+			char	aliasSet[4][8];
 
-			char	aliasJunk[10][10];
-			char	randomIP[10][10];
+			char	aliasJunk[10][8];
+			char	randomIP[10][22];
 
 			for (i = 0; i < sizeof(sv_client->reconnect_var)-1; i++)
 			{
