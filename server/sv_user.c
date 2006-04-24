@@ -2293,7 +2293,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 				}
 				else if (newcmd.msec == 0)
 				{
-					Com_Printf ("Hmm, 0 msec move from %s[%s]. Should this ever happen?\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+					Com_DPrintf ("Hmm, 0 msec move from %s[%s]. Should this ever happen?\n", cl->name, NET_AdrToString (&cl->netchan.remote_address));
 				}
 			}
 

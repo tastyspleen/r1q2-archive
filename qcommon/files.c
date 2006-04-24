@@ -42,7 +42,7 @@ typedef struct
 	{
 		FILE			*handle;
 		unzFile			*zhandle;
-	};
+	} h;
 	uint32			length;
 	uint32			refcount;
 } fshandle_t;
@@ -72,7 +72,7 @@ typedef struct pack_s
 	{
 		FILE			*handle;
 		unzFile			*zhandle;
-	};
+	} h;
 	int				numfiles;
 	//packfile_t		*files;
 	struct rbtree	*rb;
@@ -621,7 +621,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 				}
 				else
 				{
-					*file = cache->pak->handle;
+					*file = cache->pak->h.handle;
 					*closeHandle = false;
 				}
 			}
@@ -740,7 +740,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 						}
 						else
 						{
-							*file = pak->handle;
+							*file = pak->h.handle;
 							*closeHandle = false;
 						}
 						//if (!*file)
@@ -1060,7 +1060,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 
 		Q_strncpy (pack->filename, packfile, sizeof(pack->filename)-1);
 
-		pack->handle = packhandle;
+		pack->h.handle = packhandle;
 		pack->numfiles = numpackfiles;
 
 		Com_Printf ("Added packfile %s (%i files)\n", LOG_GENERAL,  packfile, numpackfiles);
@@ -1106,7 +1106,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 			}
 		} while (unzGoToNextFile (f) == UNZ_OK);
 
-		pack->zhandle = f;
+		pack->h.zhandle = f;
 		Com_Printf ("Added zpackfile %s (%i files)\n", LOG_GENERAL,  packfile, i);
 	}
 	else
@@ -1363,7 +1363,7 @@ void FS_ReloadPAKs (void)
 	{
 		if (fs_searchpaths->pack)
 		{
-			fclose (fs_searchpaths->pack->handle);
+			fclose (fs_searchpaths->pack->h.handle);
 			//Z_Free (fs_searchpaths->pack->files);
 			//RB_Purge (fs_searchpaths->pack->rb);
 			rbdestroy (fs_searchpaths->pack->rb);
@@ -1405,7 +1405,7 @@ void FS_SetGamedir (const char *dir)
 	{
 		if (fs_searchpaths->pack)
 		{
-			fclose (fs_searchpaths->pack->handle);
+			fclose (fs_searchpaths->pack->h.handle);
 			//Z_Free (fs_searchpaths->pack->files);
 			rbdestroy (fs_searchpaths->pack->rb);
 			Z_Free (fs_searchpaths->pack);
