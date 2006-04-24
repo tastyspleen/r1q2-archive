@@ -120,10 +120,23 @@ smoothly scrolled off.
 */
 void EXPORT Draw_Char (int x, int y, int num)
 {
-	int				row, col;
+	int				row, col, size;
 	float			frow, fcol, frowbottom, fcolbottom;
 
 	num &= 0xFF;
+
+	if (gl_hudscale->value != 1)
+	{
+		float dx = (float)x * gl_hudscale->value;
+		float dy = (float)y * gl_hudscale->value;
+		x = (int) (dx - ((float)dx - (float)x)/2.0f);
+		y = (int) (dy - ((float)dy - (float)y)/2.0f);
+		size = (int)(8.0f * gl_hudscale->value);
+		//x += gl_hudscale->value - 1.0f;
+		//y += gl_hudscale->value - 1.0f;
+	}
+	else
+		size = 8;
 
 	if ( (num&127) == 32 )
 		return;		// space
@@ -160,11 +173,11 @@ void EXPORT Draw_Char (int x, int y, int num)
 	qglTexCoord2f (fcol, frow);
 	qglVertex2i (x, y);
 	qglTexCoord2f (fcolbottom, frow);
-	qglVertex2i (x+8, y);
+	qglVertex2i (x+size, y);
 	qglTexCoord2f (fcolbottom, frowbottom);
-	qglVertex2i (x+8, y+8);
+	qglVertex2i (x+size, y+size);
 	qglTexCoord2f (fcol, frowbottom);
-	qglVertex2i (x, y+8);
+	qglVertex2i (x, y+size);
 	qglEnd ();
 }
 

@@ -265,7 +265,6 @@ typedef struct client_state_s
 	clientinfo_t	baseclientinfo;
 
 	qboolean		enhancedServer;
-	qboolean		advancedDeltas;
 	qboolean		strafeHack;
 
 	//r1: defer rendering when realtime < this

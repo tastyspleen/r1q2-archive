@@ -45,17 +45,17 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 
 	//r1: better than just the first digit for ip validity :)
 	p = s;
-	while (*p)
+	while (p[0])
 	{
-		if (*p == '.')
+		if (p[0] == '.')
 		{
 			isip++;
 		}
-		else if (*p == ':') 
+		else if (p[0] == ':') 
 		{
 			break;
 		}
-		else if (!isdigit(*p))
+		else if (!isdigit(p[0]))
 		{
 			isip = -1;
 			break;
@@ -74,10 +74,10 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 	Q_strncpy (copy, s, sizeof(copy)-1);
 
 	// strip off a trailing :port if present
-	for (colon = copy ; *colon ; colon++) {
-		if (*colon == ':')
+	for (colon = copy ; colon[0] ; colon++) {
+		if (colon[0] == ':')
 		{
-			*colon = 0;
+			colon[0] = 0;
 			((struct sockaddr_in *)sadr)->sin_port = htons((int16)atoi(colon+1));
 			break;
 		}

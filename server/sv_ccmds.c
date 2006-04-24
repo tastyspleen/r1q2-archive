@@ -90,9 +90,9 @@ static qboolean StringIsNumeric (const char *s)
 
 	p = s;
 
-	while (*p)
+	while (p[0])
 	{
-		if (!isdigit (*p))
+		if (!isdigit (p[0]))
 			return false;
 		p++;
 	}
@@ -761,7 +761,7 @@ static void SV_Savegame_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("USAGE: savegame <directory>\n", LOG_GENERAL);
+		Com_Printf ("USAGE: save <directory>\n", LOG_GENERAL);
 		return;
 	}
 
@@ -1570,6 +1570,12 @@ static void SV_Stuffall_f (void)
 	client_t	*cl;
 	int			i;
 	char		*s;
+
+	if (!svs.initialized)
+	{
+		Com_Printf ("No server running.\n", LOG_GENERAL);
+		return;
+	}
 
 	s = Cmd_Args();
 

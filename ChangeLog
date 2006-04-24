@@ -1,3 +1,140 @@
+2006-03-21	r1ch
+	* qcommon/crypt.h 1.1:
+		Hi guess what I forgot
+
+	* build.h 1.232:
+	* qcommon/cmd.c 1.68:
+	* qcommon/cmodel.c 1.46:
+	* qcommon/files.c 1.84:
+	* server/sv_user.c 1.157:
+	* win32/q2.rc 1.99:
+		More stuff!
+
+	* qcommon/ioapi.c 1.1:
+	* qcommon/ioapi.h 1.1:
+	* qcommon/unzip.c 1.1:
+	* qcommon/unzip.h 1.1:
+		Unzip for pkz support.
+
+2006-03-17	r1ch
+	* build.h 1.231:
+	* client/cl_main.c 1.147:
+	* game/q_shared.h 1.80:
+	* qcommon/cmd.c 1.67:
+	* qcommon/cmodel.c 1.45:
+	* qcommon/cvar.c 1.52:
+	* qcommon/files.c 1.83:
+	* qcommon/qcommon.h 1.120:
+	* quake2.vcproj 1.57:
+	* server/sv_ccmds.c 1.96:
+	* server/sv_main.c 1.188:
+	* server/sv_user.c 1.156:
+	* win32/q2.rc 1.98:
+	* win32/q_shwin.c 1.28:
+	* win32/sys_win.c 1.94:
+		Partial pkz support, misc fixes
+
+2006-02-27	r1ch
+	* build.h 1.230:
+	* ref_gl/gl_rmisc.c 1.32:
+	* server/sv_ccmds.c 1.95:
+	* server/sv_init.c 1.92:
+	* server/sv_main.c 1.187:
+		Misc fixes.
+
+2006-02-21	r1ch
+	* build.h 1.229:
+	* server/sv_main.c 1.186:
+	* server/sv_user.c 1.155:
+		sv_format_string_hack fix
+
+	* build.h 1.228:
+	* client/cl_ents.c 1.54:
+	* client/cl_parse.c 1.108:
+	* client/cl_scrn.c 1.49:
+	* client/cl_view.c 1.47:
+	* client/client.h 1.62:
+	* game/q_shared.h 1.79:
+	* qcommon/common.c 1.138:
+	* qcommon/qcommon.h 1.119:
+	* quake2.vcproj 1.56:
+	* server/server.h 1.98:
+	* server/server.h 1.99:
+	* server/sv_anticheat.c 1.2:
+	* server/sv_ents.c 1.53:
+	* server/sv_init.c 1.91:
+	* server/sv_main.c 1.184:
+	* server/sv_main.c 1.185:
+	* server/sv_send.c 1.104:
+	* server/sv_user.c 1.153:
+	* server/sv_user.c 1.154:
+	* win32/q2.rc 1.97:
+		Removed advanced deltas (Q3 code)
+		More anticheat stuff
+		Configurable crosshair offset
+		sv_format_string_hack
+		Warning, -> WARNING
+
+2006-02-14	r1ch
+	* build.h 1.227:
+	* client/cl_dll.c 1.8:
+	* client/cl_fx.c 1.29:
+	* client/cl_main.c 1.146:
+	* client/cl_newfx.c 1.13:
+	* client/cl_parse.c 1.107:
+	* client/cl_scrn.c 1.48:
+	* client/cl_view.c 1.46:
+	* client/console.c 1.40:
+	* client/keys.c 1.42:
+	* client/menu.c 1.34:
+	* client/ref.h 1.16:
+	* client/snd_mix.c 1.16:
+	* game/q_shared.c 1.64:
+	* game/q_shared.h 1.78:
+	* qcommon/common.c 1.137:
+	* qcommon/cvar.c 1.51:
+	* qcommon/net_common.c 1.24:
+	* qcommon/qcommon.h 1.118:
+	* quake2.vcproj 1.55:
+	* ref_gl/gl_draw.c 1.17:
+	* ref_gl/gl_local.h 1.68:
+	* ref_gl/gl_rmain.c 1.59:
+	* server/server.h 1.97:
+	* server/sv_anticheat.c 1.1:
+	* server/sv_ccmds.c 1.94:
+	* server/sv_ents.c 1.52:
+	* server/sv_game.c 1.64:
+	* server/sv_init.c 1.90:
+	* server/sv_main.c 1.183:
+	* server/sv_user.c 1.152:
+	* win32/sys_win.c 1.93:
+	* win32/vid_dll.c 1.63:
+		Built in server command help
+		More anticheat framework
+		Win32 exception handler updates
+		Game DLL message buffer fix
+
+2006-01-04	r1ch
+	* win32/q2.rc 1.96:
+		build num
+
+	* build.h 1.226:
+	* win32/sys_win.c 1.92:
+	* win32/vid_dll.c 1.62:
+	* win32/vid_menu.c 1.16:
+		Crashdump fixups
+
+2006-01-02	r1ch
+	* binaries/client/Makefile 1.4:
+	* binaries/game/Makefile 1.3:
+	* binaries/r1q2ded/Makefile 1.6:
+	* build.h 1.225:
+	* client/cl_http.c 1.8:
+	* client/cl_main.c 1.145:
+	* client/cl_scrn.c 1.47:
+	* genupdate.pl 1.10:
+		http dl updates, chathud fix
+
 2005-12-24	r1ch
 	* build.h 1.224:
 	* client/cl_parse.c 1.106:

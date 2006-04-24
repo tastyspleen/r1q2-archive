@@ -44,6 +44,10 @@ cvar_t		*cl_stats;
 cvar_t		*cl_drawfps;
 cvar_t		*cl_stfu_ilkhan;
 cvar_t		*cl_defermodels;
+cvar_t		*cl_particlecount;
+
+cvar_t		*scr_crosshair_x;
+cvar_t		*scr_crosshair_y;
 
 extern cvar_t		*scr_showturtle;
 
@@ -54,7 +58,7 @@ int			r_numentities;
 entity_t	r_entities[MAX_ENTITIES];
 
 int			r_numparticles;
-particle_t	r_particles[MAX_PARTICLES];
+particle_t	*r_particles;//[MAX_PARTICLES];
 
 lightstyle_t	r_lightstyles[MAX_LIGHTSTYLES];
 
@@ -100,7 +104,7 @@ void V_AddParticle (vec3_t org, unsigned color, float alpha)
 {
 	particle_t	*p;
 
-	if (r_numparticles >= MAX_PARTICLES)
+	if (r_numparticles >= cl_particlecount->intvalue)
 		return;
 
 	if (color > 0xFF)
@@ -168,7 +172,7 @@ void V_TestParticles (void)
 	int			i, j;
 	float		d, r, u;
 
-	r_numparticles = MAX_PARTICLES;
+	r_numparticles = cl_particlecount->intvalue;
 	for (i=0 ; i<r_numparticles ; i++)
 	{
 		d = i*0.25f;
@@ -534,8 +538,8 @@ __inline void SCR_DrawCrosshair (void)
 	if (!crosshair_pic[0])
 		return;
 
-	re.DrawPic (scr_vrect.x + ((scr_vrect.width - crosshair_width)>>1)
-	, scr_vrect.y + ((scr_vrect.height - crosshair_height)>>1), crosshair_pic);
+	re.DrawPic (scr_vrect.x + scr_crosshair_x->intvalue + ((scr_vrect.width - crosshair_width)>>1)
+	, scr_vrect.y + + scr_crosshair_y->intvalue + ((scr_vrect.height - crosshair_height)>>1), crosshair_pic);
 }
 
 int spc = 0;
@@ -777,6 +781,43 @@ void OnCrossHairChange (cvar_t *self, char *old, char *newValue)
 	SCR_TouchPics();
 }
 
+//ick
+extern cparticle_t	*particles;
+void CL_ClearParticles (int num);
+void _particlecount_changed (cvar_t *self, char *old, char *newValue)
+{
+	//don't allow disabling from here
+	if (self->intvalue < 1024)
+	{
+		Cvar_Set (self->name, "1024");
+		return;
+	}
+	else if (self->intvalue > 1048576)
+	{
+		//prevent forced crashes etc by setting this insane
+		Cvar_Set (self->name, "1048576");
+		return;
+	}
+
+	if (particles)
+	{
+		CL_ClearParticles (atoi(old));
+		Z_Free (particles);
+	}
+
+	if (r_particles)
+	{
+		r_numparticles = 0;
+		Z_Free (r_particles);
+	}
+
+	particles = Z_TagMalloc (self->intvalue * sizeof(*particles), TAGMALLOC_CL_PARTICLES);
+	r_particles = Z_TagMalloc (self->intvalue * sizeof(*r_particles), TAGMALLOC_CL_PARTICLES);
+
+	//allocated uninit
+	CL_ClearParticles (cl_particlecount->intvalue);
+}
+
 /*
 =============
 V_Init
@@ -793,6 +834,10 @@ void V_Init (void)
 	crosshair = Cvar_Get ("crosshair", "0", CVAR_ARCHIVE);
 	crosshair->changed = OnCrossHairChange;
 
+	cl_particlecount = Cvar_Get ("cl_particlecount", "16384", 0);
+	cl_particlecount->changed = _particlecount_changed;
+	_particlecount_changed (cl_particlecount, cl_particlecount->string, cl_particlecount->string);
+
 	cl_testblend = Cvar_Get ("cl_testblend", "0", 0);
 	cl_testparticles = Cvar_Get ("cl_testparticles", "0", 0);
 	cl_testentities = Cvar_Get ("cl_testentities", "0", 0);
@@ -802,4 +847,7 @@ void V_Init (void)
 	cl_drawfps = Cvar_Get ("cl_drawfps", "0", 0);
 	cl_stfu_ilkhan = Cvar_Get ("cl_drawmaptime", "0", 0);
 	cl_defermodels = Cvar_Get ("cl_defermodels", "1", 0);
+
+	scr_crosshair_x = Cvar_Get ("scr_crosshair_x", "0", 0);
+	scr_crosshair_y = Cvar_Get ("scr_crosshair_y", "0", 0);
 }

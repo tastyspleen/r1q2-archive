@@ -144,7 +144,7 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 		//r1: fix \ to /
 		p = cls.downloadname;
 		while ((p = strchr(p, '\\')))
-			*p = '/';
+			p[0] = '/';
 
 		length = (int)strlen(cls.downloadname);
 
@@ -501,7 +501,8 @@ qboolean CL_ParseServerData (void)
 	strncpy (cl.gamedir, str, sizeof(cl.gamedir)-1);
 
 	// set gamedir, fucking christ this is messy!
-	if ((*str && (!fs_gamedirvar->string || !*fs_gamedirvar->string || strcmp(fs_gamedirvar->string, str))) || (!*str && (fs_gamedirvar->string || *fs_gamedirvar->string)))
+	if ((str[0] && (!fs_gamedirvar->string || !fs_gamedirvar->string[0] || strcmp(fs_gamedirvar->string, str))) ||
+		(!str[0] && (fs_gamedirvar->string || fs_gamedirvar->string[0])))
 	{
 		if (strcmp(fs_gamedirvar->string, str))
 		{
@@ -554,22 +555,17 @@ qboolean CL_ParseServerData (void)
 
 		if (newVersion >= 1903)
 		{
-			cl.advancedDeltas = MSG_ReadByte (&net_message);
+			MSG_ReadByte (&net_message);	//was ad
 			cl.strafeHack = MSG_ReadByte (&net_message);
-
-			if (cl.advancedDeltas)
-				MSG_initHuffman ();
 		}
 		else
 		{
 			cl.strafeHack = false;
-			cl.advancedDeltas = false;
 		}
 	}
 	else
 	{
 		cl.enhancedServer = false;
-		cl.advancedDeltas = false;
 		cl.strafeHack = false;
 	}
 
@@ -607,23 +603,10 @@ void CL_ParseBaseline (void)
 	uint32			bits;
 	int				newnum;
 
-	if (!cl.advancedDeltas)
-	{
-		newnum = CL_ParseEntityBits (&bits);
-		es = &cl_entities[newnum].baseline;
-		CL_ParseDelta (&null_entity_state, es, newnum, bits);
-	}
-	else
-	{
-		sizebuf_t *msg = &net_message;
-		msg->bit = msg->readcount * 8;
-		newnum = MSG_ReadBits( msg, GENTITYNUM_BITS );
-		if ( newnum < 0 || newnum >= MAX_GENTITIES ) {
-			Com_Error( ERR_DROP, "Baseline number out of range: %i", newnum );
-		}
-		es = &cl_entities[ newnum ].baseline;
-		MSG_ReadDeltaEntityQ3 ( msg, &null_entity_state, es, newnum );
-	}
+
+	newnum = CL_ParseEntityBits (&bits);
+	es = &cl_entities[newnum].baseline;
+	CL_ParseDelta (&null_entity_state, es, newnum, bits);
 }
 
 void CL_ParseZPacket (void)
@@ -1321,7 +1304,7 @@ void CL_ParseServerMessage (void)
 
 		default:
 #ifdef _DEBUG
-			Sys_DebugBreak ();
+			//Sys_DebugBreak ();
 #endif
 			if (developer->intvalue)
 			{

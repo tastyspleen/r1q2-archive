@@ -494,7 +494,7 @@ void Sys_UpdateConsoleBuffer (void)
 			char	*p = consoleFullBuffer + buflen;
 			char	*q;
 
-			while (*p && *p != '\n')
+			while (p[0] && p[0] != '\n')
 				p++;
 			p++;
 			q = (consoleFullBuffer + buflen);
@@ -928,17 +928,17 @@ void Sys_ConsoleOutput (const char *string)
 	p = string;
 	s = text;
 
-	while (*p)
+	while (p[0])
 	{
-		if (*p == '\n') {
+		if (p[0] == '\n') {
 			*s++ = '\r';
 			//console_lines++;
 		}
 
 		//r1: strip high bits here
-		*s = (*p) & 127;
+		*s = (p[0]) & 127;
 
-		if (*s >= 32 || *s == '\n' || *s == '\t')
+		if (s[0] >= 32 || s[0] == '\n' || s[0] == '\t')
 			s++;
 
 		p++;
@@ -948,7 +948,7 @@ void Sys_ConsoleOutput (const char *string)
 			break;
 		}
 	}
-	*s = '\0';
+	s[0] = '\0';
 
 	//MessageBox (NULL, text, "hi", MB_OK);
 	//if (console_buffer.cursize + strlen(text)+2 > console_buffer.maxsize)
@@ -1344,7 +1344,7 @@ reInit:
 
 	hAC = LoadLibrary ("anticheat");
 	if (!hAC)
-		Com_Error (ERR_DROP, "Unable to load anticheat module. Please check you have installed anticheat.dll");
+		Com_Error (ERR_DROP, "Unable to load anticheat module. Please check you have installed anticheat.dll to your Quake II directory.");
 
 	init = (FNINIT)GetProcAddress (hAC, "Initialize");
 	anticheat = (anticheat_export_t *)init ();
@@ -1407,6 +1407,7 @@ typedef BOOL (WINAPI *GETFILEVERSIONINFO) (LPTSTR lptstrFilename, DWORD dwHandle
 VERQUERYVALUE			fnVerQueryValue;
 GETFILEVERSIONINFOSIZE	fnGetFileVersionInfoSize;
 GETFILEVERSIONINFO		fnGetFileVersionInfo;
+BOOL					versionedGL = FALSE;
 
 BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBase, ULONG ModuleSize, PVOID UserContext)
 {
@@ -1415,6 +1416,10 @@ BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBas
 	DWORD	dummy, len;
 	FILE	*fhReport = (FILE *)UserContext;
 	CHAR	verString[32];
+	CHAR	lowered[MAX_PATH];
+
+	Q_strncpy (lowered, ModuleName, sizeof(lowered)-1);
+	strlwr (lowered);
 
 	if (fnGetFileVersionInfo && fnVerQueryValue && fnGetFileVersionInfoSize)
 	{
@@ -1424,9 +1429,15 @@ BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBas
 			if (fnGetFileVersionInfo (ModuleName, dummy, len, verInfo))
 			{
 				if (fnVerQueryValue (verInfo, "\\", (LPVOID)&fileVersion, &dummy))
+				{
+					if (strstr (lowered, "ref_gl"))
+						versionedGL = TRUE;
 					sprintf (verString, "%d.%d.%d.%d", HIWORD(fileVersion->dwFileVersionMS), LOWORD(fileVersion->dwFileVersionMS), HIWORD(fileVersion->dwFileVersionLS), LOWORD(fileVersion->dwFileVersionLS));
+				}
 				else
+				{
 					strcpy (verString, "unknown");
+				}
 			}
 			else
 			{
@@ -1573,7 +1584,7 @@ VOID R1Q2UploadCrashDump (LPCSTR crashDump, LPCSTR crashText)
 		/* Set the form info */
 		curl_easy_setopt (curl, CURLOPT_HTTPPOST, post);
 
-		if (cl_http_proxy && !IsBadStringPtr (cl_http_proxy->string, 256))
+		if (cl_http_proxy)
 			curl_easy_setopt (curl, CURLOPT_PROXY, cl_http_proxy->string);
 
 		//curl_easy_setopt (curl, CURLOPT_UPLOAD, 1);
@@ -1600,7 +1611,25 @@ VOID R1Q2UploadCrashDump (LPCSTR crashDump, LPCSTR crashText)
 		else
 		{
 			if (!win_silentexceptionhandler->intvalue)
-				MessageBox (NULL, "Upload completed. Thanks for submitting your crash report!\n\nIf you would like feedback on the cause of this crash, please post a brief note on the R1Q2 forums describing what you were doing at the time the exception occured. If possible, please also attach the R1Q2CrashLog.txt file.", "Upload Complete", MB_ICONINFORMATION | MB_OK);
+			{
+				long response;
+
+				if (curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &response) == CURLE_OK)
+				{
+					if (response == 202)
+					{
+						MessageBox (NULL, "Upload completed, however the server reports that you are using an out of date R1Q2 version. Crash reports from old versions are not as likely to be investigated as the problem may already have been fixed. Please update your R1Q2 using the R1Q2Updater.", "Upload Complete", MB_ICONEXCLAMATION | MB_OK);
+					}
+					else if (response == 200)
+					{
+						MessageBox (NULL, "Upload completed. Thanks for submitting your crash report!\n\nIf you would like feedback on the cause of this crash, please post a brief note on the R1Q2 forums describing what you were doing at the time the exception occured. If possible, please also attach the R1Q2CrashLog.txt file.", "Upload Complete", MB_ICONINFORMATION | MB_OK);
+					}
+					else
+					{
+						MessageBox (NULL, "Upload failed, HTTP error.", "Upload Failed", MB_ICONEXCLAMATION | MB_OK);
+					}
+				}
+			}
 		}
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)
@@ -1680,7 +1709,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	if (!hDbgHelp)
 	{
 		if (!win_silentexceptionhandler->intvalue)
-			MessageBox (NULL, "R1Q2 has encountered an unhandled exception and must be terminated. No crash report could be generated since R1Q2 failed to load DBGHELP.DLL. Please obtain DBGHELP.DLL and place it in your R1Q2 directory to enable crash dump generation.", "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
+			MessageBox (NULL, PRODUCTNAME " has encountered an unhandled exception and must be terminated. No crash report could be generated since R1Q2 failed to load DBGHELP.DLL. Please obtain DBGHELP.DLL and place it in your R1Q2 directory to enable crash dump generation.", "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
 
@@ -1710,12 +1739,12 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		FreeLibrary (hDbgHelp);
 		if (hVersion)
 			FreeLibrary (hVersion);
-		MessageBox (NULL, "R1Q2 has encountered an unhandled exception and must be terminated. No crash report could be generated since the version of DBGHELP.DLL in use is too old. Please obtain an up-to-date DBGHELP.DLL and place it in your R1Q2 directory to enable crash dump generation.", "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
+		MessageBox (NULL, PRODUCTNAME " has encountered an unhandled exception and must be terminated. No crash report could be generated since the version of DBGHELP.DLL in use is too old. Please obtain an up-to-date DBGHELP.DLL and place it in your R1Q2 directory to enable crash dump generation.", "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
 
 	if (!win_silentexceptionhandler->intvalue)
-		ret = MessageBox (NULL, "R1Q2 has encountered an unhandled exception and must be terminated. Would you like to generate a crash report?", "Unhandled Exception", MB_ICONEXCLAMATION | MB_YESNO);
+		ret = MessageBox (NULL, PRODUCTNAME " has encountered an unhandled exception and must be terminated. Would you like to generate a crash report?", "Unhandled Exception", MB_ICONEXCLAMATION | MB_YESNO);
 	else
 		ret = IDYES;
 
@@ -1741,7 +1770,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 	for (;;)
 	{
-		snprintf (tempPath, sizeof(tempPath)-1, "%s\\R1Q2CrashLog%.4d-%.2d-%.2d_%d.txt", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
+		snprintf (tempPath, sizeof(tempPath)-1, "%s\\R1Q2CrashLog%.4d-%.2d-%.2d%_%d.txt", searchPath, timeInfo.wYear, timeInfo.wMonth, timeInfo.wDay, i);
 		if (Sys_FileLength (tempPath) == -1)
 			break;
 		i++;
@@ -1808,72 +1837,82 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	if (strstr (szModuleName, "gamex86"))
 	{
 		gameMsg = 
-			"\nIt is very likely that the Game DLL you are using for the mod you run is at fault.\n"
+			"\r\nIt is very likely that the Game DLL you are using for the mod you run is at fault.\r\n"
 			"Please send this crash report to the author(s) of the mod you are running.";
+		wantUpload = FALSE;
 	}
 	else if (strstr (szModuleName, "ref_soft"))
 	{
 		gameMsg = 
-			"\nIt is very likely that the software renderer (ref_soft) is at fault. Software.\n"
-			"rendering in Q2 has always been unreliable. If possible, please use OpenGL to avoid\n"
+			"\r\nIt is very likely that the software renderer (ref_soft) is at fault. Software.\r\n"
+			"rendering in Q2 has always been unreliable. If possible, please use OpenGL to avoid\r\n"
 			"crashes.";
+		wantUpload = FALSE;
+	}
+	else if (strstr (szModuleName, "ref_gl") && !versionedGL)
+	{
+		gameMsg = 
+			"\r\nSince the crash occured in ref_gl and you aren't using R1GL, it is unlikely that\r\n"
+			"this exception can be debugged. Please consider switching to R1GL for improved crash\r\n"
+			"reporting, speed and stability. If you are using R1GL, please make sure you have updated\r\n"
+			"to the latest version.";
 		wantUpload = FALSE;
 	}
 	else if (strstr (szModuleName, "r1q2.exe") || strstr (szModuleName, "ref_r1gl.dll") || strstr (szModuleName, "dedicated.exe"))
 	{
 #ifdef USE_CURL
 		gameMsg = 
-		"\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\n"
-		"if when prompted, you submitted the crash report to r1ch.net. This will aid in\n"
+		"\r\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\r\n"
+		"if when prompted, you submitted the crash report to r1ch.net. This will aid in\r\n"
 		"finding the fault that caused this exception.";
 #else
 		gameMsg = 
-		"\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\n"
-		"if you submitted the crash report to r1ch.net forums. This will aid in finding\n"
+		"\r\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\r\n"
+		"if you submitted the crash report to r1ch.net forums. This will aid in finding\r\n"
 		"the fault that caused this exception.";
 #endif
 	}
 	else
 	{
 		gameMsg =
-		"\nPlease note, unless you are using both R1Q2 and R1GL, any crashes will be much\n"
-		"harder to diagnose. If you are still using ref_gl, please consider using R1GL for\n"
+		"\r\nPlease note, unless you are using both R1Q2 and R1GL, any crashes will be much\r\n"
+		"harder to diagnose. If you are still using ref_gl, please consider using R1GL for\r\n"
 		"an accurate crash report.";
 	}
 
 #ifdef USE_CURL
 	fprintf (fhReport,
-		"R1Q2 encountered an unhandled exception and has terminated. If you are able to\n"
-		"reproduce this crash, please submit the crash report to r1ch.net when prompted or\n"
-		"post this file and the crash dump .dmp file (if available) on the R1Q2 forums at\n"
-		"http://www.r1ch.net/forum/index.php?board=8.0\n"
-		"\n"
-		"     PLEASE MAKE SURE YOU ARE USING THE LATEST VERSIONS OF R1Q2/R1GL/ETC!\n"
-		"\n"
-		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
+		PRODUCTNAME " encountered an unhandled exception and has terminated. If you are able to\r\n"
+		"reproduce this crash, please submit the crash report to r1ch.net when prompted or\r\n"
+		"post this file and the crash dump .dmp file (if available) on the R1Q2 forums at\r\n"
+		"http://www.r1ch.net/forum/index.php?board=8.0\r\n"
+		"\r\n"
+		"     PLEASE MAKE SURE YOU ARE USING THE LATEST VERSIONS OF R1Q2/R1GL/ETC!\r\n"
+		"\r\n"
+		"This crash appears to have occured in the '%s' module.%s\r\n\r\n", szModuleName, gameMsg);
 #else
 	fprintf (fhReport,
-		"R1Q2 encountered an unhandled exception and has terminated. If you are able to\n"
-		"reproduce this crash, please submit the crash report on the R1Q2 forums at\n"
-		"http://www.r1ch.net/forum/index.php?board=8.0 - include this .txt file and the\n"
-		".dmp file (if available)\n"
-		"\n"
-		"This crash appears to have occured in the '%s' module.%s\n\n", szModuleName, gameMsg);
+		PRODUCTNAME " encountered an unhandled exception and has terminated. If you are able to\r\n"
+		"reproduce this crash, please submit the crash report on the R1Q2 forums at\r\n"
+		"http://www.r1ch.net/forum/index.php?board=8.0 - include this .txt file and the\r\n"
+		".dmp file (if available)\r\n"
+		"\r\n"
+		"This crash appears to have occured in the '%s' module.%s\r\n\r\n", szModuleName, gameMsg);
 #endif
 
-	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\nFault address: %I64p (%s)\n", exceptionCode, InstructionPtr, szModuleName);
+	fprintf (fhReport, "**** UNHANDLED EXCEPTION: %x\r\nFault address: %I64p (%s)\r\n", exceptionCode, InstructionPtr, szModuleName);
 
-	fprintf (fhReport, "R1Q2 module: %s(%s) (Version: %s)\n", binary_name, R1BINARY, R1Q2_VERSION_STRING);
-	fprintf (fhReport, "Windows version: %d.%d (Build %d) %s\n\n", osInfo.dwMajorVersion, osInfo.dwMinorVersion, osInfo.dwBuildNumber, osInfo.szCSDVersion);
+	fprintf (fhReport, PRODUCTNAME " module: %s(%s) (Version: %s)\r\n", binary_name, R1BINARY, R1Q2_VERSION_STRING);
+	fprintf (fhReport, "Windows version: %d.%d (Build %d) %s\r\n\r\n", osInfo.dwMajorVersion, osInfo.dwMinorVersion, osInfo.dwBuildNumber, osInfo.szCSDVersion);
 
-	fprintf (fhReport, "Symbol information:\n");
+	fprintf (fhReport, "Symbol information:\r\n");
 	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcSymInfo, (VOID *)fhReport);
 
-	fprintf (fhReport, "\nEnumerate loaded modules:\n");
+	fprintf (fhReport, "\r\nEnumerate loaded modules:\r\n");
 	fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcDump, (VOID *)fhReport);
 
-	fprintf (fhReport, "\nStack trace:\n");
-	fprintf (fhReport, "Stack    EIP      Arg0     Arg1     Arg2     Arg3     Address\n");
+	fprintf (fhReport, "\r\nStack trace:\r\n");
+	fprintf (fhReport, "Stack    EIP      Arg0     Arg1     Arg2     Arg3     Address\r\n");
 	while (fnStackWalk64 (IMAGE_FILE_MACHINE_I386, hProcess, GetCurrentThread(), &frame, &context, NULL, (PFUNCTION_TABLE_ACCESS_ROUTINE64)fnSymFunctionTableAccess64, (PGET_MODULE_BASE_ROUTINE64)fnSymGetModuleBase64, NULL))
 	{
 		strcpy (szModuleName, "<unknown>");
@@ -1891,11 +1930,11 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 		if (fnSymFromAddr (hProcess, frame.AddrPC.Offset, &fnOffset, symInfo) && !(symInfo->Flags & SYMFLAG_EXPORT))
 		{
-			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!%s+0x%I64x\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, symInfo->Name, fnOffset, symInfo->Tag);
+			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!%s+0x%I64x\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, symInfo->Name, fnOffset, symInfo->Tag);
 		}
 		else
 		{
-			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!0x%I64p\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, frame.AddrPC.Offset);
+			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!0x%I64p\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, frame.AddrPC.Offset);
 		}
 	}
 
@@ -1947,7 +1986,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 #endif			
 				DeleteFile (dumpPath);
 				strcpy (dumpPath, zPath);
-				fprintf (fhReport, "\nA minidump was saved to %s.\nPlease include this file when posting a crash report.\n", dumpPath);
+				fprintf (fhReport, "\r\nA minidump was saved to %s.\r\nPlease include this file when posting a crash report.\r\n", dumpPath);
 			}
 			else
 			{
@@ -1958,7 +1997,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	}
 	else
 	{
-		fprintf (fhReport, "\nA minidump could not be created. Minidumps are only available on Windows XP or later.\n");
+		fprintf (fhReport, "\r\nA minidump could not be created. Minidumps are only available on Windows XP or later.\r\n");
 	}
 
 	fclose (fhReport);
@@ -1991,6 +2030,22 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 		if (ret == IDYES)
 			R1Q2UploadCrashDump (dumpPath, tempPath);
+	}
+	else
+	{
+		CHAR message[1024], *s;
+		strcpy (message, "This crash report will not be uploaded due to the following reason:");
+		strcat (message, gameMsg);
+		s = message + sizeof("This crash report will not be uploaded due to the following reason:");
+		while (s[0])
+		{
+			if (s[0] == '\n')
+				s[0] = ' ';
+			else if (s[0] == '\r')
+				s[0] = ' ';
+			s++;
+		}
+		MessageBox (NULL, message, "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
 	}
 #endif
 

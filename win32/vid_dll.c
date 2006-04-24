@@ -1034,7 +1034,7 @@ void _winkey_changed (cvar_t *cvar, char *old, char *newv)
 {
 	if (!os_winxp && cvar->intvalue)
 	{
-		Com_Printf ("win_disablewinkey required Windows 2000 or higher.\n", LOG_CLIENT);
+		Com_Printf ("win_disablewinkey requires Windows 2000 or higher.\n", LOG_CLIENT);
 		Cvar_Set ("win_disablewinkey", "0");
 		return;
 	}

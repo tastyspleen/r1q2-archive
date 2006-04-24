@@ -375,7 +375,7 @@ void GL_SetDefaultState( void )
 
 	GL_TexEnv( GL_REPLACE );
 
-	if ( qglPointParameterfEXT )
+	if ( qglPointParameterfEXT && FLOAT_NE_ZERO(gl_ext_pointparameters->value))
 	{
 		float attenuations[3];
 

@@ -1672,19 +1672,19 @@ safe:
 						p = s + 1;
 
 						//make it more readable
-						while (*p)
+						while (p[0])
 						{
-							if (*p == '\\')
+							if (p[0] == '\\')
 							{
 								if (flip)
-									*p = '\n';
+									p[0] = '\n';
 								else
-									*p = '=';
+									p[0] = '=';
 								flip ^= 1;
 							}
-							else if (*p == '\n')
+							else if (p[0] == '\n')
 							{
-								while (*p && *p == '\n')
+								while (p[0] && p[0] == '\n')
 								{
 									p[0] = 0;
 									p++;
@@ -1707,9 +1707,9 @@ safe:
 		86 24 "[MCB]Jonny"
 		*/
 					//icky icky parser
-					while (*p)
+					while (p[0])
 					{
-						if (isdigit (*p))
+						if (isdigit (p[0]))
 						{
 							player_score = p;
 							p = strchr (player_score, ' ');
@@ -1717,7 +1717,7 @@ safe:
 							{
 								p[0] = 0;
 								p++;
-								if (isdigit (*p))
+								if (isdigit (p[0]))
 								{
 									player_ping = p;
 									p = strchr (player_ping, ' ');
@@ -1725,7 +1725,7 @@ safe:
 									{
 										p[0] = 0;
 										p++;
-										if (*p == '"')
+										if (p[0] == '"')
 										{
 											player_name = p + 1;
 											p = strchr (player_name, '"');
@@ -1733,7 +1733,7 @@ safe:
 											{
 												p[0] = 0;
 												p++;
-												if (*p == '\n')
+												if (p[0] == '\n')
 												{
 													Com_Printf ("%-15s %5s %4s\n", LOG_CLIENT, player_name, player_score, player_ping);
 													p++;
@@ -2393,13 +2393,13 @@ const char *colortext(const char *text)
 	const char *p;
 	char *cp;
 	c^=1;
-	if (!*text)
+	if (!text[0])
 		return text;
 
-	for (p=text, cp=ctext[c];*p!=0;p++, cp++){
-		*cp=*p|128;
+	for (p=text, cp=ctext[c];p[0]!=0;p++, cp++){
+		cp[0]=p[0]|128;
 	}
-	*cp=0;
+	cp[0]=0;
 	return ctext[c];
 }
 
@@ -2415,7 +2415,7 @@ void CL_ResetPrecacheCheck (void)
 void CL_RequestNextDownload (void)
 {
 	int			PLAYER_MULT;
-	char		*sexedSounds[MAX_SOUNDS];
+	const char	*sexedSounds[MAX_SOUNDS];
 	uint32		map_checksum;		// for detecting cheater maps
 	char		fn[MAX_OSPATH];
 
@@ -2423,10 +2423,20 @@ void CL_RequestNextDownload (void)
 	dmdl_t		*pheader;
 	dsprite_t	*spriteheader;
 
+	int			i;
+
 	if (cls.state != ca_connected)
 		return;
 
 	PLAYER_MULT = 0;
+
+	for (i = CS_SOUNDS; i < CS_SOUNDS + MAX_SOUNDS; i++)
+	{
+		if (cl.configstrings[i][0] == '*')
+			sexedSounds[PLAYER_MULT++] = cl.configstrings[i] + 1;
+	}
+
+	PLAYER_MULT += 5;
 
 	if (!allow_download->intvalue && precache_check < ENV_CNT)
 		precache_check = ENV_CNT;
@@ -2663,19 +2673,6 @@ redoSkins:;
 		precache_check = CS_PLAYERSKINS;
 	}
 
-	if (!PLAYER_MULT)
-	{
-		int	i;
-
-		for (i = CS_SOUNDS; i < CS_SOUNDS + MAX_SOUNDS; i++)
-		{
-			if (cl.configstrings[i][0] == '*')
-				sexedSounds[PLAYER_MULT++] = cl.configstrings[i] + 1;
-		}
-	}
-
-	PLAYER_MULT += 5;
-
 	// skins are special, since a player has three things to download:
 	// model, weapon model and skin
 	// so precache_check is now *3
@@ -2730,7 +2727,7 @@ redoSkins:;
 				if (p)
 				{
 					*p++ = 0;
-					if (!*p || !model[0])
+					if (!p[0] || !model[0])
 					{
 						precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
 						continue;
@@ -2955,6 +2952,11 @@ skipplayer:;
 
 	CL_FixCvarCheats();
 
+	MSG_BeginWriting (clc_setting);
+	MSG_WriteShort (CLSET_NOGUN);
+	MSG_WriteShort (cl_gun->intvalue ? 0 : 1);
+	MSG_EndWriting (&cls.netchan.message);
+
 	MSG_WriteByte (clc_stringcmd);
 	MSG_WriteString (va("begin %i\n", precache_spawncount) );
 	MSG_EndWriting (&cls.netchan.message);
@@ -3008,7 +3010,7 @@ void CL_Toggle_f (void)
 
 	if (!tvar)
 	{
-		Com_Printf ("no such variable %s\n", LOG_CLIENT, Cmd_Argv(1));
+		Com_Printf ("%s: no such variable\n", LOG_CLIENT, Cmd_Argv(1));
 		return;
 	}
 
@@ -3016,7 +3018,7 @@ void CL_Toggle_f (void)
 	{
 		if (tvar->value != 0 && tvar->value != 1)
 		{
-			Com_Printf ("not a binary variable\n", LOG_CLIENT);
+			Com_Printf ("%s: not a binary variable\n", LOG_CLIENT, Cmd_Argv(1));
 			return;
 		}
 		Cvar_SetValue (Cmd_Argv(1), (float)((int)tvar->value ^ 1));
@@ -3032,12 +3034,12 @@ void CL_Toggle_f (void)
 				if (i == Cmd_Argc() -1)
 				{
 					Cvar_Set (Cmd_Argv(1), Cmd_Argv(2));
-					return;
+					break;
 				}
 				else
 				{
 					Cvar_Set (Cmd_Argv(1), Cmd_Argv(i+1));
-					return;
+					break;
 				}
 			}
 		}
@@ -3046,7 +3048,7 @@ void CL_Toggle_f (void)
 
 void version_update (cvar_t *self, char *old, char *newValue)
 {
-	Cvar_Set ("cl_version", va("R1Q2 %s; %s", VERSION, *newValue ? newValue : "unknown renderer"));
+	Cvar_Set ("cl_version", va(PRODUCTNAME " " VERSION "; %s", newValue[0] ? newValue : "unknown renderer"));
 }
 
 void _name_changed (cvar_t *var, char *oldValue, char *newValue)
@@ -3379,7 +3381,7 @@ void CL_InitLocal (void)
 
 	//haxx
 	glVersion = Cvar_VariableString ("cl_version");
-	(Cvar_ForceSet ("cl_version", va("R1Q2 %s; %s", VERSION, glVersion[0] ? glVersion : "unknown renderer" )))->changed = version_update;
+	(Cvar_ForceSet ("cl_version", va(PRODUCTNAME " " VERSION "; %s", glVersion[0] ? glVersion : "unknown renderer" )))->changed = version_update;
 
 	name->changed = _name_changed;
 
@@ -3783,11 +3785,7 @@ void CL_Synchronous_Frame (int msec)
 
 	if (cls.spamTime && cls.spamTime < cls.realtime)
 	{
-		char buff[256];
-		Com_sprintf (buff, sizeof(buff), "say \"R1Q2 %s %s %s %s [http://r1ch.net/r1q2]\"\n", VERSION,
-			__TIMESTAMP__, CPUSTRING, BUILDSTRING
-		);
-		Cbuf_AddText (buff);
+		Cbuf_AddText ("say \"" PRODUCTNAME " " VERSION " " __TIMESTAMP__ " " CPUSTRING " " BUILDSTRING " [http://r1ch.net/r1q2]\"\n");
 		cls.lastSpamTime = cls.realtime;
 		cls.spamTime = 0;
 	}
@@ -4110,5 +4108,3 @@ void CL_Shutdown(void)
 	IN_Shutdown ();
 	VID_Shutdown();
 }
-
-

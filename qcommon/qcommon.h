@@ -119,12 +119,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 		#define R1BINARY "R1Q2-x86"
 	#elif R1RELEASE == 6
 		#define R1BINARY "R1Q2-AMD64"
+	#elif R1RELEASE == 7
+		#define R1BINARY "R1Q2-x86-debug"
 	#else
 		#error What the hell is going on here
 	#endif
+	#define PRODUCTNAME "R1Q2"
+	#define PRODUCTNAMELOWER "r1q2"
 #else
 	#define R1BINARY "R1Q2"
 	#define RELEASESTRING "Source Build"
+	#define PRODUCTNAME "R1Q2 (modified)"
+	#define PRODUCTNAMELOWER "r1q2 (mod)"
 #endif
 
 #define R1Q2_VERSION_STRING "R1Q2 " VERSION " " CPUSTRING " " __DATE__ " " BUILDSTRING
@@ -151,7 +157,6 @@ typedef struct sizebuf_s
 	int			cursize;
 	int			readcount;
 	int			buffsize;
-	int			bit;
 } sizebuf_t;
 
 typedef struct messagelist_s
@@ -268,13 +273,9 @@ void SZ_WriteByte (sizebuf_t *buf, int c);
 void SZ_WriteShort (sizebuf_t *buf, int c);
 void SZ_WriteLong (sizebuf_t *buf, int c);
 
-void MSG_SetBit (int bits);
-void MSG_ReadDeltaEntityQ3 ( sizebuf_t *msg, entity_state_t *from, entity_state_t *to, int number);
-int MSG_ReadBits( sizebuf_t *msg, int bits );
-void MSG_WriteBits( sizebuf_t *msg, int value, int bits );
 
 void MSG_WriteDeltaUsercmd (const struct usercmd_s *from, const struct usercmd_s /*@out@*/*cmd);
-void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol, qboolean advanced);
+void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol);
 void MSG_WriteDir (vec3_t vector);
 
 
@@ -1074,7 +1075,7 @@ extern	int		time_after_ref;
 typedef struct tagmalloc_tag_s
 {
 	int16		value;
-	char		*name;
+	const char	*name;
 	uint32		 allocs;
 } tagmalloc_tag_t;
 
@@ -1097,6 +1098,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CL_ENTS,
 	TAGMALLOC_CL_BASELINES,
 	TAGMALLOC_CL_MESSAGES,
+	TAGMALLOC_CL_PARTICLES,
 
 	TAGMALLOC_CLIENT_DOWNLOAD,
 	TAGMALLOC_CLIENT_KEYBIND,
@@ -1133,7 +1135,7 @@ void Qcommon_Shutdown (void);
 
 #if defined _WIN32 && !defined _M_AMD64
 size_t __cdecl fast_strlen(const char *s);
-void __cdecl fast_strlwr(char *s);
+void __fastcall fast_strlwr(char *s);
 int __cdecl fast_tolower(int c);
 #else
 #define fast_strlwr(x) Q_strlwr(x)

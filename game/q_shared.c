@@ -888,9 +888,9 @@ char *COM_SkipPath (char *pathname)
 	char	*last;
 	
 	last = pathname;
-	while (*pathname)
+	while (pathname[0])
 	{
-		if (*pathname=='/')
+		if (pathname[0] == '/')
 			last = pathname+1;
 		pathname++;
 	}
@@ -1473,6 +1473,7 @@ qboolean Info_Validate (const char *s)
 
 	if (strchr (s, ';'))
 		return false;
+
 	return true;
 }
 
@@ -1499,7 +1500,7 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 		return;
 	}
 
-	if (strchr (key, ';') )
+	if (strchr (key, ';') || strchr (value, ';') )
 	{
 		Com_Printf ("Can't use keys or values with a semicolon (attempted to set key '%s')\n", LOG_GENERAL, key);
 		return;

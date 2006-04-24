@@ -1595,7 +1595,7 @@ static void Options_MenuInit( void )
 	s_options_r1q2_action.generic.type = MTYPE_ACTION;
 	s_options_r1q2_action.generic.x		= 0;
 	s_options_r1q2_action.generic.y		= 140;
-	s_options_r1q2_action.generic.name	= "r1q2 options";
+	s_options_r1q2_action.generic.name	= PRODUCTNAMELOWER " options";
 	s_options_r1q2_action.generic.callback = R1Q2OptionsMenu;
 
 	s_options_customize_options_action.generic.type	= MTYPE_ACTION;

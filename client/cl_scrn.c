@@ -461,8 +461,8 @@ void SCR_Sky_f (void)
 
 #define CHATHUD_MAX_LINES 32
 
-static char	chathud_messages[CHATHUD_MAX_LINES][512];
-static int	chathud_index = 0;
+static char		chathud_messages[CHATHUD_MAX_LINES][512];
+static unsigned	chathud_index = 0;
 
 void SCR_ClearChatMessages (void)
 {
@@ -574,10 +574,15 @@ void SCR_AddChatMessage (const char *chat)
 	}
 
 	//unfortunate way of doing this but necessary
-	if (scr_chathud_ignore_duplicates->intvalue && chathud_index &&
-		!strcmp (tempchat, chathud_messages[chathud_index-1 % scr_chathud_lines->intvalue]))
+	if (scr_chathud_ignore_duplicates->intvalue && chathud_index)
 	{
-		return;
+		for (i = 1; i <= scr_chathud_ignore_duplicates->intvalue; i++)
+		{
+			if (!strcmp (tempchat, chathud_messages[(chathud_index - i) % scr_chathud_lines->intvalue]))
+				return;
+			if (chathud_index == i)
+				break;
+		}
 	}
 
 	strncpy (chathud_messages[chathud_index % scr_chathud_lines->intvalue], tempchat, sizeof(chathud_messages[0])-1);
@@ -1138,12 +1143,12 @@ void SCR_DrawField (int x, int y, int color, int width, int value)
 	x += 2 + CHAR_WIDTH*(width - l);
 
 	ptr = num;
-	while (*ptr && l)
+	while (ptr[0] && l)
 	{
-		if (*ptr == '-')
+		if (ptr[0] == '-')
 			frame = STAT_MINUS;
 		else
-			frame = *ptr -'0';
+			frame = ptr[0] -'0';
 
 		re.DrawPic (x, y, sb_nums[color][frame]);
 		x += CHAR_WIDTH;

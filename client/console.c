@@ -727,7 +727,7 @@ void Con_DrawConsole (float frac)
 
 	len = (int)strlen(key_lines[edit_line]);
 
-	i = Com_sprintf (version, sizeof(version), "r1q2 %s", VERSION);
+	i = Com_sprintf (version, sizeof(version), PRODUCTNAMELOWER " " VERSION);
 
 	if (len >= (viddef.width * 0.125) - (i+2))
 		offset = 20;

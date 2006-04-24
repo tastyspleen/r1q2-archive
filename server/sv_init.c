@@ -68,7 +68,7 @@ int SV_FindIndex (const char *name, int start, int maxIndex, qboolean create)
 			if (!cs) {
 				Com_Printf ("failed.\n", LOG_SERVER|LOG_ERROR);
 			} else {
-				fprintf (cs, "r1q2 configstring dump:\n\nCS_SOUNDS:\n");
+				fprintf (cs, "configstring dump:\n\nCS_SOUNDS:\n");
 				for (i = CS_SOUNDS; i < CS_SOUNDS+MAX_SOUNDS; i++)
 					fprintf (cs, "%i: %s\n", i, sv.configstrings[i]);
 
@@ -77,7 +77,7 @@ int SV_FindIndex (const char *name, int start, int maxIndex, qboolean create)
 					fprintf (cs, "%i: %s\n", i, sv.configstrings[i]);
 
 				fprintf (cs, "\nCS_ITEMS:\n");
-				for (i = CS_MODELS; i < CS_MODELS+MAX_MODELS; i++)
+				for (i = CS_MODELS; i < CS_ITEMS+MAX_MODELS; i++)
 					fprintf (cs, "%i: %s\n", i, sv.configstrings[i]);
 
 				fprintf (cs, "\nCS_IMAGES:\n");
@@ -301,7 +301,7 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 		strcpy (sv.name, CM_MapName() + 5);
 		p = strrchr(sv.name, '.');
 		if (!p)
-			Com_Error (ERR_DROP, "Aiee, sv.name is missing it's period: %s", sv.name);
+			Com_Error (ERR_DROP, "Aiee, sv.name is missing its period: %s", sv.name);
 		p[0] = 0;
 	}
 
@@ -401,9 +401,6 @@ void SV_InitGame (void)
 	// get any latched variable changes (maxclients, etc)
 	Cvar_GetLatchedVars ();
 
-	if (sv_advanced_deltas->intvalue)
-		MSG_initHuffman ();
-
 	if (Cvar_IntValue ("coop") && Cvar_IntValue ("deathmatch"))
 	{
 		Com_Printf("Deathmatch and Coop both set, disabling Coop\n", LOG_SERVER|LOG_NOTICE);
@@ -477,6 +474,11 @@ void SV_InitGame (void)
 			}
 		}
 	}
+
+#ifdef ANTICHEAT
+	if (sv_require_anticheat->intvalue)
+		SV_AntiCheat_Connect ();
+#endif
 
 	Z_Verify("SV_InitGame:END");
 }
@@ -563,6 +565,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	l = strlen(level);
 	if (l > 4 && !strcmp (level+l-4, ".cin") )
 	{
+		if (attractloop)
+			Com_Error (ERR_HARD, "Demomap may only be used to replay demos (*.dm2)");
 #ifndef DEDICATED_ONLY
 		SCR_BeginLoadingPlaque ();			// for local system
 #endif
@@ -582,6 +586,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	}
 	else if (l > 4 && !strcmp (level+l-4, ".pcx") )
 	{
+		if (attractloop)
+			Com_Error (ERR_HARD, "Demomap may only be used to replay demos (*.dm2)");
 #ifndef DEDICATED_ONLY
 		SCR_BeginLoadingPlaque ();			// for local system
 #endif
@@ -590,6 +596,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	}
 	else
 	{
+		if (attractloop)
+			Com_Error (ERR_HARD, "Demomap may only be used to replay demos (*.dm2)");
 #ifndef DEDICATED_ONLY
 		SCR_BeginLoadingPlaque ();			// for local system
 #endif

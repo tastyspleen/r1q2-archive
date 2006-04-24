@@ -49,10 +49,18 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 
 	//r1: pointless waste of byte since this is already inside an svc_frame
 	if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
+	{
 		MSG_BeginWriting (svc_packetentities);
+	}
 #ifndef NPROFILE
 	else
+	{
 		svs.proto35BytesSaved++;
+#ifdef _DEBUG
+		if (MSG_GetLength())
+			Sys_DebugBreak ();
+#endif
+	}
 #endif
 
 	if (!from)
@@ -106,7 +114,7 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
 
-			MSG_WriteDeltaEntity (oldent, newent, false, newent->number <= maxclients->intvalue, cl->protocol, sv_advanced_deltas->intvalue);
+			MSG_WriteDeltaEntity (oldent, newent, false, newent->number <= maxclients->intvalue, cl->protocol);
 
 			oldindex++;
 			newindex++;
@@ -115,24 +123,20 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 	
 		if (newnum < oldnum)
 		{	// this is a new entity, send it from the baseline
-			MSG_WriteDeltaEntity (&cl->lastlines[newnum], newent, true, true, cl->protocol, sv_advanced_deltas->intvalue);
+			MSG_WriteDeltaEntity (&cl->lastlines[newnum], newent, true, true, cl->protocol);
 			newindex++;
 			continue;
 		}
 
 		if (newnum > oldnum)
 		{	// the old entity isn't present in the new message
-			MSG_WriteDeltaEntity (oldent, NULL, true, false, cl->protocol, sv_advanced_deltas->intvalue);
+			MSG_WriteDeltaEntity (oldent, NULL, true, false, cl->protocol);
 			oldindex++;
 			continue;
 		}
 	}
 
-	if (cl->protocol == ORIGINAL_PROTOCOL_VERSION || !sv_advanced_deltas->intvalue )
-		MSG_WriteShort (0);	// end of packetentities
-	else
-		MSG_WriteBits (MSG_GetRawMsg(), (MAX_GENTITIES-1), GENTITYNUM_BITS);	// end of packetentities
-
+	MSG_WriteShort (0);	// end of packetentities
 	MSG_EndWriting (msg);
 }
 
@@ -473,10 +477,18 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 
 	//r1: pointless waste of byte since this is already inside an svc_frame
 	if (!enhanced)
+	{
 		MSG_BeginWriting (svc_playerinfo);
+	}
 #ifndef NPROFILE
 	else
+	{
 		svs.proto35BytesSaved++;
+#ifdef _DEBUG
+		if (MSG_GetLength())
+			Sys_DebugBreak ();
+#endif
+	}
 #endif
 
 	MSG_WriteShort (pflags);
@@ -767,7 +779,6 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	client->surpressCount = 0;
 
 	// delta encode the entities
-	msg->bit = msg->cursize * 8;
 	SV_EmitPacketEntities (client, oldframe, frame, msg);
 } 
 
@@ -1212,7 +1223,7 @@ void SV_RecordDemoMessage (void)
 			(ent->s.modelindex || ent->s.effects || ent->s.sound || ent->s.event) && 
 			!(ent->svflags & SVF_NOCLIENT))
 		{
-			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, ORIGINAL_PROTOCOL_VERSION, false);
+			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, ORIGINAL_PROTOCOL_VERSION);
 			MSG_EndWriting (&buf);
 		}
 

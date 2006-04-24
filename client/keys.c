@@ -241,6 +241,12 @@ static void Key_CompleteCommand (void) {
 		partial += 4;
 		offset += 4;
 	}
+	else if (!Q_strncasecmp (partial, "cvarhelp ", 9))
+	{
+		checkCmds = false;
+		partial += 9;
+		offset += 9;
+	}
 
 	len = (int)strlen (partial);
 

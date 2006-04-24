@@ -165,13 +165,17 @@ cvar_t	*sv_rcon_showoutput;
 cvar_t	*sv_show_name_changes;
 
 cvar_t	*sv_optimize_deltas;
-cvar_t	*sv_advanced_deltas;
 
 cvar_t	*sv_predict_on_lag;
+cvar_t	*sv_format_string_hack;
 
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
+cvar_t	*sv_anticheat_error_action;
 cvar_t	*sv_anticheat_message;
+cvar_t	*sv_anticheat_server_address;
+
+netblock_t	anticheat_exceptions;
 #endif
 
 //r1: not needed
@@ -227,9 +231,9 @@ static int StringIsWhitespace (const char *name)
 
 	p = name;
 
-	while (*p)
+	while (p[0])
 	{
-		if (!isspace (*p))
+		if (!isspace (p[0]))
 			return 0;
 		p++;
 	}
@@ -735,12 +739,27 @@ flood the server with invalid connection IPs.  With a
 challenge, they must give a valid IP address.
 =================
 */
+static qboolean SV_ChallengeIsInUse (uint32 challenge)
+{
+	client_t	*cl;
+
+	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+	{
+		if (cl->state == cs_free)
+			continue;
+
+		if (cl->challenge == challenge)
+			return true;
+	}
+	return false;
+}
 
 static void SVC_GetChallenge (void)
 {
 	int		i;
 	int		oldest = 0;
 	uint32	oldestTime = 0xffffffff;
+	const char	*ac;
 
 	// see if we already have a challenge for this ip
 	for (i = 0 ; i < MAX_CHALLENGES ; i++)
@@ -758,17 +777,48 @@ static void SVC_GetChallenge (void)
 	if (i == MAX_CHALLENGES)
 	{
 		// overwrite the oldest
-		svs.challenges[oldest].challenge = randomMT()&0x7FFFFFFF;
+		do
+		{
+			svs.challenges[oldest].challenge = randomMT()&0x7FFFFFFF;
+		} while (SV_ChallengeIsInUse (svs.challenges[oldest].challenge));
 		svs.challenges[oldest].adr = net_from;
 		svs.challenges[oldest].time = curtime;
 		i = oldest;
 	} else {
-		svs.challenges[i].challenge = randomMT()&0x7FFFFFFF;
+		do
+		{
+			svs.challenges[i].challenge = randomMT()&0x7FFFFFFF;
+		} while (SV_ChallengeIsInUse (svs.challenges[i].challenge));
 		svs.challenges[i].time = curtime;
 	}
 
+#ifdef ANTICHEAT
+	if (sv_require_anticheat->intvalue)
+	{
+		netblock_t *n = &anticheat_exceptions;
+
+		ac = " ac=1";
+
+		//r1: exception list
+		while (n->next)
+		{
+			n = n->next;
+			if ((*(uint32 *)net_from.ip & n->mask) == (n->ip & n->mask))
+			{
+				ac = "";
+				break;
+			}
+		}
+
+		if (ac[0])
+			SV_AntiCheat_Challenge (&net_from, svs.challenges[i].challenge);
+	}
+	else
+#endif
+		ac = "";
+
 	// send it back
-	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d p=34,35", svs.challenges[i].challenge);
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d p=34,35%s", svs.challenges[i].challenge, ac);
 }
 
 #if 0
@@ -1060,6 +1110,13 @@ static void SVC_DirectConnect (void)
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nBad userinfo string.\n");
 		return;
 	}
+	else if (!Info_Validate (userinfo))
+	{
+		Com_DPrintf ("    invalid userinfo string\n");
+		Com_Printf ("WARNING: Info_Validate failed for %s (%s)\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr), MakePrintable (userinfo, 0));
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nInvalid userinfo string.\n");
+		return;
+	}
 
 	if (!SV_UserinfoValidate (userinfo))
 	{
@@ -1089,7 +1146,7 @@ static void SVC_DirectConnect (void)
 	{
 		if (!Info_CheckBytes (userinfo))
 		{
-			Com_Printf ("Warning, Info_CheckBytes failed for %s!\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr));
+			Com_Printf ("WARNING: Info_CheckBytes failed for %s (%s)\n", LOG_SERVER|LOG_WARNING, NET_AdrToString (adr), MakePrintable (userinfo, 0));
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nUserinfo contains illegal bytes.\n");
 			return;
 		}
@@ -1214,7 +1271,7 @@ static void SVC_DirectConnect (void)
 			if (cl->state != cs_zombie)
 			{
 				Com_DPrintf ("    client already found\n");
-				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPlayer '%s' is already connected from %s.\n", cl->name, NET_AdrToString(adr));
+				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPlayer '%s' is already connected from your address.\n", cl->name);
 				return;
 			}
 
@@ -1232,10 +1289,10 @@ static void SVC_DirectConnect (void)
 			if (cl->reconnect_var[0])
 			{
 				if (adr->port != cl->netchan.remote_address.port)
-					Com_Printf ("Warning, %s[%s] reconnected from a different port! Tried to use ratbot/proxy or has broken router?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr));
+					Com_Printf ("WARNING: %s[%s] reconnected from a different port (%d -> %d)! Tried to use ratbot/proxy or has broken router?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr), ShortSwap (cl->netchan.remote_address.port), ShortSwap(adr->port));
 
 				if (cl->protocol != protocol)
-					Com_Printf ("Warning, %s[%s] reconnected using a different protocol! Why would that happen?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr));
+					Com_Printf ("WARNING: %s[%s] reconnected using a different protocol (%d -> %d)! Why would that happen?\n", LOG_SERVER|LOG_WARNING, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr), cl->protocol, protocol);
 			}
 
 			strcpy (saved_var, cl->reconnect_var);
@@ -1310,7 +1367,7 @@ gotnewcl:
 		if (userinfo[MAX_INFO_STRING-1])
 		{
 			//probably already crashed by now but worth a try
-			Com_Error (ERR_FATAL, "Userinfo string length overflowed after ClientConnect");
+			Com_Error (ERR_FATAL, "Game DLL overflowed userinfo string after ClientConnect");
 		}
 
 		if (!allowed)
@@ -1730,6 +1787,13 @@ static void SV_ConnectionlessPacket (void)
 	MSG_ReadLong (&net_message);		// skip the -1 marker
 
 	s = MSG_ReadStringLine (&net_message);
+
+	if (sv_format_string_hack->intvalue == 2)
+	{
+		char	*p = s;
+		while ((p = strchr (p, '%')))
+			p[0] = ' ';
+	}
 
 	Cmd_TokenizeString (s, false);
 
@@ -2167,6 +2231,14 @@ static void SV_RunGameFrame (void)
 	{
 		ge->RunFrame ();
 
+		if (MSG_GetLength())
+		{
+			Com_Printf ("GAME ERROR: The Game DLL wrote data to the message buffer, but did not call gi.unicast or gi.multicast before finishing this frame.\nData: %s\n", LOG_WARNING|LOG_GAMEDEBUG|LOG_SERVER, MakePrintable (MSG_GetData(), MSG_GetLength()));
+			if (sv_gamedebug->intvalue > 1)
+				Sys_DebugBreak ();
+			MSG_Clear ();
+		}
+
 		// never get more than one tic behind
 		if (sv.time < svs.realtime)
 		{
@@ -2311,6 +2383,10 @@ void SV_Frame (int msec)
 
 	// clear teleport flags, etc for next frame
 	SV_PrepWorldFrame ();
+
+#ifdef ANTICHEAT
+	SV_AntiCheat_Run ();
+#endif
 }
 
 //============================================================================
@@ -2411,10 +2487,10 @@ void SV_UserinfoChanged (client_t *cl)
 	char				*val;
 
 	if (cl->state < cs_connected)
-		Com_Printf ("Warning, SV_UserinfoChanged for unconnected client %s[%s]!!\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+		Com_Printf ("WARNING: SV_UserinfoChanged for unconnected client %s[%s]!!\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 
 	if (!cl->userinfo[0])
-		Com_Printf ("Warning, SV_UserinfoChanged for %s[%s] with empty userinfo!\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+		Com_Printf ("WARNING: SV_UserinfoChanged for %s[%s] with empty userinfo!\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 
 	//r1ch: ban anyone trying to use the end-of-message-in-string exploit
 	if (strchr (cl->userinfo, '\xFF'))
@@ -2445,10 +2521,17 @@ void SV_UserinfoChanged (client_t *cl)
 	{
 		if (!Info_CheckBytes (cl->userinfo))
 		{
-			Com_Printf ("Warning, illegal userinfo bytes from %s.\n", LOG_SERVER|LOG_WARNING, cl->name);
+			Com_Printf ("WARNING: Illegal userinfo bytes from %s.\n", LOG_SERVER|LOG_WARNING, cl->name);
 			SV_KickClient (cl, "illegal userinfo string", "Userinfo contains illegal bytes. Please disable any color-names and similar features.\n");
 			return;
 		}
+	}
+
+	if (sv_format_string_hack->intvalue)
+	{
+		char	*p = cl->userinfo;
+		while ((p = strchr (p, '%')))
+			p[0] = ' ';
 	}
 
 	//r1ch: allow filtering of stupid "fun" names etc.
@@ -2460,7 +2543,7 @@ void SV_UserinfoChanged (client_t *cl)
 	//they tried to set name to something bad
 	if (!val[0] || NameColorFilterCheck (val) || StringIsWhitespace(val))
 	{
-		Com_Printf ("Warning, invalid name change to '%s' from %s[%s].\n", LOG_SERVER|LOG_WARNING, MakePrintable(val, 0), cl->name, NET_AdrToString(&cl->netchan.remote_address)); 
+		Com_Printf ("WARNING: Invalid name change to '%s' from %s[%s].\n", LOG_SERVER|LOG_WARNING, MakePrintable(val, 0), cl->name, NET_AdrToString(&cl->netchan.remote_address)); 
 		SV_ClientPrintf (cl, PRINT_HIGH, "Invalid name '%s'\n", val);
 		if (cl->name[0])
 		{
@@ -2540,6 +2623,7 @@ void SV_Init (void)
 
 	rcon_password = Cvar_Get ("rcon_password", "", 0);
 	lrcon_password = Cvar_Get ("lrcon_password", "", 0);
+	lrcon_password->help = "Limited rcon password for use with lrcon commands. Default empty.\n";
 
 	Cvar_Get ("skill", "1", 0);
 
@@ -2563,9 +2647,11 @@ void SV_Init (void)
 
 	//r1: dropped to 90 from 125
 	timeout = Cvar_Get ("timeout", "90", 0);
+	timeout->help = "Number of seconds after which a client is dropped if they have not sent any data. Default 90.\n";
 
 	//r1: bumped to 3 from 2
 	zombietime = Cvar_Get ("zombietime", "3", 0);
+	zombietime->help = "Number of seconds during which packets from a recently disconnected client are ignored. Default 3.\n";
 
 #ifndef DEDICATED_ONLY
 	sv_showclamp = Cvar_Get ("showclamp", "0", 0);
@@ -2576,6 +2662,7 @@ void SV_Init (void)
 
 	//r1: default 1
 	sv_enforcetime = Cvar_Get ("sv_enforcetime", "1", 0);
+	sv_enforcetime->help = "Enforce time movements to prevent speed hacking. Default 1.\n0: Disabled\n1: Enabled, prevent excess movement\n2+: Enabled, kick on excessive movement (increase value to reduce false positives from lag)\n";
 
 #ifndef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "0", CVAR_ARCHIVE);
@@ -2593,6 +2680,7 @@ void SV_Init (void)
 	sv_airaccelerate = Cvar_Get("sv_airaccelerate", "0", CVAR_LATCH);
 
 	public_server = Cvar_Get ("public", "0", 0);
+	public_server->help = "If set, sends information about this server to master servers which will cause the server to be shown in server browsers. See also 'setmaster' command. Default 0.\n";
 
 	//r1: not needed
 	//sv_reconnect_limit = Cvar_Get ("sv_reconnect_limit", "3", CVAR_ARCHIVE);
@@ -2606,26 +2694,36 @@ void SV_Init (void)
 
 	//r1: lock server (prevent new connections)
 	sv_locked = Cvar_Get ("sv_locked", "0", 0);
+	sv_locked->help = "Prevent new players from connecting. Default 0.\n";
 
 	//r1: restart server on this map if the _GAME_ dll dies
 	//    (only via a ERR_GAME drop of course)
 	sv_restartmap = Cvar_Get ("sv_restartmap", "", 0);
+	sv_restartmap->help = "If set, restart the server by changing to this map if the server crashes from a non-fatal error. Default empty.\n";
 
 	//r1: server-side password protection (why id put this into the game dll
 	//    i will never figure out)
 	sv_password = Cvar_Get ("sv_password", "", 0);
 	sv_password->changed = _password_changed;
+	sv_password->help = "Password required to connect to the server. Default empty.\n";
 
 	//r1: text filtering: 1 = strip low bits, 2 = low+hi
 	sv_filter_q3names = Cvar_Get ("sv_filter_q3names", "0", 0);
+	sv_filter_q3names->help = "Disallow names that use Quake III style coloring. Default 0.\n";
+
 	sv_filter_userinfo = Cvar_Get ("sv_filter_userinfo", "0", 0);
+	sv_filter_userinfo->help = "Filter client userinfo. Default 0.\n0: No filtering\n1: Strip low ASCII values.\n2: Strip low+high ASCII values.\n";
+
 	sv_filter_stringcmds = Cvar_Get ("sv_filter_stringcmds", "0", 0);
+	sv_filter_stringcmds->help = "Filter client commands. Default 0.\n0: No filtering\n1: Strip low ASCII values.\n2: Strip low+high ASCII values.\n";
 
 	//r1: enable blocking of clients that attempt to attack server/clients
 	sv_blackholes = Cvar_Get ("sv_blackholes", "1", 0);
+	sv_blackholes->help = "Allow automatic blackholing (IP blocking) by various features. Default 1.\n";
 
 	//r1: allow clients to use cl_nodelta (increases server bw usage)
 	sv_allownodelta = Cvar_Get ("sv_allownodelta", "1", 0);
+	sv_allownodelta->help = "Allow clients to use cl_nodelta (disables delta state). Not using delta state results in much greater bandwidth usage. Default 1.\n";
 
 	//r1: option to block q2ace due to hacked versions
 	sv_deny_q2ace = Cvar_Get ("sv_deny_q2ace", "0", 0);
@@ -2634,38 +2732,51 @@ void SV_Init (void)
 
 	//r1: limit connections per ip address (stop zombie dos/flood)
 	sv_iplimit = Cvar_Get ("sv_iplimit", "3", 0);
+	sv_iplimit->help = "Maximum number of connections allowed from a single IP. Default 3.\n";
 
 	//r1: message to send to connecting clients via CONNECTIONLESS print immediately
 	//    after client connects. \n is expanded to new line.
 	sv_connectmessage = Cvar_Get ("sv_connectmessage", "", 0);
+	sv_connectmessage->help = "Message to show to clients after they connect (prior to auto downloading and entering the game). Default empty.\n";
 
 	//r1: nocheat visibility check support (cpu intensive -- warning)
 	sv_nc_visibilitycheck = Cvar_Get ("sv_nc_visibilitycheck", "0", 0);
+	sv_nc_visibilitycheck->help = "Attempt to calculate player visibility server-side to thwart wall-hacks and other cheats. CPU intensive. Default 0.\n";
+
 	sv_nc_clientsonly = Cvar_Get ("sv_nc_clientsonly", "1", 0);
+	sv_nc_clientsonly->help = "Only apply sv_nc_visibilitycheck checking to other players. Default 1.\n";
 
 	//r1: http dl server
 	sv_downloadserver = Cvar_Get ("sv_downloadserver", "", 0);
+	sv_downloadserver->help = "URL to a location where clients can download game content over HTTP. Default empty.\n";
 
 	//r1: max allowed file size for autodownloading (bytes)
 	sv_max_download_size = Cvar_Get ("sv_max_download_size", "8388608", 0);
+	sv_max_download_size->help = "Maximum file size in bytes that a client may attempt to auto download. Default 8388608 (8MB).\n";
 
 	//r1: max backup packets to allow from lagged clients (id.default=20)
 	sv_max_netdrop = Cvar_Get ("sv_max_netdrop", "20", 0);
+	sv_max_netdrop->help = "Maximum number of movements to replay from lagged clients. Lower this to limit 'warping' effects. Default 20.\n";
 
 	//r1: don't respond to status requests
 	sv_hidestatus = Cvar_Get ("sv_hidestatus", "0", 0);
+	sv_hidestatus->help = "Don't respond at all to requests for information from server browsers. Default 0.\n";
 
 	//r1: hide player info from status requests
 	sv_hideplayers = Cvar_Get ("sv_hideplayers", "0", 0);
+	sv_hideplayers->help = "Hide information about who is playing from server browsers. Default 0.\n";
 
 	//r1: kick high fps users flooding packets
 	sv_fpsflood = Cvar_Get ("sv_fpsflood", "0", 0);
+	sv_fpsflood->help = "Kick users who send more than this many packets/sec (packet rate is usually tied to FPS on old clients). 0 means no limit. Default 0.\n";
 
 	//r1: randomize starting framenum to thwart map timers
 	sv_randomframe = Cvar_Get ("sv_randomframe", "0", 0);
+	sv_randomframe->help = "Randomize the server framenumber on starting to prevent clients from being able to tell how long the map has been running. Default 0.\n";
 
 	//r1: msecs to give clients
 	sv_msecs = Cvar_Get ("sv_msecs", "1800", 0);
+	sv_msecs->help = "Milliseconds of movement to allow per client per 16 frames. You shouldn't need to change this unless you know why. Default 1800.\n";
 
 	//r1: nocheat parser shit
 	sv_nc_kick = Cvar_Get ("sv_nc_kick", "0", 0);
@@ -2682,102 +2793,146 @@ void SV_Init (void)
 
 	//r1: crash on game errors with int3
 	sv_gamedebug = Cvar_Get ("sv_gamedebug", "0", 0);
+	sv_gamedebug->help = "Show warnings and optionally cause breakpoints if the Game DLL does something in an incorrect or dangerous way. Useful for mod developers. Default 0.\n1: Show warnings only.\n2: Show warnings and break on severe errors.\n3: Show warnings and break on severe and normal errors.\n4+: Show warnings and break on all errors.\n";
 
 	//r1: reload game dll on next map change (resets to 0 after)
 	sv_recycle = Cvar_Get ("sv_recycle", "0", 0);
+	sv_recycle->help = "Reload the Game DLL on the next map load. For mod developers only. Default 0.\n";
 
 	//r1: track server uptime in serverinfo?
 	sv_uptime = Cvar_Get ("sv_uptime", "0", 0);
+	sv_uptime->help = "Display the server uptime statistics in the info response shown to server browsers. Default 0.\n";
 
 	//r1: allow strafe jumping at high fps values (Requires hacked client (!!!))
 	sv_strafejump_hack = Cvar_Get ("sv_strafejump_hack", "0", CVAR_LATCH);
+	sv_strafejump_hack->help = "Allow strafe jumping at any FPS value. Default 0.\n0: Standard Q2 strafe jumping allowed\n1: Allow compatible clients to strafe jump at any FPS\n2: Allow all clients to strafe jump at any FPS (causes prediction errors on non-compatible clients)\n";
 
 	//r1: reserved slots (set 'rp' userinfo)
 	sv_reserved_password = Cvar_Get ("sv_reserved_password", "", 0);
+	sv_reserved_password->help = "Password required to access a reserved player slot. Clients should set their 'password' cvar to this. Default empty.\n";
+
 	sv_reserved_slots = Cvar_Get ("sv_reserved_slots", "0", CVAR_LATCH);
+	sv_reserved_slots->help = "Number of reserved player slots. Default 0.\n";
 
 	//r1: allow use of 'map' command after game dll is loaded?
 	sv_allow_map = Cvar_Get ("sv_allow_map", "0", 0);
+	sv_allow_map->help = "Allow use of the 'map' command to change levels. The gamemap command should be used to change levels as 'map' will force the Game DLL to unload and reload, losing any internal state. Default 0.\n";
 
 	//r1: allow unconnected clients to execute game commands (default enabled in id!)
 	sv_allow_unconnected_cmds = Cvar_Get ("sv_allow_unconnected_cmds", "0", 0);
+	sv_allow_unconnected_cmds->help = "Allow players who aren't in game to send commands (eg players who are map downloading). Since the Game DLL has no knowledge of the player until they are in-game, this can be dangerous if enabled. Default 0.\n";
 
 	//r1: validate userinfo strings explicitly according to info key rules?
 	sv_strict_userinfo_check = Cvar_Get ("sv_strict_userinfo_check", "1", 0);
+	sv_strict_userinfo_check->help = "Force client userinfo to conform to the userinfo specifications. This will prevent colored names amongst other things. Default 1.\n";
 
 	//r1: method to calculate pings. 0 = disable entirely, 1 = average, 2 = min
 	sv_calcpings_method = Cvar_Get ("sv_calcpings_method", "1", 0);
+	sv_calcpings_method->help = "Method used to calculate displayed pings. Default 1.\n0: Disable ping calculations completely\n1: Average of packets (default Q2 method)\n2: Best of packets (increased accuracy under normal network conditions)\n";
 
 	//r1: disallow mod to set serverinfo via Cvar_Get?
 	sv_no_game_serverinfo = Cvar_Get ("sv_no_game_serverinfo", "0", 0);
+	sv_no_game_serverinfo->help = "Disallow the Game DLL to set serverinfo cvars (serverinfo shows up on server browsers). Some mods set too much serverinfo, causing info string exceeded errors. Must be set before the mod loads to be of any effect. Default 0.\n";
 
 	//r1: send message on download failure/success
 	sv_mapdownload_denied_message = Cvar_Get ("sv_mapdownload_denied_message", "", 0);
+	sv_mapdownload_denied_message->help = "Message to sent to clients when they are refused a map download. Default empty.\n";
+
 	sv_mapdownload_ok_message = Cvar_Get ("sv_mapdownload_ok_message", "", 0);
+	sv_mapdownload_ok_message->help = "Message to send to clients when they commence a map download. Default empty.\n";
 
 	//r1: failsafe against buggy traces
 	sv_max_traces_per_frame = Cvar_Get ("sv_max_traces_per_frame", "10000", 0);
+	sv_max_traces_per_frame->help = "Maximum amount of path traces permitted by the Game DLL per frame (100ms). Some mods get into infinite trace loops so this counter is a protection against that. Default 10000.\n";
 
 	//r1: rate limiting for status requests to prevent udp spoof DoS
 	sv_ratelimit_status = Cvar_Get ("sv_ratelimit_status", "15", 0);
+	sv_ratelimit_status->help = "Maximum number of status requests to reply to per second.\n";
 
 	//r1: allow new SVF_ ent flags? some mods mistakenly extend SVF_ for their own purposes.
 	sv_new_entflags = Cvar_Get ("sv_new_entflags", "0", 0);
+	sv_new_entflags->help = "Allow use of new R1Q2-specific server entity flags. Only enable this if instructed to do so by the mod you are running. Default 0.\n";
 
 	//r1: validate playerskins passed to us by the mod? if not, we could end up sending
 	//illegal names (eg "name\hack/$$") which the client would issue as "download hack/$$"
 	//resulting in a command expansion attack.
 	sv_validate_playerskins = Cvar_Get ("sv_validate_playerskins", "1", 0);
+	sv_validate_playerskins->help = "Perform strict checks on playerskins passed to the engine by the mod. Some (almost all) mods do not validate skin names from the client and malformed skins can cause problems if broadcast to other clients. When enabled, this ensures all skins are in the form model/skin. Default 1.\n";
 
 	//r1: seconds before idle kick
 	sv_idlekick = Cvar_Get ("sv_idlekick", "0", 0);
+	sv_idlekick->help = "Seconds before kicking idle players. 0 means no limit.\n";
 
 	//r1: cut off packetentities if they get too large?
 	sv_packetentities_hack = Cvar_Get ("sv_packetentities_hack", "0", 0);
+	sv_packetentities_hack->help = "Help to avoid SZ_Getspace: overflow and 'freezing' effects on the client by only sending partial amounts of packetentities. This will break delta state and may cause odd effects on the client. Default 0.\n0: Disabled\n1: Enabled, single pass (no attempt at compressing for protocol 35)\n2: Enabled, two pass (attempts to compress for protocol 35 clients)\n";
 
 	//r1: don't send ents that are marked !inuse?
 	sv_entity_inuse_hack = Cvar_Get ("sv_entity_inuse_hack", "0", 0);
+	sv_entity_inuse_hack->help = "Save network bandwidth by not sending entities that are marked as no longer in use. This only applies to buggy mods that do not mark entities as unused when they are no longer in use. Note that some mods may have problems with this if set to 1. Default 0.\n";
 
 	//r1: force reconnect?
 	sv_force_reconnect = Cvar_Get ("sv_force_reconnect", "", 0);
+	sv_force_reconnect->help = "Force a quick reconnect to this specified IP/hostname. Useful as an anti-proxy check, specify your full IP:PORT. Default empty.\n";
 
 	//r1: refuse downloads if this many players connected
 	sv_download_refuselimit = Cvar_Get ("sv_download_refuselimit", "0", 0);
+	sv_download_refuselimit->help = "Refuse auto downloading if the number of players on the server is equal or higher than this value. 0 means no limit. Default 0.\n";
 
 	sv_download_drop_file = Cvar_Get ("sv_download_drop_file", "", 0);
+	sv_download_drop_file->help = "If a player attempts to download this file, they are kicked from the server. Used to prevent players from trying to auto download huge mods. Default empty.\n";
+
 	sv_download_drop_message = Cvar_Get ("sv_download_drop_message", "This mod requires client-side files, please visit the mod homepage to download them.", 0);
+	sv_download_drop_message->help = "Message to show to users who are kicked for trying to download the file specified by sv_download_drop_file.\n";
 
 	//r1: default blackhole mask
 	sv_blackhole_mask = Cvar_Get ("sv_blackhole_mask", "32", 0);
+	sv_blackhole_mask->help = "Network mask to use for automatically added blackholes. Common values: 24 means 1.2.3.*, 16 means 1.2.*.*, etc. Default 32.\n";
 
 	//r1: what to do on unrequested cvars
 	sv_badcvarcheck = Cvar_Get ("sv_badcvarcheck", "1", 0);
+	sv_badcvarcheck->help = "Action to take on receiving an illegal cvarcheck response (illegal meaning 'completely invalid', not 'fails the check condition').\n0: Console warning only\n1: Kick player\n2: Kick and blackhole player.\n";
 
 	//r1: control rcon buffer size
 	sv_rcon_buffsize = Cvar_Get ("sv_rcon_buffsize", "1384", 0);
 	sv_rcon_buffsize->changed = _rcon_buffsize_changed;
+	sv_rcon_buffsize->help = "Amount of bytes the rcon buffer holds before flushing. You should not change this unless you know what you are doing. Default 1384.\n";
 
 	//r1: show output of rcon in console?
 	sv_rcon_showoutput = Cvar_Get ("sv_rcon_showoutput", "0", 0);
+	sv_rcon_showoutput->help = "Display output of rcon commands in the server console. Default 0.\n";
 
 	//r1: broadcast name changes?
 	sv_show_name_changes = Cvar_Get ("sv_show_name_changes", "0", 0);
+	sv_show_name_changes->help = "Broadcast player name changes to all players on the server. Default 0.";
 
 	//r1: delta optimz (small non-r1q2 client breakage on 2)
 	sv_optimize_deltas = Cvar_Get ("sv_optimize_deltas", "1", 0);
-
-	//r1: q3-style delta entities?
-	sv_advanced_deltas = Cvar_Get ("sv_advanced_deltas", "0", CVAR_LATCH);
+	sv_optimize_deltas->help = "Optimize network bandwidth by not sending the view angles back to the client.\n0: Disabled\n1: Enabled for protocol 35 clients\n2: Enabled for all clients\n";
 
 	//r1: enhanced setplayer code?
 	sv_enhanced_setplayer = Cvar_Get ("sv_enhanced_setplayer", "0", 0);
+	sv_enhanced_setplayer->help = "Allow use of partial names in the kick, dumpuser, etc commands. Default 0.";
 
 	//r1: test lag stuff
 	sv_predict_on_lag = Cvar_Get ("sv_predict_on_lag", "0", 0);
+	sv_predict_on_lag->help = "Try to predict movement of lagged players to avoid frozen/warping players (experimental). Default 0.";
+
+	sv_format_string_hack = Cvar_Get ("sv_format_string_hack", "0", 0);
+	sv_format_string_hack->help = "Remove %% from user-supplied strings to mitigate format string vulnerabilities in the Game DLL. Default 0.";
 
 #ifdef ANTICHEAT
-	sv_require_anticheat = Cvar_Get ("sv_require_anticheat", "0", CVAR_LATCH);
-	sv_anticheat_message = Cvar_Get ("sv_anticheat_message", "This server requires the r1ch.net anticheat module. Please see http://www.r1ch.net/stuff/r1q2/anticheat/ for more details.", 0);
+	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
+	sv_require_anticheat->help = "Require use of the r1ch.net anticheat module by players. Default 0.\n0: Don't require any anticheat module.\n1: Optionally use the anticheat module.\n2: Require the anticheat module.\n";
+
+	sv_anticheat_server_address = Cvar_Get ("sv_anticheat_server_address", "anticheat.r1ch.net", CVAR_LATCH);
+	sv_anticheat_server_address->help = "Address of the r1ch.net anticheat server. To avoid server stalls due to DNS lookup, you may wish to replace this with the current server IP. Default anticheat.r1ch.net.\n";
+
+	sv_anticheat_error_action = Cvar_Get ("sv_anticheat_error_action", "0", 0);
+	sv_anticheat_error_action->help = "Action to take if the anticheat server is unavailable. Default 0.\n0: Allow new clients to connect with no cheat protection\n1: Don't allow new clients until the connection is re-established.\n";
+
+	sv_anticheat_message = Cvar_Get ("sv_anticheat_message", "This server requires the r1ch.net anticheat module. Please see http://r1ch.net/anticheat/ for more details.", 0);
+	sv_anticheat_message->help = "Message to show to clients who are using anticheat-incompatible versions.\n";
 #endif
 
 	//r1: init pyroadmin
@@ -2862,6 +3017,10 @@ void SV_Shutdown (char *finalmsg, qboolean reconnect, qboolean crashing)
 
 	if (!crashing || dbg_unload->intvalue)
 		SV_ShutdownGameProgs ();
+
+#ifdef ANTICHEAT
+	SV_AntiCheat_Disconnect ();
+#endif
 
 	// free current level
 	if (sv.demofile)

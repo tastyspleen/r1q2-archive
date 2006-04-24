@@ -196,7 +196,7 @@ static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 
 	if (cl->state <= cs_zombie)
 	{
-		Com_Printf ("Warning, SV_AddMessage to zombie/free client %d.\n", LOG_SERVER|LOG_WARNING, (int)(cl - svs.clients));
+		Com_Printf ("WARNING: SV_AddMessage to zombie/free client %d.\n", LOG_SERVER|LOG_WARNING, (int)(cl - svs.clients));
 		return;
 	}
 

@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cmodel.c -- model loading
 
 #include "qcommon.h"
+#include <io.h>
 
 typedef struct
 {
@@ -176,15 +177,16 @@ void CMod_LoadSurfaces (lump_t *l)
 		Com_Error (ERR_DROP, "CMod_LoadSurfaces: funny lump size");
 	count = l->filelen / sizeof(*in);
 	if (count < 1)
-		Com_Error (ERR_DROP, "Map with no surfaces");
+		Com_Error (ERR_DROP, "CMod_LoadSurfaces: Map with no surfaces");
 	if (count > MAX_MAP_TEXINFO)
-		Com_Error (ERR_DROP, "Map has too many surfaces");
+		Com_Error (ERR_DROP, "CMod_LoadSurfaces: Map has too many surfaces");
 
 	numtexinfo = count;
 	out = map_surfaces;
 
 	for ( i=0 ; i<count ; i++, in++, out++)
 	{
+		//FIXME CRASH: crashreport here due to illegal texture pointer.
 		strncpy (out->c.name, in->texture, sizeof(out->c.name)-1);
 		strncpy (out->rname, in->texture, sizeof(out->rname)-1);
 		out->c.flags = LittleLong (in->flags);
@@ -558,6 +560,11 @@ qboolean CM_MapWillLoad (const char *name)
 	if (FS_LoadFile (csname, NULL) != -1)
 		return true;
 
+	Com_sprintf (csname, sizeof(csname), "%s.gz", name);
+
+	if (FS_LoadFile (csname, NULL) != -1)
+		return true;
+
 	if (FS_LoadFile (name, NULL) != -1)
 		return true;
 
@@ -662,7 +669,52 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 		}
 	}
 
-	length = FS_LoadFile (name, (void **)&buf);
+	//FIXME: make this work clientside too... ugly fs hacks needed i guess :/
+	/*length = 0;
+
+#ifndef NO_ZLIB
+	{
+		char		gzName[MAX_QPATH];
+		FILE		*f;
+		gzFile		compressed;
+		qboolean	closeHandle;
+
+		Com_sprintf (gzName, sizeof(gzName), "%s.gz", name);
+		//compressed = gzopen (gzName, "rb");
+
+		length = FS_FOpenFile (gzName, &f, HANDLE_OPEN, &closeHandle);
+		if (length != -1)
+		{
+			int fd;
+
+			fseek (f, -4, SEEK_END);
+			fread (&length, sizeof(length), 1, f);
+			rewind (f);
+
+			fd = fileno (f);
+
+			compressed = gzdopen (_dup(fd), "rb");
+			if (compressed)
+			{
+				//length = gzseek (compressed, 0, SEEK_END);
+				//gzrewind (compressed);
+				buf = Z_TagMalloc (length, TAGMALLOC_FSLOADFILE);
+				if (gzread (compressed, buf, length) == -1)
+					length = 0;
+				gzclose (compressed);
+			}
+
+			if (closeHandle)
+				fclose (f);
+		}
+		else
+			length = 0;
+	}
+#endif
+
+	if (!length)*/
+		length = FS_LoadFile (name, (void **)&buf);
+
 	if (!buf)
 	{
 		if (!developer->intvalue || !clientload)
@@ -722,7 +774,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 	if (!(override_bits & 4))
 		CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES]);
 
-	FS_FreeFile (buf);
+	Z_Free (buf);
 
 	CM_InitBoxHull ();
 

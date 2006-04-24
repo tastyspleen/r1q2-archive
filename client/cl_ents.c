@@ -218,36 +218,6 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 	ent->current = *state;
 }
 
-static void CL_DeltaEntityQ3 (sizebuf_t *msg, frame_t *frame, int newnum, entity_state_t *old, qboolean unchanged)
-{
-	centity_t		*ent;
-	entity_state_t	*state;
-
-	// save the parsed entity state into the big circular buffer so
-	// it can be used as the source for a later delta
-	state = &cl_parse_entities[cl.parse_entities & (MAX_PARSE_ENTITIES-1)];
-
-	if ( unchanged )
-	{
-		*state = *old;
-	}
-	else
-	{
-		MSG_ReadDeltaEntityQ3 ( msg, old, state, newnum );
-	}
-
-	if ( state->number == (MAX_GENTITIES-1) )
-	{
-		return;		// entity was delta removed
-	}
-
-	ent = &cl_entities[newnum];
-
-	CL_SetEntState (ent, state);
-
-	cl.parse_entities++;
-	frame->num_entities++;
-}
 
 /*
 ==================
@@ -400,161 +370,93 @@ static void CL_ParsePacketEntities (const frame_t *oldframe, frame_t *newframe)
 		}
 	}
 
-	if (!cl.advancedDeltas)
+	for (;;)
 	{
-		for (;;)
-		{
-			newnum = CL_ParseEntityBits (&bits);
+		newnum = CL_ParseEntityBits (&bits);
 
-			if (net_message.readcount > net_message.cursize)
-				Com_Error (ERR_DROP,"CL_ParsePacketEntities: end of message");
+		if (net_message.readcount > net_message.cursize)
+			Com_Error (ERR_DROP,"CL_ParsePacketEntities: end of message");
 
-			if (!newnum)
-				break;
+		if (!newnum)
+			break;
 
-			if (cl_shownet->intvalue >= 4)
-				Com_Printf ("%i bytes.\n", LOG_CLIENT, net_message.readcount-1);
+		if (cl_shownet->intvalue >= 4)
+			Com_Printf ("%i bytes.\n", LOG_CLIENT, net_message.readcount-1);
 
-			while (oldnum < newnum)
-			{	// one or more entities from the old packet are unchanged
-				if (cl_shownet->intvalue >= 3)
-					Com_Printf ("   unchanged: %i\n", LOG_CLIENT, oldnum);
-				CL_DeltaEntity (newframe, oldnum, oldstate, 0);
-				
-				oldindex++;
+		while (oldnum < newnum)
+		{	// one or more entities from the old packet are unchanged
+			if (cl_shownet->intvalue >= 3)
+				Com_Printf ("   unchanged: %i\n", LOG_CLIENT, oldnum);
+			CL_DeltaEntity (newframe, oldnum, oldstate, 0);
+			
+			oldindex++;
 
-				if (oldindex >= oldframe->num_entities)
-					oldnum = 99999;
-				else
-				{
-					oldstate = &cl_parse_entities[(oldframe->parse_entities+oldindex) & (MAX_PARSE_ENTITIES-1)];
-					oldnum = oldstate->number;
-				}
-			}
-
-			if (bits & U_REMOVE)
-			{	
-				// the entity present in oldframe is not in the current frame
-				if (!oldframe)
-					Com_Error (ERR_DROP, "CL_ParsePacketEntities: U_REMOVE with no oldframe");
-
-				if (cl_shownet->intvalue >= 3)
-					Com_Printf ("   remove: %i\n", LOG_CLIENT, newnum);
-
-				if (oldnum != newnum)
-					Com_DPrintf ("U_REMOVE: oldnum != newnum\n");
-
-				//reset the baseline.
-				//cl_entities[newnum].baseline.number = 0;
-
-				oldindex++;
-
-				if (oldindex >= oldframe->num_entities)
-					oldnum = 99999;
-				else
-				{
-					oldstate = &cl_parse_entities[(oldframe->parse_entities+oldindex) & (MAX_PARSE_ENTITIES-1)];
-					oldnum = oldstate->number;
-				}
-				continue;
-			}
-
-			if (oldnum == newnum)
-			{	// delta from previous state
-				if (!oldframe)
-					Com_Error (ERR_DROP, "CL_ParsePacketEntities: delta with no oldframe");
-
-				if (cl_shownet->intvalue >= 3)
-					Com_Printf ("   delta: %i\n", LOG_CLIENT, newnum);
-				CL_DeltaEntity (newframe, newnum, oldstate, bits);
-
-				oldindex++;
-
-				if (oldindex >= oldframe->num_entities)
-					oldnum = 99999;
-				else
-				{
-					oldstate = &cl_parse_entities[(oldframe->parse_entities+oldindex) & (MAX_PARSE_ENTITIES-1)];
-					oldnum = oldstate->number;
-				}
-				continue;
-			}
-
-			if (oldnum > newnum)
-			{	// delta from baseline
-				if (cl_shownet->intvalue >= 3)
-					Com_Printf ("   baseline: %i\n", LOG_CLIENT, newnum);
-				ShowBits (bits);
-
-				CL_DeltaEntity (newframe, newnum, &cl_entities[newnum].baseline, bits);
-
-				continue;
+			if (oldindex >= oldframe->num_entities)
+				oldnum = 99999;
+			else
+			{
+				oldstate = &cl_parse_entities[(oldframe->parse_entities+oldindex) & (MAX_PARSE_ENTITIES-1)];
+				oldnum = oldstate->number;
 			}
 		}
-	}
-	else
-	{
-		sizebuf_t *msg = &net_message;
 
-		msg->bit = msg->readcount * 8;
+		if (bits & U_REMOVE)
+		{	
+			// the entity present in oldframe is not in the current frame
+			if (!oldframe)
+				Com_Error (ERR_DROP, "CL_ParsePacketEntities: U_REMOVE with no oldframe");
 
-		for (;;)
-		{
-			// read the entity index number
-			newnum = MSG_ReadBits( msg, GENTITYNUM_BITS );
+			if (cl_shownet->intvalue >= 3)
+				Com_Printf ("   remove: %i\n", LOG_CLIENT, newnum);
 
-			if ( newnum == (MAX_GENTITIES-1) ) {
-				break;
+			if (oldnum != newnum)
+				Com_DPrintf ("U_REMOVE: oldnum != newnum\n");
+
+			//reset the baseline.
+			//cl_entities[newnum].baseline.number = 0;
+
+			oldindex++;
+
+			if (oldindex >= oldframe->num_entities)
+				oldnum = 99999;
+			else
+			{
+				oldstate = &cl_parse_entities[(oldframe->parse_entities+oldindex) & (MAX_PARSE_ENTITIES-1)];
+				oldnum = oldstate->number;
 			}
+			continue;
+		}
 
-			if ( msg->readcount > msg->cursize ) {
-				Com_Error (ERR_DROP,"CL_ParsePacketEntities: end of message");
+		if (oldnum == newnum)
+		{	// delta from previous state
+			if (!oldframe)
+				Com_Error (ERR_DROP, "CL_ParsePacketEntities: delta with no oldframe");
+
+			if (cl_shownet->intvalue >= 3)
+				Com_Printf ("   delta: %i\n", LOG_CLIENT, newnum);
+			CL_DeltaEntity (newframe, newnum, oldstate, bits);
+
+			oldindex++;
+
+			if (oldindex >= oldframe->num_entities)
+				oldnum = 99999;
+			else
+			{
+				oldstate = &cl_parse_entities[(oldframe->parse_entities+oldindex) & (MAX_PARSE_ENTITIES-1)];
+				oldnum = oldstate->number;
 			}
+			continue;
+		}
 
-			while ( oldnum < newnum ) {
-				// one or more entities from the old packet are unchanged
-				if ( cl_shownet->intvalue == 3 ) {
-					Com_Printf ("%3i:  unchanged: %i\n", LOG_GENERAL, msg->readcount, oldnum);
-				}
-				CL_DeltaEntityQ3 ( msg, newframe, oldnum, oldstate, true );
-				
-				oldindex++;
+		if (oldnum > newnum)
+		{	// delta from baseline
+			if (cl_shownet->intvalue >= 3)
+				Com_Printf ("   baseline: %i\n", LOG_CLIENT, newnum);
+			ShowBits (bits);
 
-				if ( oldindex >= oldframe->num_entities ) {
-					oldnum = 99999;
-				} else {
-					oldstate = &cl_parse_entities[
-						(oldframe->parse_entities + oldindex) & (MAX_PARSE_ENTITIES-1)];
-					oldnum = oldstate->number;
-				}
-			}
-			if (oldnum == newnum) {
-				// delta from previous state
-				if ( cl_shownet->intvalue == 3 ) {
-					Com_Printf ("%3i:  delta: %i\n", LOG_GENERAL, msg->readcount, newnum);
-				}
-				CL_DeltaEntityQ3 ( msg, newframe, newnum, oldstate, false );
+			CL_DeltaEntity (newframe, newnum, &cl_entities[newnum].baseline, bits);
 
-				oldindex++;
-
-				if ( oldindex >= oldframe->num_entities ) {
-					oldnum = 99999;
-				} else {
-					oldstate = &cl_parse_entities[
-						(oldframe->parse_entities + oldindex) & (MAX_PARSE_ENTITIES-1)];
-					oldnum = oldstate->number;
-				}
-				continue;
-			}
-
-			if ( oldnum > newnum ) {
-				// delta from baseline
-				if ( cl_shownet->intvalue == 3 ) {
-					Com_Printf ("%3i:  baseline: %i\n", LOG_GENERAL, msg->readcount, newnum);
-				}
-				CL_DeltaEntityQ3 ( msg, newframe, newnum, &cl_entities[newnum].baseline, false );
-				continue;
-			}
+			continue;
 		}
 	}
 

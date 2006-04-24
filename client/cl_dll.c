@@ -139,7 +139,7 @@ qboolean CL_InitClientDLL (void)
 			break;
 		default:
 			CL_FreeCllib ();
-			Com_Printf ("r1q2 doesn't support your client dll version (%s)\n", LOG_CLIENT, name);
+			Com_Printf (PRODUCTNAME " doesn't support your client dll version (%s)\n", LOG_CLIENT, name);
 			return false;
 	}
 

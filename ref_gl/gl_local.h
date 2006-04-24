@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.32"
+#define	REF_VERSION	"R1GL 0.1.5.33"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -240,6 +240,7 @@ extern cvar_t	*gl_doublelight_entities;
 extern cvar_t	*gl_noscrap;
 extern cvar_t	*gl_zfar;
 extern cvar_t	*gl_overbrights;
+extern cvar_t	*gl_hudscale;
 
 extern cvar_t	*vid_gamma_pics;
 

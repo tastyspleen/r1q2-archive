@@ -124,6 +124,7 @@ cvar_t	*gl_ext_multisample;
 cvar_t	*gl_ext_samples;
 
 cvar_t	*gl_zfar;
+cvar_t	*gl_hudscale;
 
 cvar_t	*cl_version;
 cvar_t	*gl_r1gl_test;
@@ -1201,6 +1202,7 @@ void R_Register( void )
 	gl_ext_samples = ri.Cvar_Get ("gl_ext_samples", "2", 0);
 	
 	gl_zfar = ri.Cvar_Get ("gl_zfar", "8192", 0);
+	gl_hudscale = ri.Cvar_Get ("gl_hudscale", "1", 0);
 
 	cl_version = ri.Cvar_Get ("cl_version", REF_VERSION, CVAR_NOSET); 
 	

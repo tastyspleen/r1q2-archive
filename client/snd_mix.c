@@ -178,7 +178,7 @@ void S_TransferPaintBuffer(int endtime)
 			int16 *out = (int16 *) pbuf;
 			while (count--)
 			{
-				val = *p >> 8;
+				val = p[0] >> 8;
 				p+= step;
 				if (val > 0x7fff)
 					val = 0x7fff;
@@ -193,7 +193,7 @@ void S_TransferPaintBuffer(int endtime)
 			unsigned char *out = (unsigned char *) pbuf;
 			while (count--)
 			{
-				val = *p >> 8;
+				val = p[0] >> 8;
 				p+= step;
 				if (val > 0x7fff)
 					val = 0x7fff;

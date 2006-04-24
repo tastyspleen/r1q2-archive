@@ -615,7 +615,9 @@ void Cmd_Alias_f (void)
 	}
 	else
 	{
-		strcpy (a->name, s);
+		//strcpy (a->name, s);
+		//memleak fix, thanks Maniac-
+		Z_Free (a->value);
 	}
 
 // copy the rest of the command line
@@ -934,7 +936,10 @@ void	EXPORT Cmd_AddCommand (const char *cmd_name, xcommand_t function)
 {
 	void			**data;
 	cmd_function_t	*cmd;
-	
+
+	if (!cmd_name)
+		Com_Error (ERR_FATAL, "Cmd_AddCommand: NULL command name");
+
 // fail if the command is a variable name
 	if (Cvar_VariableString(cmd_name)[0])
 	{
@@ -1098,6 +1103,7 @@ void	Cmd_ExecuteString (char *text)
 	}
 
 	// check functions
+	// FIXME CRASH: NULL in the rb tree!
 	data = rbfind (cmd_argv[0], cmdtree);
 	if (data)
 	{

@@ -342,7 +342,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		p[0] = 0;
 		p++;
 		model_name = p;
-		if (!*model_name)
+		if (!model_name[0])
 		{
 			val = SV_FixPlayerSkin (val, player_name);
 			goto fixed;
@@ -362,7 +362,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		p++;
 		skin_name = p;
 
-		if (!*skin_name)
+		if (!skin_name[0])
 		{
 			val = SV_FixPlayerSkin (val, player_name);
 			goto fixed;

@@ -422,12 +422,16 @@ size_t __cdecl fast_strlen(const char *s)
 
 //fast_strlwr, adapted from http://www.assembly-journal.com/viewarticle.php?id=131&layout=html
 //since it only writes to edi if modified, this is faster for strings that are mostly lower.
-void __cdecl fast_strlwr(char *s)
+//void __cdecl fast_strlwr(char *s)
+__declspec(naked) void __fastcall fast_strlwr (char *s)
 {
 	__asm
 	{
-			mov esi, [s]					;get string
-			mov edi, esi					;destination
+			push esi
+			push edi
+			;mov esi, [esp+4]				;get string
+			mov esi, ecx					;__fastcall only!
+			mov edi, ecx					;destination
 		loop1:
 			lodsb							;load byte
 			cmp    al, 5Ah					;greater than 'Z'
@@ -444,6 +448,9 @@ void __cdecl fast_strlwr(char *s)
 			inc		edi						;no change, increment pointer
 			jmp    short loop1					;loop
 		finish1:
+			pop edi
+			pop esi
+			retn
 	}
 }
 

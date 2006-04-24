@@ -1026,7 +1026,19 @@ e->angles[2] = -e->angles[2];	// stupid quake bug
 	GL_TexEnv( GL_REPLACE );
 	GL_SelectTexture( GL_TEXTURE1);
 	
-	GL_TexEnv( GL_MODULATE );
+	//GL_TexEnv( GL_MODULATE );
+	if (FLOAT_EQ_ZERO(gl_overbrights->value) || gl_overbrights->modified)
+	{
+		GL_TexEnv( GL_MODULATE );
+	}
+	else
+	{
+		qglTexEnvi (GL_TEXTURE_ENV,	GL_TEXTURE_ENV_MODE,	GL_COMBINE_ARB);
+		qglTexEnvi (GL_TEXTURE_ENV,	GL_COMBINE_RGB_ARB,		GL_MODULATE);
+		qglTexEnvi (GL_TEXTURE_ENV,	GL_COMBINE_ALPHA_ARB,	GL_MODULATE);
+		qglTexEnvi (GL_TEXTURE_ENV,	GL_RGB_SCALE_ARB,		2);
+		GL_TexEnv (GL_COMBINE_ARB);
+	}
 
 	R_DrawInlineBModel ();
 	GL_EnableMultitexture( false );

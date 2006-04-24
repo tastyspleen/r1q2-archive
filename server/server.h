@@ -226,6 +226,10 @@ typedef struct client_s
 	qboolean					moved;
 
 	unsigned long				settings[CLSET_MAX];
+
+#ifdef ANTICHEAT
+	qboolean					anticheat_valid;
+#endif
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -355,6 +359,7 @@ extern	edict_t		*sv_player;
 extern	cvar_t		*sv_enhanced_setplayer;
 
 extern	cvar_t		*sv_predict_on_lag;
+extern	cvar_t		*sv_format_string_hack;
 
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;
@@ -410,7 +415,6 @@ extern cvar_t	*sv_gamedebug;
 extern cvar_t	*sv_packetentities_hack;
 
 extern cvar_t	*sv_optimize_deltas;
-extern cvar_t	*sv_advanced_deltas;
 
 //void Master_Heartbeat (void);
 //void Master_Packet (void);
@@ -581,6 +585,15 @@ struct blackhole_s
 	ratelimit_t		ratelimit;
 };
 
+typedef struct netblock_s netblock_t;
+
+struct netblock_s
+{
+	netblock_t		*next;
+	uint32			ip;
+	uint32			mask;
+};
+
 #define	BLACKHOLE_SILENT	0
 #define	BLACKHOLE_MESSAGE	1
 
@@ -592,6 +605,9 @@ struct blackhole_s
 #define	CVARBAN_EXEC		6
 
 extern blackhole_t blackholes;
+#ifdef ANTICHEAT
+extern netblock_t anticheat_exceptions;
+#endif
 
 typedef struct banmatch_s banmatch_t;
 
@@ -622,3 +638,13 @@ const banmatch_t *VarBanMatch (varban_t *bans, const char *var, const char *resu
 
 extern	cvar_t	*sv_max_traces_per_frame;
 extern	unsigned int		sv_tracecount;
+
+#ifdef ANTICHEAT
+void SV_AntiCheat_Disconnect (void);
+qboolean SV_AntiCheat_Connect (void);
+void SV_AntiCheat_Run (void);
+void SV_AntiCheat_Challenge (netadr_t *from, unsigned challenge);
+#define ANTICHEATMESSAGE "\220\xe1\xee\xf4\xe9\xe3\xe8\xe5\xe1\xf4\221"
+extern	cvar_t	*sv_anticheat_server_address;
+extern	cvar_t	*sv_anticheat_error_action;
+#endif

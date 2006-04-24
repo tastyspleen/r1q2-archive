@@ -328,16 +328,18 @@ static void SV_New_f (void)
 		{
 			int		i;
 			int		j;
+			int		rnd, rnd2;
 
 			int		varindex;
 			int		conindex;
-
+			int		realIndex;
 			int		serverIndex;
 
-			char	aliasConnect[32];
+			char	aliasConnect[4][10];
+			char	aliasSet[4][10];
 
-			char	aliasJunk[16][32];
-			char	randomIP[16][32];
+			char	aliasJunk[10][10];
+			char	randomIP[10][10];
 
 			for (i = 0; i < sizeof(sv_client->reconnect_var)-1; i++)
 			{
@@ -347,47 +349,82 @@ static void SV_New_f (void)
 			for (i = 0; i < sizeof(sv_client->reconnect_var)-1; i++)
 				sv_client->reconnect_value[i] = junkChars[(int)(random() * (sizeof(junkChars)-1))];
 
-			for (i = 0; i < sizeof(aliasConnect)-1; i++)
-				aliasConnect[i] = junkChars[(int)(random() * (sizeof(junkChars)-1))];
-			aliasConnect[i] = 0;
+			for (i = 0; i < 4; i++)
+			{
+				for (j = 0; j < sizeof(aliasSet[0])-1; j++)
+					aliasSet[i][j] = junkChars[(int)(random() * (sizeof(junkChars)-1))];
+				aliasSet[i][j] = 0;
+			}
 
-			for (i = 0; i < 16; i++)
+			for (i = 0; i < 4; i++)
+			{
+				for (j = 0; j < sizeof(aliasConnect[0])-1; j++)
+					aliasConnect[i][j] = junkChars[(int)(random() * (sizeof(junkChars)-1))];
+				aliasConnect[i][j] = 0;
+			}
+
+			for (i = 0; i < 10; i++)
 			{
 				for (j = 0; j < sizeof(aliasJunk[0])-1; j++)
-					aliasJunk[i][j] =junkChars[(int)(random() * (sizeof(junkChars)-1))];
+					aliasJunk[i][j] = junkChars[(int)(random() * (sizeof(junkChars)-1))];
 
 				aliasJunk[i][j] = 0;
 				Com_sprintf (randomIP[i], sizeof(randomIP[0]), "%d.%d.%d.%d:%d", (int)(random() * 255),  (int)(random() * 255), (int)(random() * 255), (int)(random() * 255), server_port);
 			}
 
-			serverIndex = (int)(random() * 15);
+			serverIndex = (int)(random() * 9);
 
 			Q_strncpy (randomIP[serverIndex], sv_force_reconnect->string, sizeof(randomIP[0])-1);
 
-			conindex = (int)(random() * 15);
-			varindex = (int)(random() * 15);
+			conindex = (int)(random() * 9);
+			varindex = (int)(random() * 9);
 
-			for (i = 0; i < 16; i++)
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString (va("set %s set\n", aliasSet[0]));
+			SV_AddMessage (sv_client, true);
+
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString (va("$%s %s $%s\n", aliasSet[0], aliasSet[1], aliasSet[0]));
+			SV_AddMessage (sv_client, true);
+
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString (va("$%s %s $%s\n", aliasSet[1], aliasSet[2], aliasSet[1]));
+			SV_AddMessage (sv_client, true);
+
+			MSG_BeginWriting (svc_stufftext);
+			MSG_WriteString (va("$%s %s $%s\n", aliasSet[2], aliasSet[3], aliasSet[0]));
+			SV_AddMessage (sv_client, true);
+
+			for (i = 0; i < 10; i++)
 			{
+				rnd = (int)(random () * 3);
+				rnd2 = (int)(random () * 3);
 				if (i == conindex)
 				{
 					MSG_BeginWriting (svc_stufftext);
-					MSG_WriteString (va ("set %s connect\n", aliasConnect));
+					MSG_WriteString (va ("$%s %s connect\n", aliasSet[rnd], aliasConnect[rnd2]));
+					SV_AddMessage (sv_client, true);
+					realIndex = rnd2;
+				}
+				else if ((int)(random() * 5) == 3)
+				{
+					MSG_BeginWriting (svc_stufftext);
+					MSG_WriteString (va ("$%s %s connect\n", aliasSet[rnd], aliasConnect[rnd2]));
 					SV_AddMessage (sv_client, true);
 				}
 				if (i == varindex)
 				{
 					MSG_BeginWriting (svc_stufftext);
-					MSG_WriteString (va ("set %s \"%s\"\n", sv_client->reconnect_var, sv_client->reconnect_value));
+					MSG_WriteString (va ("$%s %s \"%s\"\n", aliasSet[rnd], sv_client->reconnect_var, sv_client->reconnect_value));
 					SV_AddMessage (sv_client, true);
 				}
 				MSG_BeginWriting (svc_stufftext);
-				MSG_WriteString (va ("set %s \"%s\"\n", aliasJunk[i], randomIP[i]));
+				MSG_WriteString (va ("$%s %s \"%s\"\n", aliasSet[rnd], aliasJunk[i], randomIP[i]));
 				SV_AddMessage (sv_client, true);
 			}
 
 			MSG_BeginWriting (svc_stufftext);
-			MSG_WriteString (va ("$%s $%s\n",  aliasConnect, aliasJunk[serverIndex]));
+			MSG_WriteString (va ("$%s $%s\n",  aliasConnect[realIndex], aliasJunk[serverIndex]));
 			SV_AddMessage (sv_client, true);
 
 			if (sv_client->netchan.reliable_length)
@@ -445,7 +482,7 @@ static void SV_New_f (void)
 		//forced protocol breakage for 34 fallback
 		MSG_WriteShort (CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
 
-		MSG_WriteByte (sv_advanced_deltas->intvalue);
+		MSG_WriteByte (0);	//was adv.deltas
 		MSG_WriteByte (sv_strafejump_hack->intvalue);
 	}
 
@@ -596,7 +633,7 @@ plainLines:
 			if (base->number)
 			{
 				MSG_BeginWriting (svc_spawnbaseline);
-				MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol, sv_advanced_deltas->intvalue);
+				MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol);
 				wrote += MSG_GetLength();
 				SV_AddMessage (sv_client, true);
 
@@ -649,8 +686,7 @@ plainLines:
 					if (base->number)
 					{
 						MSG_BeginWriting (svc_spawnbaseline);
-						MSG_SetBit (8);
-						MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol, sv_advanced_deltas->intvalue);
+						MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol);
 						MSG_EndWriting (&zBuff);
 
 						if (zBuff.cursize >= 300 || z.total_out > sv_client->netchan.message.buffsize - 300)
@@ -827,7 +863,13 @@ static void SV_Begin_f (void)
 	sv_client->commandMsec = sv_msecs->intvalue;
 	sv_client->commandMsecOverflowCount = 0;
 
-
+#ifdef ANTICHEAT
+	if (sv_require_anticheat->intvalue == 1 || (sv_require_anticheat->intvalue && sv_anticheat_error_action->intvalue == 0))
+	{
+		if (!sv_client->anticheat_valid)
+			SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " Client '%s' is not using anticheat.\n", sv_client->name);
+	}
+#endif
 	//r1: this is in bad place
 	//Cbuf_InsertFromDefer ();
 }
@@ -1345,8 +1387,24 @@ static void SV_BeginDownload_f(void)
 	SV_NextDownload_f ();
 }
 
+#ifdef ANTICHEAT
+static void SV_ACList_f (void)
+{
+	client_t	*cl;
+	const char	*substring;
 
+	substring = Cmd_Argv (1);
 
+	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+	{
+		if (cl->state < cs_spawned)
+			continue;
+
+		if (!substring[0] || strstr (cl->name, substring))
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "%s: %susing anticheat\n", cl->name, cl->anticheat_valid ? "" : "not ");
+	}
+}
+#endif
 //============================================================================
 
 
@@ -1391,14 +1449,14 @@ static void SV_ShowServerinfo_f (void)
 	p = s;
 
 	//make it more readable
-	while (*p)
+	while (p[0])
 	{
-		if (*p == '\\')
+		if (p[0] == '\\')
 		{
 			if (flip)
-				*p = '\n';
+				p[0] = '\n';
 			else
-				*p = '=';
+				p[0] = '=';
 			flip ^= 1;
 		}
 		p++;
@@ -1409,14 +1467,12 @@ static void SV_ShowServerinfo_f (void)
 
 static void SV_ClientServerinfo_f (void)
 {
-	char	*strafejump_msg;
-	char	*delta_msg;
-	char	*optimize_msg;
-	char	*packetents_msg;
-	int		maxLen;
+	const char	*strafejump_msg;
+	const char	*optimize_msg;
+	const char	*packetents_msg;
+	int			maxLen;
 
 	strafejump_msg = sv_strafejump_hack->intvalue == 2 ? "Forced" : sv_strafejump_hack->intvalue ? "Enabled (requires protocol 35 client)" : "Disabled";
-	delta_msg = sv_advanced_deltas->intvalue ? "Enabled (requires protocol 35 client)" : "Disabled";
 	optimize_msg = sv_optimize_deltas->intvalue == 2 ? "Forced" : sv_optimize_deltas->intvalue ? "Enabled" : "Disabled";
 	packetents_msg = sv_packetentities_hack->intvalue == 2 ? "Enabled (with protocol 35 zlib support)" : sv_packetentities_hack->intvalue ? "Enabled (without protocol 35 zlib support)" : "Disabled";
 
@@ -1430,13 +1486,11 @@ static void SV_ClientServerinfo_f (void)
 		"Your protocol  : %d\n"
 		"Your max packet: %d (server max allowed: %d)\n"
 		"Strafejump hack: %s\n"
-		"Advanced deltas: %s\n"
 		"Optimize deltas: %s\n"
 		"Packetents hack: %s\n",
 		sv_client->protocol,
 		sv_client->netchan.message.buffsize, maxLen,
 		strafejump_msg,
-		delta_msg,
 		optimize_msg,
 		packetents_msg);
 }
@@ -1697,6 +1751,10 @@ static ucmd_t ucmds[] =
 
 	{"nogamedata", SV_NoGameData_f},
 
+#ifdef ANTICHEAT
+	{"aclist", SV_ACList_f},
+#endif
+
 	{"download", SV_BeginDownload_f},
 	{"nextdl", SV_NextDownload_f},
 	//{"debuginfo", SV_Shit_f},
@@ -1787,6 +1845,13 @@ static void SV_ExecuteUserCommand (char *s)
 		Com_Printf ("EXPLOIT: Client %s[%s] tried to use a command containing 0xFF: %s\n", LOG_EXPLOIT|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), p);
 		SV_KickClient (sv_client, "attempted command exploit", NULL);
 		return;
+	}
+
+	if (sv_format_string_hack->intvalue)
+	{
+		char	*p = s;
+		while ((p = strchr (p, '%')))
+			p[0] = ' ';
 	}
 
 	//r1: allow filter of high bit commands (eg \n\r in say cmds)
@@ -2217,12 +2282,19 @@ void SV_ExecuteClientMessage (client_t *cl)
 			}
 
 			//r1: normal q2 client caps at 250 internally so this is a nice hack check
-			if (cl->state == cs_spawned && newcmd.msec > 250)
+			if (cl->state == cs_spawned)
 			{
-				Com_Printf ("EXPLOIT: Client %s[%s] tried to use illegal msec value: %d\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), newcmd.msec);
-				Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal msec value (%d)", newcmd.msec);
-				SV_KickClient (cl, "illegal pmove msec detected", NULL);
-				return;
+				if (newcmd.msec > 250)
+				{
+					Com_Printf ("EXPLOIT: Client %s[%s] tried to use illegal msec value: %d\n", LOG_EXPLOIT|LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address), newcmd.msec);
+					Blackhole (&cl->netchan.remote_address, true, sv_blackhole_mask->intvalue, BLACKHOLE_SILENT, "illegal msec value (%d)", newcmd.msec);
+					SV_KickClient (cl, "illegal pmove msec detected", NULL);
+					return;
+				}
+				else if (newcmd.msec == 0)
+				{
+					Com_Printf ("Hmm, 0 msec move from %s[%s]. Should this ever happen?\n", LOG_SERVER, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+				}
 			}
 
 			if ( cl->state != cs_spawned )
@@ -2315,11 +2387,11 @@ void SV_ExecuteClientMessage (client_t *cl)
 			{
 				//Com_Printf ("%s: excessive stringcmd discarded.\n", cl->name);
 				//break;
-				Com_Printf ("Warning, %d byte stringcmd from %s: '%.32s...'\n", LOG_SERVER|LOG_WARNING, c, cl->name, s);
+				Com_Printf ("WARNING: %d byte stringcmd from %s: '%.32s...'\n", LOG_SERVER|LOG_WARNING, c, cl->name, s);
 			}
 
 			if (move_issued)
-				Com_Printf ("Warning, out-of-order stringcmd '%.32s...' from %s\n", LOG_SERVER|LOG_WARNING, s, cl->name);
+				Com_Printf ("WARNING: Out-of-order stringcmd '%.32s...' from %s\n", LOG_SERVER|LOG_WARNING, s, cl->name);
 
 			// malicious users may try using too many string commands
 			if (++stringCmdCount < MAX_STRINGCMDS)
@@ -2338,12 +2410,12 @@ void SV_ExecuteClientMessage (client_t *cl)
 			}
 			else
 			{
-				Com_Printf ("Warning, too many userinfo updates (%d) in single packet from %s\n", LOG_SERVER|LOG_WARNING, userinfoCount, cl->name);
+				Com_Printf ("WARNING: Too many userinfo updates (%d) in single packet from %s\n", LOG_SERVER|LOG_WARNING, userinfoCount, cl->name);
 				MSG_ReadString (&net_message);
 			}
 
 			if (move_issued)
-				Com_Printf ("Warning, out-of-order userinfo from %s\n", LOG_SERVER|LOG_WARNING, cl->name);
+				Com_Printf ("WARNING: Out-of-order userinfo from %s\n", LOG_SERVER|LOG_WARNING, cl->name);
 
 			if (cl->state == cs_zombie)
 				return;	//kicked

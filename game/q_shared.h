@@ -34,6 +34,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define ZEXPORT __cdecl
 #endif
 #include <zlib.h>
+#ifdef _WIN32
+#undef ZEXPORT
+#endif
 #endif
 
 //for broken Makefiles?
@@ -514,6 +517,7 @@ void Sys_Sleep (int msec);
 #define	LOG_CHAT		0x2000
 #define	LOG_NET			0x4000
 #define	LOG_GAMEDEBUG	0x8000
+#define LOG_ANTICHEAT	0x10000
 
 // this is only here so the functions in q_shared.c and q_shwin.c can link
 NORETURN void Sys_Error (const char *error, ...) __attribute__ ((format (printf, 1, 2)));
@@ -552,6 +556,7 @@ typedef struct cvar_s
 	//r1ch: added this to avoid all the if (x->modified) bloat
 	void		(*changed) (struct cvar_s *self, char *oldValue, char *newValue);
 	int			intvalue;
+	const char	*help;
 } cvar_t;
 
 #define	MAX_ALIAS_NAME	32

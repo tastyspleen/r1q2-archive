@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "qcommon.h"
 #include "redblack.h"
+#include "unzip.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -37,18 +38,45 @@ QUAKE FILESYSTEM
 
 typedef struct
 {
+	union
+	{
+		FILE			*handle;
+		unzFile			*zhandle;
+	};
+	uint32			length;
+	uint32			refcount;
+} fshandle_t;
+
+typedef struct
+{
 	char			name[56];
 	uint32			filepos;
 	uint32			filelen;
 } packfile_t;
 
+typedef struct
+{
+	uint32			offset;
+} zpackfile_t;
+
+typedef enum
+{
+	PAK_QUAKE,
+	PAK_ZIP,
+} packtype_t;
+
 typedef struct pack_s
 {
 	char			filename[MAX_OSPATH];
-	FILE			*handle;
+	union
+	{
+		FILE			*handle;
+		unzFile			*zhandle;
+	};
 	int				numfiles;
 	//packfile_t		*files;
 	struct rbtree	*rb;
+	packtype_t		type;
 } pack_t;
 
 char	fs_gamedir[MAX_OSPATH];
@@ -105,13 +133,14 @@ FS_filelength
 */
 static int FS_filelength (FILE *f)
 {
-	int		pos;
+//	int		pos;
 	int		end;
 
-	pos = ftell (f);
+	//pos = ftell (f);
 	fseek (f, 0, SEEK_END);
 	end = ftell (f);
-	fseek (f, pos, SEEK_SET);
+	rewind (f);
+	//fseek (f, pos, SEEK_SET);
 
 	return end;
 }
@@ -690,47 +719,50 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 			//r1: optimized btree search
 			pak = search->pack;
 
-			entry = rbfind (lowered, pak->rb);
-
-			if (entry)
+			if (pak->type == PAK_QUAKE)
 			{
-				entry = *(packfile_t **)entry;
+				entry = rbfind (lowered, pak->rb);
 
-#ifdef _DEBUG
-				Com_DPrintf ("File '%s' found in %s, (%s)\n", filename, pak->filename, entry->name);
-#endif
-				if (openHandle != HANDLE_NONE)
+				if (entry)
 				{
-					//*file = fopen (pak->filename, "rb");
-					if (openHandle == HANDLE_DUPE)
+					entry = *(packfile_t **)entry;
+
+	#ifdef _DEBUG
+					Com_DPrintf ("File '%s' found in %s, (%s)\n", filename, pak->filename, entry->name);
+	#endif
+					if (openHandle != HANDLE_NONE)
 					{
-						*file = fopen (pak->filename, "rb");
-						*closeHandle = true;	
+						//*file = fopen (pak->filename, "rb");
+						if (openHandle == HANDLE_DUPE)
+						{
+							*file = fopen (pak->filename, "rb");
+							*closeHandle = true;	
+						}
+						else
+						{
+							*file = pak->handle;
+							*closeHandle = false;
+						}
+						//if (!*file)
+						//	Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
+
+						if (fseek (*file, entry->filepos, SEEK_SET))
+							Com_Error (ERR_FATAL, "Couldn't seek to offset %u for %s in %s", entry->filepos, entry->name, pak->filename);
 					}
-					else
+
+					if (fs_cache->intvalue & 1)
 					{
-						*file = pak->handle;
-						*closeHandle = false;
+	#if BTREE_SEARCH
+						FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename, pak);
+	#elif HASH_CACHE
+						FS_AddToCache (hash, pak->filename, entry->filelen, entry->filepos, cache, filename);
+	#elif MAGIC_BTREE
+						FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename, hash);
+	#endif
 					}
-					//if (!*file)
-					//	Com_Error (ERR_FATAL, "Couldn't reopen pak file %s", pak->filename);	
 
-					if (fseek (*file, entry->filepos, SEEK_SET))
-						Com_Error (ERR_FATAL, "Couldn't seek to offset %u for %s in %s", entry->filepos, entry->name, pak->filename);
+					return entry->filelen;
 				}
-
-				if (fs_cache->intvalue & 1)
-				{
-#if BTREE_SEARCH
-					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename, pak);
-#elif HASH_CACHE
-					FS_AddToCache (hash, pak->filename, entry->filelen, entry->filepos, cache, filename);
-#elif MAGIC_BTREE
-					FS_AddToCache (pak->filename, entry->filelen, entry->filepos, filename, hash);
-#endif
-				}
-
-				return entry->filelen;
 			}
 		}
 		else if (!fs_noextern->intvalue)
@@ -946,95 +978,142 @@ Loads the header and directory, adding the files at the beginning
 of the list so they override previous pack files.
 =================
 */
-static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile)
+static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext)
 {
-	dpackheader_t	header;
-	int				i;
-	//packfile_t		*newfiles;
-	unsigned		pakLen;
-	int				numpackfiles;
-	pack_t			*pack;
-	FILE			*packhandle;
-	packfile_t		*info;//[MAX_FILES_IN_PACK];
-
-	void			**newitem;
-	//packfile_t		*entry;
-
-	packhandle = fopen(packfile, "rb");
-
-	if (!packhandle)
-		return NULL;
-
-	fseek (packhandle, 0, SEEK_END);
-	pakLen = ftell (packhandle);
-	rewind (packhandle);
-
-	if (fread (&header, sizeof(header), 1, packhandle) != 1)
-		Com_Error (ERR_FATAL, "couldn't read pak header from %s", packfile);
-
-	if (LittleLong(header.ident) != IDPAKHEADER)
-		Com_Error (ERR_FATAL, "%s is not a valid packfile", packfile);
 	
-#if YOU_HAVE_A_BROKEN_COMPUTER
-	header.dirofs = LittleLong (header.dirofs);
-	header.dirlen = LittleLong (header.dirlen);
-#endif
+	int				i;
+	void			**newitem;
+	pack_t			*pack;
+	packfile_t		*info;
 
-	if (header.dirlen % sizeof(packfile_t))
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %u is not a multiple of %d)", packfile, header.dirlen, (int)sizeof(packfile_t));
-
-	numpackfiles = header.dirlen / sizeof(packfile_t);
-
-	if (numpackfiles > MAX_FILES_IN_PACK)
-		//Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
-		Com_Printf ("WARNING: packfile %s has %i files (max allowed %d) - may not be compatible with other clients\n", LOG_GENERAL, packfile, numpackfiles, MAX_FILES_IN_PACK);
-
-	if (!numpackfiles)
+	if (!strcmp (ext, "pak"))
 	{
-		fclose (packhandle);
-		Com_Printf ("WARNING: Empty packfile %s\n", LOG_GENERAL|LOG_WARNING, packfile);
-		return NULL;
-	}
+		unsigned		pakLen;
+		int				numpackfiles;
+		FILE			*packhandle;
+		dpackheader_t	header;
 
-	//newfiles = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
-	info = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
+		packhandle = fopen(packfile, "rb");
 
-	if (fseek (packhandle, header.dirofs, SEEK_SET))
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
+		if (!packhandle)
+			return NULL;
 
-	if ((int)fread (info, 1, header.dirlen, packhandle) != header.dirlen)
-		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
+		fseek (packhandle, 0, SEEK_END);
+		pakLen = ftell (packhandle);
+		rewind (packhandle);
 
-	pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
+		if (fread (&header, sizeof(header), 1, packhandle) != 1)
+			Com_Error (ERR_FATAL, "couldn't read pak header from %s", packfile);
 
-	pack->rb = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, numpackfiles);
-
-	//entry = Z_TagMalloc (sizeof(packfile_t) * numpackfiles, TAGMALLOC_FSLOADPAK);
-
-	for (i=0 ; i<numpackfiles ; i++)
-	{
-		fast_strlwr (info[i].name);
-#if YOU_HAVE_A_BROKEN_COMPUTER
-		info[i].filepos = LittleLong(info[i].filepos);
-		info[i].filelen = LittleLong(info[i].filelen);
-#endif
-		if (info[i].filepos + info[i].filelen >= pakLen)
-			Com_Error (ERR_FATAL, "FS_LoadPackFile: file '%s' has illegal offset %u past end of file %u", info[i].name, info[i].filepos, pakLen);
+		if (LittleLong(header.ident) != IDPAKHEADER)
+			Com_Error (ERR_FATAL, "%s is not a valid packfile", packfile);
 		
-		newitem = rbsearch (info[i].name, pack->rb);
-		*newitem = &info[i];
+	#if YOU_HAVE_A_BROKEN_COMPUTER
+		header.dirofs = LittleLong (header.dirofs);
+		header.dirlen = LittleLong (header.dirlen);
+	#endif
+
+		if (header.dirlen % sizeof(packfile_t))
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %u is not a multiple of %d)", packfile, header.dirlen, (int)sizeof(packfile_t));
+
+		numpackfiles = header.dirlen / sizeof(packfile_t);
+
+		if (numpackfiles > MAX_FILES_IN_PACK)
+			//Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
+			Com_Printf ("WARNING: packfile %s has %i files (max allowed %d) - may not be compatible with other clients\n", LOG_GENERAL, packfile, numpackfiles, MAX_FILES_IN_PACK);
+
+		if (!numpackfiles)
+		{
+			fclose (packhandle);
+			Com_Printf ("WARNING: Empty packfile %s\n", LOG_GENERAL|LOG_WARNING, packfile);
+			return NULL;
+		}
+
+		//newfiles = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
+		info = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
+
+		if (fseek (packhandle, header.dirofs, SEEK_SET))
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
+
+		if ((int)fread (info, 1, header.dirlen, packhandle) != header.dirlen)
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
+
+		pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
+		pack->type = PAK_QUAKE;
+		pack->rb = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, numpackfiles);
+
+		//entry = Z_TagMalloc (sizeof(packfile_t) * numpackfiles, TAGMALLOC_FSLOADPAK);
+
+		for (i=0 ; i<numpackfiles ; i++)
+		{
+			fast_strlwr (info[i].name);
+#if YOU_HAVE_A_BROKEN_COMPUTER
+			info[i].filepos = LittleLong(info[i].filepos);
+			info[i].filelen = LittleLong(info[i].filelen);
+#endif
+			if (info[i].filepos + info[i].filelen >= pakLen)
+				Com_Error (ERR_FATAL, "FS_LoadPackFile: file '%s' has illegal offset %u past end of file %u", info[i].name, info[i].filepos, pakLen);
+			
+			newitem = rbsearch (info[i].name, pack->rb);
+			*newitem = &info[i];
+		}
+
+		Q_strncpy (pack->filename, packfile, sizeof(pack->filename)-1);
+
+		pack->handle = packhandle;
+		pack->numfiles = numpackfiles;
+
+		Com_Printf ("Added packfile %s (%i files)\n", LOG_GENERAL,  packfile, numpackfiles);
+	}
+	else if (!strcmp (ext, "pkz"))
+	{
+		unzFile			f;
+		unz_global_info	zipinfo;
+		char			zipFileName[56];
+		unz_file_info	fileInfo;
+
+		f = unzOpen (packfile);
+		if (!f)
+			return NULL;
+
+		if (unzGetGlobalInfo (f, &zipinfo) != UNZ_OK)
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: Couldn't read .zip info from '%s'", packfile);
+
+		info = Z_TagMalloc (zipinfo.number_entry * sizeof(*info), TAGMALLOC_FSLOADPAK);
+
+		pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
+		pack->type = PAK_ZIP;
+		pack->rb = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, zipinfo.number_entry);
+
+		if (unzGoToFirstFile (f) != UNZ_OK)
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: Couldn't seek to first .zip file in '%s'", packfile);
+
+		zipFileName[sizeof(zipFileName)-1] = 0;
+		i = 0;
+		do
+		{
+			if (unzGetCurrentFileInfo (f, &fileInfo, zipFileName, sizeof(zipFileName)-1, NULL, 0, NULL, 0) == UNZ_OK)
+			{
+				//directory, ignored
+				if (fileInfo.external_fa & 16)
+					continue;
+				strcpy (info[i].name, zipFileName);
+				info[i].filepos = unzGetOffset (f);
+				info[i].filelen = fileInfo.uncompressed_size;
+				newitem = rbsearch (info[i].name, pack->rb);
+				*newitem = &info[i];
+				i++;
+			}
+		} while (unzGoToNextFile (f) == UNZ_OK);
+
+		pack->zhandle = f;
+		Com_Printf ("Added zpackfile %s (%i files)\n", LOG_GENERAL,  packfile, i);
+	}
+	else
+	{
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: Unknown type %s", ext);
 	}
 
-	Q_strncpy (pack->filename, packfile, sizeof(pack->filename)-1);
-
-	pack->handle = packhandle;
-	pack->numfiles = numpackfiles;
-
-	//Z_Free (newfiles);
-
-	//pack->files = newfiles;
-
-	Com_Printf ("Added packfile %s (%i files)\n", LOG_GENERAL,  packfile, numpackfiles);
 	return pack;
 }
 
@@ -1047,15 +1126,7 @@ static int EXPORT pakcmp (const void *a, const void *b)
 	return -1;
 }
 
-/*
-================
-FS_AddGameDirectory
-
-Sets fs_gamedir, adds the directory to the head of the path,
-then loads and adds pak1.pak pak2.pak ... 
-================
-*/
-static void FS_AddGameDirectory (const char *dir)
+static void FS_LoadPaks (const char *dir, const char *ext)
 {
 	int				i;
 	int				total;
@@ -1069,8 +1140,89 @@ static void FS_AddGameDirectory (const char *dir)
 	char			*filenames[4096];
 	int				pakfiles[1024];
 
-	searchpath_t	*search;
 	pack_t			*pak;
+	searchpath_t	*search;
+
+	//r1: load all *.pak files
+	Com_sprintf (pakfile, sizeof(pakfile), "%s/*.%s", dir, ext);
+	Com_sprintf (pakmatch, sizeof(pakmatch), "%s/pak", dir);
+	pakmatchlen = strlen(pakmatch);
+
+	total = 0;
+	totalpaks = 0;
+
+	if ((s = Sys_FindFirst (pakfile, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM)))
+	{
+		while (s)
+		{
+			i = (int)strlen (s);
+			if (*(s+(i-4)) == '.' && !Q_stricmp (s+(i-3), ext))
+			{
+				if (!Q_strncasecmp (s, pakmatch, pakmatchlen))
+				{
+					pakfiles[totalpaks++] = atoi(s+pakmatchlen);
+				}
+				else
+				{
+					filenames[total++] = strdup(s);
+					//filenames[total] = alloca(strlen(s)+1);
+					//strcpy (filenames[total], s);
+					//total++;
+				}
+			}
+
+			s = Sys_FindNext (0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM);
+		}
+	}
+
+	Sys_FindClose ();
+
+	//sort for filenames designed to override earlier pak files
+	qsort (filenames, total, sizeof(filenames[0]), (int (EXPORT *)(const void *, const void *))strcmp);
+	qsort (pakfiles, totalpaks, sizeof(pakfiles[0]), pakcmp);
+
+	//r1: load pak*.pak first
+	for (i = 0; i < totalpaks; i++)
+	{
+		Com_sprintf (pakfile, sizeof(pakfile), "%s/pak%d.%s", dir, pakfiles[i], ext);
+		pak = FS_LoadPackFile (pakfile, ext);
+		if (pak)
+		{
+			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+			search->pack = pak;
+			search->filename[0] = 0;
+			search->next = fs_searchpaths;
+			fs_searchpaths = search;
+		}
+	}
+
+	//now the rest of them
+	for (i = 0; i < total; i++)
+	{
+		pak = FS_LoadPackFile (filenames[i], ext);
+		if (pak)
+		{
+			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+			search->pack = pak;
+			search->filename[0] = 0;
+			search->next = fs_searchpaths;
+			fs_searchpaths = search;
+		}
+		free (filenames[i]);
+	}
+}
+
+/*
+================
+FS_AddGameDirectory
+
+Sets fs_gamedir, adds the directory to the head of the path,
+then loads and adds pak1.pak pak2.pak ... 
+================
+*/
+static void FS_AddGameDirectory (const char *dir)
+{
+	searchpath_t	*search;
 
 	Q_strncpy (fs_gamedir, dir, sizeof(fs_gamedir)-1);
 
@@ -1102,73 +1254,10 @@ static void FS_AddGameDirectory (const char *dir)
 		}
 	}*/
 
-	//r1: load all *.pak files
-	Com_sprintf (pakfile, sizeof(pakfile), "%s/*.pak", dir);
-	Com_sprintf (pakmatch, sizeof(pakmatch), "%s/pak", dir);
-	pakmatchlen = strlen(pakmatch);
-
-	total = 0;
-	totalpaks = 0;
-
-	if ((s = Sys_FindFirst (pakfile, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM)))
-	{
-		while (s)
-		{
-			i = (int)strlen (s);
-			if (!Q_stricmp (s+(i-4), ".pak"))
-			{
-				if (!Q_strncasecmp (s, pakmatch, pakmatchlen))
-				{
-					pakfiles[totalpaks++] = atoi(s+pakmatchlen);
-				}
-				else
-				{
-					filenames[total++] = strdup(s);
-					//filenames[total] = alloca(strlen(s)+1);
-					//strcpy (filenames[total], s);
-					//total++;
-				}
-			}
-
-			s = Sys_FindNext (0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM);
-		}
-	}
-
-	Sys_FindClose ();
-
-	//sort for filenames designed to override earlier pak files
-	qsort (filenames, total, sizeof(filenames[0]), (int (EXPORT *)(const void *, const void *))strcmp);
-	qsort (pakfiles, totalpaks, sizeof(pakfiles[0]), pakcmp);
-
-	//r1: load pak*.pak first
-	for (i = 0; i < totalpaks; i++)
-	{
-		Com_sprintf (pakfile, sizeof(pakfile), "%s/pak%d.pak", dir, pakfiles[i]);
-		pak = FS_LoadPackFile (pakfile);
-		if (pak)
-		{
-			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
-			search->pack = pak;
-			search->filename[0] = 0;
-			search->next = fs_searchpaths;
-			fs_searchpaths = search;
-		}
-	}
-
-	//now the rest of them
-	for (i = 0; i < total; i++)
-	{
-		pak = FS_LoadPackFile (filenames[i]);
-		if (pak)
-		{
-			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
-			search->pack = pak;
-			search->filename[0] = 0;
-			search->next = fs_searchpaths;
-			fs_searchpaths = search;
-		}
-		free (filenames[i]);
-	}
+	FS_LoadPaks (dir, "pak");
+#ifdef _DEBUG
+	FS_LoadPaks (dir, "pkz");
+#endif
 }
 
 /*

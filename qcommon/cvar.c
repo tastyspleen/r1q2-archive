@@ -259,6 +259,7 @@ static cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
 	var->value = (float)atof (var->string);
 	var->intvalue = (int)var->value;
 	var->flags = flags;
+	var->help = NULL;
 
 	//r1: fix 0 case
 	if (!var->intvalue && FLOAT_NE_ZERO(var->value))
@@ -403,6 +404,8 @@ static cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean forc
 			}
 			else
 			{
+				//memleak fix, thanks Maniac-
+				Z_Free (var->string);
 				var->string = CopyString(value, TAGMALLOC_CVAR);
 				var->value = (float)atof (var->string);
 				var->intvalue = (int)var->value;
@@ -807,6 +810,32 @@ char *Cvar_Serverinfo (void)
 	return Cvar_BitInfo (CVAR_SERVERINFO);
 }
 
+void Cvar_Help_f (void)
+{
+	cvar_t	*var;
+
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf ("Usage: cvarhelp cvarname\n", LOG_GENERAL);
+		return;
+	}
+
+	var = Cvar_FindVar (Cmd_Argv(1));
+	if (!var)
+	{
+		Com_Printf ("Cvar %s not found.\n", LOG_GENERAL, Cmd_Argv(1));
+		return;
+	}
+
+	if (!var->help)
+	{
+		Com_Printf ("No help available for %s.\n", LOG_GENERAL, Cmd_Argv(1));
+		return;
+	}
+
+	Com_Printf ("%s: %s", LOG_GENERAL, var->name, var->help);
+}
+
 /*
 ============
 Cvar_Init
@@ -820,6 +849,7 @@ void Cvar_Init (void)
 
 	Cmd_AddCommand ("set", Cvar_Set_f);
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
+	Cmd_AddCommand ("cvarhelp", Cvar_Help_f);
 
 	developer = Cvar_Get ("developer", "0", 0);
 }

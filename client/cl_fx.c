@@ -903,26 +903,27 @@ typedef struct particle_s
 
 cparticle_t	*active_particles, *free_particles;
 
-cparticle_t	particles[MAX_PARTICLES];
+cparticle_t	*particles;//[MAX_PARTICLES];
 //int			cl_numparticles = MAX_PARTICLES;
 
+extern	cvar_t	*cl_particlecount;
 
 /*
 ===============
 CL_ClearParticles
 ===============
 */
-void CL_ClearParticles (void)
+void CL_ClearParticles (int num)
 {
 	int		i;
 	
 	free_particles = &particles[0];
 	active_particles = NULL;
 
-	for (i=0 ;i < MAX_PARTICLES; i++)
+	for (i=0 ;i < num; i++)
 		particles[i].next = &particles[i+1];
 
-	particles[MAX_PARTICLES-1].next = NULL;
+	particles[num-1].next = NULL;
 }
 
 
@@ -2385,7 +2386,7 @@ CL_ClearEffects
 */
 void CL_ClearEffects (void)
 {
-	CL_ClearParticles ();
+	CL_ClearParticles (cl_particlecount->intvalue);
 	CL_ClearDlights ();
 	CL_ClearLightStyles ();
 }
