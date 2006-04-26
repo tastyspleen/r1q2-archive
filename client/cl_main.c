@@ -2952,10 +2952,13 @@ skipplayer:;
 
 	CL_FixCvarCheats();
 
-	MSG_BeginWriting (clc_setting);
-	MSG_WriteShort (CLSET_NOGUN);
-	MSG_WriteShort (cl_gun->intvalue ? 0 : 1);
-	MSG_EndWriting (&cls.netchan.message);
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_NOGUN);
+		MSG_WriteShort (cl_gun->intvalue ? 0 : 1);
+		MSG_EndWriting (&cls.netchan.message);
+	}
 
 	MSG_WriteByte (clc_stringcmd);
 	MSG_WriteString (va("begin %i\n", precache_spawncount) );

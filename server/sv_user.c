@@ -415,11 +415,11 @@ static void SV_New_f (void)
 				if (i == varindex)
 				{
 					MSG_BeginWriting (svc_stufftext);
-					MSG_WriteString (va ("$%s %s \"%s\"\n", aliasSet[rnd], sv_client->reconnect_var, sv_client->reconnect_value));
+					MSG_WriteString (va ("$%s %s %s\n", aliasSet[rnd], sv_client->reconnect_var, sv_client->reconnect_value));
 					SV_AddMessage (sv_client, true);
 				}
 				MSG_BeginWriting (svc_stufftext);
-				MSG_WriteString (va ("$%s %s \"%s\"\n", aliasSet[rnd], aliasJunk[i], randomIP[i]));
+				MSG_WriteString (va ("$%s %s %s\n", aliasSet[rnd], aliasJunk[i], randomIP[i]));
 				SV_AddMessage (sv_client, true);
 			}
 
