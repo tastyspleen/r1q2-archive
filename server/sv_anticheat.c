@@ -652,10 +652,16 @@ static void SV_AntiCheat_CheckQueryTimeOut (void)
 }
 
 //FIXME duplicated code
-void SVCmd_ACList_f (void)
+void SVCmd_SVACList_f (void)
 {
 	client_t	*cl;
 	const char	*substring;
+
+	if (!svs.initialized)
+	{
+		Com_Printf ("No server running.\n", LOG_GENERAL);
+		return;
+	}
 
 	substring = Cmd_Argv (1);
 
@@ -688,13 +694,19 @@ void SVCmd_ACList_f (void)
 }
 
 //FIXME duplicated code
-void SVCmd_ACInfo_f (void)
+void SVCmd_SVACInfo_f (void)
 {
 	int					clientID;
 	const char			*substring;
 	const char			*filesubstring;
 	client_t			*cl;
 	linkednamelist_t	*bad;
+
+	if (!svs.initialized)
+	{
+		Com_Printf ("No server running.\n", LOG_GENERAL);
+		return;
+	}
 
 	if (Cmd_Argc() == 1)
 	{

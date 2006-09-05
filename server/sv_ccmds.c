@@ -2601,8 +2601,8 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("pc", SV_PassiveConnect_f);
 
 #ifdef ANTICHEAT
-	Cmd_AddCommand ("aclist", SVCmd_ACList_f);
-	Cmd_AddCommand ("acinfo", SVCmd_ACInfo_f);
+	Cmd_AddCommand ("svaclist", SVCmd_SVACList_f);
+	Cmd_AddCommand ("svacinfo", SVCmd_SVACInfo_f);
 	Cmd_AddCommand ("addacexception", SV_AddACException_f);
 	Cmd_AddCommand ("addacrequirement", SV_AddACRequirement_f);
 #endif

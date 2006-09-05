@@ -667,8 +667,8 @@ extern	cvar_t	*sv_anticheat_badfile_max;
 extern	cvar_t	*sv_anticheat_message;
 extern	int		antiCheatNumFileHashes;
 
-void SVCmd_ACList_f (void);
-void SVCmd_ACInfo_f (void);
+void SVCmd_SVACList_f (void);
+void SVCmd_SVACInfo_f (void);
 
 enum
 {
