@@ -525,11 +525,17 @@ void SCR_AddChatMessage (const char *chat)
 
 	if (scr_chathud_highlight->intvalue)
 	{
+		char	player_name[MAX_QPATH];
+		int		bestlen, best, bestoffset;
+
+		best = -1;
+		bestlen = -1;
+
 		for (i = 0; i < cl.maxclients; i++)
 		{
 			if (cl.configstrings[CS_PLAYERSKINS + i][0])
 			{
-				char	player_name[MAX_QPATH], *separator, *foundname;
+				char *separator, *foundname;
 				
 				separator = strchr (cl.configstrings[CS_PLAYERSKINS + i], '\\');
 				if (!separator)
@@ -540,35 +546,48 @@ void SCR_AddChatMessage (const char *chat)
 				foundname = strstr (tempchat, player_name);
 				if (foundname != NULL)
 				{
-					unsigned start;
+					int	len;
 
-					length = strlen (player_name);
+					len = strlen (player_name);
 
-					if (scr_chathud_highlight->intvalue & 4)
-						length++;
-
-					if (scr_chathud_highlight->intvalue & 2)
+					if (len > bestlen)
 					{
-						length += (foundname - tempchat);
-						start = 0;
+						best = i;
+						bestlen = len;
+						bestoffset = (foundname - tempchat);
 					}
-					else
-					{
-						start = (foundname - tempchat);
-					}
-
-					if (scr_chathud_colored->intvalue)
-					{
-						for (j = start; j < start + length; j++)
-							tempchat[j] &= ~128;
-					}
-					else
-					{
-						for (j = start; j < length; j++)
-							tempchat[j] |= 128;
-					}
-					break;
 				}
+			}
+		}
+
+		if (best != -1)
+		{
+			unsigned start;
+
+			length = bestlen;
+
+			if (scr_chathud_highlight->intvalue & 4)
+				length++;
+
+			if (scr_chathud_highlight->intvalue & 2)
+			{
+				length += bestoffset;
+				start = 0;
+			}
+			else
+			{
+				start = bestoffset;
+			}
+
+			if (scr_chathud_colored->intvalue)
+			{
+				for (j = start; j < start + length; j++)
+					tempchat[j] &= ~128;
+			}
+			else
+			{
+				for (j = start; j < length; j++)
+					tempchat[j] |= 128;
 			}
 		}
 	}
@@ -591,7 +610,7 @@ void SCR_AddChatMessage (const char *chat)
 
 void SCR_Conheight_Changed (cvar_t *self, char *old, char *newValue)
 {
-	if (self->value > 1.0)
+	if (self->value > 1.0f)
 	{
 		//Com_Printf ("scr_conheight ranges from 0 to 1\n", LOG_CLIENT);
 		Cvar_ForceSet ("scr_conheight", "1");
@@ -942,7 +961,7 @@ void SCR_TileClear (void)
 	if (scr_drawall->intvalue)
 		SCR_DirtyScreen ();	// for power vr or broken page flippers...
 
-	if (scr_con_current == 1.0)
+	if (scr_con_current == 1.0f)
 		return;		// full screen console
 
 #ifdef CINEMATICS
@@ -1585,7 +1604,7 @@ void SCR_UpdateScreen (void)
 	** brain
 	*/
 #ifdef CL_STEREO_SUPPORT
-	if ( cl_stereo_separation->value > 1.0 )
+	if ( cl_stereo_separation->value > 1.0f )
 		Cvar_SetValue( "cl_stereo_separation", 1.0 );
 	else if (FLOAT_LT_ZERO(cl_stereo_separation->value))
 		Cvar_SetValue( "cl_stereo_separation", 0.0 );

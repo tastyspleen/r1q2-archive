@@ -9,14 +9,14 @@ quake2_SRC:=cl_cin.c cl_ents.c cl_fx.c cl_input.c cl_inv.c cl_main.c\
 	    sv_user.c sv_world.c \
 	    q_shlinux.c vid_menu.c vid_so.c sys_linux.c glob.c net_udp.c\
 	    q_shared.c pmove.c mersennetwister.c le_util.c\
-	    le_physics.c redblack.c cd_linux.c snd_linux.c qal_linux.c\
-	    al_linux.c huffman.c
+	    le_physics.c redblack.c cd_linux.c snd_linux.c unzip.c ioapi.c
+#	    al_linux.c qal_linux.c
 
-CFLAGS+=-DUSE_OPENAL
+#CFLAGS+=-DUSE_OPENAL
 quake2_OBJ:=$(quake2_SRC:.c=.o)
 ALLSRC:=$(quake2_SRC)
 
-.PHONY: default
+.PHONY: default combine
 
 default: quake2
 
@@ -37,5 +37,10 @@ endif
 
 quake2: $(quake2_OBJ)
 	$(CC) -g -o $@ $^ $(LDFLAGS)
+
+# only works with gcc >4.1
+combine: quake2-combine
+quake2-combine: $(quake2_SRC)
+	$(CC) -O2 -ffloat-store -DNDEBUG -DLINUX -fwhole-program --combine -g -o $@ $^ $(LDFLAGS)
 
 -include .depends/*.d

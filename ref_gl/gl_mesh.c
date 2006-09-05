@@ -458,13 +458,13 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 		else
 			tmp[2] = maxs[2];
 
-		VectorCopy( tmp, bbox[i] );
+		FastVectorCopy( tmp, *bbox[i] );
 	}
 
 	/*
 	** rotate the bounding box
 	*/
-	VectorCopy( e->angles, angles );
+	FastVectorCopy( e->angles, angles );
 	angles[YAW] = -angles[YAW];
 	AngleVectors( angles, vectors[0], vectors[1], vectors[2] );
 
@@ -472,7 +472,7 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 	{
 		vec3_t tmp;
 
-		VectorCopy( bbox[i], tmp );
+		FastVectorCopy( *bbox[i], tmp );
 
 		bbox[i][0] = DotProduct( vectors[0], tmp );
 		bbox[i][1] = -DotProduct( vectors[1], tmp );

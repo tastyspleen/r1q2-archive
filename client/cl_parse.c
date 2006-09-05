@@ -59,7 +59,7 @@ void CL_FinishDownload (void)
 		Com_Printf ("failed to rename.\n", LOG_CLIENT);
 
 #ifdef _DEBUG
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION && (strstr(newn, "players"))) {
+	if (cls.serverProtocol == PROTOCOL_R1Q2 && (strstr(newn, "players"))) {
 		for (r = 0; r < cl.maxclients; r++) {
 			ci = &cl.clientinfo[r];
 			if (ci->deferred)
@@ -191,7 +191,7 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 			Com_Printf ("Resuming %s\n", LOG_CLIENT, cls.downloadname);
 
 			MSG_WriteByte (clc_stringcmd);
-			if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+			if (cls.serverProtocol == PROTOCOL_R1Q2)
 				MSG_WriteString (va("download \"%s\" %i udp-zlib", cls.downloadname, len));
 			else
 				MSG_WriteString (va("download \"%s\" %i", cls.downloadname, len));
@@ -201,7 +201,7 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 			Com_Printf ("Downloading %s\n", LOG_CLIENT, cls.downloadname);
 
 			MSG_WriteByte (clc_stringcmd);
-			if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+			if (cls.serverProtocol == PROTOCOL_R1Q2)
 				MSG_WriteString (va("download \"%s\" 0 udp-zlib", cls.downloadname));
 			else
 				MSG_WriteString (va("download \"%s\"", cls.downloadname));
@@ -291,7 +291,7 @@ void CL_Download_f (void)
 		// give the server an offset to start the download
 		Com_Printf ("Resuming %s\n", LOG_CLIENT, cls.downloadname);
 		MSG_WriteByte (clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+		if (cls.serverProtocol == PROTOCOL_R1Q2) {
 			MSG_WriteString (va("download \"%s\" %i udp-zlib", cls.downloadname, len));
 		} else {
 			MSG_WriteString (va("download \"%s\" %i", cls.downloadname, len));
@@ -300,7 +300,7 @@ void CL_Download_f (void)
 		Com_Printf ("Downloading %s\n", LOG_CLIENT, cls.downloadname);
 	
 		MSG_WriteByte (clc_stringcmd);
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION) {
+		if (cls.serverProtocol == PROTOCOL_R1Q2) {
 			MSG_WriteString (va("download \"%s\" 0 udp-zlib", cls.downloadname));
 		} else {
 			MSG_WriteString (va("download \"%s\" 0", cls.downloadname));
@@ -493,7 +493,7 @@ qboolean CL_ParseServerData (void)
 	cl.servercount = MSG_ReadLong (&net_message);
 	cl.attractloop = MSG_ReadByte (&net_message);
 
-	if (i != ORIGINAL_PROTOCOL_VERSION && i != ENHANCED_PROTOCOL_VERSION && !cl.attractloop)
+	if (i != PROTOCOL_ORIGINAL && i != PROTOCOL_R1Q2 && !cl.attractloop)
 		Com_Error (ERR_HARD, "Server is using unknown protocol %d.", i);
 
 	// game directory
@@ -529,25 +529,25 @@ qboolean CL_ParseServerData (void)
 	// get the full level name
 	str = MSG_ReadString (&net_message);
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_R1Q2)
 	{
 		cl.enhancedServer = MSG_ReadByte (&net_message);
 
 		newVersion = MSG_ReadShort (&net_message);
-		if (newVersion != CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
+		if (newVersion != MINOR_VERSION_R1Q2)
 		{
 			if (cl.attractloop)
 			{
-				if (newVersion < CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
+				if (newVersion < MINOR_VERSION_R1Q2)
 					Com_Printf ("This demo was recorded with an earlier version of the R1Q2 protocol. It may not play back properly.\n", LOG_CLIENT);
 				else
 					Com_Printf ("This demo was recorded with a later version of the R1Q2 protocol. It may not play back properly. Please update your R1Q2 client.\n", LOG_CLIENT);
 			}
 			else
 			{
-				Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", LOG_CLIENT, newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+				Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", LOG_CLIENT, newVersion, MINOR_VERSION_R1Q2);
 				CL_Disconnect(false);
-				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+				cls.serverProtocol = PROTOCOL_ORIGINAL;
 				CL_Reconnect_f ();
 				return false;
 			}
@@ -1161,19 +1161,19 @@ void CL_ParseServerMessage (void)
 			
 		case svc_disconnect:
 			//uuuuugly...
-			/*if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && !cl.attractloop && cls.realtime - cls.connect_time < 30000)
+			/*if (cls.serverProtocol != PROTOCOL_ORIGINAL && !cl.attractloop && cls.realtime - cls.connect_time < 30000)
 			{
 				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT);
 				CL_Disconnect(false);
-				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+				cls.serverProtocol = PROTOCOL_ORIGINAL;
 				CL_Reconnect_f ();
 				return;
 			}
 			else*/
+			CL_WriteDemoMessage (net_message.data + oldReadCount, net_message.readcount - oldReadCount, false);
 			{
 				Com_Error (ERR_DISCONNECT, "Server disconnected\n");
 			}
-			CL_WriteDemoMessage (net_message.data + oldReadCount, net_message.readcount - oldReadCount, false);
 			break;
 
 		case svc_reconnect:
@@ -1312,11 +1312,11 @@ void CL_ParseServerMessage (void)
 			}
 			else
 			{
-				/*if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
+				/*if (cls.serverProtocol != PROTOCOL_ORIGINAL && cls.realtime - cls.connect_time < 30000)
 				{
 					Com_Printf ("Unknown command byte %d, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT, cmd);
 					CL_Disconnect(false);
-					cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+					cls.serverProtocol = PROTOCOL_ORIGINAL;
 					CL_Reconnect_f ();
 					return;
 				}*/

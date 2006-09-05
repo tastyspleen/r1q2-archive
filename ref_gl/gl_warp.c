@@ -88,7 +88,7 @@ void SubdividePolygon (int numverts, float *verts)
 		// wrap cases
 		dist[j] = dist[0];
 		v-=i;
-		VectorCopy (verts, v);
+		FastVectorCopy (*verts, *v);
 
 		f = b = 0;
 		v = verts;
@@ -97,12 +97,12 @@ void SubdividePolygon (int numverts, float *verts)
 		{
 			if (FLOAT_GE_ZERO(dist[j]))
 			{
-				VectorCopy (v, front[f]);
+				FastVectorCopy (*v, front[f]);
 				f++;
 			}
 			if (FLOAT_LE_ZERO(dist[j]))
 			{
-				VectorCopy (v, back[b]);
+				FastVectorCopy (*v, back[b]);
 				b++;
 			}
 			if (FLOAT_EQ_ZERO(dist[j]) || FLOAT_EQ_ZERO(dist[j+1]))
@@ -141,7 +141,7 @@ void SubdividePolygon (int numverts, float *verts)
 	total_t = 0;
 	for (i=0 ; i<numverts ; i++, verts+= 3)
 	{
-		VectorCopy (verts, poly->verts[i+1]);
+		FastVectorCopy (*verts, poly->verts[i+1]);
 		s = DotProduct (verts, warpface->texinfo->vecs[0]);
 		t = DotProduct (verts, warpface->texinfo->vecs[1]);
 
@@ -193,7 +193,7 @@ void GL_SubdivideSurface (msurface_t *fa)
 			vec = loadmodel->vertexes[loadmodel->edges[lindex].v[0]].position;
 		else
 			vec = loadmodel->vertexes[loadmodel->edges[-lindex].v[1]].position;
-		VectorCopy (vec, verts[numverts]);
+		FastVectorCopy (*vec, verts[numverts]);
 		numverts++;
 	}
 
@@ -339,7 +339,8 @@ glEnd();
 return;
 #endif
 	// decide which face it maps to
-	VectorCopy (vec3_origin, v);
+	//VectorCopy (vec3_origin, v);
+	VectorClear (v);
 	for (i=0, vp=vecs ; i<nump ; i++, vp+=3)
 	{
 		VectorAdd (vp, v, v);
@@ -452,7 +453,7 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 	// clip it
 	sides[i] = sides[0];
 	dists[i] = dists[0];
-	VectorCopy (vecs, (vecs+(i*3)) );
+	FastVectorCopy (*vecs, *(vecs+(i*3)) );
 	newc[0] = newc[1] = 0;
 
 	for (i=0, v = vecs ; i<nump ; i++, v+=3)
@@ -460,17 +461,17 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 		switch (sides[i])
 		{
 		case SIDE_FRONT:
-			VectorCopy (v, newv[0][newc[0]]);
+			FastVectorCopy (*v, newv[0][newc[0]]);
 			newc[0]++;
 			break;
 		case SIDE_BACK:
-			VectorCopy (v, newv[1][newc[1]]);
+			FastVectorCopy (*v, newv[1][newc[1]]);
 			newc[1]++;
 			break;
 		case SIDE_ON:
-			VectorCopy (v, newv[0][newc[0]]);
+			FastVectorCopy (*v, newv[0][newc[0]]);
 			newc[0]++;
-			VectorCopy (v, newv[1][newc[1]]);
+			FastVectorCopy (*v, newv[1][newc[1]]);
 			newc[1]++;
 			break;
 		}
@@ -647,7 +648,7 @@ void EXPORT R_SetSky (char *name, float rotate, vec3_t axis)
 
 	strncpy (skyname, name, sizeof(skyname)-1);
 	skyrotate = rotate;
-	VectorCopy (axis, skyaxis);
+	FastVectorCopy (*axis, skyaxis);
 
 	strlwr (skyname);
 

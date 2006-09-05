@@ -45,13 +45,13 @@ void LE_Physics_Toss (localent_t *ent)
 	vec3_t	vel;
 
 	//copy old origin
-	VectorCopy (ent->ent.origin, ent->ent.oldorigin);
+	FastVectorCopy (ent->ent.origin, ent->ent.oldorigin);
 
 	//FIXME: properly scale this to client FPS.
 	ent->velocity[2] -= 1;
 
 	//scale velocity based on something stupid
-	VectorCopy (ent->velocity, vel);
+	FastVectorCopy (ent->velocity, vel);
 	VectorScale (vel, cl.lerpfrac, vel);
 
 	//add velocity to origin
@@ -59,17 +59,18 @@ void LE_Physics_Toss (localent_t *ent)
 
 	//check we didn't hit the world
 	tr = CM_BoxTrace (ent->ent.oldorigin, ent->ent.origin, ent->mins, ent->maxs, 0, MASK_SOLID);
-	if (tr.fraction != 1.0) {
+	if (tr.fraction != 1.0f)
+	{
 		//vec3_t down;
 		//if we did, back off.
-		VectorCopy (tr.endpos, ent->ent.origin);
+		FastVectorCopy (tr.endpos, ent->ent.origin);
 		if (ent->touch)
 			ent->touch (ent, &tr.plane, tr.surface);
 
 		//check for stop
 		ClipVelocity (ent->velocity, tr.plane.normal, ent->velocity, ent->movetype == MOVETYPE_BOUNCE ? 1.7f : 1.0f);
 
-		if ((tr.plane.normal[2] > 0.7 && ent->movetype == MOVETYPE_TOSS) || ((ent->velocity[2] < 0.01 && ent->velocity[2] > -0.01) && ent->movetype == MOVETYPE_BOUNCE))
+		if ((tr.plane.normal[2] > 0.7f && ent->movetype == MOVETYPE_TOSS) || ((ent->velocity[2] < 0.01f && ent->velocity[2] > -0.01f) && ent->movetype == MOVETYPE_BOUNCE))
 			ent->movetype = MOVETYPE_NONE;
 	}
 
@@ -88,7 +89,7 @@ void LE_Physics_Toss (localent_t *ent)
 		//check for stop
 		ClipVelocity (ent->velocity, tr.plane.normal, ent->velocity, ent->movetype == MOVETYPE_BOUNCE ? 1.7 : 1);
 
-		if (tr.plane.normal[2] > 0.7 && ent->movetype == MOVETYPE_TOSS || ((ent->velocity[2] < 0.01 && ent->velocity[2] > -0.01) && ent->movetype == MOVETYPE_BOUNCE))
+		if (tr.plane.normal[2] > 0.7f && ent->movetype == MOVETYPE_TOSS || ((ent->velocity[2] < 0.01f && ent->velocity[2] > -0.01f) && ent->movetype == MOVETYPE_BOUNCE))
 			ent->movetype = MOVETYPE_NONE;
 
 	}*/

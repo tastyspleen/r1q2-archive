@@ -554,13 +554,12 @@ typedef struct {
     size_t Pos;
 } TPngFileBuffer;
 
-void __cdecl PngReadFunc(png_struct *Png, png_bytep buf, png_size_t size)
+void EXPORT PngReadFunc(png_struct *Png, png_bytep buf, png_size_t size)
 {
     TPngFileBuffer *PngFileBuffer=(TPngFileBuffer*)png_get_io_ptr(Png);
     memcpy(buf,PngFileBuffer->Buffer+PngFileBuffer->Pos,size);
     PngFileBuffer->Pos+=size;
 }
-
 
 void LoadPNG (const char *name, byte **pic, int *width, int *height)
 {
@@ -1052,10 +1051,10 @@ void LoadJPG (const char *filename, byte **pic, int *width, int *height)
 	// Load JPEG file into memory
 	rawsize = ri.FS_LoadFile(filename, (void **)&rawdata);
 
-	if(!rawdata)
+	if (!rawdata)
 		return;	
 
-	if ( rawdata[6] != 'J' || rawdata[7] != 'F' || rawdata[8] != 'I' || rawdata[9] != 'F')
+	if (rawsize < 10 || rawdata[6] != 'J' || rawdata[7] != 'F' || rawdata[8] != 'I' || rawdata[9] != 'F')
 	{ 
 		ri.Con_Printf (PRINT_ALL, "Invalid JPEG header: %s\n", filename); 
 		ri.FS_FreeFile(rawdata); 
@@ -1087,7 +1086,8 @@ void LoadJPG (const char *filename, byte **pic, int *width, int *height)
 	}
 
 	// Pass sizes to output
-	*width = cinfo.output_width; *height = cinfo.output_height;
+	*width = cinfo.output_width;
+	*height = cinfo.output_height;
 
 	// Allocate Scanline buffer
 	scanline = malloc (cinfo.output_width * 3);
@@ -2184,7 +2184,7 @@ nonscrap:
 
 	if (global_hax_texture_x && global_hax_texture_y)
 	{
-		if (1 || global_hax_texture_x <= image->width && global_hax_texture_y <= image->height)
+		if (global_hax_texture_x <= image->width && global_hax_texture_y <= image->height)
 		{
 			image->width = global_hax_texture_x;
 			image->height = global_hax_texture_y;
@@ -2345,9 +2345,10 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 		memcpy (png_name, name, len+1);
 		if (load_tga_pics)
 		{
-			png_name[len-3] = 't';
-			png_name[len-2] = 'g';
-			png_name[len-1] = 'a';
+			//png_name[len-3] = 't';
+			//png_name[len-2] = 'g';
+			//png_name[len-1] = 'a';
+			*(int *)(png_name + (len-3)) = '\0agt';
 			current_texture_filename = png_name;
 			LoadTGA (png_name, &pic, &width, &height);
 		}
@@ -2355,17 +2356,19 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 		{
 			if (load_png_pics)
 			{
-				png_name[len-3] = 'p';
-				png_name[len-2] = 'n';
-				png_name[len-1] = 'g';
+				//png_name[len-3] = 'p';
+				//png_name[len-2] = 'n';
+				//png_name[len-1] = 'g';
+				*(int *)(png_name + (len-3)) = '\0gnp';
 				LoadPNG (png_name, &pic, &width, &height);
 			}
 			if (!pic)
 			{
 				if (load_jpg_pics)
 				{
-					png_name[len-3] = 'j';
-					png_name[len-2] = 'p';
+					//png_name[len-3] = 'j';
+					//png_name[len-2] = 'p';
+					*(int *)(png_name + (len-3)) = '\0gpj';
 					LoadJPG (png_name, &pic, &width, &height);
 				}
 				if (!pic)

@@ -78,7 +78,7 @@ void CL_Flashlight (int ent, vec3_t pos)
 	cdlight_t	*dl;
 
 	dl = CL_AllocDlight (ent, true);
-	VectorCopy (pos,  dl->origin);
+	FastVectorCopy (*pos,  dl->origin);
 	dl->radius = 400;
 	//dl->minlight = 250;
 	dl->die = cl.time + 100;
@@ -105,7 +105,7 @@ void CL_ColorFlash (vec3_t pos, int ent, float intensity, float r, float g, floa
 	}
 
 	dl = CL_AllocDlight (ent, false);
-	VectorCopy (pos,  dl->origin);
+	FastVectorCopy (*pos,  dl->origin);
 	dl->radius = intensity;
 	//dl->minlight = 250;
 	dl->die = cl.time + 100;
@@ -133,7 +133,7 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 //	float		d, c, s;
 //	vec3_t		dir;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
@@ -145,7 +145,7 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 //	dec = 0.75;
 	dec = 3;
 	VectorScale (vec, dec, vec);
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 
 	while (len > 0)
 	{
@@ -165,7 +165,7 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 		p->alphavel = -0.1f;
 //		p->alphavel = 0;
 		p->color = 0x74 + (randomMT()&7);
-		VectorCopy (move, p->org);
+		FastVectorCopy (move, p->org);
 /*
 		for (j=0 ; j<3 ; j++)
 		{
@@ -192,13 +192,16 @@ void CL_SmokeTrail (vec3_t start, vec3_t end, int colorStart, int colorRun, int 
 	int			j;
 	cparticle_t	*p;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
 	VectorScale (vec, spacing, vec);
 
 	time = (float)cl.time;
+
+	if (colorStart > 255 || colorStart < 0)
+		Com_Error (ERR_DROP, "CL_SmokeTrail: bad color %d", colorStart);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)
@@ -218,6 +221,11 @@ void CL_SmokeTrail (vec3_t start, vec3_t end, int colorStart, int colorRun, int 
 		p->alpha = 1.0;
 		p->alphavel = -1.0f / (1+frand()*0.5f);
 		p->color = colorStart + (randomMT() % colorRun);
+		if (p->color > 255)
+		{
+			Com_Printf ("Warning, capped particle color %d in CL_SmokeTrail\n", p->color);
+			p->color = 255;
+		}
 		for (j=0 ; j<3 ; j++)
 		{
 			p->org[j] = move[j] + crand()*3;
@@ -237,13 +245,16 @@ void CL_ForceWall (vec3_t start, vec3_t end, int color)
 	int			j;
 	cparticle_t	*p;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
 	VectorScale (vec, 4, vec);
 
 	time = (float)cl.time;
+
+	if (color > 255 || color < 0)
+		Com_Error (ERR_DROP, "CL_ForceWall: bad color %d", color);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)
@@ -253,7 +264,7 @@ void CL_ForceWall (vec3_t start, vec3_t end, int color)
 		if (!free_particles)
 			return;
 		
-		if (frand() > 0.3)
+		if (frand() > 0.3f)
 		{
 			p = free_particles;
 			free_particles = p->next;
@@ -293,6 +304,9 @@ void CL_GenericParticleEffect (vec3_t org, vec3_t dir, int color, int count, int
 	float		time;
 
 	time = (float)cl.time;
+
+	if (color < 0 || color + numcolors > 255)
+		Com_Error (ERR_DROP, "CL_GenericParticleEffect: bad color/rand %d/%d", color, numcolors);
 
 	for (i=0 ; i<count ; i++)
 	{
@@ -342,7 +356,7 @@ void CL_BubbleTrail2 (vec3_t start, vec3_t end, int dist)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
@@ -491,19 +505,20 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 
 	VectorMA (start, 4096, forward, end);
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
 	// FIXME - pmm - these might end up using old values?
 //	MakeNormalVectors (vec, right, up);
-	VectorCopy (cl.v_right, right);
-	VectorCopy (cl.v_up, up);
-	if (vidref_val == VIDREF_GL)
+	FastVectorCopy (cl.v_right, right);
+	FastVectorCopy (cl.v_up, up);
+
+	/*if (vidref_val == VIDREF_GL)
 	{ // GL mode
 		VectorMA (move, -0.5, right, move);
 		VectorMA (move, -0.5, up, move);
-	}
+	}*/
 	// otherwise assume SOFT
 
 	time = (float)cl.time;
@@ -709,6 +724,9 @@ void CL_ParticleSteamEffect (vec3_t org, vec3_t dir, int color, int count, int m
 //	vectoangles2 (dir, angle_dir);
 //	AngleVectors (angle_dir, f, r, u);
 
+	if (color < 0 || color > 255-7)
+		Com_Error (ERR_DROP, "CL_ParticleSteamEffect: bad color %d", color);
+
 	MakeNormalVectors (dir, r, u);
 
 	for (i=0 ; i<count ; i++)
@@ -757,7 +775,7 @@ void CL_ParticleSteamEffect2 (cl_sustain_t *self)
 //	vectoangles2 (dir, angle_dir);
 //	AngleVectors (angle_dir, f, r, u);
 
-	VectorCopy (self->dir, dir);
+	FastVectorCopy (self->dir, dir);
 	MakeNormalVectors (dir, r, u);
 
 	for (i=0 ; i<self->count ; i++)
@@ -771,6 +789,8 @@ void CL_ParticleSteamEffect2 (cl_sustain_t *self)
 
 		p->time = time;
 		p->color = self->color + (randomMT()&7);
+		if (p->color > 255 || p->color < 0)
+			Com_Error (ERR_DROP, "CL_ParticleSteamEffect2: bad color %d", p->color);
 
 		for (j=0 ; j<3 ; j++)
 		{
@@ -811,11 +831,14 @@ void CL_TrackerTrail (vec3_t start, vec3_t end, int particleColor)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	if (particleColor < 0 || particleColor > 255)
+		Com_Error (ERR_DROP, "CL_TrackerTrail: bad color %d", particleColor);
+
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
-	VectorCopy(vec, forward);
+	FastVectorCopy(vec, forward);
 	vectoangles2 (forward, angle_dir);
 	AngleVectors (angle_dir, forward, right, up);
 
@@ -1097,7 +1120,10 @@ void CL_TagTrail (vec3_t start, vec3_t end, int color)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	if (color < 0 || color > 255)
+		Com_Error (ERR_DROP, "CL_TagTrail: bad color %d", color);
+
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
@@ -1145,6 +1171,9 @@ void CL_ColorExplosionParticles (vec3_t org, int color, int run)
 
 	time = (float)cl.time;
 
+	if (color < 0 || color + run > 255)
+		Com_Error (ERR_DROP, "CL_ColorExplosionParticles: bad color/rand %d/%d", color, run);
+
 	for (i=0 ; i<128 ; i++)
 	{
 		if (!free_particles)
@@ -1185,6 +1214,9 @@ void CL_ParticleSmokeEffect (vec3_t org, vec3_t dir, int color, int count, int m
 	float		time;
 
 	time = (float)cl.time;
+
+	if (color < 0 || color > 255-7)
+		Com_Error (ERR_DROP, "CL_ParticleSmokeEffect: bad color %d", color);
 
 	MakeNormalVectors (dir, r, u);
 
@@ -1235,6 +1267,9 @@ void CL_BlasterParticles2 (vec3_t org, vec3_t dir, uint32 color)
 
 	time = (float)cl.time;
 
+	if (color > 255-7)
+		Com_Error (ERR_DROP, "CL_BlasterParticles2: bad color %d", color);
+
 	count = 40;
 	for (i=0 ; i<count ; i++)
 	{
@@ -1282,7 +1317,7 @@ void CL_BlasterTrail2 (vec3_t start, vec3_t end)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 

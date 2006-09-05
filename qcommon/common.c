@@ -168,6 +168,9 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CMDBANS, "CMDBANS", 0},
 	{TAGMALLOC_REDBLACK, "REDBLACK", 0},
 	{TAGMALLOC_LRCON, "LRCON", 0},
+#ifdef ANTICHEAT
+	{TAGMALLOC_ANTICHEAT, "ANTICHEAT", 0},
+#endif
 	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
 };
 
@@ -1107,13 +1110,13 @@ void MSG_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to,
 			(
 				(
 					(to->renderfx & RF_BEAM) &&
-					cl_protocol == ORIGINAL_PROTOCOL_VERSION
+					cl_protocol == PROTOCOL_ORIGINAL
 				)
 			)
 			||
 			(
 				(to->renderfx & RF_BEAM) &&
-				cl_protocol == ENHANCED_PROTOCOL_VERSION &&
+				cl_protocol == PROTOCOL_R1Q2 &&
 				!VectorCompare (to->old_origin, from->old_origin)
 			)
 		)
@@ -1137,7 +1140,7 @@ void MSG_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to,
 	}
 
 #ifdef ENHANCED_SERVER
-	if (!VectorCompare (to->velocity, from->velocity) && cl_protocol == ENHANCED_PROTOCOL_VERSION)
+	if (!VectorCompare (to->velocity, from->velocity) && cl_protocol == PROTOCOL_R1Q2)
 		bits |= U_VELOCITY;
 #endif
 
@@ -2061,7 +2064,7 @@ RESTRICT void * EXPORT Z_TagMallocGame (int size, int tag)
 	{
 		if (z_buggygame->intvalue)
 		{
-			Com_Printf ("ERROR: Game DLL tried to allocate 0 bytes. Giving it 1 byte of 0x00\n", LOG_ERROR|LOG_SERVER|LOG_GAME);
+			Com_Printf ("ERROR: Game DLL tried to allocate 0 bytes at 0x%p. Giving it 1 byte of 0x00\n", LOG_ERROR|LOG_SERVER|LOG_GAME, retAddr);
 			size = 1;
 		}
 		else
@@ -2856,7 +2859,7 @@ const char *MakePrintable (const void *subject, size_t numchars)
 	len = 0;
 
 	if (!numchars)
-		numchars = strlen(s);
+		numchars = strlen((const char *) s);
 
 	while (numchars--)
 	{

@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.33"
+#define	REF_VERSION	"R1GL 0.1.5.34"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -226,6 +226,7 @@ extern cvar_t	*gl_ext_texture_filter_anisotropic;
 extern cvar_t	*gl_ext_texture_non_power_of_two;
 extern cvar_t	*gl_ext_max_anisotropy;
 extern cvar_t	*gl_ext_nv_multisample_filter_hint;
+extern cvar_t	*gl_ext_occlusion_query;
 
 extern cvar_t	*gl_colorbits;
 extern cvar_t	*gl_alphabits;
@@ -464,6 +465,9 @@ void EmptyImageCache (void);
 #define		GL_RENDERER_SGI			0x00F00000
 
 #define GL_RENDERER_MCD			0x01000000
+#define GL_RENDERER_ATI			0x02000000
+#define GL_RENDERER_NV			0x04000000
+
 #define GL_RENDERER_OTHER		0x80000000
 
 //r1ch: my super leet gl extensions!
@@ -501,7 +505,8 @@ typedef struct
 	qboolean	wglPFD;
 
 	int			bitDepth;
-
+	int			r1gl_QueryBits;
+	int			r1gl_Queries[MAX_ENTITIES];
 } glconfig_t;
 
 typedef struct

@@ -114,10 +114,11 @@ static areanode_t *SV_CreateAreaNode (int depth, const vec3_t mins, const vec3_t
 		anode->axis = 1;
 	
 	anode->dist = 0.5f * (maxs[anode->axis] + mins[anode->axis]);
-	VectorCopy (mins, mins1);	
-	VectorCopy (mins, mins2);	
-	VectorCopy (maxs, maxs1);	
-	VectorCopy (maxs, maxs2);	
+
+	FastVectorCopy (*mins, mins1);	
+	FastVectorCopy (*mins, mins2);	
+	FastVectorCopy (*maxs, maxs1);	
+	FastVectorCopy (*maxs, maxs2);	
 	
 	maxs1[anode->axis] = mins2[anode->axis] = anode->dist;
 	
@@ -338,7 +339,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	// if first time, make sure old_origin is valid
 	if (!ent->linkcount)
 	{
-		VectorCopy (ent->s.origin, ent->s.old_origin);
+		FastVectorCopy (ent->s.origin, ent->s.old_origin);
 	}
 	ent->linkcount++;
 
@@ -677,10 +678,10 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 
 		clip.trace.fraction = 1.0;
 		clip.trace.ent = ge->edicts;
-		VectorCopy (end, clip.trace.endpos);
+		FastVectorCopy (*end, clip.trace.endpos);
 		//this is really nasty, attempts to overwrite source in Game DLL. may result in flying players and ents if it uses an origin
 		//directly!! we may even crash here if we are given a write protected start.
-		VectorCopy (end, start);
+		FastVectorCopy (*end, *start);
 		sv_tracecount = 0;
 		return clip.trace;
 	}
@@ -699,8 +700,8 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	clip.maxs = maxs;
 	clip.passedict = passedict;
 
-	VectorCopy (mins, clip.mins2);
-	VectorCopy (maxs, clip.maxs2);
+	FastVectorCopy (*mins, clip.mins2);
+	FastVectorCopy (*maxs, clip.maxs2);
 	
 	// create the bounding box of the entire move
 	//SV_TraceBounds ( start, clip.mins2, clip.maxs2, end, clip.boxmins, clip.boxmaxs );

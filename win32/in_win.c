@@ -1733,7 +1733,7 @@ void IN_JoyMove (usercmd_t *cmd)
 				{		
 					// if mouse invert is on, invert the joystick pitch value
 					// only absolute control support here (joy_advanced is false)
-					if (m_pitch->value < 0.0)
+					if (m_pitch->value < 0.0f)
 					{
 						cl.viewangles[PITCH] -= (fAxisValue * joy_pitchsensitivity->value) * aspeed * cl_pitchspeed->value;
 					}

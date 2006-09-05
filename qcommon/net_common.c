@@ -119,6 +119,7 @@ qboolean	NET_StringToAdr (const char *s, netadr_t *a)
 		//r1: should need some kind of ip data to prevent comparisons with empty ips?
 		a->ip[0] = 127;
 		a->ip[3] = 1;
+		a->port = PORT_SERVER;
 		a->type = NA_LOOPBACK;
 		return true;
 	}
@@ -350,6 +351,7 @@ qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_me
 	net_from->type = NA_LOOPBACK;
 	net_from->ip[0] = 127;
 	net_from->ip[3] = 1;
+	net_from->port = PORT_SERVER;
 	return true;
 
 }

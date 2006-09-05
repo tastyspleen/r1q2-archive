@@ -84,6 +84,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#pragma warning(disable: 4996)		// deprecated functions
 
 #pragma intrinsic(memcmp)
+//#pragma intrinsic(memset)
 
 #if _MSC_VER > 14000
 #define NORETURN __declspec(noreturn)
@@ -330,11 +331,20 @@ void Q_ftol2( float f, int *out );
 //and disable some optimizations.
 void _Q_DEBUGBREAKPOINT (void);
 
+typedef union
+{
+	int		i[3];
+	float	f[3];
+} vectorhack_t;
+
 #define DotProduct(x,y)			(x[0]*y[0]+x[1]*y[1]+x[2]*y[2])
 #define VectorSubtract(a,b,c)	(c[0]=a[0]-b[0],c[1]=a[1]-b[1],c[2]=a[2]-b[2])
 #define VectorAdd(a,b,c)		(c[0]=a[0]+b[0],c[1]=a[1]+b[1],c[2]=a[2]+b[2])
 #define VectorCopy(src,dst)		(dst[0]=src[0],dst[1]=src[1],dst[2]=src[2])
-#define VectorClear(a)			(a[0]=a[1]=a[2]=0)
+#define FastVectorCopy(src,dst)		*(vectorhack_t *)&(dst) = *(vectorhack_t *)&(src)
+//#define VectorClear(a)			(a[0]=a[1]=a[2]=0)
+//#define VectorClear(a)			(memset ((&a), 0, sizeof((a))))
+#define VectorClear(a)			*(int *)&(a)[0] = 0, *(int *)&(a)[1] = 0, *(int *)&(a)[2] = 0
 #define VectorNegate(a,b)		(b[0]=-a[0],b[1]=-a[1],b[2]=-a[2])
 #define VectorSet(v, x, y, z)	(v[0]=(x), v[1]=(y), v[2]=(z))
 #define VectorAverage(a,b,o)	((o)[0]=((a)[0]+(b)[0])*0.5f,(o)[1]=((a)[1]+(b)[1])*0.5f,(o)[2]=((a)[2]+(b)[2])*0.5f)
@@ -419,7 +429,7 @@ int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...) __attribut
 void Com_PageInMemory (byte *buffer, int size);
 
 #ifdef ANTICHEAT
-void Sys_GetAntiCheatAPI (void);
+int Sys_GetAntiCheatAPI (void);
 #endif
 
 //=============================================
@@ -545,13 +555,13 @@ CVARS (console variables)
 // nothing outside the Cvar_*() functions should modify these fields!
 typedef struct cvar_s
 {
-	char		*name;
-	char		*string;
-	char		*latched_string;	// for CVAR_LATCH vars
-	int			flags;
-	qboolean	modified;	// set each time the cvar is changed
-	float		value;
-	struct cvar_s *next;
+	char		*name;													//0x00
+	char		*string;												//0x04
+	char		*latched_string;	// for CVAR_LATCH vars				//0x08
+	int			flags;													//0x0c
+	qboolean	modified;	// set each time the cvar is changed		//0x10
+	float		value;													//0x14
+	struct cvar_s *next;												//0x18
 
 	//r1ch: added this to avoid all the if (x->modified) bloat
 	void		(*changed) (struct cvar_s *self, char *oldValue, char *newValue);

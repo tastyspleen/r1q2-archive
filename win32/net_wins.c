@@ -268,16 +268,22 @@ int NET_IPSocket (char *net_interface, int port)
 	}
 
 	i = net_rcvbuf->intvalue * 1024;
-	setsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&i, sizeof(i));
-	getsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&j, &x);
-	if (i != j)
-		Com_Printf ("WARNING: Setting SO_RCVBUF: wanted %d, got %d\n", LOG_NET, i, j);
+	if (i)
+	{
+		setsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&i, sizeof(i));
+		getsockopt (newsocket, SOL_SOCKET, SO_RCVBUF, (char *)&j, &x);
+		if (i != j)
+			Com_Printf ("WARNING: Setting SO_RCVBUF: wanted %d, got %d\n", LOG_NET, i, j);
+	}
 
 	i = net_sndbuf->intvalue * 1024;
-	setsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&i, sizeof(i));
-	getsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&j, &x);
-	if (i != j)
-		Com_Printf ("WARNING: Setting SO_SNDBUF: wanted %d, got %d\n", LOG_NET, i, j);
+	if (i)
+	{
+		setsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&i, sizeof(i));
+		getsockopt (newsocket, SOL_SOCKET, SO_SNDBUF, (char *)&j, &x);
+		if (i != j)
+			Com_Printf ("WARNING: Setting SO_SNDBUF: wanted %d, got %d\n", LOG_NET, i, j);
+	}
 
 	i = 1;
 
@@ -393,8 +399,8 @@ void NET_Init (void)
 	if (r)
 		Com_Error (ERR_FATAL,"Winsock initialization failed.");
 
-	net_rcvbuf = Cvar_Get ("net_rcvbuf", "128", 0);
-	net_sndbuf = Cvar_Get ("net_sndbuf", "128", 0);
+	net_rcvbuf = Cvar_Get ("net_rcvbuf", "0", 0);
+	net_sndbuf = Cvar_Get ("net_sndbuf", "0", 0);
 
 	net_ignore_icmp = Cvar_Get ("net_ignore_icmp", "0", 0);
 

@@ -34,12 +34,12 @@ int		edit_line=0;
 int		history_line=0;
 
 //int		key_waiting;
-char	*keybindings[256];
+char		*keybindings[256];
 qboolean	consolekeys[256];	// if true, can't be rebound while in console
 qboolean	menubound[256];	// if true, can't be rebound while in menu
 int			keyshift[256];		// key to map to if shift held down in console
 int			key_repeats[256];	// if > 1, it is autorepeating
-qboolean	keydown[256];
+int			keydown[256];
 
 int			key_lastrepeat[256];
 
@@ -470,11 +470,34 @@ void Key_Console (int key)
 		
 		if ( ( cbd = Sys_GetClipboardData() ) != 0 )
 		{
-			int i;
+			int		i;
+			char	*p, *s;
 
-			strtok( cbd, "\n\r\b" );
+			p = cbd;
+			while ((p = strchr (p, '\r')))
+				p[0] = ' ';
 
-			i = (int)strlen( cbd );
+			//r1: multiline paste
+			p = strrchr (cbd, '\n');
+			if (p)
+			{
+				s = strrchr (p, '\n');
+				if (s)
+				{
+					s[0] = 0;
+					p++;
+					if (cbd[0])
+					{
+						Cbuf_AddText (cbd);
+						Cbuf_AddText ("\n");
+						Com_Printf ("%s\n", LOG_GENERAL, cbd);
+					}
+				}
+			}
+			else
+				p = cbd;
+			
+			i = (int)strlen( p );
 
 			//r1: save byte for null terminator!!
 			if ( i + key_linepos >= MAXCMDLINE - 1)
@@ -482,8 +505,8 @@ void Key_Console (int key)
 
 			if ( i > 0 )
 			{
-				cbd[i]=0;
-				strcat( key_lines[edit_line], cbd );
+				p[i]=0;
+				strcat( key_lines[edit_line], p );
 				key_linepos += i;
 			}
 			free( cbd );

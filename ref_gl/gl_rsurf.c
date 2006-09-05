@@ -1007,7 +1007,7 @@ void R_DrawBrushModel (entity_t *e)
 		vec3_t	temp;
 		vec3_t	forward, right, up;
 
-		VectorCopy (modelorg, temp);
+		FastVectorCopy (modelorg, temp);
 		AngleVectors (e->angles, forward, right, up);
 		modelorg[0] = DotProduct (temp, forward);
 		modelorg[1] = -DotProduct (temp, right);
@@ -1233,7 +1233,7 @@ void R_DrawWorld (void)
 
 	currentmodel = r_worldmodel;
 
-	VectorCopy (r_newrefdef.vieworg, modelorg);
+	FastVectorCopy (r_newrefdef.vieworg, modelorg);
 
 	// auto cycle the world frame for texture animation
 	memset (&ent, 0, sizeof(ent));
@@ -1528,7 +1528,7 @@ void GL_BuildPolygonFromSurface(msurface_t *fa)
 		t /= fa->texinfo->image->height;
 
 		VectorAdd (total, vec, total);
-		VectorCopy (vec, poly->verts[i]);
+		FastVectorCopy (*vec, poly->verts[i]);
 		poly->verts[i][3] = s;
 		poly->verts[i][4] = t;
 

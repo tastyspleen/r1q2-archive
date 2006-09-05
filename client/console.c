@@ -729,7 +729,7 @@ void Con_DrawConsole (float frac)
 
 	i = Com_sprintf (version, sizeof(version), PRODUCTNAMELOWER " " VERSION);
 
-	if (len >= (viddef.width * 0.125) - (i+2))
+	if (len >= (viddef.width * 0.125f) - (i+2))
 		offset = 20;
 	else
 		offset = 0;

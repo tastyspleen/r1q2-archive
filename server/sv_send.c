@@ -533,7 +533,7 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 //	sizebuf_t	*to;
 	qboolean	force_pos= false;
 
-	if (FLOAT_LT_ZERO(volume) || volume > 1.0)
+	if (FLOAT_LT_ZERO(volume) || volume > 1.0f)
 		Com_Error (ERR_DROP, "SV_StartSound: volume = %f", volume);
 
 	if (FLOAT_LT_ZERO(attenuation) || attenuation > 4)
@@ -542,7 +542,7 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 //	if (channel < 0 || channel > 15)
 //		Com_Error (ERR_FATAL, "SV_StartSound: channel = %i", channel);
 
-	if (FLOAT_LT_ZERO(timeofs) || timeofs > 0.255)
+	if (FLOAT_LT_ZERO(timeofs) || timeofs > 0.255f)
 		Com_Error (ERR_DROP, "SV_StartSound: timeofs = %f", timeofs);
 
 	ent = NUM_FOR_EDICT(entity);
@@ -592,7 +592,7 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 			}
 			else
 			{
-				VectorCopy (entity->s.origin, origin_v);
+				FastVectorCopy (entity->s.origin, origin_v);
 			}
 		}
 	}
@@ -637,10 +637,12 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 
 		if (flags & SND_ATTENUATION)
 		{
-			if (attenuation >= 4.0)
+			if (attenuation >= 4.0f)
 			{
-				Com_Printf ("GAME ERROR: Sound %s with bad attenuation %f, fixed.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, sv.configstrings[CS_SOUNDS+soundindex], attenuation);
-				attenuation = 3.984375;
+				Com_Printf ("GAME WARNING: Attempt to play sound '%s' with illegal attenuation %f, fixed.\n", LOG_WARNING|LOG_SERVER|LOG_GAMEDEBUG, sv.configstrings[CS_SOUNDS+soundindex], attenuation);
+				if (sv_gamedebug->intvalue >= 2)
+					Sys_DebugBreak ();
+				attenuation = 3.984375f;
 			}
 			MSG_WriteByte ((int)(attenuation*64));
 		}
@@ -811,7 +813,7 @@ static qboolean SV_SendClientDatagram (client_t *client)
 		frame.allowoverflow = true;
 
 		//adjust for packetentities hack
-		if (sv_packetentities_hack->intvalue == 1 || client->protocol == ORIGINAL_PROTOCOL_VERSION)
+		if (sv_packetentities_hack->intvalue == 1 || client->protocol == PROTOCOL_ORIGINAL)
 			frame.maxsize = msg.maxsize;
 
 #ifndef NO_ZLIB

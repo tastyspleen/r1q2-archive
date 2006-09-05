@@ -950,8 +950,11 @@ void	EXPORT Cmd_AddCommand (const char *cmd_name, xcommand_t function)
 // fail if the command already exists
 	if (rbfind (cmd_name, cmdtree))
 	{
-		Com_Printf ("Cmd_AddCommand: %s already defined\n", LOG_GENERAL, cmd_name);
-		return;
+		//r1: delete command and replace. unclean ref shutdown for example
+		//will leave dangling pointers.
+		//Com_Printf ("Cmd_AddCommand: %s already defined\n", LOG_GENERAL, cmd_name);
+		//return;
+		Cmd_RemoveCommand (cmd_name);
 	}
 
 	cmd = Z_TagMalloc (sizeof(cmd_function_t), TAGMALLOC_CMD);

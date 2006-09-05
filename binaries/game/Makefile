@@ -17,6 +17,8 @@ game_SRC:=g_ai.c g_chase.c g_cmds.c g_combat.c g_func.c g_items.c g_main.c\
 game_OBJ:=$(game_SRC:.c=.o)
 ALLSRC:=$(game_SRC)
 
+.PHONY: default combine
+
 default: game$(ARCH).so
 
 TARGETS:=game$(ARCH).so
@@ -27,5 +29,10 @@ LDFLAGS+=-lm
 
 game$(ARCH).so: $(game_OBJ)
 	$(CC) -shared -g -o $@ $^ $(LDFLAGS)
+
+# only works with gcc >4.1
+combine: game$(ARCH)-combine.so
+game$(ARCH)-combine.so: $(game_SRC)
+	$(CC) -shared -O2 -ffloat-store -DNDEBUG -DLINUX -fPIC -fwhole-program --combine -g -o $@ $^ $(LDFLAGS)
 
 -include .depends/*.d

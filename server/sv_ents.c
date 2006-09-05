@@ -48,7 +48,7 @@ static void SV_EmitPacketEntities (const client_t *cl, const client_frame_t /*@n
 //	removedindex = 0;
 
 	//r1: pointless waste of byte since this is already inside an svc_frame
-	if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
+	if (cl->protocol != PROTOCOL_R1Q2)
 	{
 		MSG_BeginWriting (svc_packetentities);
 	}
@@ -179,7 +179,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	ps = &to->ps;
 
 	extraflags = 0;
-	enhanced = (client->protocol == ENHANCED_PROTOCOL_VERSION);
+	enhanced = (client->protocol == PROTOCOL_R1Q2);
 
 	if (!from)
 		ops = &null_playerstate;
@@ -278,7 +278,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 
 	needViewAngleDeltas =
 		((client->settings[CLSET_RECORDING]) ||
-        (sv_optimize_deltas->intvalue == 1 && client->protocol != ENHANCED_PROTOCOL_VERSION) ||
+        (sv_optimize_deltas->intvalue == 1 && client->protocol != PROTOCOL_R1Q2) ||
         (ps->pmove.pm_type >= PM_DEAD) ||
 		(sv_optimize_deltas->intvalue == 0));
 
@@ -457,7 +457,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 
 	//only possibly send bbox if the client supports it AND the game is supposed to send it
 #ifdef ENHANCED_SERVER
-	if (client->protocol == ENHANCED_PROTOCOL_VERSION && (!VectorCompare (ps->mins, ops->mins) || !VectorCompare (ps->maxs, ops->maxs)))
+	if (client->protocol == PROTOCOL_R1Q2 && (!VectorCompare (ps->mins, ops->mins) || !VectorCompare (ps->maxs, ops->maxs)))
 		pflags |= PS_BBOX;
 #endif
 
@@ -725,7 +725,7 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	SZ_WriteByte (msg, 0);
 
 	//pack pack pack....
-	if (client->protocol == ENHANCED_PROTOCOL_VERSION)
+	if (client->protocol == PROTOCOL_R1Q2)
 	{
 		uint32		offset;
 		uint32		encodedFrame;
@@ -765,7 +765,7 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	extraflags = SV_WritePlayerstateToClient (oldframe, frame, msg, client);
 
 	//HOLY CHRIST
-	if (client->protocol == ENHANCED_PROTOCOL_VERSION)
+	if (client->protocol == PROTOCOL_R1Q2)
 	{
 		msg->data[serverByteIndex] = svc_frame + ((extraflags & 0xF0) << 1);
 		msg->data[extraDataIndex] = client->surpressCount + ((extraflags & 0x0F) << 4);
@@ -848,7 +848,7 @@ static qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, const edict_t
 	trace_t	trace;
 	int		num;
 
-	VectorCopy(ent->s.origin, entOrigin);
+	FastVectorCopy (ent->s.origin, entOrigin);
 	
 	if ( predictEnt && ent->client ) {
 		for (i = 0; i < 3; i++)
@@ -861,13 +861,13 @@ static qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, const edict_t
 
 	}
 
-	VectorCopy(entOrigin, ends[0]);
+	FastVectorCopy (entOrigin, ends[0]);
 
 	if ( fullCheck ) {
 		vec3_t	right, up;
 
 		for (i = 1; i < 9; i++)
-			VectorCopy(entOrigin, ends[i]);
+			FastVectorCopy (entOrigin, ends[i]);
 
 		AngleVectors(Angles, NULL, right, up);
 
@@ -1086,7 +1086,7 @@ void SV_BuildClientFrame (client_t *client)
 		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP && ent->solid != SOLID_TRIGGER)
 		{
 			// *********** NiceAss Start ************
-			VectorCopy(org, start);
+			FastVectorCopy (org, start);
 #ifdef ENHANCED_SERVER
 			visible = SV_CheckPlayerVisible(((struct gclient_new_s *)(clent->client))->ps.viewangles, start, ent, true, false);
 #else
@@ -1094,7 +1094,7 @@ void SV_BuildClientFrame (client_t *client)
 #endif
 		
 			if (!visible) {
-				VectorCopy(org, start);
+				FastVectorCopy (org, start);
 
 				// If the first direct check didn't see the player, check a little ahead
 				// of yourself based on your current velocity, lag, frame update speed (100ms). 
@@ -1115,7 +1115,7 @@ void SV_BuildClientFrame (client_t *client)
 #endif
 
 				if ( !visible ) {
-					VectorCopy(org, start);
+					FastVectorCopy (org, start);
 					// If the first/second direct check didn't see the player, check a little above
 					// of yourself based on your current velocity. This will compensate for
 					// clients predicting where they will be due to lag (cl_predict)
@@ -1223,7 +1223,7 @@ void SV_RecordDemoMessage (void)
 			(ent->s.modelindex || ent->s.effects || ent->s.sound || ent->s.event) && 
 			!(ent->svflags & SVF_NOCLIENT))
 		{
-			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, ORIGINAL_PROTOCOL_VERSION);
+			MSG_WriteDeltaEntity (&null_entity_state, &ent->s, false, true, PROTOCOL_ORIGINAL);
 			MSG_EndWriting (&buf);
 		}
 

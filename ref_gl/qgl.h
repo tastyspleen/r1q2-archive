@@ -395,6 +395,17 @@ extern	void ( APIENTRY * qglSelectTextureSGIS)( GLenum );
 extern	void ( APIENTRY * qglPointParameterfARB) (GLenum, GLfloat);
 extern	void ( APIENTRY * qglPointParameterfvARB) (GLenum, const GLfloat *);
 
+
+
+extern	void  (APIENTRY *qglGenQueriesARB) (GLsizei, GLuint *);
+extern	void (APIENTRY *qglDeleteQueriesARB) (GLsizei, const GLuint *);
+extern	GLboolean (APIENTRY *qglIsQueryARB) (GLuint);
+extern	void (APIENTRY *qglBeginQueryARB) (GLenum, GLuint);
+extern	void (APIENTRY *qglEndQueryARB) (GLenum);
+extern	void (APIENTRY *qglGetQueryivARB) (GLenum, GLenum, GLint *);
+extern	void (APIENTRY *qglGetQueryObjectivARB) (GLuint, GLenum, GLint *);
+extern	void (APIENTRY *qglGetQueryObjectuivARB) (GLuint, GLenum, GLuint *);
+
 extern	void ( APIENTRY * qglActiveTextureARB)( GLenum );
 extern	void ( APIENTRY * qglClientActiveTextureARB)( GLenum );
 

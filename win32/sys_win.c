@@ -112,11 +112,6 @@ SERVICE_STATUS_HANDLE   MyServiceStatusHandle;
 char	cmdline[4096];
 char	bname[MAX_QPATH];
 
-#ifndef DEDICATED_ONLY
-#ifdef ANTICHEAT
-anticheat_export_t	*anticheat;
-#endif
-#endif
 /*
 ===============================================================================
 
@@ -1287,64 +1282,61 @@ void QuakeMain (void)
 
 void FixWorkingDirectory (void)
 {
-	char *p;
-	char curDir[MAX_PATH];
+	int		i;
+	char	*p;
+	char	curDir[MAX_PATH];
 
 	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
+
+	p = strrchr (curDir, '\\');
+	p[0] = 0;
+
+	for (i = 1; i < argc; i++)
+	{
+		if (!strcmp (argv[i], "-nopathcheck"))
+			goto skipPathCheck;
+	}
 
 	if (strlen(curDir) > (MAX_OSPATH - MAX_QPATH))
 		Sys_Error ("Current path is too long. Please move your Quake II installation to a shorter path.");
 
-	p = strrchr (curDir, '\\');
-	p[0] = 0;
+skipPathCheck:
 
 	SetCurrentDirectory (curDir);
 }
 
 #ifdef ANTICHEAT
-#ifndef NO_SERVER
-void *Sys_GetAntiCheatServerAPI (void)
-{
-	VOID		*ret;
-	qboolean	updated = false;
-	FARPROC		fnInit;
-	HMODULE		hAC;
-
-reInit:
-
-	hAC = LoadLibrary ("anticheatserver");
-	if (!hAC)
-		return NULL;
-
-	fnInit = GetProcAddress (hAC, "Initialize");
-	ret = (void *)fnInit ();
-
-	if (!updated && !ret)
-	{
-		updated = true;
-		FreeLibrary (hAC);
-		goto reInit;
-	}
-
-	return ret;
-}
-#endif
-
 #ifndef DEDICATED_ONLY
+
+typedef struct
+{
+	void (*Check) (void);
+} anticheat_export_t;
+
+anticheat_export_t *anticheat;
 
 typedef VOID * (*FNINIT) (VOID);
 
-void Sys_GetAntiCheatAPI (void)
+int Sys_GetAntiCheatAPI (void)
 {
-	qboolean	updated = false;
-	HMODULE		hAC;
-	FNINIT		init;
+	qboolean			updated = false;
+	HMODULE				hAC;
+	static FNINIT		init;
+
+	//already loaded, just reinit
+	if (anticheat)
+	{
+		anticheat = (anticheat_export_t *)init ();
+		if (!anticheat)
+			return 0;
+		return 1;
+	}
 
 reInit:
 
 	hAC = LoadLibrary ("anticheat");
 	if (!hAC)
-		Com_Error (ERR_DROP, "Unable to load anticheat module. Please check you have installed anticheat.dll to your Quake II directory.");
+		return 0;
 
 	init = (FNINIT)GetProcAddress (hAC, "Initialize");
 	anticheat = (anticheat_export_t *)init ();
@@ -1353,11 +1345,13 @@ reInit:
 	{
 		updated = true;
 		FreeLibrary (hAC);
+		hAC = NULL;
 		goto reInit;
 	}
 
 	if (!anticheat)
-		Com_Error (ERR_DROP, "Unable to load anticheat module.");
+		return 0;
+	return 1;
 }
 #endif
 #endif
@@ -1456,7 +1450,7 @@ BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBas
 		strcpy (verString, "unknown");
 	}	
 
-	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%lu bytes, version %s)\n", ModuleBase, ModuleBase + (DWORD64)ModuleSize, ModuleName, ModuleSize, verString);
+	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%lu bytes, version %s)\r\n", ModuleBase, ModuleBase + (DWORD64)ModuleSize, ModuleName, ModuleSize, verString);
 	return TRUE;
 }
 
@@ -1495,12 +1489,12 @@ BOOL CALLBACK EnumerateLoadedModulesProcSymInfo (PSTR ModuleName, DWORD64 Module
 			break;
 		}
 
-		fprintf (fhReport, "%s, %s symbols loaded.\n", symInfo.LoadedImageName, symType);
+		fprintf (fhReport, "%s, %s symbols loaded.\r\n", symInfo.LoadedImageName, symType);
 	}
 	else
 	{
 		int i = GetLastError ();
-		fprintf (fhReport, "%s, couldn't check symbols (error %d, DBGHELP.DLL too old?)\n", ModuleName, i);
+		fprintf (fhReport, "%s, couldn't check symbols (error %d, DBGHELP.DLL too old?)\r\n", ModuleName, i);
 	}
 	
 	return TRUE;
@@ -2108,7 +2102,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	{
 		Qcommon_Init (argc, argv);
 
-		//_controlfp( _PC_24, _MCW_PC );
+		_controlfp( _PC_24, _MCW_PC );
 
 		oldtime = Sys_Milliseconds ();
 		/* main window message loop */

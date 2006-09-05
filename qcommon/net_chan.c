@@ -162,7 +162,7 @@ void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol,
 	chan->sock = sock;
 	chan->remote_address = *adr;
 
-	if (protocol == ENHANCED_PROTOCOL_VERSION)
+	if (protocol == PROTOCOL_R1Q2)
 	{
 		if (msglen)
 		{
@@ -235,7 +235,7 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 
 
 // write the packet header
-	if (chan->protocol == ENHANCED_PROTOCOL_VERSION)
+	if (chan->protocol == PROTOCOL_R1Q2)
 		SZ_Init (&send, send_buf, sizeof(send_buf));
 	else
 		SZ_Init (&send, send_buf, 1400);
@@ -252,7 +252,7 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 	// send the qport if we are a client
 	if (chan->sock == NS_CLIENT)
 	{
-		if (chan->protocol != ENHANCED_PROTOCOL_VERSION)
+		if (chan->protocol != PROTOCOL_R1Q2)
 			SZ_WriteShort (&send, chan->qport);
 		else if (chan->qport)
 			SZ_WriteByte (&send, chan->qport);
@@ -330,7 +330,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 	if (chan->sock == NS_SERVER)
 	{
 		//suck up 2 bytes for original and old r1q2
-		if (chan->protocol != ENHANCED_PROTOCOL_VERSION || chan->qport > 0xFF)
+		if (chan->protocol != PROTOCOL_R1Q2 || chan->qport > 0xFF)
 			MSG_ReadShort (msg);
 		else if (chan->qport)
 			MSG_ReadByte (msg);

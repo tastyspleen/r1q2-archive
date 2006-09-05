@@ -39,6 +39,8 @@ model_t		*r_worldmodel;
 
 double		gldepthmin, gldepthmax;
 
+double		vid_scaled_width, vid_scaled_height;
+
 glconfig_t gl_config;
 glstate_t  gl_state;
 
@@ -114,6 +116,7 @@ cvar_t	*gl_ext_texture_filter_anisotropic;
 cvar_t	*gl_ext_texture_non_power_of_two;
 cvar_t	*gl_ext_max_anisotropy;
 cvar_t	*gl_ext_nv_multisample_filter_hint;
+cvar_t	*gl_ext_occlusion_query;
 
 cvar_t	*gl_colorbits;
 cvar_t	*gl_alphabits;
@@ -372,6 +375,140 @@ void R_DrawNullModel (void)
 	qglEnable (GL_TEXTURE_2D);
 }
 
+int visibleBits[MAX_ENTITIES];
+
+
+void R_Occlusion_Results (void)
+{
+	int		i, visible;
+	entity_t	*ent;
+	//int		numOccluded = 0;
+
+	// now we read back
+	for (i = 0; i < r_newrefdef.num_entities; i++)
+	{
+		int	available;
+
+		ent = &r_newrefdef.entities[i];
+
+		if (!ent->model || ent->model->type == mod_brush)
+		{
+			visibleBits[i] = 500;
+			continue;
+		}
+
+		if (visibleBits[i] > 1)
+		{
+			visibleBits[i]--;
+			continue;
+		}
+
+		qglGetQueryObjectivARB (gl_config.r1gl_Queries[i], GL_QUERY_RESULT_AVAILABLE_ARB, &available);
+		if (!available)
+		{
+			if (gl_ext_occlusion_query->value == 2.0f)
+				i--;
+			else
+				visibleBits[i] = 25;
+
+			continue;
+		}
+
+		// get the object and store it in the occlusion bits for the ent
+		qglGetQueryObjectivARB (gl_config.r1gl_Queries[i], GL_QUERY_RESULT, &visible);
+
+		if (!visible)
+		{
+			//ri.Con_Printf (PRINT_ALL, "Occluded %d, %s\n", i, ent->model->name);
+			visibleBits[i] = 0;
+		}
+		else
+			visibleBits[i] = 25;
+	}
+}
+
+void R_Occlusion_Run (void)
+{
+	int		i;
+	entity_t	*ent;
+	float	mins[3];
+	float	maxs[3];
+
+	static const byte boxindexes[] =
+	{
+	0, 1, 2, 3,
+	4, 5, 1, 0,
+	3, 2, 6, 7,
+	5, 4, 7, 6,
+	1, 5, 6, 2,
+	4, 0, 3, 7
+	};
+
+	float	boxverts[24];
+
+	if (!r_newrefdef.num_entities)
+		return;
+
+	// disable texturing
+	qglDisable (GL_TEXTURE_2D);
+
+	// because we don;t know the orientation of the bbox in advance...
+	qglDisable (GL_CULL_FACE);
+
+	// disable framebuffer and depthbuffer writes
+	qglColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	qglDepthMask (GL_FALSE);
+
+	qglEnableClientState (GL_VERTEX_ARRAY);
+	qglVertexPointer (3, GL_FLOAT, 0, boxverts);
+
+	for (i = 0; i < r_newrefdef.num_entities; i++)
+	{
+		ent = &r_newrefdef.entities[i];
+
+		if (!ent->model || ent->model->type == mod_brush)
+			continue;
+
+		if (visibleBits[i] > 1)
+			continue;
+
+		// get mins and maxs points
+		VectorAdd (ent->origin, ent->model->mins, mins);
+		VectorAdd (ent->origin, ent->model->maxs, maxs);
+
+		// CPU grunt to the rescue!!!
+		boxverts[0] = boxverts[9] = boxverts[12] = boxverts[21] = mins[0];
+		boxverts[3] = boxverts[6] = boxverts[15] = boxverts[18] = maxs[0];
+		boxverts[1] = boxverts[4] = boxverts[13] = boxverts[16] = maxs[1];
+		boxverts[7] = boxverts[10] = boxverts[19] = boxverts[22] = mins[1];
+		boxverts[2] = boxverts[5] = boxverts[8] = boxverts[11] = maxs[2];
+		boxverts[14] = boxverts[17] = boxverts[20] = boxverts[23] = mins[2];
+
+		// begin the occlusion query
+		qglBeginQueryARB (GL_SAMPLES_PASSED, gl_config.r1gl_Queries[i]);
+
+		// draw as indexed varray
+		qglDrawElements (GL_QUADS, 24, GL_UNSIGNED_BYTE, boxindexes);
+
+		// end the query
+		// don't read back immediately so that we give the query time to be ready
+		qglEndQueryARB (GL_SAMPLES_PASSED);
+	}
+
+	qglDisableClientState (GL_VERTEX_ARRAY);
+
+	// restore basic state
+	qglEnable (GL_TEXTURE_2D);
+	qglEnable (GL_CULL_FACE);
+
+	// enable framebuffer and depthbuffer writes
+	qglColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	qglDepthMask (GL_TRUE);
+
+	// some implementations don't reset the primary colour properly after restoring the colormask
+	qglColor4f  (1, 1, 1, 1);
+}
+
 /*
 =============
 R_DrawEntitiesOnList
@@ -384,10 +521,17 @@ void R_DrawEntitiesOnList (void)
 	if (FLOAT_EQ_ZERO(r_drawentities->value))
 		return;
 
+	if (gl_config.r1gl_QueryBits)
+		R_Occlusion_Results ();
+
 	// draw non-transparent first
 	for (i=0 ; i<r_newrefdef.num_entities ; i++)
 	{
+		if (gl_config.r1gl_QueryBits && !visibleBits[i])
+			continue;
+
 		currententity = &r_newrefdef.entities[i];
+
 		if (currententity->flags & RF_TRANSLUCENT || (FLOAT_NE_ZERO(gl_alphaskins->value) && currententity->skin && currententity->skin->has_alpha))
 			continue;	// solid
 
@@ -403,20 +547,21 @@ void R_DrawEntitiesOnList (void)
 				R_DrawNullModel ();
 				continue;
 			}
+
 			switch (currentmodel->type)
 			{
-			case mod_alias:
-				R_DrawAliasModel (currententity);
-				break;
-			case mod_brush:
-				R_DrawBrushModel (currententity);
-				break;
-			case mod_sprite:
-				R_DrawSpriteModel (currententity);
-				break;
-			default:
-				ri.Sys_Error (ERR_DROP, "Bad modeltype %d on %s", currentmodel->type, currentmodel->name);
-				break;
+				case mod_alias:
+					R_DrawAliasModel (currententity);
+					break;
+				case mod_brush:
+					R_DrawBrushModel (currententity);
+					break;
+				case mod_sprite:
+					R_DrawSpriteModel (currententity);
+					break;
+				default:
+					ri.Sys_Error (ERR_DROP, "Bad modeltype %d on %s", currentmodel->type, currentmodel->name);
+					break;
 			}
 		}
 	}
@@ -738,7 +883,7 @@ void R_SetupFrame (void)
 	r_framecount++;
 
 // build the transformation matrix for the given view angles
-	VectorCopy (r_newrefdef.vieworg, r_origin);
+	FastVectorCopy (r_newrefdef.vieworg, r_origin);
 
 	AngleVectors (r_newrefdef.viewangles, vpn, vright, vup);
 
@@ -755,7 +900,7 @@ void R_SetupFrame (void)
 		{	// look down a bit
 			vec3_t	temp;
 
-			VectorCopy (r_origin, temp);
+			FastVectorCopy (r_origin, temp);
 			temp[2] -= 16;
 			leaf = Mod_PointInLeaf (temp, r_worldmodel);
 			if ( !(leaf->contents & CONTENTS_SOLID) &&
@@ -766,7 +911,7 @@ void R_SetupFrame (void)
 		{	// look up a bit
 			vec3_t	temp;
 
-			VectorCopy (r_origin, temp);
+			FastVectorCopy (r_origin, temp);
 			temp[2] += 16;
 			leaf = Mod_PointInLeaf (temp, r_worldmodel);
 			if ( !(leaf->contents & CONTENTS_SOLID) &&
@@ -906,7 +1051,7 @@ float ref_frand(void)
 
 void R_Clear (void)
 {
-	if (FLOAT_NE_ZERO(gl_ztrick->value))
+	if (FLOAT_NE_ZERO(gl_ztrick->value) && r_worldmodel != NULL)
 	{
 		static int trickframe;
 
@@ -967,6 +1112,14 @@ void R_RenderView (refdef_t *fd)
 
 	r_newrefdef = *fd;
 
+	if (FLOAT_NE_ZERO(gl_hudscale->value))
+	{
+		r_newrefdef.width *= gl_hudscale->value;
+		r_newrefdef.height *= gl_hudscale->value;
+		r_newrefdef.x *= gl_hudscale->value;
+		r_newrefdef.y *= gl_hudscale->value;
+	}
+
 	if (!r_worldmodel && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 		ri.Sys_Error (ERR_DROP, "R_RenderView: NULL worldmodel");
 
@@ -992,6 +1145,9 @@ void R_RenderView (refdef_t *fd)
 
 	R_MarkLeaves ();	// done here so we know if we're in water
 
+	if (gl_config.r1gl_QueryBits)
+		R_Occlusion_Run ();
+
 	R_DrawWorld ();
 
 	R_DrawEntitiesOnList ();
@@ -1003,7 +1159,7 @@ void R_RenderView (refdef_t *fd)
 	R_DrawAlphaSurfaces ();
 
 	R_PolyBlend();
-
+	
 	if (FLOAT_NE_ZERO(r_speeds->value))
 	{
 		ri.Con_Printf (PRINT_ALL, "%4i wpoly %4i epoly %i tex %i lmaps\n",
@@ -1021,7 +1177,8 @@ void	R_SetGL2D (void)
 	qglViewport (0,0, vid.width, vid.height);
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
-	qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
+	//qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
+	qglOrtho(0, vid_scaled_width, vid_scaled_height, 0, -99999, 99999);
 	qglMatrixMode(GL_MODELVIEW);
     qglLoadIdentity ();
 	qglDisable (GL_DEPTH_TEST);
@@ -1190,6 +1347,7 @@ void R_Register( void )
 	gl_ext_texture_filter_anisotropic = ri.Cvar_Get ("gl_ext_texture_filter_anisotropic", "0", 0);
 	gl_ext_texture_non_power_of_two = ri.Cvar_Get ("gl_ext_texture_non_power_of_two", "0", 0);
 	gl_ext_max_anisotropy = ri.Cvar_Get ("gl_ext_max_anisotropy", "2", 0);
+	gl_ext_occlusion_query = ri.Cvar_Get ("gl_ext_occlusion_query", "0", 0);
 	
 	gl_ext_nv_multisample_filter_hint = ri.Cvar_Get ("gl_ext_nv_multisample_filter_hint", "fastest", 0);
 
@@ -1426,6 +1584,10 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 		gl_config.renderer = GL_RENDERER_PCX2;
 	else if ( strstr( renderer_buffer, "verite" ) )
 		gl_config.renderer = GL_RENDERER_RENDITION;
+	else if ( strstr (renderer_buffer, "ati tech"))
+		gl_config.renderer = GL_RENDERER_ATI;
+	else if ( strstr (renderer_buffer, "nvidia corp"))
+		gl_config.renderer = GL_RENDERER_NV;
 	else
 		gl_config.renderer = GL_RENDERER_OTHER;
 
@@ -1510,15 +1672,22 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 
 	if ( strstr( gl_config.extensions_string, "GL_EXT_point_parameters" ) )
 	{
-		if ( FLOAT_NE_ZERO(gl_ext_pointparameters->value) )
+		if ( gl_config.renderer == GL_RENDERER_ATI)
 		{
-			qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qwglGetProcAddress( "glPointParameterfEXT" );
-			qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qwglGetProcAddress( "glPointParameterfvEXT" );
-			ri.Con_Printf( PRINT_ALL, "...using GL_EXT_point_parameters\n" );
+			ri.Con_Printf (PRINT_ALL, "...ignoring GL_EXT_point_parameters on ATi\n");
 		}
 		else
 		{
-			ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_point_parameters\n" );
+			if ( FLOAT_NE_ZERO(gl_ext_pointparameters->value) )
+			{
+				qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qwglGetProcAddress( "glPointParameterfEXT" );
+				qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qwglGetProcAddress( "glPointParameterfvEXT" );
+				ri.Con_Printf( PRINT_ALL, "...using GL_EXT_point_parameters\n" );
+			}
+			else
+			{
+				ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_point_parameters\n" );
+			}
 		}
 	}
 	else
@@ -1607,7 +1776,8 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 	}*/
 
 	gl_config.r1gl_GL_ARB_point_sprite = false;
-	if ( strstr( gl_config.extensions_string, "GL_ARB_point_sprite" ) ) {
+	if ( strstr( gl_config.extensions_string, "GL_ARB_point_sprite" ) )
+	{
 		//if ( gl_ext_point_sprite->value ) {
 			qglPointParameterfARB = (void (__stdcall *)(GLenum,GLfloat))qwglGetProcAddress("glPointParameterfARB");
 			qglPointParameterfvARB = (void (__stdcall *)(GLenum,const GLfloat *))qwglGetProcAddress("glPointParameterfvARB");
@@ -1628,7 +1798,8 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 	}
 
 	gl_config.r1gl_GL_EXT_texture_filter_anisotropic = false;
-	if ( strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic" ) ) {
+	if ( strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic" ) )
+	{
 		//if ( gl_ext_texture_filter_anisotropic->value ) {
 			ri.Con_Printf( PRINT_ALL, "...using GL_EXT_texture_filter_anisotropic\n" );
 			gl_config.r1gl_GL_EXT_texture_filter_anisotropic = true;
@@ -1651,6 +1822,33 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 		ri.Con_Printf( PRINT_ALL, "...GL_ARB_texture_non_power_of_two not found\n" );
 	}
 
+	if ( strstr (gl_config.extensions_string, "GL_ARB_occlusion_query"))
+	{
+		//r1: occlusion queries
+		if (FLOAT_NE_ZERO (gl_ext_occlusion_query->value) )
+		{
+			qglGenQueriesARB			 = (void (__stdcall *)(GLsizei,GLuint *))qwglGetProcAddress ("glGenQueriesARB");
+			qglGetQueryivARB			 = (void (__stdcall *)(GLenum,GLenum,GLint *))qwglGetProcAddress ("glGetQueryivARB");
+			qglGetQueryObjectivARB		 = (void (__stdcall *)(GLuint,GLenum,GLint *))qwglGetProcAddress ("glGetQueryObjectivARB");
+			qglBeginQueryARB			 = (void (__stdcall *)(GLenum,GLuint))qwglGetProcAddress ("glBeginQueryARB");
+			qglEndQueryARB				 = (void (__stdcall *)(GLenum))qwglGetProcAddress ("glEndQueryARB");
+
+			qglGetQueryivARB (GL_SAMPLES_PASSED, GL_QUERY_COUNTER_BITS, &gl_config.r1gl_QueryBits);
+			ri.Con_Printf (PRINT_ALL, "...using GL_ARB_occlusion_query (%d bits)\n", gl_config.r1gl_QueryBits);
+			if (gl_config.r1gl_QueryBits)
+				qglGenQueriesARB (MAX_ENTITIES, gl_config.r1gl_Queries);
+		}
+		else
+		{
+			ri.Con_Printf (PRINT_ALL, "...ignoring GL_ARB_occlusion_query\n");
+			gl_config.r1gl_QueryBits = 0;
+		}
+	}
+	else
+	{
+		gl_config.r1gl_QueryBits = 0;
+		ri.Con_Printf (PRINT_ALL, "...GL_ARB_occlusion_query not found\n");
+	}
 
 	ri.Con_Printf( PRINT_ALL, "Initializing r1gl NVIDIA-only extensions:\n" );
 	gl_config.r1gl_GL_EXT_nv_multisample_filter_hint = false;
@@ -1663,6 +1861,10 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 
 	ri.Con_Printf( PRINT_DEVELOPER, "GL_SetDefaultState()\n" );
 	GL_SetDefaultState();
+
+	//r1: setup cached screensizes
+	vid_scaled_width = vid.width / gl_hudscale->value;
+	vid_scaled_height = vid.height / gl_hudscale->value;
 
 	/*
 	** draw our stereo patterns
@@ -1818,7 +2020,8 @@ void EXPORT R_BeginFrame( float camera_separation )
 	qglViewport (0,0, vid.width, vid.height);
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
-	qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
+	//qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
+	qglOrtho(0, vid_scaled_width, vid_scaled_height, 0, -99999, 99999);
 	qglMatrixMode(GL_MODELVIEW);
     qglLoadIdentity ();
 	//qglDisable (GL_DEPTH_TEST);
@@ -1860,6 +2063,36 @@ void EXPORT R_BeginFrame( float camera_separation )
 	{
 		GL_UpdateAnisotropy ();
 		gl_ext_max_anisotropy->modified = false;
+	}
+
+	if (gl_hudscale->modified)
+	{
+		int width, height;
+
+		gl_hudscale->modified = false;
+
+		if (gl_hudscale->value < 1.0f)
+		{
+			ri.Cvar_Set ("gl_hudscale", "1.0");
+		}
+		else
+		{
+			//r1: hudscaling
+			width = (int)ceilf((float)vid.width / gl_hudscale->value);
+			height = (int)ceilf((float)vid.height / gl_hudscale->value);
+
+			//round to powers of 8/2 to avoid blackbars
+			width = (width+7)&~7;
+			height = (height+1)&~1;
+
+			gl_hudscale->modified = false;
+
+			vid_scaled_width = vid.width / gl_hudscale->value;
+			vid_scaled_height = vid.height / gl_hudscale->value;
+
+			// let the sound and input subsystems know about the new window
+			ri.Vid_NewWindow (width, height);
+		}
 	}
 
 #if 0

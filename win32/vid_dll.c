@@ -698,6 +698,10 @@ void VID_UpdateWindowPosAndSize(void)
 */
 void EXPORT VID_NewWindow ( int width, int height)
 {
+	//sanity check from renderer
+	if (width >= 0x10000 || width < 64 || height >= 0x10000 || height < 48)
+		Com_Error (ERR_FATAL, "VID_NewWindow: Illegal width/height %d/%d", width, height);
+
 	viddef.width  = width;
 	viddef.height = height;
 
@@ -713,6 +717,15 @@ void VID_FreeReflib (void)
 	reflib_active  = false;
 }
 
+//Wrapper function for externally added commands to ensure unclean shutdown
+//doesn't trash memory. note that this however LEAKS MEMORY, albeit a tiny bit :)
+void EXPORT Cmd_AddCommand_RefCopy (const char *cmd_name, xcommand_t function)
+{
+	const char *newname;
+
+	newname = CopyString (cmd_name, TAGMALLOC_CMD);
+	Cmd_AddCommand (newname, function);
+}
 
 /*
 ==============
@@ -752,7 +765,7 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 
 	Com_DPrintf ("reflib_library initialized.\n");
 
-	ri.Cmd_AddCommand = Cmd_AddCommand;
+	ri.Cmd_AddCommand = Cmd_AddCommand_RefCopy;
 	ri.Cmd_RemoveCommand = Cmd_RemoveCommand;
 	ri.Cmd_Argc = Cmd_Argc;
 	ri.Cmd_Argv = Cmd_Argv;
@@ -900,6 +913,9 @@ void VID_ReloadRefresh (void)
 
 	//not needed with openal
 	S_StopAllSounds();
+
+	//r1: stop tent models for now.
+	CL_ClearTEnts();
 
 	//MessageBox (cl_hwnd, "video restarts!", "what", MB_OK);
 

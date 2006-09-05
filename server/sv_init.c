@@ -477,7 +477,11 @@ void SV_InitGame (void)
 
 #ifdef ANTICHEAT
 	if (sv_require_anticheat->intvalue)
+	{
+		Cvar_FullSet ("anticheat", sv_require_anticheat->string, CVAR_SERVERINFO | CVAR_NOSET);
 		SV_AntiCheat_Connect ();
+		SV_AntiCheat_WaitForInitialConnect ();
+	}
 #endif
 
 	Z_Verify("SV_InitGame:END");
@@ -608,6 +612,27 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 		//r1: do we really need this?
 		//Cbuf_CopyToDefer ();
 	}
+
+#ifdef ANTICHEAT
+	//FIXME: see how often this becomes a problem and rework acserver someday to handle it better...
+	if (SV_AntiCheat_IsConnected ())
+	{
+		client_t	*cl;
+		int			i;
+		for (i = 0; i < maxclients->intvalue; i++)
+		{
+			cl = &svs.clients[i];
+			if (cl->state >= cs_connected && !cl->anticheat_valid)
+			{
+				if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required)
+				{
+					SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " Due to a server connection problem, you must reconnect to re-enable anticheat.\n");
+					SV_DropClient (cl, true);
+				}
+			}
+		}
+	}
+#endif
 
 	SV_BroadcastCommand ("reconnect\n");
 	Z_Verify("SV_Map:END");

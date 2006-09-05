@@ -3,7 +3,10 @@
 #ifdef USE_OPENAL
 #include <AL/al.h>
 #include <AL/alc.h>
-#include <AL/altypes.h>
+
+#ifndef _WIN32
+#include <AL/alext.h>
+#endif
 
 #include "client.h"
 

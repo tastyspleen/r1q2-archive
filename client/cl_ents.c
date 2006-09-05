@@ -99,10 +99,10 @@ void CL_ParseDelta (const entity_state_t *from, entity_state_t *to, int number, 
 	// set everything to the state we are delta'ing from
 	*to = *from;
 
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
-		VectorCopy (from->origin, to->old_origin);
+	if (cls.serverProtocol != PROTOCOL_R1Q2)
+		FastVectorCopy (from->origin, to->old_origin);
 	else if (!(bits & U_OLDORIGIN) && !(from->renderfx & RF_BEAM))
-		VectorCopy (from->origin, to->old_origin);
+		FastVectorCopy (from->origin, to->old_origin);
 
 	to->number = number;
 
@@ -200,13 +200,13 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 		ent->prev = *state;
 		if (state->event == EV_OTHER_TELEPORT)
 		{
-			VectorCopy (state->origin, ent->prev.origin);
-			VectorCopy (state->origin, ent->lerp_origin);
+			FastVectorCopy (state->origin, ent->prev.origin);
+			FastVectorCopy (state->origin, ent->lerp_origin);
 		}
 		else
 		{
-			VectorCopy (state->old_origin, ent->prev.origin);
-			VectorCopy (state->old_origin, ent->lerp_origin);
+			FastVectorCopy (state->old_origin, ent->prev.origin);
+			FastVectorCopy (state->old_origin, ent->lerp_origin);
 		}
 	}
 	else
@@ -983,7 +983,7 @@ static void CL_ParsePlayerstate (const frame_t *oldframe, frame_t *newframe, int
 	qboolean	enhanced;
 
 	state = &newframe->playerstate;
-	enhanced = (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION);
+	enhanced = (cls.serverProtocol == PROTOCOL_R1Q2);
 
 	// clear to old value before delta parsing
 	if (oldframe)
@@ -1191,7 +1191,7 @@ void CL_ParseFrame (int extrabits)
 	//really need the possibility of the server running same map for 13 years...
 	serverframe = MSG_ReadLong (&net_message);
 
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol != PROTOCOL_R1Q2)
 	{
 		cl.frame.serverframe = serverframe;
 		cl.frame.deltaframe = MSG_ReadLong (&net_message);
@@ -1229,7 +1229,7 @@ void CL_ParseFrame (int extrabits)
 		data = MSG_ReadByte (&net_message);
 
 		//r1: HACK to get extra 4 bits of otherwise unused data
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		if (cls.serverProtocol == PROTOCOL_R1Q2)
 		{
 			cl.surpressCount = (data & 0x0F);
 			extraflags |= (data & 0xF0) >> 4;
@@ -1285,7 +1285,7 @@ void CL_ParseFrame (int extrabits)
 	MSG_ReadData (&net_message, &cl.frame.areabits, len);
 
 	// read playerinfo
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol != PROTOCOL_R1Q2)
 	{
 		cmd = MSG_ReadByte (&net_message);
 		SHOWNET(svc_strings[cmd]);
@@ -1296,7 +1296,7 @@ void CL_ParseFrame (int extrabits)
 	CL_ParsePlayerstate (old, &cl.frame, extraflags);
 
 	// read packet entities
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol != PROTOCOL_R1Q2)
 	{
 		cmd = MSG_ReadByte (&net_message);
 		SHOWNET(svc_strings[cmd]);
@@ -1307,7 +1307,7 @@ void CL_ParseFrame (int extrabits)
 	CL_ParsePacketEntities (old, &cl.frame);
 
 	//r1: now write protocol 34 compatible delta from our localstate for demo.
-	if (cls.demorecording && cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
+	if (cls.demorecording && cls.serverProtocol != PROTOCOL_ORIGINAL)
 	{
 		sizebuf_t	fakeMsg;
 		byte		fakeDemoFrame[1300];
@@ -1362,7 +1362,7 @@ void CL_ParseFrame (int extrabits)
 			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125f;
 			cl.predicted_origin[1] = cl.frame.playerstate.pmove.origin[1]*0.125f;
 			cl.predicted_origin[2] = cl.frame.playerstate.pmove.origin[2]*0.125f;
-			VectorCopy (cl.frame.playerstate.viewangles, cl.predicted_angles);
+			FastVectorCopy (cl.frame.playerstate.viewangles, cl.predicted_angles);
 			if (cls.disable_servercount != cl.servercount
 				&& cl.refresh_prepped)
 				SCR_EndLoadingPlaque ();	// get rid of loading plaque
@@ -1568,8 +1568,8 @@ static void CL_AddPacketEntities (const frame_t *frame)
 			}
 			else
 			{
-				VectorCopy (cent->current.origin, ent.origin);
-				VectorCopy (cent->current.old_origin, ent.oldorigin);
+				FastVectorCopy (cent->current.origin, ent.origin);
+				FastVectorCopy (cent->current.old_origin, ent.oldorigin);
 			}
 		}
 		else
@@ -1968,7 +1968,7 @@ static void CL_AddPacketEntities (const frame_t *frame)
 			}
 		}
 
-		VectorCopy (ent.origin, cent->lerp_origin);
+		FastVectorCopy (ent.origin, cent->lerp_origin);
 	}
 }
 
@@ -2027,7 +2027,7 @@ static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new
 
 	gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
 	gun.backlerp = 1.0f - cl.lerpfrac;
-	VectorCopy (gun.origin, gun.oldorigin);	// don't lerp at all
+	FastVectorCopy (gun.origin, gun.oldorigin);	// don't lerp at all
 	V_AddEntity (&gun);
 }
 
@@ -2114,12 +2114,12 @@ static void CL_CalcViewValues (void)
 		}
 		else
 		{
-			VectorCopy (cl.predicted_angles, cl.refdef.viewangles);
+			FastVectorCopy (cl.predicted_angles, cl.refdef.viewangles);
 		}
 	}
 	else if ( cl.frame.playerstate.pmove.pm_type < PM_DEAD)
 	{	// use predicted values
-		VectorCopy (cl.predicted_angles, cl.refdef.viewangles);
+		FastVectorCopy (cl.predicted_angles, cl.refdef.viewangles);
 	}
 	else
 	{	// just use interpolated values
@@ -2250,7 +2250,7 @@ void CL_GetEntityOrigin (int ent, vec3_t origin)
 	// Player entity
 	if (ent == cl.playernum + 1)
 	{
-		VectorCopy (cl.refdef.vieworg, origin);
+		FastVectorCopy (cl.refdef.vieworg, *origin);
 		return;
 	}
 

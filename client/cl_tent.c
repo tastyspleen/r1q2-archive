@@ -233,6 +233,9 @@ void CL_ClearTEnts (void)
 	memset (cl_playerbeams, 0, sizeof(cl_playerbeams));
 	memset (cl_sustains, 0, sizeof(cl_sustains));
 //ROGUE
+
+	//r1: reset dynamically loaded models
+	cl_mod_heatbeam = cl_mod_explo4_big = cl_mod_lightning = NULL;
 }
 
 /*
@@ -280,7 +283,7 @@ void CL_SmokeAndFlash(vec3_t origin)
 	explosion_t	*ex;
 
 	ex = CL_AllocExplosion ();
-	VectorCopy (origin, ex->ent.origin);
+	FastVectorCopy (*origin, ex->ent.origin);
 	ex->type = ex_misc;
 	ex->frames = 4;
 	ex->ent.flags = RF_TRANSLUCENT;
@@ -288,7 +291,7 @@ void CL_SmokeAndFlash(vec3_t origin)
 	ex->ent.model = cl_mod_smoke;
 
 	ex = CL_AllocExplosion ();
-	VectorCopy (origin, ex->ent.origin);
+	FastVectorCopy (*origin, ex->ent.origin);
 	ex->type = ex_flash;
 	ex->ent.flags = RF_FULLBRIGHT;
 	ex->frames = 2;
@@ -344,8 +347,8 @@ void CL_ParseBeam (struct model_s *model)
 			//b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
 			VectorClear (b->offset);
 			return;
 		}
@@ -359,8 +362,8 @@ void CL_ParseBeam (struct model_s *model)
 			b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
 			VectorClear (b->offset);
 			return;
 		}
@@ -396,9 +399,9 @@ void CL_ParseBeam2 (struct model_s *model)
 			//b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
-			VectorCopy (offset, b->offset);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
+			FastVectorCopy (offset, b->offset);
 			return;
 		}
 	}
@@ -411,9 +414,9 @@ void CL_ParseBeam2 (struct model_s *model)
 			b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;	
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
-			VectorCopy (offset, b->offset);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
+			FastVectorCopy (offset, b->offset);
 			return;
 		}
 	}
@@ -479,9 +482,9 @@ void CL_ParsePlayerBeam (int tempent)
 			//b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 200;
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
-			VectorCopy (offset, b->offset);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
+			FastVectorCopy (offset, b->offset);
 			return;
 		}
 	}
@@ -494,9 +497,9 @@ void CL_ParsePlayerBeam (int tempent)
 			b->entity = ent;
 			b->model = model;
 			b->endtime = cl.time + 100;		// PMM - this needs to be 100 to prevent multiple heatbeams
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
-			VectorCopy (offset, b->offset);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
+			FastVectorCopy (offset, b->offset);
 			return;
 		}
 	}
@@ -532,8 +535,8 @@ int CL_ParseLightning (struct model_s *model)
 			//b->dest_entity = destEnt;
 			b->model = model;
 			b->endtime = cl.time + 200;
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
 			VectorClear (b->offset);
 			return srcEnt;
 		}
@@ -548,8 +551,8 @@ int CL_ParseLightning (struct model_s *model)
 			b->dest_entity = destEnt;
 			b->model = model;
 			b->endtime = cl.time + 200;
-			VectorCopy (start, b->start);
-			VectorCopy (end, b->end);
+			FastVectorCopy (start, b->start);
+			FastVectorCopy (end, b->end);
 			VectorClear (b->offset);
 			return srcEnt;
 		}
@@ -573,8 +576,8 @@ void CL_ParseLaser (int colors, vec3_t start, vec3_t end)
 		if (l->endtime < cl.time)
 		{
 			l->ent.flags = RF_TRANSLUCENT | RF_BEAM;
-			VectorCopy (start, l->ent.origin);
-			VectorCopy (end, l->ent.oldorigin);
+			FastVectorCopy (*start, l->ent.origin);
+			FastVectorCopy (*end, l->ent.oldorigin);
 			l->ent.alpha = 0.30f;
 			l->ent.skinnum = (colors >> ((randomMT() % 4)*8)) & 0xff;
 			l->ent.model = NULL;
@@ -758,8 +761,8 @@ void CL_Gibs (vec3_t origin)
 
 		le->ent.model = le_mod_gibs;
 
-		VectorCopy (origin, le->ent.origin);
-		VectorCopy (origin, le->ent.oldorigin);
+		FastVectorCopy (*origin, le->ent.origin);
+		FastVectorCopy (*origin, le->ent.oldorigin);
 
 		le->velocity[0] = crand() * 15;
 		le->velocity[1] = crand() * 15;
@@ -786,8 +789,8 @@ void CL_ExplosionDebris (vec3_t origin)
 
 			le->ent.model = le_mod_debris1;
 
-			VectorCopy (origin, le->ent.origin);
-			VectorCopy (origin, le->ent.oldorigin);
+			FastVectorCopy (*origin, le->ent.origin);
+			FastVectorCopy (*origin, le->ent.oldorigin);
 
 			le->velocity[0] = crand() * 25;
 			le->velocity[1] = crand() * 25;
@@ -922,7 +925,7 @@ void CL_ParseTEnt (void)
 		CL_BlasterParticles (pos, dir);
 
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->ent.angles[0] = (float)acos(dir[2])/M_PI*180;
 	// PMM - fixed to correct for pitch of 0
 		if (dir[0])
@@ -988,7 +991,7 @@ void CL_ParseTEnt (void)
 		MSG_ReadPos (&net_message, pos);
 
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->start = cl.frame.servertime - 100.0f;
@@ -1011,7 +1014,7 @@ void CL_ParseTEnt (void)
 	case TE_PLASMA_EXPLOSION:
 		MSG_ReadPos (&net_message, pos);
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->start = cl.frame.servertime - 100.0f;
@@ -1021,7 +1024,7 @@ void CL_ParseTEnt (void)
 		ex->lightcolor[2] = 0.5;
 		ex->ent.angles[1] = (float)(randomMT() % 360);
 		ex->ent.model = cl_mod_explo4;
-		if (frand() < 0.5)
+		if (frand() < 0.5f)
 			ex->baseframe = 15;
 		ex->frames = 15;
 		CL_ExplosionParticles (pos);
@@ -1036,7 +1039,7 @@ void CL_ParseTEnt (void)
 		MSG_ReadPos (&net_message, pos);
 
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->start = cl.frame.servertime - 100.0f;
@@ -1059,7 +1062,7 @@ void CL_ParseTEnt (void)
 			}
 			ex->ent.model = cl_mod_explo4_big;
 		}
-		if (frand() < 0.5)
+		if (frand() < 0.5f)
 			ex->baseframe = 15;
 		ex->frames = 15;
 		if ((type != TE_EXPLOSION1_BIG) && (type != TE_EXPLOSION1_NP))		// PMM
@@ -1075,7 +1078,7 @@ void CL_ParseTEnt (void)
 	case TE_BFG_EXPLOSION:
 		MSG_ReadPos (&net_message, pos);
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->start = cl.frame.servertime - 100.0f;
@@ -1130,7 +1133,7 @@ void CL_ParseTEnt (void)
 		CL_ParticleEffect2 (pos, dir, color, cnt);
 
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->type = ex_flash;
 		// note to self
 		// we need a better no draw flag
@@ -1174,7 +1177,7 @@ void CL_ParseTEnt (void)
 			CL_BlasterParticles2 (pos, dir, 0x6f); // 75
 
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->ent.angles[0] = (float)acos(dir[2])/M_PI*180;
 	// PMM - fixed to correct for pitch of 0
 		if (dir[0])
@@ -1234,7 +1237,7 @@ void CL_ParseTEnt (void)
 		MSG_ReadPos (&net_message, pos);
 
 		ex = CL_AllocExplosion ();
-		VectorCopy (pos, ex->ent.origin);
+		FastVectorCopy (pos, ex->ent.origin);
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->start = cl.frame.servertime - 100.0f;
@@ -1244,7 +1247,7 @@ void CL_ParseTEnt (void)
 		ex->lightcolor[2] = 0.5;
 		ex->ent.angles[1] = (float)(randomMT() % 360);
 		ex->ent.model = cl_mod_explo4;
-		if (frand() < 0.5)
+		if (frand() < 0.5f)
 			ex->baseframe = 15;
 		ex->frames = 15;
 		if (type == TE_ROCKET_EXPLOSION_WATER)
@@ -1397,7 +1400,7 @@ void CL_AddBeams (void)
 		// if coming from the player, update the start position
 		if (b->entity == cl.playernum+1)	// entity 0 is the world
 		{
-			VectorCopy (cl.refdef.vieworg, b->start);
+			FastVectorCopy (cl.refdef.vieworg, b->start);
 			b->start[2] -= 22;	// adjust for view height
 		}
 		VectorAdd (b->start, b->offset, org);
@@ -1452,7 +1455,7 @@ void CL_AddBeams (void)
 		// through the tesla mine (instead it goes through the target)
 		if ((b->model == cl_mod_lightning) && (d <= model_length))
 		{
-			VectorCopy (b->end, ent.origin);
+			FastVectorCopy (b->end, ent.origin);
 			// offset to push beam outside of tesla model (negative because dist is from end to start
 			// for this beam)
 //			for (j=0 ; j<3 ; j++)
@@ -1467,7 +1470,7 @@ void CL_AddBeams (void)
 		}
 		while (FLOAT_GT_ZERO(d))
 		{
-			VectorCopy (org, ent.origin);
+			FastVectorCopy (org, ent.origin);
 			ent.model = b->model;
 			if (b->model == cl_mod_lightning)
 			{
@@ -1567,20 +1570,20 @@ void CL_AddPlayerBeams (void)
 					VectorMA (org, -1, cl.v_up, org);
 				}
 				// FIXME - take these out when final
-				VectorCopy (cl.v_right, r);
-				VectorCopy (cl.v_forward, f);
-				VectorCopy (cl.v_up, u);
+				FastVectorCopy (cl.v_right, r);
+				FastVectorCopy (cl.v_forward, f);
+				FastVectorCopy (cl.v_up, u);
 
 			}
 			else
-				VectorCopy (b->start, org);
+				FastVectorCopy (b->start, org);
 		}
 		else
 		{
 			// if coming from the player, update the start position
 			if (b->entity == cl.playernum+1)	// entity 0 is the world
 			{
-				VectorCopy (cl.refdef.vieworg, b->start);
+				FastVectorCopy (cl.refdef.vieworg, b->start);
 				b->start[2] -= 22;	// adjust for view height
 			}
 			VectorAdd (b->start, b->offset, org);
@@ -1616,7 +1619,7 @@ void CL_AddPlayerBeams (void)
 		else
 		{
 	// PMM - fixed to correct for pitch of 0
-			if (FLOAT_EQ_ZERO(dist[0]))
+			if (FLOAT_NE_ZERO(dist[0]))
 				yaw = ((float)atan2(dist[1], dist[0]) * 180 / M_PI);
 			else if (FLOAT_GT_ZERO(dist[1]))
 				yaw = 90;
@@ -1693,7 +1696,7 @@ void CL_AddPlayerBeams (void)
 		if ((b->model == cl_mod_lightning) && (d <= model_length))
 		{
 //			Com_Printf ("special case\n");
-			VectorCopy (b->end, ent.origin);
+			FastVectorCopy (b->end, ent.origin);
 			// offset to push beam outside of tesla model (negative because dist is from end to start
 			// for this beam)
 //			for (j=0 ; j<3 ; j++)
@@ -1708,7 +1711,7 @@ void CL_AddPlayerBeams (void)
 		}
 		while (FLOAT_GT_ZERO(d))
 		{
-			VectorCopy (org, ent.origin);
+			FastVectorCopy (org, ent.origin);
 			ent.model = b->model;
 			if(cl_mod_heatbeam && (b->model == cl_mod_heatbeam))
 			{
@@ -1875,7 +1878,7 @@ void CL_AddExplosions (void)
 				ex->lightcolor[0], ex->lightcolor[1], ex->lightcolor[2]);
 		}
 
-		VectorCopy (ent->origin, ent->oldorigin);
+		FastVectorCopy (ent->origin, ent->oldorigin);
 
 		if (f < 0)
 			f = 0;

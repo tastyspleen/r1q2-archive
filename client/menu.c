@@ -1154,7 +1154,7 @@ static void R1Q2_MenuInit (void)
 	s_r1q2_warning.generic.y	 = 0;
 
 	s_r1q2_warning2.generic.type = MTYPE_SEPARATOR;
-	s_r1q2_warning2.generic.name = "that you wish to be keep will need adding to a config.";
+	s_r1q2_warning2.generic.name = "that you wish to keep will need adding to a config.";
 	s_r1q2_warning2.generic.x    = 160;
 	s_r1q2_warning2.generic.y	 = 10;
 
@@ -4090,7 +4090,7 @@ static void PlayerConfig_MenuDraw( void )
 		entity.origin[0] = 80;
 		entity.origin[1] = 0;
 		entity.origin[2] = 0;
-		VectorCopy( entity.origin, entity.oldorigin );
+		FastVectorCopy( entity.origin, entity.oldorigin );
 		entity.frame = 0;
 		entity.oldframe = 0;
 		entity.backlerp = 0.0;

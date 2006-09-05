@@ -64,11 +64,26 @@ static qboolean VerifyDriver( void )
 	return true;
 }
 
+BOOL WINAPI DllMain(HINSTANCE hDll,DWORD dwReason,LPVOID lpReserved)
+{
+	switch (dwReason)
+	{
+		case DLL_PROCESS_ATTACH:
+			DisableThreadLibraryCalls (hDll);
+			glw_state.hModule = hDll;
+			break;
+	}
+
+	return TRUE;
+}
+
 /*
 ** VID_CreateWindow
 */
 #define	WINDOW_CLASS_NAME	"Quake 2"
 #define OPENGL_CLASS		"OpenGLDummyPFDWindow"
+
+static qboolean		window_class_registered = false;
 
 qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 {
@@ -78,25 +93,30 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	int				stylebits;
 	int				x, y, w, h;
 	int				exstyle;
+	
+	if (!window_class_registered)
+	{
+		/* Register the frame class */
+		wc.style         = 0;
+		wc.lpfnWndProc   = (WNDPROC)glw_state.wndproc;
+		wc.cbClsExtra    = 0;
+		wc.cbWndExtra    = 0;
+		wc.hInstance     = glw_state.hModule;
+		wc.hIcon         = 0;
+		wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
+		wc.hbrBackground = (HBRUSH)COLOR_GRAYTEXT;
+		wc.lpszMenuName  = 0;
+		wc.lpszClassName = WINDOW_CLASS_NAME;
 
-	/* Register the frame class */
-    wc.style         = 0;
-    wc.lpfnWndProc   = (WNDPROC)glw_state.wndproc;
-    wc.cbClsExtra    = 0;
-    wc.cbWndExtra    = 0;
-    wc.hInstance     = glw_state.hInstance;
-    wc.hIcon         = 0;
-    wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)COLOR_GRAYTEXT;
-    wc.lpszMenuName  = 0;
-    wc.lpszClassName = WINDOW_CLASS_NAME;
+		if (!RegisterClass (&wc) )
+			ri.Sys_Error (ERR_FATAL, "Couldn't register window class (%d)", GetLastError());
 
-    if (!RegisterClass (&wc) )
-		ri.Sys_Error (ERR_FATAL, "Couldn't register window class (%d)", GetLastError());
+		window_class_registered = true;
+	}
 
 	if (fullscreen)
 	{
-		exstyle = WS_EX_TOPMOST;
+		exstyle = 0;//WS_EX_TOPMOST;
 		stylebits = WS_POPUP|WS_VISIBLE;
 	}
 	else
@@ -136,7 +156,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		 x, y, w, h,
 		 NULL,
 		 NULL,
-		 glw_state.hInstance,
+		 glw_state.hModule,
 		 NULL);
 
 	if (!glw_state.hWnd)
@@ -154,6 +174,14 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 
 	SetForegroundWindow( glw_state.hWnd );
 	SetFocus( glw_state.hWnd );
+
+	//r1: hudscaling
+	width = (int)ceilf((float)width / gl_hudscale->value);
+	height = (int)ceilf((float)height / gl_hudscale->value);
+
+	//round to power of 8/2 to avoid blackbars
+	width = (width+7)&~7;
+	height = (height+1)&~1;
 
 	// let the sound and input subsystems know about the new window
 	ri.Vid_NewWindow (width, height);
@@ -356,8 +384,10 @@ void GLimp_Shutdown( void )
 		glw_state.log_fp = 0;
 	}
 
-	UnregisterClass (WINDOW_CLASS_NAME, glw_state.hInstance);
-	UnregisterClass (OPENGL_CLASS, glw_state.hInstance);
+	UnregisterClass (WINDOW_CLASS_NAME, glw_state.hModule);
+	UnregisterClass (OPENGL_CLASS, glw_state.hModule);
+
+	window_class_registered = false;
 
 	if ( gl_state.fullscreen )
 	{
@@ -912,10 +942,10 @@ qboolean GLimp_InitGL (void)
 	/*
 	** figure out if we're running on a minidriver or not
 	*/
-	if ( strstr( gl_driver->string, "opengl32" ) != 0 )
+	//if ( strstr( gl_driver->string, "opengl32" ) != 0 )
 		glw_state.minidriver = false;
-	else
-		glw_state.minidriver = true;
+	//else
+	//	glw_state.minidriver = true;
 
 	/*
 	** Get a DC for the specified window

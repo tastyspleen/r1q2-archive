@@ -1141,8 +1141,8 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer)
 		if (starmod->firstnode >= loadmodel->numnodes)
 			ri.Sys_Error (ERR_DROP, "Inline model %i has bad firstnode", i);
 
-		VectorCopy (bm->maxs, starmod->maxs);
-		VectorCopy (bm->mins, starmod->mins);
+		FastVectorCopy (bm->maxs, starmod->maxs);
+		FastVectorCopy (bm->mins, starmod->mins);
 		starmod->radius = bm->radius;
 	
 		if (i == 0)

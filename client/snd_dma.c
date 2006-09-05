@@ -699,7 +699,7 @@ void S_Spatialize(channel_t *ch)
 
 	if (ch->fixed_origin)
 	{
-		VectorCopy (ch->origin, origin);
+		FastVectorCopy (ch->origin, origin);
 	}
 	else
 		CL_GetEntityOrigin (ch->entnum, origin);
@@ -782,7 +782,7 @@ void S_IssuePlaysound (playsound_t *ps)
 	ch->entnum = ps->entnum;
 	ch->entchannel = ps->entchannel;
 	ch->sfx = ps->sfx;
-	VectorCopy (ps->origin, ch->origin);
+	FastVectorCopy (ps->origin, ch->origin);
 	ch->fixed_origin = ps->fixed_origin;
 
 	S_Spatialize(ch);
@@ -907,7 +907,7 @@ void S_OpenAL_StartSound (const vec3_t position, int entNum, int entChannel, sfx
 	if (position)
 	{
 		ps->fixed_origin = true;
-		VectorCopy(position, ps->origin);
+		FastVectorCopy (*position, ps->origin);
 	}
 	else
 		ps->fixed_origin = false;
@@ -968,7 +968,7 @@ void S_StartSound(vec3_t origin, int entnum, int entchannel, sfx_t *sfx, float f
 
 	if (origin)
 	{
-		VectorCopy (origin, ps->origin);
+		FastVectorCopy (*origin, ps->origin);
 		ps->fixed_origin = true;
 	}
 	else
@@ -1277,7 +1277,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 //Com_Printf ("%i < %i < %i\n", soundtime, paintedtime, s_rawend);
 	if (channels == 2 && width == 2)
 	{
-		if (scale == 1.0)
+		if (scale == 1.0f)
 		{	// optimized case
 			for (i=0 ; i<samples ; i++)
 			{
@@ -1581,7 +1581,7 @@ static void S_OpenAL_IssuePlaySounds (void)
 
 		ch->loopSound = false;
 		ch->fixedPosition = ps->fixed_origin;
-		VectorCopy(ps->origin, ch->position);
+		FastVectorCopy (ps->origin, ch->position);
 		ch->volume = ps->volume;
 
 		if (ps->attenuation != ATTN_NONE)
@@ -1747,10 +1747,10 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 	}
 #endif
 
-	VectorCopy(origin, listener_origin);
-	VectorCopy(forward, listener_forward);
-	VectorCopy(right, listener_right);
-	VectorCopy(up, listener_up);
+	FastVectorCopy (*origin, listener_origin);
+	FastVectorCopy (*forward, listener_forward);
+	FastVectorCopy (*right, listener_right);
+	FastVectorCopy (*up, listener_up);
 
 	// rebuild scale tables if volume is modified
 	if (s_volume->modified)

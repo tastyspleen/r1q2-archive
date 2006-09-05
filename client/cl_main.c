@@ -196,7 +196,7 @@ void CL_WriteDemoMessageFull (void)
 
 void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 {
-	if (!cls.demorecording || cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (!cls.demorecording || cls.serverProtocol == PROTOCOL_ORIGINAL)
 		return;
 
 	if (forceFlush)
@@ -225,7 +225,7 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 		SZ_Write (&cl.demoBuff, buff, len);
 }
 
-void CL_DemoDeltaEntity (entity_state_t *from, entity_state_t *to, qboolean force, qboolean newentity);
+void CL_DemoDeltaEntity (const entity_state_t *from, const entity_state_t *to, qboolean force, qboolean newentity);
 qboolean CL_BeginRecording (char *name)
 {
 	byte	buf_data[1390];
@@ -233,6 +233,8 @@ qboolean CL_BeginRecording (char *name)
 	int		i;
 	int		len;
 	entity_state_t	*ent;
+
+	FS_CreatePath (name);
 
 	cls.demofile = fopen (name, "wb");
 
@@ -245,7 +247,7 @@ qboolean CL_BeginRecording (char *name)
 	cls.demowaiting = true;
 
 	// inform server we need to receive more data
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_R1Q2)
 	{
 		MSG_BeginWriting (clc_setting);
 		MSG_WriteShort (CLSET_RECORDING);
@@ -258,21 +260,21 @@ qboolean CL_BeginRecording (char *name)
 	//
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
 
-	//if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	//if (cls.serverProtocol == PROTOCOL_ORIGINAL)
 	//	buf.maxsize = 1390;
 
 	// send the serverdata
 	MSG_BeginWriting (svc_serverdata);
-	MSG_WriteLong (ORIGINAL_PROTOCOL_VERSION);
+	MSG_WriteLong (PROTOCOL_ORIGINAL);
 	MSG_WriteLong (0x10000 + cl.servercount);
 	MSG_WriteByte (1);	// demos are always attract loops
 	MSG_WriteString (cl.gamedir);
 	MSG_WriteShort (cl.playernum);
 	MSG_WriteString (cl.configstrings[CS_NAME]);
-	/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	/*if (cls.serverProtocol == PROTOCOL_R1Q2)
 	{
 		MSG_WriteByte (cl.enhancedServer);
-		MSG_WriteShort (CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+		MSG_WriteShort (MINOR_VERSION_R1Q2);
 		MSG_WriteByte (cl.advancedDeltas);
 	}*/
 	MSG_EndWriting (&buf);
@@ -342,7 +344,7 @@ void CL_EndRecording(void)
 	fclose (cls.demofile);
 
 	// inform server we are done with extra data
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_R1Q2)
 	{
 		MSG_BeginWriting (clc_setting);
 		MSG_WriteShort (CLSET_RECORDING);
@@ -505,7 +507,7 @@ void CL_Record_f (void)
 	}
 	else
 	{
-		/*if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		/*if (cls.serverProtocol == PROTOCOL_R1Q2)
 		{
 			//make it a bit more obvious for the bleeding idiots out there
 			//Com_Printf ("WARNING: Demos recorded at cl_protocol 35 are not guaranteed to replay properly!\n", LOG_CLIENT);
@@ -752,11 +754,11 @@ void CL_SendConnectPacket (int useProtocol)
 			else if (useProtocol)
 				cls.serverProtocol = useProtocol;
 			else
-				cls.serverProtocol = ENHANCED_PROTOCOL_VERSION;
+				cls.serverProtocol = PROTOCOL_R1Q2;
 		}
 	}
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_R1Q2)
 		port &= 0xFF;
 
 	cls.quakePort = port;
@@ -767,7 +769,7 @@ void CL_SendConnectPacket (int useProtocol)
 	//    other engine mods which may or may not extend this.
 
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_R1Q2)
 		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\" %u\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), msglen);
 	else
 		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
@@ -1098,7 +1100,6 @@ void CL_ClearState (void)
 	cl.maxclients = MAX_CLIENTS;
 	SZ_Clear (&cls.netchan.message);
 
-
 	SZ_Init (&cl.demoBuff, cl.demoFrame, sizeof(cl.demoFrame));
 	cl.demoBuff.allowoverflow = true;
 
@@ -1115,7 +1116,7 @@ This is also called on Com_Error, so it shouldn't cause any errors
 */
 void CL_Disconnect (qboolean skipdisconnect)
 {
-	byte	final[32];
+	byte	final[16];
 
 	if (cls.state == ca_disconnected)
 		return;
@@ -1127,7 +1128,7 @@ void CL_Disconnect (qboolean skipdisconnect)
 		time = Sys_Milliseconds () - cl.timedemo_start;
 		if (time > 0)
 			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", LOG_CLIENT, cl.timedemo_frames,
-			time/1000.0, cl.timedemo_frames*1000.0 / time);
+			time/1000.0f, cl.timedemo_frames*1000.0f / time);
 	}
 
 	VectorClear (cl.refdef.blend);
@@ -1432,8 +1433,8 @@ void CL_PingServers_f (void)
 		}
 		if (!adr.port)
 			adr.port = ShortSwap(PORT_SERVER);
-		//Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", ENHANCED_PROTOCOL_VERSION));
-		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "info %i\n", ORIGINAL_PROTOCOL_VERSION);
+		//Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", PROTOCOL_R1Q2));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "info %i\n", PROTOCOL_ORIGINAL);
 	}
 }
 
@@ -1549,8 +1550,11 @@ safe:
 	// server connection
 	if (!strcmp(c, "client_connect"))
 	{
-		int		i;
-		char	*buff, *p;
+#ifdef ANTICHEAT
+		qboolean	try_to_use_anticheat;
+#endif
+		int			i;
+		char		*buff, *p;
 
 		if (cls.state == ca_connected)
 		{
@@ -1574,6 +1578,10 @@ safe:
 
 		buff = NET_AdrToString(&cls.netchan.remote_address);
 
+#ifdef ANTICHEAT
+		try_to_use_anticheat = false;
+#endif
+
 		for (i = 1; i < Cmd_Argc(); i++)
 		{
 			p = Cmd_Argv(i);
@@ -1588,11 +1596,39 @@ safe:
 #else
 				Com_Printf ("HTTP downloading supported by server but this client was built without USE_CURL, bad luck.\n", LOG_CLIENT);
 #endif
-				break;
-
 			}
+#ifdef ANTICHEAT
+			else if (!strncmp (p, "ac=", 3))
+			{
+				p+= 3;
+				if (!p[0])
+					continue;
+				if (atoi (p))
+					try_to_use_anticheat = true;
+			}
+#endif
 		}
 
+		//note, not inside the loop as we could potentially clobber cmd_argc/cmd_argv
+#ifdef ANTICHEAT
+		if (try_to_use_anticheat)
+		{
+			MSG_WriteByte (clc_nop);
+			MSG_EndWriting (&cls.netchan.message);
+			Netchan_Transmit (&cls.netchan, 0, NULL);
+			S_StopAllSounds ();
+			con.ormask = 128;
+			Com_Printf("\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n", LOG_CLIENT);
+			Com_Printf ("Loading anticheat, this may take a few moments...\n", LOG_GENERAL);
+			Com_Printf("\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n", LOG_CLIENT);
+			con.ormask = 0;
+			SCR_UpdateScreen ();
+			SCR_UpdateScreen ();
+			SCR_UpdateScreen ();
+			if (!Sys_GetAntiCheatAPI ())
+				Com_Printf ("anticheat failed to load, trying to connect without it.\n", LOG_GENERAL);
+		}
+#endif
 		p = strchr (buff, ':');
 		if (p)
 			p[0] = 0;
@@ -1753,10 +1789,10 @@ safe:
 				if (!strstr (s, "full") &&
 					!strstr (s, "locked") &&
 					!strncmp (s, "Server is ", 10) &&
-					cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
+					cls.serverProtocol != PROTOCOL_ORIGINAL)
 				{
-					Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, ORIGINAL_PROTOCOL_VERSION);
-					cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+					Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, PROTOCOL_ORIGINAL);
+					cls.serverProtocol = PROTOCOL_ORIGINAL;
 					//force immediate retry
 					cls.connect_time = -99999;
 
@@ -1780,7 +1816,7 @@ safe:
 	// challenge from the server we are connecting to
 	if (!strcmp(c, "challenge"))
 	{
-		int		protocol = ORIGINAL_PROTOCOL_VERSION;
+		int		protocol = PROTOCOL_ORIGINAL;
 		int		i;
 		char	*p;
 
@@ -1798,7 +1834,7 @@ safe:
 				for (;;)
 				{
 					i = atoi (p);
-					if (i == ENHANCED_PROTOCOL_VERSION)
+					if (i == PROTOCOL_R1Q2)
 						protocol = i;
 					p = strchr(p, ',');
 					if (!p)
@@ -1809,17 +1845,6 @@ safe:
 				}
 				break;
 			}
-#ifdef ANTICHEAT
-			else if (!strncmp (p, "ac=", 3))
-			{
-				p+= 3;
-				if (!p[0])
-					continue;
-				i = atoi (p);
-				if (i)
-					Sys_GetAntiCheatAPI ();
-			}
-#endif
 		}
 
 		//r1: reset the timer so we don't send dup. getchallenges
@@ -1913,7 +1938,7 @@ void CL_ReadPackets (void)
 		// we don't know if it is ok to save a demo message until
 		// after we have parsed the frame
 		//
-		if (cls.demorecording && !cls.demowaiting && cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+		if (cls.demorecording && !cls.demowaiting && cls.serverProtocol == PROTOCOL_ORIGINAL)
 			CL_WriteDemoMessageFull ();
 	}
 
@@ -2049,7 +2074,6 @@ void CL_FreeLocs (void)
 		{
 			Z_Free (old->name);
 			Z_Free (old);
-			old = NULL;
 		}
 		old = loc;
 	}
@@ -2257,7 +2281,7 @@ void CL_AddLoc_f (void)
 
 	newentry = Z_TagMalloc (sizeof(*loc), TAGMALLOC_CLIENT_LOC);
 	newentry->name = CopyString (Cmd_Args(), TAGMALLOC_CLIENT_LOC);
-	VectorCopy (cl.refdef.vieworg, newentry->location);
+	FastVectorCopy (cl.refdef.vieworg, newentry->location);
 	newentry->next = last;
 	loc->next = newentry;
 
@@ -2316,7 +2340,7 @@ const char *CL_Get_Loc_There (void)
 
 	tr = CM_BoxTrace (cl.refdef.vieworg, end, vec3_origin, vec3_origin, 0, MASK_SOLID);
 
-	if (tr.fraction != 1.0)
+	if (tr.fraction != 1.0f)
 		return CL_Loc_Get (tr.endpos);
 
 	return CL_Loc_Get (end);
@@ -2360,7 +2384,7 @@ const char *CL_Get_Loc_Here (void)
 
 					tr = CM_BoxTrace (cl.refdef.vieworg, end, vec3_origin, vec3_origin, 0, MASK_SOLID);
 
-					if (tr.fraction != 1.0)
+					if (tr.fraction != 1.0f)
 						location_name = CL_Loc_Get (tr.endpos);
 					else
 						location_name = CL_Loc_Get (end);
@@ -2946,13 +2970,16 @@ skipplayer:;
 		COM_StripExtension (cl.configstrings[CS_MODELS+1], mapname);
 
 		Com_sprintf (autorecord_name, sizeof(autorecord_name), "%s/demos/%s-%s.dm2", FS_Gamedir(), time_buff, mapname + 5);
-		Com_Printf ("Auto-recording to %s.\n", LOG_CLIENT, autorecord_name);
-		CL_BeginRecording (autorecord_name);
+		
+		if (CL_BeginRecording (autorecord_name))
+			Com_Printf ("Auto-recording to %s.\n", LOG_CLIENT, autorecord_name);
+		else
+			Com_Printf ("Couldn't auto-record to %s.\n", LOG_CLIENT, autorecord_name);
 	}
 
 	CL_FixCvarCheats();
 
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_R1Q2)
 	{
 		MSG_BeginWriting (clc_setting);
 		MSG_WriteShort (CLSET_NOGUN);
@@ -3220,7 +3247,7 @@ void _cl_http_max_connections_changed (cvar_t *c, char *old, char *new)
 
 void _gun_changed (cvar_t *c, char *old, char *new)
 {
-	if (cls.state >= ca_connected && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.state >= ca_connected && cls.serverProtocol == PROTOCOL_R1Q2)
 	{
 		MSG_BeginWriting (clc_setting);
 		MSG_WriteShort (CLSET_NOGUN);
@@ -3228,15 +3255,6 @@ void _gun_changed (cvar_t *c, char *old, char *new)
 		MSG_EndWriting (&cls.netchan.message);
 	}
 }
-
-#ifdef _DEBUG
-void CL_LoadAntiCheat_f (void)
-{
-	Com_Printf ("Loading anticheat module. Please wait, this may take a few moments...\n", LOG_GENERAL);
-	SCR_UpdateScreen ();
-	Sys_GetAntiCheatAPI ();
-}
-#endif
 
 /*
 =================
@@ -3423,7 +3441,6 @@ void CL_InitLocal (void)
 #ifdef _DEBUG
 	Cmd_AddCommand ("packet", CL_Packet_f);
 	Cmd_AddCommand ("spam", CL_Spam_f);
-	Cmd_AddCommand ("initanticheat", CL_LoadAntiCheat_f);
 #endif
 
 #ifdef CLIENT_DLL
@@ -3628,6 +3645,8 @@ void LE_RunLocalEnts (void);
 //CL_RefreshInputs
 //jec - updates all input events
 
+void IN_Commands (void);
+
 void CL_RefreshCmd (void);
 void CL_RefreshInputs (void)
 {
@@ -3739,8 +3758,8 @@ void CL_Synchronous_Frame (int msec)
 
 	extratime = 0;
 #if 0
-	if (cls.frametime > (1.0 / cl_minfps->value))
-		cls.frametime = (1.0 / cl_minfps->value);
+	if (cls.frametime > (1.0f / cl_minfps->value))
+		cls.frametime = (1.0f / cl_minfps->value);
 #else
 	if (cls.frametime > (1.0f / 5))
 		cls.frametime = (1.0f / 5);

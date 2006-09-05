@@ -460,7 +460,7 @@ void CL_ParseMuzzleFlash2 (void)
 	origin[2] = cl_entities[ent].current.origin[2] + forward[2] * monster_flash_offset[flash_number][0] + right[2] * monster_flash_offset[flash_number][1] + monster_flash_offset[flash_number][2];
 
 	dl = CL_AllocDlight (ent, false);
-	VectorCopy (origin,  dl->origin);
+	FastVectorCopy (origin,  dl->origin);
 	dl->radius = 200.0f + (randomMT()&31);
 	//dl->minlight = 32;
 	dl->die = cl.time;	// + 0.1;
@@ -921,7 +921,10 @@ void CL_ClearParticles (int num)
 	active_particles = NULL;
 
 	for (i=0 ;i < num; i++)
+	{
 		particles[i].next = &particles[i+1];
+		particles[i].color = 123456789;
+	}
 
 	particles[num-1].next = NULL;
 }
@@ -942,6 +945,9 @@ void CL_ParticleEffect (vec3_t org, vec3_t dir, int color, int count)
 	float		time;
 
 	time = (float)cl.time;
+
+	if (color > 248 || color < 0)
+		Com_Error (ERR_DROP, "CL_ParticleEffect: bad color %d", color);
 
 	for (i=0 ; i<count ; i++)
 	{
@@ -985,6 +991,9 @@ void CL_ParticleEffect2 (vec3_t org, vec3_t dir, int color, int count)
 
 	time = (float)cl.time;
 
+	if (color > 255 || color < 0)
+		Com_Error (ERR_DROP, "CL_ParticleEffect2: bad color %d", color);
+
 	for (i=0 ; i<count ; i++)
 	{
 		if (!free_particles)
@@ -1027,6 +1036,9 @@ void CL_ParticleEffect3 (vec3_t org, vec3_t dir, int color, int count)
 	float		time;
 
 	time = (float)cl.time;
+
+	if (color > 255 || color < 0)
+		Com_Error (ERR_DROP, "CL_ParticleEffect3: bad color %d", color);
 
 	for (i=0 ; i<count ; i++)
 	{
@@ -1341,7 +1353,7 @@ void CL_BlasterTrail (vec3_t start, vec3_t end)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = (int)VectorNormalize (vec);
 
@@ -1395,7 +1407,7 @@ void CL_QuadTrail (vec3_t start, vec3_t end)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = (int)VectorNormalize (vec);
 
@@ -1449,12 +1461,15 @@ void CL_FlagTrail (vec3_t start, vec3_t end, int color)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = (int)VectorNormalize (vec);
 
 	dec = 5;
 	VectorScale (vec, 5, vec);
+
+	if (color > 255 || color < 0)
+		Com_Error (ERR_DROP, "CL_FlagTrail: bad color %d", color);
 
 	while (len > 0)
 	{
@@ -1505,7 +1520,7 @@ void CL_DiminishingTrail (vec3_t start, vec3_t end, centity_t *old, int flags)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
@@ -1631,7 +1646,7 @@ void CL_RocketTrail (vec3_t start, vec3_t end, centity_t *old)
 	CL_DiminishingTrail (start, end, old, EF_ROCKET);
 
 	// fire
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = (int)VectorNormalize (vec);
 
@@ -1691,7 +1706,10 @@ void CL_RailTrail (vec3_t start, vec3_t end, byte clr)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	if (clr > 255-7)
+		Com_Error (ERR_DROP, "CL_RailTrail: bad color %d", clr);
+
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
@@ -1731,7 +1749,7 @@ void CL_RailTrail (vec3_t start, vec3_t end, byte clr)
 
 	dec = 0.75;
 	VectorScale (vec, dec, vec);
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 
 	while (FLOAT_GT_ZERO(len))
 	{
@@ -1781,7 +1799,7 @@ void CL_IonripperTrail (vec3_t start, vec3_t ent)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (ent, start, vec);
 	len = (int)VectorNormalize (vec);
 
@@ -1847,7 +1865,7 @@ void CL_BubbleTrail (vec3_t start, vec3_t end)
 
 	time = (float)cl.time;
 
-	VectorCopy (start, move);
+	FastVectorCopy (*start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
@@ -2051,6 +2069,11 @@ void CL_BfgParticles (entity_t *ent)
 		VectorSubtract (p->org, ent->origin, v);
 		dist = VectorLength(v) / 90.0f;
 		p->color = (int)floor (0xd0 + dist * 7);
+		if (p->color > 255)
+		{
+			Com_Printf ("Warning, capped particle color %d in CL_BfgParticles\n", LOG_GENERAL, p->color);
+			p->color = 255;
+		}
 		//p->colorvel = 0;
 
 		p->alpha = 1.0f - dist;
@@ -2079,11 +2102,11 @@ void CL_TrapParticles (entity_t *ent)
 	time = (float)cl.time;
 
 	ent->origin[2]-=14;
-	VectorCopy (ent->origin, start);
-	VectorCopy (ent->origin, end);
+	FastVectorCopy (ent->origin, start);
+	FastVectorCopy (ent->origin, end);
 	end[2]+=64;
 
-	VectorCopy (start, move);
+	FastVectorCopy (start, move);
 	VectorSubtract (end, start, vec);
 	len = (int)VectorNormalize (vec);
 
@@ -2131,7 +2154,7 @@ void CL_TrapParticles (entity_t *ent)
 
 	
 	ent->origin[2]+=14;
-	VectorCopy (ent->origin, org);
+	FastVectorCopy (ent->origin, org);
 
 
 	for (i=-2 ; i<=2 ; i+=4)

@@ -280,8 +280,8 @@ void EXPORT PF_setmodel (edict_t *ent, const char *name)
 	if (name[0] == '*')
 	{
 		mod = CM_InlineModel (name);
-		VectorCopy (mod->mins, ent->mins);
-		VectorCopy (mod->maxs, ent->maxs);
+		FastVectorCopy (mod->mins, ent->mins);
+		FastVectorCopy (mod->maxs, ent->maxs);
 		SV_LinkEdict (ent);
 	}
 
@@ -427,7 +427,7 @@ fixed:
 		}
 		else if (index == CS_NAME)
 		{
-			//some map names overflow this - ill allow for one index overflow since
+			//some map names overflow this - i allow for one index overflow since
 			//its only the cd audio that gets overwritten and seriously, how many maps set cd
 			//audio to something other than 0?
 			if (length > (sizeof(sv.configstrings[0]) * (CS_SKY-CS_NAME))-1)
@@ -690,7 +690,7 @@ void EXPORT SV_Pmove (pmove_t *pm)
 	memcpy (&epm, pm, sizeof(pmove_t));
 
 	//r1ch: allow non-client calls of this function
-	if (sv_client && sv_client->protocol == ENHANCED_PROTOCOL_VERSION)
+	if (sv_client && sv_client->protocol == PROTOCOL_R1Q2)
 	{
 		if (pm->s.pm_type == PM_SPECTATOR)
 		epm.multiplier = 2;

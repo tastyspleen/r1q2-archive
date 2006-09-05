@@ -187,7 +187,7 @@ trace_t		EXPORT CL_PMTrace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end)
 
 	// check against world
 	t = CM_BoxTrace (start, end, mins, maxs, 0, MASK_PLAYERSOLID);//(CONTENTS_SOLID|CONTENTS_PLAYERCLIP|CONTENTS_WINDOW|CONTENTS_MONSTER|CONTENTS_DEADMONSTER));
-	if (t.fraction < 1.0)
+	if (t.fraction < 1.0f)
 		t.ent = (struct edict_s *)1;
 
 	// check all other solid models
@@ -293,8 +293,8 @@ void CL_PredictMovement (void)
 
 	if (cl.enhancedServer)
 	{
-		VectorCopy (cl.frame.playerstate.mins, pm.mins);
-		VectorCopy (cl.frame.playerstate.maxs, pm.maxs);
+		FastVectorCopy (cl.frame.playerstate.mins, pm.mins);
+		FastVectorCopy (cl.frame.playerstate.maxs, pm.maxs);
 	}
 	else
 	{
@@ -302,7 +302,7 @@ void CL_PredictMovement (void)
 		VectorSet (pm.maxs,  16,  16, 32);
 	}
 
-	if (pm.s.pm_type == PM_SPECTATOR && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (pm.s.pm_type == PM_SPECTATOR && cls.serverProtocol == PROTOCOL_R1Q2)
 		pm.multiplier = 2;
 	else
 		pm.multiplier = 1;
@@ -393,5 +393,5 @@ void CL_PredictMovement (void)
 	cl.predicted_origin[1] = pm.s.origin[1]*0.125f;
 	cl.predicted_origin[2] = pm.s.origin[2]*0.125f;
 
-	VectorCopy (pm.viewangles, cl.predicted_angles);
+	FastVectorCopy (pm.viewangles, cl.predicted_angles);
 }

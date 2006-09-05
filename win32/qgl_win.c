@@ -418,6 +418,16 @@ void ( APIENTRY * qglClientActiveTextureARB) ( GLenum );
 void ( APIENTRY * qglPointParameterfARB) (GLenum, GLfloat);
 void ( APIENTRY * qglPointParameterfvARB) (GLenum, const GLfloat *);
 
+void  (APIENTRY *qglGenQueriesARB) (GLsizei, GLuint *);
+void (APIENTRY *qglDeleteQueriesARB) (GLsizei, const GLuint *);
+GLboolean (APIENTRY *qglIsQueryARB) (GLuint);
+void (APIENTRY *qglBeginQueryARB) (GLenum, GLuint);
+void (APIENTRY *qglEndQueryARB) (GLenum);
+void (APIENTRY *qglGetQueryivARB) (GLenum, GLenum, GLint *);
+void (APIENTRY *qglGetQueryObjectivARB) (GLuint, GLenum, GLint *);
+void (APIENTRY *qglGetQueryObjectuivARB) (GLuint, GLenum, GLuint *);
+
+
 /*static void ( APIENTRY * dllAccum )(GLenum op, GLfloat value);
 static void ( APIENTRY * dllAlphaFunc )(GLenum func, GLclampf ref);
 GLboolean ( APIENTRY * dllAreTexturesResident )(GLsizei n, const GLuint *textures, GLboolean *residences);
@@ -1107,6 +1117,11 @@ void QGL_Shutdown( void )
 	qglVertexPointer             = NULL;
 	qglViewport                  = NULL;
 
+	qglGenQueriesARB			 = NULL;
+	qglGetQueryObjectivARB		 = NULL;
+	qglBeginQueryARB			 = NULL;
+	qglEndQueryARB				 = NULL;
+
 	qwglCopyContext              = NULL;
 	qwglCreateContext            = NULL;
 	qwglCreateLayerContext       = NULL;
@@ -1554,6 +1569,12 @@ qboolean QGL_Init( const char *dllname )
 	qglSelectTextureSGIS = NULL;
 	qglMTexCoord2fSGIS = NULL;
 	qglMTexCoord2fvSGIS = NULL;
+	qglBeginQueryARB = NULL;
+	qglEndQueryARB = NULL;
+	qglGenQueriesARB = NULL;
+	qglGetQueryivARB = NULL;
+	qglGetQueryObjectivARB = NULL;
+	qglGetQueryObjectuivARB = NULL;
 
 	return true;
 }

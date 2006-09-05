@@ -226,9 +226,16 @@ typedef struct client_s
 	qboolean					moved;
 
 	unsigned long				settings[CLSET_MAX];
+	unsigned					totalMsecUsed;
+	unsigned					enterFrame;
 
 #ifdef ANTICHEAT
 	qboolean					anticheat_valid;
+	qboolean					anticheat_query_sent;
+	int							anticheat_required;
+	int							anticheat_file_failures;
+	linkednamelist_t			anticheat_bad_files;
+	unsigned					anticheat_query_time;
 #endif
 } client_t;
 
@@ -639,12 +646,40 @@ const banmatch_t *VarBanMatch (varban_t *bans, const char *var, const char *resu
 extern	cvar_t	*sv_max_traces_per_frame;
 extern	unsigned int		sv_tracecount;
 
+qboolean StringIsNumeric (const char *s);
+uint32 CalcMask (int32 bits);
+
 #ifdef ANTICHEAT
+void SV_AntiCheat_WaitForInitialConnect (void);
 void SV_AntiCheat_Disconnect (void);
 qboolean SV_AntiCheat_Connect (void);
+qboolean SV_AntiCheat_IsConnected (void);
+qboolean SV_AntiCheat_Disconnect_Client (client_t *cl);
+qboolean SV_AntiCheat_QueryClient (client_t *cl);
 void SV_AntiCheat_Run (void);
-void SV_AntiCheat_Challenge (netadr_t *from, unsigned challenge);
+qboolean SV_AntiCheat_Challenge (netadr_t *from, client_t *cl);
 #define ANTICHEATMESSAGE "\220\xe1\xee\xf4\xe9\xe3\xe8\xe5\xe1\xf4\221"
 extern	cvar_t	*sv_anticheat_server_address;
 extern	cvar_t	*sv_anticheat_error_action;
+extern	cvar_t	*sv_anticheat_badfile_action;
+extern	cvar_t	*sv_anticheat_badfile_message;
+extern	cvar_t	*sv_anticheat_badfile_max;
+extern	cvar_t	*sv_anticheat_message;
+extern	int		antiCheatNumFileHashes;
+
+void SVCmd_ACList_f (void);
+void SVCmd_ACInfo_f (void);
+
+enum
+{
+	ANTICHEAT_NORMAL,
+	ANTICHEAT_REQUIRED,
+	ANTICHEAT_EXEMPT
+};
+
+extern netblock_t	anticheat_exceptions;
+extern netblock_t	anticheat_requirements;
+
 #endif
+
+void SV_ClientBegin (client_t *cl);

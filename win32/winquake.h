@@ -58,13 +58,3 @@ extern RECT		window_rect;
 
 extern	HINSTANCE	global_hInstance;
 
-#ifdef ANTICHEAT
-typedef struct
-{
-	void (*	Unload) (void);
-} anticheat_export_t;
-
-extern anticheat_export_t *anticheat;
-
-void Sys_GetAntiCheatAPI (void);
-#endif

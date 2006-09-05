@@ -715,7 +715,7 @@ void CL_SendCmd_Synchronous (void)
 
 	// save the position for a checksum byte
 	// save the position for a checksum byte
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_ORIGINAL)
 	{
 		checksumIndex = MSG_GetLength();// buf.cursize;
 		MSG_WriteByte (0);
@@ -748,7 +748,7 @@ void CL_SendCmd_Synchronous (void)
 	MSG_EndWriting (&buf);
 
 	// calculate a checksum over the move commands
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_ORIGINAL)
 	{
 		buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
 			buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
@@ -819,7 +819,7 @@ void CL_SendCmd (void)
 	MSG_WriteByte (clc_move);
 
 	// save the position for a checksum byte
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_ORIGINAL)
 	{
 		checksumIndex = MSG_GetLength();// buf.cursize;
 		MSG_WriteByte (0);
@@ -854,7 +854,7 @@ void CL_SendCmd (void)
 	MSG_EndWriting (&buf);
 
 	// calculate a checksum over the move commands
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_ORIGINAL)
 	{
 		buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
 			buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,

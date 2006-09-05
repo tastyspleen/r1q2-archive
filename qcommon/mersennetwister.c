@@ -43,16 +43,7 @@
 // It would be nice to CC: <Cokus@math.washington.edu> when you write.
 //
 
-#include <stdio.h>
-#include <stdlib.h>
-
-//
-// uint32 must be an unsigned integer type capable of holding at least 32
-// bits; exactly 32 should be fastest, but 64 is better on an Alpha with
-// GCC at -O3 optimization so try your options and see what's best for you
-//
-
-typedef unsigned long uint32;
+#include "../game/q_shared.h"
 
 #define N              (624)                 // length of state vector
 #define M              (397)                 // a period parameter

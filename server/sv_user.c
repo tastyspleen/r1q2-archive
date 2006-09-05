@@ -91,7 +91,7 @@ static void SV_CreateBaseline (client_t *cl)
 		//
 		//VectorCopy (svent->s.origin, svent->s.old_origin);
 		cl->lastlines[entnum] = svent->s;
-		VectorCopy (cl->lastlines[entnum].origin, cl->lastlines[entnum].old_origin);
+		FastVectorCopy (cl->lastlines[entnum].origin, cl->lastlines[entnum].old_origin);
 	}
 }
 
@@ -114,7 +114,7 @@ static void SV_AddConfigstrings (void)
 
 	// write a packet full of data
 #ifndef NO_ZLIB
-	if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION)
+	if (sv_client->protocol == PROTOCOL_ORIGINAL)
 #endif
 	{
 #ifndef NO_ZLIB
@@ -332,7 +332,7 @@ static void SV_New_f (void)
 
 			int		varindex;
 			int		conindex;
-			int		realIndex;
+			int		realIndex = 0;
 			int		serverIndex;
 
 			char	aliasConnect[4][8];
@@ -470,7 +470,7 @@ static void SV_New_f (void)
 	// send full levelname
 	MSG_WriteString (sv.configstrings[CS_NAME]);
 
-	if (sv_client->protocol == ENHANCED_PROTOCOL_VERSION)
+	if (sv_client->protocol == PROTOCOL_R1Q2)
 	{
 		//are we enhanced?
 #ifdef ENHANCED_SERVER
@@ -480,7 +480,7 @@ static void SV_New_f (void)
 #endif
 
 		//forced protocol breakage for 34 fallback
-		MSG_WriteShort (CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+		MSG_WriteShort (MINOR_VERSION_R1Q2);
 
 		MSG_WriteByte (0);	//was adv.deltas
 		MSG_WriteByte (sv_strafejump_hack->intvalue);
@@ -620,7 +620,7 @@ static void SV_BaselinesMessage (qboolean userCmd)
 	// write a packet full of data
 	//r1: use new per-client baselines
 #ifndef NO_ZLIB
-	if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION)
+	if (sv_client->protocol == PROTOCOL_ORIGINAL)
 #endif
 	{
 #ifndef NO_ZLIB
@@ -786,6 +786,132 @@ static void SV_BadCommand_f (void)
 	return;
 }
 
+void SV_ClientBegin (client_t *cl)
+{
+	if (!cl->versionString)
+	{
+		//r1: they didn't respond to version probe
+		Com_Printf ("WARNING: Didn't receive 'version' string from %s[%s], hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+		SV_DropClient (cl, false);
+		return;
+	}
+	else if (cl->reconnect_var[0])
+	{
+		//r1: or the reconnect cvar...
+		Com_Printf ("WARNING: Client %s[%s] didn't respond to reconnect check, hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+		SV_DropClient (cl, false);
+		return;
+	}
+	else if (cl->download)
+	{
+		//r1: they're still downloading? shouldn't be...
+		Com_Printf ("WARNING: Begin from %s[%s] while still downloading. Client dropped.\n", LOG_SERVER|LOG_WARNING, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+		SV_DropClient (cl, false);
+		return;
+	}
+
+#ifdef ANTICHEAT
+	//FIXME: make this into one big confusing statement
+	if (cl->anticheat_required != ANTICHEAT_EXEMPT)
+	{
+		if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required == ANTICHEAT_REQUIRED)
+		{
+			if (!cl->anticheat_valid)
+			{
+				if (!SV_AntiCheat_IsConnected())
+				{
+					if (sv_anticheat_error_action->intvalue == 1)
+					{
+						Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], no anticheat response (no anticheat server).\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+						SV_ClientPrintf (cl, PRINT_HIGH, "This server is unable to take new connections right now. Please try again later.\n");
+						SV_DropClient (cl, true);
+						return;
+					}
+				}
+				else
+				{
+					if (!cl->anticheat_query_sent)
+					{
+						SV_AntiCheat_QueryClient (cl);
+						return;
+					}
+					Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], no anticheat response.\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+					SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_message->string);
+					SV_DropClient (cl, true);
+					return;
+				}
+			}
+		}
+		else if (sv_require_anticheat->intvalue == 1)
+		{
+			if (!cl->anticheat_valid)
+			{
+				if (!cl->anticheat_query_sent && SV_AntiCheat_IsConnected())
+				{
+					SV_AntiCheat_QueryClient (cl);
+					return;
+				}
+			}
+		}
+	}
+#endif
+
+	cl->downloadsize = 0;
+
+	cl->state = cs_spawned;
+
+	//r1: check dll versions for struct mismatch
+	if (cl->edict->client == NULL)
+		Com_Error (ERR_HARD, "Tried to run API V4 game on a V3 server!!");
+
+	if (sv_deny_q2ace->intvalue)
+	{
+		SV_ClientPrintf (cl, PRINT_CHAT, "console: p_auth q2acedetect\r                                         \rWelcome to %s! [%d/%d players, %d minutes into game]\n", hostname->string, SV_CountPlayers(), maxclients->intvalue, (int)((float)sv.time / 1000 / 60));
+		//SV_ClientPrintf (sv_client, PRINT_CHAT, "p_auth                                                                                                                                                                                                                                                                                                                                \r                 \r");
+	}
+
+	if (svBeginStuffString[0])
+	{
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString (svBeginStuffString);
+		SV_AddMessage (cl, true);
+	}
+
+	// call the game begin function
+	ge->ClientBegin (cl->edict);
+
+#ifdef ANTICHEAT
+	if (sv_require_anticheat->intvalue)
+	{
+		if (cl->anticheat_valid)
+		{
+			if (cl->anticheat_file_failures)
+				SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s failed %d file check%s.\n", cl->name, cl->anticheat_file_failures, cl->anticheat_file_failures == 1 ? "" : "s");
+		}
+		else
+		{
+			if (cl->anticheat_required == ANTICHEAT_EXEMPT)
+				SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s is exempt from using anticheat.\n", cl->name);
+			else
+				SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s is not using anticheat.\n", cl->name);
+		}
+	}
+#endif
+
+	//give them some movement
+
+	//r1: give appropriate amount of movement, except on a givemsec frame.
+	if (sv.framenum & 15)
+		cl->commandMsec = (int)((sv_msecs->value / 16.0f) * (16 - (sv.framenum % 16)));
+
+	cl->commandMsecOverflowCount = 0;
+	cl->totalMsecUsed = 0;
+	cl->enterFrame = sv.framenum;
+
+	//r1: this is in bad place
+	//Cbuf_InsertFromDefer ();
+}
+
 /*
 ==================
 SV_Begin_f
@@ -812,66 +938,7 @@ static void SV_Begin_f (void)
 		return;
 	}
 
-	if (!sv_client->versionString)
-	{
-		//r1: they didn't respond to version probe
-		Com_Printf ("WARNING: Didn't receive 'version' string from %s[%s], hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
-		SV_DropClient (sv_client, false);
-		return;
-	}
-	else if (sv_client->reconnect_var[0])
-	{
-		//r1: or the reconnect cvar...
-		Com_Printf ("WARNING: Client %s[%s] didn't respond to reconnect check, hacked/broken client? Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
-		SV_DropClient (sv_client, false);
-		return;
-	}
-	else if (sv_client->download)
-	{
-		//r1: they're still downloading? shouldn't be...
-		Com_Printf ("WARNING: Begin from %s[%s] while still downloading. Client dropped.\n", LOG_SERVER|LOG_WARNING, sv_client->name, NET_AdrToString (&sv_client->netchan.remote_address));
-		SV_DropClient (sv_client, false);
-		return;
-	}
-
-	sv_client->downloadsize = 0;
-
-	sv_client->state = cs_spawned;
-
-	//r1: check dll versions for struct mismatch
-	if (sv_client->edict->client == NULL)
-		Com_Error (ERR_HARD, "Tried to run API V4 game on a V3 server!!");
-
-	if (sv_deny_q2ace->intvalue)
-	{
-		SV_ClientPrintf (sv_client, PRINT_CHAT, "console: p_auth q2acedetect\r                                         \rWelcome to %s! [%d/%d players, %d minutes into game]\n", hostname->string, SV_CountPlayers(), maxclients->intvalue, (int)((float)sv.time / 1000 / 60));
-		//SV_ClientPrintf (sv_client, PRINT_CHAT, "p_auth                                                                                                                                                                                                                                                                                                                                \r                 \r");
-	}
-
-	if (svBeginStuffString[0])
-	{
-		MSG_BeginWriting (svc_stufftext);
-		MSG_WriteString (svBeginStuffString);
-		SV_AddMessage (sv_client, true);
-	}
-
-	// call the game begin function
-	ge->ClientBegin (sv_player);
-
-	//give them some movement
-	//FIXME: make this msec value correct based on server framenum
-	sv_client->commandMsec = sv_msecs->intvalue;
-	sv_client->commandMsecOverflowCount = 0;
-
-#ifdef ANTICHEAT
-	if (sv_require_anticheat->intvalue == 1 || (sv_require_anticheat->intvalue && sv_anticheat_error_action->intvalue == 0))
-	{
-		if (!sv_client->anticheat_valid)
-			SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " Client '%s' is not using anticheat.\n", sv_client->name);
-	}
-#endif
-	//r1: this is in bad place
-	//Cbuf_InsertFromDefer ();
+	SV_ClientBegin (sv_client);
 }
 
 //=============================================================================
@@ -1186,7 +1253,7 @@ static void SV_BeginDownload_f(void)
 		return;
 	}
 	//r1: non-enhanced clients don't auto download a sprite's skins. this results in crash when trying to render it.
-	else if (sv_client->protocol == ORIGINAL_PROTOCOL_VERSION && length >= 4 && !Q_stricmp (name + length - 4, ".sp2"))
+	else if (sv_client->protocol == PROTOCOL_ORIGINAL && length >= 4 && !Q_stricmp (name + length - 4, ".sp2"))
 	{
 		Com_Printf ("Refusing download of sprite %s to %s\n", LOG_SERVER|LOG_DOWNLOAD|LOG_WARNING, name, sv_client->name);
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "\nRefusing download of '%s' as your client may not fetch any linked skins.\n"
@@ -1395,13 +1462,106 @@ static void SV_ACList_f (void)
 
 	substring = Cmd_Argv (1);
 
+	SV_ClientPrintf (sv_client, PRINT_HIGH, 
+		"+----------------+--------+-----+\n"
+		"|  Player Name   |AC Valid|Files|\n"
+		"+----------------+--------+-----+\n");
+
 	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 	{
 		if (cl->state < cs_spawned)
 			continue;
 
 		if (!substring[0] || strstr (cl->name, substring))
-			SV_ClientPrintf (sv_client, PRINT_HIGH, "%s: %susing anticheat\n", cl->name, cl->anticheat_valid ? "" : "not ");
+		{
+			if (cl->anticheat_valid)
+			{
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| %3d |\n",
+					cl->name, "   yes  ", cl->anticheat_file_failures);
+			}
+			else
+			{
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A |\n",
+					cl->name, "   NO   ");
+			}
+		}
+	}
+
+	SV_ClientPrintf (sv_client, PRINT_HIGH, 
+		"+----------------+--------+-----+\n");
+
+	if (sv_require_anticheat->intvalue)
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "This Quake II server is %scurrently connected to the anticheat server.\nFor information on anticheat, please visit http://antiche.at/\n", SV_AntiCheat_IsConnected () ? "" : "NOT ");
+	else
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is currently disabled on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
+}
+
+static void SV_ACInfo_f (void)
+{
+	int					clientID;
+	const char			*substring;
+	const char			*filesubstring;
+	client_t			*cl;
+	linkednamelist_t	*bad;
+
+	if (Cmd_Argc() == 1)
+	{
+		cl = sv_client;
+		filesubstring = "";
+	}
+	else
+	{
+		substring = Cmd_Argv (1);
+		filesubstring = Cmd_Argv (2);
+
+		clientID = -1;
+
+		if (StringIsNumeric (substring))
+		{
+			clientID = atoi (substring);
+			if (clientID >= maxclients->intvalue || clientID < 0)
+			{
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "Invalid client ID.\n");
+				return;
+			}
+		}
+		else
+		{
+			for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+			{
+				if (cl->state < cs_spawned)
+					continue;
+
+				if (strstr (cl->name, substring))
+				{
+					clientID = cl - svs.clients;
+					break;
+				}
+			}
+		}
+
+		if (clientID == -1)
+		{
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "Player not found.\n");
+			return;
+		}
+
+		cl = &svs.clients[clientID];
+		if (cl->state < cs_spawned)
+		{
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "Player is not active.\n");
+			return;
+		}
+	}
+
+	bad = &cl->anticheat_bad_files;
+
+	SV_ClientPrintf (sv_client, PRINT_HIGH, "File check failures for %s:\n", cl->name);
+	while (bad->next)
+	{
+		bad = bad->next;
+		if (!filesubstring[0] || strstr (bad->name, filesubstring))
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "%s\n", bad->name);
 	}
 }
 #endif
@@ -1753,6 +1913,7 @@ static ucmd_t ucmds[] =
 
 #ifdef ANTICHEAT
 	{"aclist", SV_ACList_f},
+	{"acinfo", SV_ACInfo_f},
 #endif
 
 	{"download", SV_BeginDownload_f},
@@ -2026,6 +2187,8 @@ static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 {
 	cl->commandMsec -= cmd->msec;
 
+	cl->totalMsecUsed += cmd->msec;
+
 	if (cl->commandMsec < 0 && sv_enforcetime->intvalue)
 		return;
 
@@ -2047,7 +2210,7 @@ static void SV_SetClientSetting (client_t *cl)
 	cl->settings[setting] = value;
 }
 
-#ifdef _DEBUG
+//#ifdef _DEBUG
 void SV_RunMultiMoves (client_t *cl)
 {
 	int			i;
@@ -2158,7 +2321,7 @@ void SV_RunMultiMoves (client_t *cl)
 	cl->moved = true;
 	cl->lastcmd = move;
 }
-#endif
+//#endif
 
 #define	MAX_STRINGCMDS			8
 #define	MAX_USERINFO_UPDATES	8
@@ -2213,11 +2376,11 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//checksumIndex = net_message.readcount;
 
 			//r1ch: suck up the extra checksum byte that is no longer used
-			if (cl->protocol == ORIGINAL_PROTOCOL_VERSION)
+			if (cl->protocol == PROTOCOL_ORIGINAL)
 			{
 				MSG_ReadByte (&net_message);
 			}
-			else if (cl->protocol != ENHANCED_PROTOCOL_VERSION)
+			else if (cl->protocol != PROTOCOL_R1Q2)
 			{
 				Com_Printf ("SV_ExecuteClientMessage: bad protocol %d (memory overwritten!)\n", LOG_SERVER, cl->protocol);
 				SV_KickClient (cl, "client state corrupted", "SV_ExecuteClientMessage: client state corrupted\n");
@@ -2431,11 +2594,11 @@ void SV_ExecuteClientMessage (client_t *cl)
 			SV_SetClientSetting (cl);
 			break;
 
-#ifdef _DEBUG
+//#ifdef _DEBUG
 		case clc_multimoves:
 			SV_RunMultiMoves (cl);
 			break;
-#endif
+//#endif
 		//r1ch ************* END R1Q2 SPECIFIC ****************************
 
 		default:

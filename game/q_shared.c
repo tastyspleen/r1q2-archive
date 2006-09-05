@@ -275,7 +275,7 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 	__asm ret
 }*/
 
-__declspec( naked ) int __cdecl Q_ftol( float f )
+__declspec( naked ) int EXPORT Q_ftol( float f )
 {
 	static int tmp;
 	__asm fld dword ptr [esp+4]
@@ -314,7 +314,7 @@ nosse:
 	__asm ret
 }*/
 
-__declspec (naked) void __cdecl Q_fastfloats (float *f, int *outptr)
+__declspec (naked) void EXPORT Q_fastfloats (float *f, int *outptr)
 {
 	/*__asm cmp sse2_enabled, 0
 	__asm jz nonsse
@@ -1447,7 +1447,7 @@ void Info_RemoveKey (char *s, const char *key)
 
 			memlen = strlen(s);
 			memmove (start, s, memlen);
-			*(start+memlen) = 0;
+			start[memlen] = 0;
 			return;
 		}
 
@@ -1479,9 +1479,9 @@ qboolean Info_Validate (const char *s)
 
 qboolean Info_CheckBytes (const char *s)
 {
-	while (*s)
+	while (s[0])
 	{
-		if (*s < 32 || *s >= 127)
+		if (s[0] < 32 || s[0] >= 127)
 			return false;
 		s++;
 	}

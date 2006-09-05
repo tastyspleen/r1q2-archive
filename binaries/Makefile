@@ -1,4 +1,4 @@
-.PHONY: default all r1q2ded game client clean distclean
+.PHONY: default all r1q2ded game client clean distclean combine
 
 default: all
 
@@ -22,3 +22,8 @@ distclean:
 	$(MAKE) -C r1q2ded distclean
 	$(MAKE) -C client distclean
 	$(MAKE) -C game distclean
+
+combine:
+	$(MAKE) -C r1q2ded combine
+	$(MAKE) -C client combine
+	$(MAKE) -C game combine

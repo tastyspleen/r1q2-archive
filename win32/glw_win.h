@@ -40,6 +40,7 @@ typedef struct
 	qboolean mcd_accelerated;
 
 	FILE *log_fp;
+	HINSTANCE	hModule;		// our dll
 } glwstate_t;
 
 extern glwstate_t glw_state;

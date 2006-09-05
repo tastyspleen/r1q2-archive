@@ -42,7 +42,13 @@ cvar_t		*cl_testblend;
 cvar_t		*cl_stats;
 
 cvar_t		*cl_drawfps;
+cvar_t		*cl_drawfps_x;
+cvar_t		*cl_drawfps_y;
+
 cvar_t		*cl_stfu_ilkhan;
+cvar_t		*cl_drawmaptime_x;
+cvar_t		*cl_drawmaptime_y;
+
 cvar_t		*cl_defermodels;
 cvar_t		*cl_particlecount;
 
@@ -111,7 +117,7 @@ void V_AddParticle (vec3_t org, unsigned color, float alpha)
 		Com_Error (ERR_DROP, "V_AddParticle: bad color %d", color);
 
 	p = &r_particles[r_numparticles++];
-	VectorCopy (org, p->origin);
+	FastVectorCopy (*org, p->origin);
 	p->color = color;
 	p->alpha = alpha;
 }
@@ -130,7 +136,7 @@ void V_AddLight (vec3_t org, float intensity, float r, float g, float b)
 		return;
 
 	dl = &r_dlights[r_numdlights++];
-	VectorCopy (org, dl->origin);
+	FastVectorCopy (*org, dl->origin);
 	dl->intensity = intensity;
 	dl->color[0] = r;
 	dl->color[1] = g;
@@ -623,9 +629,9 @@ void V_RenderView(void)
 		// never let it sit exactly on a node line, because a water plane can
 		// dissapear when viewed with the eye exactly on it.
 		// the server protocol only specifies to 1/8 pixel, so add 1/16 in each axis
-		cl.refdef.vieworg[0] += 1.0/16;
-		cl.refdef.vieworg[1] += 1.0/16;
-		cl.refdef.vieworg[2] += 1.0/16;
+		cl.refdef.vieworg[0] += 1.0f/16;
+		cl.refdef.vieworg[1] += 1.0f/16;
+		cl.refdef.vieworg[2] += 1.0f/16;
 
 		cl.refdef.x = scr_vrect.x;
 		cl.refdef.y = scr_vrect.y;
@@ -691,30 +697,38 @@ void V_RenderView(void)
 		}
 	}
 
+	//r1: fps display
 	if (cl_drawfps->intvalue)
 	{
-		int x;
-		char buff[16];
+		int		x, len;
+		char	buff[16];
+
 		frames_this_second++;
 
-		if (cl_drawfps->intvalue == 2) {
-			fps = (int)(1.0 / cls.frametime);
+		if (cl_drawfps->intvalue == 2)
+		{
+			fps = (int)(1.0f / cls.frametime);
 		}
-		Com_sprintf (buff, sizeof(buff), "%d", fps);
-		for (x = 0; x < strlen(buff); x++) {
-			re.DrawChar (viddef.width-26+x*8, viddef.height - 16, 128 + buff[x]);
+
+		len = Com_sprintf (buff, sizeof(buff), "%d", fps);
+		for (x = 0; x < len; x++)
+		{
+			re.DrawChar (viddef.width-26+x*8+cl_drawfps_x->intvalue, viddef.height - 16 + cl_drawfps_y->intvalue, 128 + buff[x]);
 		}
 	}
 
-	if (cl_stfu_ilkhan->intvalue) {
+	//r1: map timer (don't ask)
+	if (cl_stfu_ilkhan->intvalue)
+	{
 		char buff[16];
-		int x;
+		int x, len;
 		int secs = (cl.frame.serverframe % 600) / 10;
 		int mins = cl.frame.serverframe / 600;
 		
-		Com_sprintf (buff, sizeof(buff), "%d:%.2d", mins, secs);
-		for (x = 0; x < strlen(buff); x++) {
-			re.DrawChar (x*8, viddef.height - 8, 128 + buff[x]);
+		len = Com_sprintf (buff, sizeof(buff), "%d:%.2d", mins, secs);
+		for (x = 0; x < len; x++)
+		{
+			re.DrawChar (x * 8 + cl_drawmaptime_x->intvalue, viddef.height - 8 + cl_drawmaptime_y->intvalue, 128 + buff[x]);
 		}
 	}
 
@@ -844,8 +858,15 @@ void V_Init (void)
 	cl_testlights = Cvar_Get ("cl_testlights", "0", 0);
 
 	cl_stats = Cvar_Get ("cl_stats", "0", 0);
+
 	cl_drawfps = Cvar_Get ("cl_drawfps", "0", 0);
+	cl_drawfps_x = Cvar_Get ("cl_drawfps_x", "0", 0);
+	cl_drawfps_y = Cvar_Get ("cl_drawfps_y", "0", 0);
+
 	cl_stfu_ilkhan = Cvar_Get ("cl_drawmaptime", "0", 0);
+	cl_drawmaptime_x = Cvar_Get ("cl_drawmaptime_x", "0", 0);
+	cl_drawmaptime_y = Cvar_Get ("cl_drawmaptime_y", "0", 0);
+
 	cl_defermodels = Cvar_Get ("cl_defermodels", "1", 0);
 
 	scr_crosshair_x = Cvar_Get ("scr_crosshair_x", "0", 0);

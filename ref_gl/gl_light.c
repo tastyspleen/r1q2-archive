@@ -240,7 +240,7 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 		return -1;		// didn't hit anuthing
 		
 // check for impact on this node
-	VectorCopy (mid, lightspot);
+	FastVectorCopy (mid, lightspot);
 	lightplane = plane;
 
 	surf = r_worldmodel->surfaces + node->firstsurface;
@@ -271,7 +271,8 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 		dt >>= 4;
 
 		lightmap = surf->samples;
-		VectorCopy (vec3_origin, pointcolor);
+		VectorClear (pointcolor);
+
 		if (lightmap)
 		{
 			vec3_t scale;
@@ -317,7 +318,7 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	
 	if (!r_worldmodel->lightdata)
 	{
-		color[0] = color[1] = color[2] = 1.0;
+		color[0] = color[1] = color[2] = 1.0f;
 		return;
 	}
 	
@@ -329,11 +330,11 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	
 	if (r == -1)
 	{
-		VectorCopy (vec3_origin, color);
+		VectorClear (color);
 	}
 	else
 	{
-		VectorCopy (pointcolor, color);
+		FastVectorCopy (pointcolor, *color);
 	}
 
 	//
@@ -347,7 +348,7 @@ void R_LightPoint (vec3_t p, vec3_t color)
 						dl->origin,
 						dist);
 		add = dl->intensity - VectorLength(dist);
-		add *= (1.0/256);
+		add *= (1.0f/256);
 		if (FLOAT_GT_ZERO(add))
 		{
 			VectorMA (color, add, dl->color, color);
@@ -741,8 +742,12 @@ store:
 			}
 			else
 			{
-				max = colors[0] + colors[1] + colors[2];
-				max /= 3;
+				//max = colors[0] + colors[1] + colors[2];
+				//max /= 3;
+				if (FLOAT_NE_ZERO (gl_r1gl_test->value))
+					max = 0.289f * colors[0] + 0.587f * colors[1] + 0.114f * colors[2];
+				else
+					max = (colors[0] + colors[1] + colors[2]) / 3;
 				if (FLOAT_EQ_ZERO (gl_coloredlightmaps->value))
 				{
 					dest[0] = dest[1] = dest[2] = max;

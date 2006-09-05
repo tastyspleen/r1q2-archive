@@ -81,7 +81,7 @@ static void SV_SetMaster_f (void)
 	svs.last_heartbeat = -9999999;
 }
 
-static qboolean StringIsNumeric (const char *s)
+qboolean StringIsNumeric (const char *s)
 {
 	const char	*p;
 
@@ -659,8 +659,8 @@ static void SV_Map_f (void)
 		else if (sv_allow_map->intvalue == 2)
 		{
 			SV_GameMap_f ();
-			return;
 		}
+		return;
 	}
 
 	// if not a pcx, demo, or cinematic, check to make sure the level exists
@@ -1492,6 +1492,131 @@ static void SV_Addhole_f (void)
 	Blackhole (&adr, false, mask, method, "%s", Cmd_Args2(3));
 }
 
+#ifdef ANTICHEAT
+static void SV_AddACException_f (void)
+{
+	netadr_t	from;
+	netblock_t	*n;
+
+	int			mask;
+	char		*ip;
+	char		*s;
+
+	if (Cmd_Argc() == 1)
+	{
+		Com_Printf ("Purpose: Allow a given IP block to bypass anticheat requirements.\n"
+					"Syntax : addacexception <ip-address/mask>\n"
+					"Example: addacexception 192.168.0.1\n", LOG_GENERAL);
+		return;
+	}
+
+	ip = Cmd_Argv(1);
+
+	s = strchr (Cmd_Argv(1), '/');
+	if (s)
+	{
+		s[0] = 0;
+		s++;
+		if (!*s)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return;
+		}
+		mask = atoi (s);
+		if (mask < 0 || mask > 32)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return;
+		}
+	}
+	else
+	{
+		mask = 32;
+	}
+
+	if (!(NET_StringToAdr (ip, &from)))
+	{
+		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, Cmd_Argv(1));
+		return;
+	}
+
+	n = &anticheat_exceptions;
+	while (n->next)
+		n = n->next;
+
+	n->next = Z_TagMalloc (sizeof(*n), TAGMALLOC_ANTICHEAT);
+	n = n->next;
+
+	n->ip = *(uint32 *)from.ip;
+	n->mask = CalcMask(mask);
+
+	if (sv.state)
+		Com_Printf ("Anticheat exception added.\n", LOG_GENERAL);
+}
+
+static void SV_AddACRequirement_f (void)
+{
+	netadr_t	from;
+	netblock_t	*n;
+
+	int			mask;
+	char		*ip;
+	char		*s;
+
+	if (Cmd_Argc() == 1)
+	{
+		Com_Printf ("Purpose: Force a given IP block to require anticheat.\n"
+					"Syntax : addacrequirement <ip-address/mask>\n"
+					"Example: addacrequirement 192.168.0.1\n", LOG_GENERAL);
+		return;
+	}
+
+	ip = Cmd_Argv(1);
+
+	s = strchr (Cmd_Argv(1), '/');
+	if (s)
+	{
+		s[0] = 0;
+		s++;
+		if (!*s)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return;
+		}
+		mask = atoi (s);
+		if (mask < 0 || mask > 32)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return;
+		}
+	}
+	else
+	{
+		mask = 32;
+	}
+
+	if (!(NET_StringToAdr (ip, &from)))
+	{
+		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, Cmd_Argv(1));
+		return;
+	}
+
+	//FIXME dupe code
+	n = &anticheat_requirements;
+	while (n->next)
+		n = n->next;
+
+	n->next = Z_TagMalloc (sizeof(*n), TAGMALLOC_ANTICHEAT);
+	n = n->next;
+
+	n->ip = *(uint32 *)from.ip;
+	n->mask = CalcMask(mask);
+
+	if (sv.state)
+		Com_Printf ("Anticheat requirement added.\n", LOG_GENERAL);
+}
+#endif
+
 /*
 ==================
 SV_Kick_f
@@ -2260,7 +2385,7 @@ static void SV_ServerRecord_f (void)
 	//
 	// send the serverdata
 	MSG_BeginWriting (svc_serverdata);
-	MSG_WriteLong (ORIGINAL_PROTOCOL_VERSION);
+	MSG_WriteLong (PROTOCOL_ORIGINAL);
 	MSG_WriteLong (svs.spawncount);
 	// 2 means server demo
 	MSG_WriteByte (2);	// demos are always attract loops
@@ -2475,5 +2600,10 @@ void SV_InitOperatorCommands (void)
 
 	Cmd_AddCommand ("pc", SV_PassiveConnect_f);
 
-
+#ifdef ANTICHEAT
+	Cmd_AddCommand ("aclist", SVCmd_ACList_f);
+	Cmd_AddCommand ("acinfo", SVCmd_ACInfo_f);
+	Cmd_AddCommand ("addacexception", SV_AddACException_f);
+	Cmd_AddCommand ("addacrequirement", SV_AddACRequirement_f);
+#endif
 }

@@ -352,10 +352,10 @@ PROTOCOL
 
 // protocol.h -- communications protocols
 
-#define	ORIGINAL_PROTOCOL_VERSION	34
-#define	ENHANCED_PROTOCOL_VERSION	35
+#define	PROTOCOL_ORIGINAL	34
+#define	PROTOCOL_R1Q2		35
 
-#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1903
+#define	MINOR_VERSION_R1Q2	1903
 
 //=========================================
 
@@ -1113,6 +1113,9 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CMDBANS,
 	TAGMALLOC_REDBLACK,
 	TAGMALLOC_LRCON,
+#ifdef ANTICHEAT
+	TAGMALLOC_ANTICHEAT,
+#endif
 	TAGMALLOC_MAX_TAGS
 };
 

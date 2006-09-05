@@ -174,8 +174,11 @@ cvar_t	*sv_require_anticheat;
 cvar_t	*sv_anticheat_error_action;
 cvar_t	*sv_anticheat_message;
 cvar_t	*sv_anticheat_server_address;
-
+cvar_t	*sv_anticheat_badfile_action;
+cvar_t	*sv_anticheat_badfile_message;
+cvar_t	*sv_anticheat_badfile_max;
 netblock_t	anticheat_exceptions;
+netblock_t	anticheat_requirements;
 #endif
 
 //r1: not needed
@@ -277,6 +280,10 @@ void SV_DropClient (client_t *drop, qboolean notify)
 		ge->ClientDisconnect (drop->edict);
 	}
 
+#ifdef ANTICHEAT
+	SV_AntiCheat_Disconnect_Client (drop);
+#endif
+
 	//r1: fix for mods that don't clean score
 #ifdef ENHANCED_SERVER
 	((struct gclient_new_s *)(drop->edict->client))->ps.stats[STAT_FRAGS] = 0;
@@ -301,6 +308,10 @@ void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@nu
 //r1: this does the final cleaning up of a client after zombie state.
 static void SV_CleanClient (client_t *drop)
 {
+#ifdef ANTICHEAT
+	linkednamelist_t	*bad, *last;
+#endif
+
 	//r1: drop message list
 	if (drop->messageListData)
 	{
@@ -338,6 +349,28 @@ static void SV_CleanClient (client_t *drop)
 		Z_Free (drop->lastlines);
 		drop->lastlines = NULL;
 	}
+
+#ifdef ANTICHEAT
+	bad = &drop->anticheat_bad_files;
+	last = NULL;
+	while (bad->next)
+	{
+		bad = bad->next;
+
+		if (last)
+		{
+			Z_Free (last->name);
+			Z_Free (last);
+		}
+		last = bad;
+	}
+
+	if (last)
+	{
+		Z_Free (last->name);
+		Z_Free (last);
+	}
+#endif
 }
 
 const banmatch_t *SV_CheckUserinfoBans (char *userinfo, char *key)
@@ -695,7 +728,7 @@ static void SVC_Info (void)
 
 	version = atoi (Cmd_Argv(1));
 
-	if (version != ORIGINAL_PROTOCOL_VERSION && version != ENHANCED_PROTOCOL_VERSION)
+	if (version != PROTOCOL_ORIGINAL && version != PROTOCOL_R1Q2)
 	{
 		//r1: return instead of sending another packet. prevents spoofed udp packet
 		//    causing server <-> server info loops.
@@ -759,7 +792,6 @@ static void SVC_GetChallenge (void)
 	int		i;
 	int		oldest = 0;
 	uint32	oldestTime = 0xffffffff;
-	const char	*ac;
 
 	// see if we already have a challenge for this ip
 	for (i = 0 ; i < MAX_CHALLENGES ; i++)
@@ -792,33 +824,8 @@ static void SVC_GetChallenge (void)
 		svs.challenges[i].time = curtime;
 	}
 
-#ifdef ANTICHEAT
-	if (sv_require_anticheat->intvalue)
-	{
-		netblock_t *n = &anticheat_exceptions;
-
-		ac = " ac=1";
-
-		//r1: exception list
-		while (n->next)
-		{
-			n = n->next;
-			if ((*(uint32 *)net_from.ip & n->mask) == (n->ip & n->mask))
-			{
-				ac = "";
-				break;
-			}
-		}
-
-		if (ac[0])
-			SV_AntiCheat_Challenge (&net_from, svs.challenges[i].challenge);
-	}
-	else
-#endif
-		ac = "";
-
 	// send it back
-	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d p=34,35%s", svs.challenges[i].challenge, ac);
+	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "challenge %d p=34,35", svs.challenges[i].challenge);
 }
 
 #if 0
@@ -974,6 +981,7 @@ static void SVC_DirectConnect (void)
 	qboolean	reconnected;
 
 	char		*pass;
+	const char	*ac;
 
 	char		saved_var[32];
 	char		saved_val[32];
@@ -991,7 +999,7 @@ static void SVC_DirectConnect (void)
 
 	//r1: check version first of all
 	protocol= atoi(Cmd_Argv(1));
-	if (protocol != ORIGINAL_PROTOCOL_VERSION && protocol != ENHANCED_PROTOCOL_VERSION)
+	if (protocol != PROTOCOL_ORIGINAL && protocol != PROTOCOL_R1Q2)
 	{
 		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nYou need Quake II 3.19 or higher to play on this server.\n");
 		Com_DPrintf ("    rejected connect from protocol %i\n", protocol);
@@ -1001,7 +1009,7 @@ static void SVC_DirectConnect (void)
 	qport = atoi(Cmd_Argv(2));
 
 	//work around older protocol 35 clients
-	if (protocol == ENHANCED_PROTOCOL_VERSION)
+	if (protocol == PROTOCOL_R1Q2)
 	{
 		if (qport > 0xFF)
 			qport = 0;
@@ -1239,7 +1247,7 @@ static void SVC_DirectConnect (void)
 		}
 	}*/
 
-	if (!strcmp (pass, sv_reserved_password->string))
+	if (sv_reserved_password->string[0] && !strcmp (pass, sv_reserved_password->string))
 	{
 		reserved = 0;
 
@@ -1271,8 +1279,15 @@ static void SVC_DirectConnect (void)
 			if (cl->state != cs_zombie)
 			{
 				Com_DPrintf ("    client already found\n");
-				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPlayer '%s' is already connected from your address.\n", cl->name);
-				return;
+
+				//if we legitly get here, spoofed udp isn't possible (passed challenge) and client addr/port combo is exactly
+				//the same, so we can assume its really a dropped/crashed client. i hope...
+
+				//Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nPlayer '%s' is already connected from your address.\n", cl->name);
+				//SV_BroadcastPrintf (PRINT_HIGH, "%s was dropped: ghost client", cl->name);
+				Com_Printf ("Dropping %s, ghost reconnect\n", LOG_SERVER|LOG_DROP, cl->name);
+				SV_DropClient (cl, false);
+				//return;
 			}
 
 			//r1: not needed
@@ -1400,13 +1415,55 @@ gotnewcl:
 	SV_UpdateUserinfo (newcl, reconnected);
 
 	//r1: netchan init was here
+#ifdef ANTICHEAT
+	if (sv_require_anticheat->intvalue)
+	{
+		netblock_t	*n;
+
+		ac = " ac=1";
+
+		n = &anticheat_requirements;
+
+		newcl->anticheat_required = ANTICHEAT_NORMAL;
+
+		//r1: exception list
+		while (n->next)
+		{
+			n = n->next;
+			if ((*(uint32 *)net_from.ip & n->mask) == (n->ip & n->mask))
+			{
+				newcl->anticheat_required = ANTICHEAT_REQUIRED;
+				break;
+			}
+		}
+
+		n = &anticheat_exceptions;
+
+		//r1: exception list
+		while (n->next)
+		{
+			n = n->next;
+			if ((*(uint32 *)net_from.ip & n->mask) == (n->ip & n->mask))
+			{
+				newcl->anticheat_required = ANTICHEAT_EXEMPT;
+				ac = "";
+				break;
+			}
+		}
+
+		if (ac[0])
+			SV_AntiCheat_Challenge (&net_from, newcl);
+	}
+	else
+#endif
+		ac = "";
 
 	// send the connect packet to the client
 	// r1: note we could ideally send this twice but it prints unsightly message on original client.
 	if (sv_downloadserver->string[0])
-		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect dlserver=%s", sv_downloadserver->string);
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect dlserver=%s%s", sv_downloadserver->string, ac);
 	else
-		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect");
+		Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect%s", ac);
 
 	if (sv_connectmessage->modified)
 	{
@@ -1461,7 +1518,7 @@ static int Rcon_Validate (void)
 	return 0;
 }
 
-static uint32 CalcMask (int32 bits)
+uint32 CalcMask (int32 bits)
 {
 	int				i;
 	uint32			mask;
@@ -1673,6 +1730,10 @@ static void SVC_RemoteCommand (void)
 			if (strchr (remaining, ';'))
 			{
 				Com_Printf ("You may not use multiple commands in a single rcon command.\n", LOG_SERVER);
+			}
+			else if (strchr (remaining, '$'))
+			{
+				Com_Printf ("Variable expansion is not allowed via lrcon.\n", LOG_SERVER);
 			}
 			else
 			{			
@@ -1902,7 +1963,7 @@ for their command moves.  If they exceed it, assume cheating.
 static void SV_GiveMsec (void)
 {
 	int			msecpoint;
-	int			i;
+	int			i, diff;
 	client_t	*cl;
 
 	if (sv.framenum & 15)
@@ -1934,7 +1995,7 @@ static void SV_GiveMsec (void)
 					Com_DPrintf ("SV_GiveMsec: %s has commandMsec < 0: %d (lagging/speed cheat?)\n", cl->name, cl->commandMsec);
 				cl->commandMsecOverflowCount += 1.0f + (-cl->commandMsec / 250.0f);
 			}
-			else if (cl->commandMsec > sv_msecs->intvalue * 0.5)
+			else if (cl->commandMsec > (sv_msecs->intvalue / 2))
 			{
 				//they aren't lagged out (still sending packets) but didn't even use half their msec. wtf?
 				if (cl->lastmessage > msecpoint)
@@ -1944,7 +2005,7 @@ static void SV_GiveMsec (void)
 				if (!(Com_ServerState() && !dedicated->intvalue))
 #endif
 					Com_DPrintf ("SV_GiveMsec: %s has commandMsec %d (lagging/float cheat?)\n", cl->name, cl->commandMsec);
-					cl->commandMsecOverflowCount += 1.0f * (cl->commandMsec / (float)sv_msecs->intvalue);
+					cl->commandMsecOverflowCount += 1.0f * ((float)cl->commandMsec / sv_msecs->value);
 				}
 			}
 			else
@@ -1961,6 +2022,14 @@ static void SV_GiveMsec (void)
 				SV_KickClient (cl, "irregular movement", "You were kicked from the game for irregular movement. This could be caused by excessive lag or other network conditions.\n");
 				continue;
 			}
+
+			//new speed hack check, forget who thought of this but it works great, detects even 5% speed offset
+			//Com_Printf ("client: %d, server: %d, diff: %d\n", LOG_GENERAL, cl->totalMsecUsed, (sv.framenum - cl->enterFrame) * 100, );
+			diff = (sv.framenum - cl->enterFrame) * 100 - cl->totalMsecUsed;
+
+			//allow one frame of slop
+			if (diff < -100)
+				Com_Printf ("WARNING: Negative time difference of %d for %s[%s], possible speed cheat.\n", LOG_WARNING|LOG_SERVER, diff, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 		}
 
 		cl->commandMsec = sv_msecs->intvalue;		// 1600 + some slop
@@ -2035,7 +2104,7 @@ static void SV_ReadPackets (void)
 				continue;
 
 			//qport shit
-			if (cl->protocol == ORIGINAL_PROTOCOL_VERSION)
+			if (cl->protocol == PROTOCOL_ORIGINAL)
 			{
 				//compare short from original q2
 				if (cl->netchan.qport != qport)
@@ -2609,6 +2678,20 @@ static void _rcon_buffsize_changed (cvar_t *var, char *oldvalue, char *newvalue)
 	}
 }
 
+#ifdef ANTICHEAT
+static void _anticheat_changed (cvar_t *var, char *o, char *n)
+{
+	switch (var->intvalue)
+	{
+		case 1:
+		case 2:
+			Cvar_FullSet ("anticheat", var->string, CVAR_SERVERINFO|CVAR_NOSET);
+			break;
+		default:
+			Cvar_FullSet ("anticheat", "", CVAR_NOSET);
+	}
+}
+#endif
 /*
 ===============
 SV_Init
@@ -2634,7 +2717,7 @@ void SV_Init (void)
 	Cvar_Get ("fraglimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("timelimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("cheats", "0", CVAR_SERVERINFO|CVAR_LATCH);
-	Cvar_Get ("protocol", va("%i", ENHANCED_PROTOCOL_VERSION), CVAR_NOSET);
+	Cvar_Get ("protocol", va("%i", PROTOCOL_R1Q2), CVAR_NOSET);
 
 	//r1: default 8
 	maxclients = Cvar_Get ("maxclients", "8", CVAR_SERVERINFO | CVAR_LATCH);
@@ -2904,7 +2987,7 @@ void SV_Init (void)
 
 	//r1: broadcast name changes?
 	sv_show_name_changes = Cvar_Get ("sv_show_name_changes", "0", 0);
-	sv_show_name_changes->help = "Broadcast player name changes to all players on the server. Default 0.";
+	sv_show_name_changes->help = "Broadcast player name changes to all players on the server. Default 0.\n";
 
 	//r1: delta optimz (small non-r1q2 client breakage on 2)
 	sv_optimize_deltas = Cvar_Get ("sv_optimize_deltas", "1", 0);
@@ -2912,7 +2995,7 @@ void SV_Init (void)
 
 	//r1: enhanced setplayer code?
 	sv_enhanced_setplayer = Cvar_Get ("sv_enhanced_setplayer", "0", 0);
-	sv_enhanced_setplayer->help = "Allow use of partial names in the kick, dumpuser, etc commands. Default 0.";
+	sv_enhanced_setplayer->help = "Allow use of partial names in the kick, dumpuser, etc commands. Default 0.\n";
 
 	//r1: test lag stuff
 	sv_predict_on_lag = Cvar_Get ("sv_predict_on_lag", "0", 0);
@@ -2923,6 +3006,7 @@ void SV_Init (void)
 
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
+	sv_require_anticheat->changed = _anticheat_changed;
 	sv_require_anticheat->help = "Require use of the r1ch.net anticheat module by players. Default 0.\n0: Don't require any anticheat module.\n1: Optionally use the anticheat module.\n2: Require the anticheat module.\n";
 
 	sv_anticheat_server_address = Cvar_Get ("sv_anticheat_server_address", "anticheat.r1ch.net", CVAR_LATCH);
@@ -2931,8 +3015,19 @@ void SV_Init (void)
 	sv_anticheat_error_action = Cvar_Get ("sv_anticheat_error_action", "0", 0);
 	sv_anticheat_error_action->help = "Action to take if the anticheat server is unavailable. Default 0.\n0: Allow new clients to connect with no cheat protection\n1: Don't allow new clients until the connection is re-established.\n";
 
-	sv_anticheat_message = Cvar_Get ("sv_anticheat_message", "This server requires the r1ch.net anticheat module. Please see http://r1ch.net/anticheat/ for more details.", 0);
-	sv_anticheat_message->help = "Message to show to clients who are using anticheat-incompatible versions.\n";
+	sv_anticheat_message = Cvar_Get ("sv_anticheat_message", "This server requires the r1ch.net anticheat module. Please see http://antiche.at/ for more details.", 0);
+	sv_anticheat_message->help = "Message to show to players who connect with no anticheat loaded. Use \\n for newline.\n";
+	ExpandNewLines (sv_anticheat_message->string);
+
+	sv_anticheat_badfile_action = Cvar_Get ("sv_anticheat_badfile_action", "0", 0);
+	sv_anticheat_badfile_action->help = "Action to take on a bad file loaded by a client. Default 0.\n0: Kick client.\n1: Notify client only.\n2: Notify all players.\n";
+
+	sv_anticheat_badfile_message = Cvar_Get ("sv_anticheat_badfile_message", "", 0);
+	sv_anticheat_badfile_message->help = "Message to show to clients that fail file tests, useful to include a URL to your server files / rules or something. Use \\n for newline. Default empty.\n";
+	ExpandNewLines (sv_anticheat_badfile_message->string);
+
+	sv_anticheat_badfile_max = Cvar_Get ("sv_anticheat_badfile_max", "0", 0);
+	sv_anticheat_badfile_max->help = "Maximum number of bad files before a client will be kicked, regardless of sv_anticheat_badfile_action value. 0 = disabled. Default 0.\n";
 #endif
 
 	//r1: init pyroadmin

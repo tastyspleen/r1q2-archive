@@ -349,7 +349,7 @@ void S_InitScaletable (void)
 	int		i, j;
 	int		scale;
 
-	if (s_volume->value > 2.0)
+	if (s_volume->value > 2.0f)
 		Cvar_Set ("s_volume", "2");
 	else if (s_volume->value < 0)
 		Cvar_Set  ("s_volume", "0");

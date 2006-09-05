@@ -559,11 +559,6 @@ qboolean CM_MapWillLoad (const char *name)
 	if (FS_LoadFile (csname, NULL) != -1)
 		return true;
 
-	Com_sprintf (csname, sizeof(csname), "%s.gz", name);
-
-	if (FS_LoadFile (csname, NULL) != -1)
-		return true;
-
 	if (FS_LoadFile (name, NULL) != -1)
 		return true;
 
@@ -1111,7 +1106,7 @@ int	CM_TransformedPointContents (vec3_t p, int headnode, vec3_t origin, vec3_t a
 	{
 		AngleVectors (angles, forward, right, up);
 
-		VectorCopy (p_l, temp);
+		FastVectorCopy (p_l, temp);
 		p_l[0] = DotProduct (temp, forward);
 		p_l[1] = -DotProduct (temp, right);
 		p_l[2] = DotProduct (temp, up);
@@ -1553,10 +1548,10 @@ trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
 		return trace_trace;
 
 	trace_contents = brushmask;
-	VectorCopy (start, trace_start);
-	VectorCopy (end, trace_end);
-	VectorCopy (mins, trace_mins);
-	VectorCopy (maxs, trace_maxs);
+	FastVectorCopy (*start, trace_start);
+	FastVectorCopy (*end, trace_end);
+	FastVectorCopy (*mins, trace_mins);
+	FastVectorCopy (*maxs, trace_maxs);
 
 	//
 	// check for position test special case
@@ -1585,7 +1580,7 @@ trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
 			if (trace_trace.allsolid)
 				break;
 		}
-		VectorCopy (start, trace_trace.endpos);
+		FastVectorCopy (*start, trace_trace.endpos);
 		return trace_trace;
 	}
 
@@ -1614,7 +1609,7 @@ trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
 
 	if (trace_trace.fraction == 1.0f)
 	{
-		VectorCopy (end, trace_trace.endpos);
+		FastVectorCopy (*end, trace_trace.endpos);
 	}
 	else
 	{
@@ -1666,12 +1661,12 @@ trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
 	{
 		AngleVectors (angles, forward, right, up);
 
-		VectorCopy (start_l, temp);
+		FastVectorCopy (start_l, temp);
 		start_l[0] = DotProduct (temp, forward);
 		start_l[1] = -DotProduct (temp, right);
 		start_l[2] = DotProduct (temp, up);
 
-		VectorCopy (end_l, temp);
+		FastVectorCopy (end_l, temp);
 		end_l[0] = DotProduct (temp, forward);
 		end_l[1] = -DotProduct (temp, right);
 		end_l[2] = DotProduct (temp, up);
@@ -1680,13 +1675,13 @@ trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
 	// sweep the box through the model
 	trace = CM_BoxTrace (start_l, end_l, mins, maxs, headnode, brushmask);
 
-	if (rotated && trace.fraction != 1.0)
+	if (rotated && trace.fraction != 1.0f)
 	{
 		// FIXME: figure out how to do this with existing angles
 		VectorNegate (angles, a);
 		AngleVectors (a, forward, right, up);
 
-		VectorCopy (trace.plane.normal, temp);
+		FastVectorCopy (trace.plane.normal, temp);
 		trace.plane.normal[0] = DotProduct (temp, forward);
 		trace.plane.normal[1] = -DotProduct (temp, right);
 		trace.plane.normal[2] = DotProduct (temp, up);
@@ -1855,7 +1850,10 @@ qboolean	EXPORT CM_AreasConnected (int area1, int area2)
 		return true;
 
 	if (area1 > numareas || area2 > numareas)
-		Com_Error (ERR_DROP, "area > numareas");
+		Com_Error (ERR_DROP, "CM_AreasConnected: area > numareas");
+
+	if (area1 < 0 || area2 < 0)
+		Com_Error (ERR_DROP, "CM_AreasConnected: area < 0");
 
 	if (map_areas[area1].floodnum == map_areas[area2].floodnum)
 		return true;
