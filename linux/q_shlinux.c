@@ -85,12 +85,12 @@ void Hunk_Free (void *base)
 Sys_Milliseconds
 ================
 */
-int curtime;
-int Sys_Milliseconds (void)
+unsigned int curtime;
+unsigned int Sys_Milliseconds (void)
 {
 	struct timeval tp;
 	struct timezone tzp;
-	static int		secbase;
+	static unsigned int		secbase;
 
 	gettimeofday(&tp, &tzp);
 	

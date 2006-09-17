@@ -177,12 +177,12 @@ void Hunk_Free (void *base)
 Sys_Milliseconds
 ================
 */
-int	curtime;
+unsigned int	curtime;
 //int oldcurtime;
 #ifndef REF_GL
-int Sys_Milliseconds (void)
+unsigned int Sys_Milliseconds (void)
 {
-	static int		base;
+	static unsigned int		base;
 	static qboolean	initialized = false;
 
 	if (!initialized)

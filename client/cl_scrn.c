@@ -879,9 +879,9 @@ int EXPORT entitycmpfnc( const entity_t *a, const entity_t *b )
 
 void SCR_TimeRefresh_f (void)
 {
-	int		i;
-	int		start, stop;
-	float	time;
+	int				i;
+	unsigned int	start, stop;
+	float			time;
 
 	if ( cls.state != ca_active )
 		return;
@@ -911,7 +911,7 @@ void SCR_TimeRefresh_f (void)
 	}
 
 	stop = Sys_Milliseconds ();
-	time = (stop-start)/1000.0f;
+	time = (unsigned)(stop-start)/1000.0f;
 
 	if (Cmd_Argc() == 2)
 		Com_Printf ("%f seconds (%f fps)\n", LOG_CLIENT, time, 128000/time);
@@ -1588,7 +1588,7 @@ void SCR_UpdateScreen (void)
 	// do nothing at all
 	if (cls.disable_screen)
 	{
-		if (Sys_Milliseconds() - cls.disable_screen > 120000)
+		if ((unsigned)(Sys_Milliseconds() - cls.disable_screen) > 120000)
 		{
 			cls.disable_screen = 0;
 			Com_Printf ("Loading plaque timed out.\n", LOG_CLIENT);

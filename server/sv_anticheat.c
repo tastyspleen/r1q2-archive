@@ -486,10 +486,15 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 		return;
 	}
 
+	cl->anticheat_query_sent = ANTICHEAT_QUERY_DONE;
+
 	if (buff[3] == 1)
 		cl->anticheat_valid = true;
 
-	SV_ClientBegin (cl);
+	if (sv_anticheat_nag_time->intvalue)
+		cl->anticheat_nag_time = curtime;
+	else
+		SV_ClientBegin (cl);
 }
 
 static void SV_AntiCheat_ParseBuffer (void)
@@ -525,11 +530,12 @@ static void SV_AntiCheat_ParseBuffer (void)
 		case ACS_NOACCESS:
 			Com_Printf ("ANTICHEAT WARNING: You do not have permission to use the anticheat server. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER);
 			SV_AntiCheat_Disconnect ();
-			Cvar_Set ("sv_anticheat_required", "0");
+			Cvar_ForceSet ("sv_anticheat_required", "0");
+			break;
 		default:
 			Com_Printf ("ANTICHEAT WARNING: Unknown command byte %d, please make sure you are using the latest R1Q2 server version. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER, buff[0]);
 			SV_AntiCheat_Disconnect ();
-			Cvar_Set ("sv_anticheat_required", "0");
+			Cvar_ForceSet ("sv_anticheat_required", "0");
 			break;
 	}
 }
@@ -641,10 +647,16 @@ static void SV_AntiCheat_CheckQueryTimeOut (void)
 	{
 		if (cl->state == cs_spawning)
 		{
-			if (cl->anticheat_query_sent && cl->anticheat_query_time + 5000 < svs.realtime)
+			if (cl->anticheat_query_sent == ANTICHEAT_QUERY_SENT && (unsigned)(curtime - cl->anticheat_query_time) > 5000)
 			{
 				Com_Printf ("ANTICHEAT WARNING: Query timed out for %s, possible network problem.\n", LOG_SERVER|LOG_ANTICHEAT|LOG_WARNING, cl->name);
 				cl->anticheat_valid = false;
+				SV_ClientBegin (cl);
+				continue;
+			}
+			if (cl->anticheat_nag_time && (unsigned)(curtime - cl->anticheat_nag_time) > (int)(sv_anticheat_nag_time->value * 1000))
+			{
+				cl->anticheat_nag_time = 0;
 				SV_ClientBegin (cl);
 			}
 		}
@@ -710,7 +722,7 @@ void SVCmd_SVACInfo_f (void)
 
 	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("Usage: acinfo [substring|id]\n", LOG_GENERAL);
+		Com_Printf ("Usage: svacinfo [substring|id]\n", LOG_GENERAL);
 		return;
 	}
 	else
@@ -802,7 +814,8 @@ void SV_AntiCheat_Run (void)
 			int		exception_occured = 0;
 			int		connect_occured = 0;
 #ifdef LINUX
-			int		linux_socket_implementation_can_lick_my_nuts, this_shit_sucks;
+			int		linux_socket_implementation_can_lick_my_nuts;
+			socklen_t	this_shit_sucks;
 			//fucking linux can't handle select like every other half implemented OS, nooo...
 			this_shit_sucks = sizeof(linux_socket_implementation_can_lick_my_nuts);
 			getsockopt (acSocket, SOL_SOCKET, SO_ERROR, &linux_socket_implementation_can_lick_my_nuts, &this_shit_sucks);
@@ -934,7 +947,7 @@ qboolean SV_AntiCheat_Disconnect_Client (client_t *cl)
 {
 	int		num;
 
-	cl->anticheat_query_sent = false;
+	cl->anticheat_query_sent = ANTICHEAT_QUERY_UNSENT;
 	cl->anticheat_valid = false;
 
 	if (!anticheat_ready)
@@ -997,11 +1010,14 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 {
 	int		num;
 
-	cl->anticheat_query_sent = true;
-	cl->anticheat_query_time = svs.realtime;
+	cl->anticheat_query_sent = ANTICHEAT_QUERY_SENT;
+	cl->anticheat_query_time = curtime;
 
 	if (!anticheat_ready)
 		return false;
+
+	if (sv_anticheat_nag_time->intvalue)
+		SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_nag_message->string);
 
 	if (acSendBufferLen + 7 >= AC_BUFFSIZE)
 	{

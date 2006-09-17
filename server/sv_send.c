@@ -1181,7 +1181,7 @@ void SV_SendClientMessages (void)
 			SV_WriteReliableMessages (c, c->netchan.message.buffsize);
 			// just update reliable	if needed
 			// r1: write if pending reliable buffer too.
-			if ((!c->netchan.reliable_length && c->netchan.message.cursize) || c->netchan.reliable_length || curtime - c->netchan.last_sent > 100)
+			if ((!c->netchan.reliable_length && c->netchan.message.cursize) || c->netchan.reliable_length || (unsigned)(curtime - c->netchan.last_sent) > 100)
 				Netchan_Transmit (&c->netchan, 0, NULL);
 		}
 	}

@@ -820,8 +820,8 @@ typedef struct
 
 	int			dropped;			// between last packet and previous
 
-	int			last_received;		// for timeouts
-	int			last_sent;			// for retransmits
+	unsigned	last_received;		// for timeouts
+	unsigned	last_sent;			// for retransmits
 
 	netadr_t	remote_address;
 
@@ -1067,10 +1067,10 @@ extern char	*binary_name;
 extern	cvar_t	*dbg_unload;
 
 // host_speeds times
-extern	int		time_before_game;
-extern	int		time_after_game;
-extern	int		time_before_ref;
-extern	int		time_after_ref;
+extern	unsigned int		time_before_game;
+extern	unsigned int		time_after_game;
+extern	unsigned int		time_before_ref;
+extern	unsigned int		time_after_ref;
 
 typedef struct tagmalloc_tag_s
 {

@@ -231,11 +231,12 @@ typedef struct client_s
 
 #ifdef ANTICHEAT
 	qboolean					anticheat_valid;
-	qboolean					anticheat_query_sent;
+	int							anticheat_query_sent;
 	int							anticheat_required;
 	int							anticheat_file_failures;
 	linkednamelist_t			anticheat_bad_files;
 	unsigned					anticheat_query_time;
+	unsigned					anticheat_nag_time;
 #endif
 } client_t;
 
@@ -665,6 +666,10 @@ extern	cvar_t	*sv_anticheat_badfile_action;
 extern	cvar_t	*sv_anticheat_badfile_message;
 extern	cvar_t	*sv_anticheat_badfile_max;
 extern	cvar_t	*sv_anticheat_message;
+
+extern cvar_t	*sv_anticheat_nag_time;
+extern cvar_t	*sv_anticheat_nag_message;
+
 extern	int		antiCheatNumFileHashes;
 
 void SVCmd_SVACList_f (void);
@@ -675,6 +680,13 @@ enum
 	ANTICHEAT_NORMAL,
 	ANTICHEAT_REQUIRED,
 	ANTICHEAT_EXEMPT
+};
+
+enum
+{
+	ANTICHEAT_QUERY_UNSENT,
+	ANTICHEAT_QUERY_SENT,
+	ANTICHEAT_QUERY_DONE
 };
 
 extern netblock_t	anticheat_exceptions;

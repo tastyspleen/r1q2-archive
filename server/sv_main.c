@@ -177,6 +177,10 @@ cvar_t	*sv_anticheat_server_address;
 cvar_t	*sv_anticheat_badfile_action;
 cvar_t	*sv_anticheat_badfile_message;
 cvar_t	*sv_anticheat_badfile_max;
+
+cvar_t	*sv_anticheat_nag_time;
+cvar_t	*sv_anticheat_nag_message;
+
 netblock_t	anticheat_exceptions;
 netblock_t	anticheat_requirements;
 #endif
@@ -791,7 +795,7 @@ static void SVC_GetChallenge (void)
 {
 	int		i;
 	int		oldest = 0;
-	uint32	oldestTime = 0xffffffff;
+	uint32	oldestTime = 0, diff;
 
 	// see if we already have a challenge for this ip
 	for (i = 0 ; i < MAX_CHALLENGES ; i++)
@@ -799,9 +803,10 @@ static void SVC_GetChallenge (void)
 		if (NET_CompareBaseAdr (&net_from, &svs.challenges[i].adr))
 			break;
 
-		if (svs.challenges[i].time < oldestTime)
+		diff = curtime - svs.challenges[i].time;
+		if (diff > oldestTime)
 		{
-			oldestTime = svs.challenges[i].time;
+			oldestTime = diff;
 			oldest = i;
 		}
 	}
@@ -1963,8 +1968,10 @@ for their command moves.  If they exceed it, assume cheating.
 static void SV_GiveMsec (void)
 {
 	int			msecpoint;
-	int			i, diff;
+	int			i;
 	client_t	*cl;
+
+	//int	diff;
 
 	if (sv.framenum & 15)
 		return;
@@ -2025,11 +2032,14 @@ static void SV_GiveMsec (void)
 
 			//new speed hack check, forget who thought of this but it works great, detects even 5% speed offset
 			//Com_Printf ("client: %d, server: %d, diff: %d\n", LOG_GENERAL, cl->totalMsecUsed, (sv.framenum - cl->enterFrame) * 100, );
-			diff = (sv.framenum - cl->enterFrame) * 100 - cl->totalMsecUsed;
+
+			//FIXME: use real time, fix for internet.
+			/*diff = (sv.framenum - cl->enterFrame) * 100 - cl->totalMsecUsed;
 
 			//allow one frame of slop
 			if (diff < -100)
-				Com_Printf ("WARNING: Negative time difference of %d for %s[%s], possible speed cheat.\n", LOG_WARNING|LOG_SERVER, diff, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+				Com_Printf ("WARNING: Negative time difference of %d for %s[%s], possible speed cheat.\n", LOG_WARNING|LOG_SERVER, diff, cl->name, NET_AdrToString (&cl->netchan.remote_address));*/
+
 		}
 
 		cl->commandMsec = sv_msecs->intvalue;		// 1600 + some slop
@@ -2692,6 +2702,12 @@ static void _anticheat_changed (cvar_t *var, char *o, char *n)
 	}
 }
 #endif
+
+static void _expand_cvar_newlines (cvar_t *var, char *o, char *n)
+{
+	ExpandNewLines (var->string);
+}
+
 /*
 ===============
 SV_Init
@@ -3017,6 +3033,7 @@ void SV_Init (void)
 
 	sv_anticheat_message = Cvar_Get ("sv_anticheat_message", "This server requires the r1ch.net anticheat module. Please see http://antiche.at/ for more details.", 0);
 	sv_anticheat_message->help = "Message to show to players who connect with no anticheat loaded. Use \\n for newline.\n";
+	sv_anticheat_message->changed = _expand_cvar_newlines;
 	ExpandNewLines (sv_anticheat_message->string);
 
 	sv_anticheat_badfile_action = Cvar_Get ("sv_anticheat_badfile_action", "0", 0);
@@ -3024,10 +3041,19 @@ void SV_Init (void)
 
 	sv_anticheat_badfile_message = Cvar_Get ("sv_anticheat_badfile_message", "", 0);
 	sv_anticheat_badfile_message->help = "Message to show to clients that fail file tests, useful to include a URL to your server files / rules or something. Use \\n for newline. Default empty.\n";
+	sv_anticheat_badfile_message->changed = _expand_cvar_newlines;
 	ExpandNewLines (sv_anticheat_badfile_message->string);
 
 	sv_anticheat_badfile_max = Cvar_Get ("sv_anticheat_badfile_max", "0", 0);
 	sv_anticheat_badfile_max->help = "Maximum number of bad files before a client will be kicked, regardless of sv_anticheat_badfile_action value. 0 = disabled. Default 0.\n";
+
+	sv_anticheat_nag_time = Cvar_Get ("sv_anticheat_nag_time", "0", 0);
+	sv_anticheat_nag_time->help = "Seconds to wait before letting a non-anticheat client into the game. The sv_anticheat_nag_message will be shown during this time. Default 0.\n";
+
+	sv_anticheat_nag_message = Cvar_Get ("sv_anticheat_nag_message", "Please consider using anticheat on this server. See http://antiche.at/ for information and downloads.", 0);
+	sv_anticheat_nag_message->help = "Message to show to clients before letting them into the game if they are not using anticheat. \\n supported.";
+	sv_anticheat_nag_message->changed = _expand_cvar_newlines;
+	ExpandNewLines (sv_anticheat_nag_message->string);
 #endif
 
 	//r1: init pyroadmin

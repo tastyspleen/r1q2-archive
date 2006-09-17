@@ -983,7 +983,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 	
 	int				i;
 	void			**newitem;
-	pack_t			*pack;
+	pack_t			*pack = NULL;
 	packfile_t		*info;
 
 	if (!strcmp (ext, "pak"))

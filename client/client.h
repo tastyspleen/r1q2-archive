@@ -184,7 +184,7 @@ typedef struct client_state_s
 	int			timeoutcount;
 
 	int			timedemo_frames;
-	int			timedemo_start;
+	unsigned 	timedemo_start;
 
 	qboolean	refresh_prepped;	// false if on new level or new ref dll
 	qboolean	sound_prepped;		// ambient sounds can start

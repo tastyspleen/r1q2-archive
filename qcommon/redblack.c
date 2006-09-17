@@ -1,4 +1,4 @@
-//static char rcsid[]="$Id: redblack.c,v 1.12 2005/10/25 05:31:13 r1ch Exp $";
+//static char rcsid[]="$Id: redblack.c,v 1.13 2006/06/09 16:23:25 r1ch Exp $";
 
 /*
    Redblack balanced tree algorithm
@@ -507,7 +507,7 @@ static struct RB_ENTRY(node) *
 RB_ENTRY(_lookup)(int mode, const RB_ENTRY(data_t) *key, struct RB_ENTRY(tree) *rbinfo)
 {
 	struct RB_ENTRY(node) *x,*y;
-	int cmp;
+	int cmp = 0;
 	int found=0;
 
 	y=RBNULL; /* points to the parent of x */
@@ -1016,6 +1016,9 @@ RB_ENTRY(_free)(struct RB_ENTRY(node) *x)
 
 /*
  * $Log: redblack.c,v $
+ * Revision 1.13  2006/06/09 16:23:25  r1ch
+ * -Wall cleanups by Turol.
+ *
  * Revision 1.12  2005/10/25 05:31:13  r1ch
  * Win32 exception handler
  *

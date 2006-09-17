@@ -103,22 +103,6 @@ void Sys_SetWindowText (char *dummy)
 {
 }
 
-void Sys_AcquireDlMutex (void)
-{
-}
-
-void Sys_ReleaseDlMutex (void)
-{
-}
-
-void Sys_FreeDlMutex (void)
-{
-}
-
-void Sys_InitDlMutex (void)
-{
-}
-
 void Sys_Printf (char *fmt, ...)
 {
 	va_list		argptr;
@@ -513,7 +497,7 @@ char *Sys_GetClipboardData(void)
 
 int main (int argc, char **argv)
 {
-	int 	time, oldtime, newtime;
+	unsigned int 	time, oldtime, newtime;
 
 	// go back to real user for config loads
 	//saved_euid = geteuid();

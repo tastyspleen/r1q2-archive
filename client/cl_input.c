@@ -664,7 +664,7 @@ void CL_SendCmd_Synchronous (void)
 
 	if ( cls.state == ca_connected)
 	{
-		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 ) {
+		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| (unsigned)(curtime - cls.netchan.last_sent) > 100 ) {
 	 		//memset (&buf, 0, sizeof(buf));
 			//Com_DPrintf ("connected: flushing netchan (len=%d, %s)\n", cls.netchan.message.cursize, MakePrintable(cls.netchan.message.data));
 			Netchan_Transmit (&cls.netchan, 0, NULL);	
@@ -779,7 +779,7 @@ void CL_SendCmd (void)
 
 	if ( cls.state == ca_connected)
 	{
-		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 ) {
+		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| (unsigned)(curtime - cls.netchan.last_sent) > 100 ) {
 	 		//memset (&buf, 0, sizeof(buf));
 			//Com_DPrintf ("connected: flushing netchan (len=%d, %s)\n", cls.netchan.message.cursize, MakePrintable(cls.netchan.message.data));
 			Netchan_Transmit (&cls.netchan, 0, NULL);	

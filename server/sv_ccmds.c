@@ -655,12 +655,13 @@ static void SV_Map_f (void)
 				Com_Printf ("(Set the cvar 'sv_allow_map 1' if you wish to disable this check)\n", LOG_GENERAL);
 				warned = true;
 			}
+			return;
 		}
 		else if (sv_allow_map->intvalue == 2)
 		{
 			SV_GameMap_f ();
+			return;
 		}
-		return;
 	}
 
 	// if not a pcx, demo, or cinematic, check to make sure the level exists

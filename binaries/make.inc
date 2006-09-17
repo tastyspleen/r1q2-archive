@@ -1,6 +1,6 @@
 #turol: for some reason -ffast-math causes strange errors
 #and it's not really any faster
-CFLAGS+=-DNDEBUG -DLINUX -O2 -ffloat-store -pipe -g -MF .depends/$*.d -MMD
+CFLAGS+=-DNDEBUG -DLINUX -O2 -fno-strict-aliasing -Wall -ffloat-store -pipe -g -MF .depends/$*.d -MMD
 ALLOBJ:=$(ALLSRC:.c=.o)
 
 .PHONY: clean distclean

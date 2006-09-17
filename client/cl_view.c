@@ -678,13 +678,13 @@ void V_RenderView(void)
 	//if ( log_stats->value && ( log_stats_file != 0 ) )
 	//	fprintf( log_stats_file, "%i,%i,%i,",r_numentities, r_numdlights, r_numparticles);
 
-	if (Sys_Milliseconds () - frames_seconds >= 1000)
+	if ((unsigned)(curtime - frames_seconds) >= 1000)
 	{
 		spc = serverPacketCount;
 		fps = frames_this_second;
 		frames_this_second = 0;
 		serverPacketCount = 0;
-		frames_seconds = Sys_Milliseconds();
+		frames_seconds = curtime;
 	}
 
 	if (cl_shownet->intvalue == -1)

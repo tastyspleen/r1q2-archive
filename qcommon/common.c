@@ -93,10 +93,10 @@ static FILE	*logfile;
 int			server_state;
 
 // host_speeds times
-int		time_before_game;
-int		time_after_game;
-int		time_before_ref;
-int		time_after_ref;
+unsigned int		time_before_game;
+unsigned int		time_after_game;
+unsigned int		time_before_ref;
+unsigned int		time_after_ref;
 
 // for profiling
 #ifndef NPROFILE

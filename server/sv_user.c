@@ -830,7 +830,7 @@ void SV_ClientBegin (client_t *cl)
 				}
 				else
 				{
-					if (!cl->anticheat_query_sent)
+					if (cl->anticheat_query_sent == ANTICHEAT_QUERY_UNSENT)
 					{
 						SV_AntiCheat_QueryClient (cl);
 						return;
@@ -846,7 +846,7 @@ void SV_ClientBegin (client_t *cl)
 		{
 			if (!cl->anticheat_valid)
 			{
-				if (!cl->anticheat_query_sent && SV_AntiCheat_IsConnected())
+				if (cl->anticheat_query_sent == ANTICHEAT_QUERY_UNSENT && SV_AntiCheat_IsConnected())
 				{
 					SV_AntiCheat_QueryClient (cl);
 					return;

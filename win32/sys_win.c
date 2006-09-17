@@ -1308,6 +1308,20 @@ skipPathCheck:
 #ifdef ANTICHEAT
 #ifndef DEDICATED_ONLY
 
+typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
+ 
+BOOL IsWow64()
+{
+    BOOL bIsWow64 = FALSE;
+	LPFN_ISWOW64PROCESS fnIsWow64Process = (LPFN_ISWOW64PROCESS)GetProcAddress(GetModuleHandle("KERNEL32"),"IsWow64Process");
+ 
+    if (NULL != fnIsWow64Process)
+    {
+        fnIsWow64Process(GetCurrentProcess(), &bIsWow64);
+    }
+    return bIsWow64;
+}
+
 typedef struct
 {
 	void (*Check) (void);
@@ -1322,6 +1336,19 @@ int Sys_GetAntiCheatAPI (void)
 	qboolean			updated = false;
 	HMODULE				hAC;
 	static FNINIT		init;
+
+	//windows version check
+	if (s_win95)
+	{
+		Com_Printf ("anticheat requires Windows 2000/XP/2003.\n", LOG_GENERAL);
+		return 0;
+	}
+
+	if (IsWow64())
+	{
+		Com_Printf ("anticheat is incompatible with 64 bit Windows.\n", LOG_GENERAL);
+		return 0;
+	}
 
 	//already loaded, just reinit
 	if (anticheat)
@@ -2063,14 +2090,13 @@ HINSTANCE	global_hInstance;
 //#define FLOAT2INTCAST(f)(*((int *)(&f)))
 //#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
 
-
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 #ifndef NO_SERVER
 //	unsigned int	handle;
 #endif
     MSG				msg;
-	int				time, oldtime, newtime;
+	unsigned int				time, oldtime, newtime;
 
     /* previous instances do not exist in Win32 */
     if (hPrevInstance)

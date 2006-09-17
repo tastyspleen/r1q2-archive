@@ -41,7 +41,7 @@ int			keyshift[256];		// key to map to if shift held down in console
 int			key_repeats[256];	// if > 1, it is autorepeating
 int			keydown[256];
 
-int			key_lastrepeat[256];
+unsigned int			key_lastrepeat[256];
 
 int			key_repeatrate;
 int			key_repeatdelay;

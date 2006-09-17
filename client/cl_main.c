@@ -1123,7 +1123,7 @@ void CL_Disconnect (qboolean skipdisconnect)
 
 	if (cl_timedemo->intvalue)
 	{
-		int	time;
+		unsigned int	time;
 		
 		time = Sys_Milliseconds () - cl.timedemo_start;
 		if (time > 0)

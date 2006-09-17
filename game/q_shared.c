@@ -170,7 +170,7 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 	int	pos;
 	int i;
 	float minelem = 1.0F;
-	vec3_t tempvec;
+	vec3_t tempvec = {0.0, 0.0, 0.0};
 
 	/*
 	** find the smallest magnitude axially aligned vector
@@ -183,7 +183,6 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 			minelem = (float)fabs( src[i] );
 		}
 	}
-	VectorClear (tempvec);
 	tempvec[pos] = 1.0F;
 
 	/*
