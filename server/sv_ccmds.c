@@ -1550,6 +1550,7 @@ static void SV_AddACException_f (void)
 
 	n->ip = *(uint32 *)from.ip;
 	n->mask = CalcMask(mask);
+	n->next = NULL;
 
 	if (sv.state)
 		Com_Printf ("Anticheat exception added.\n", LOG_GENERAL);
@@ -1612,6 +1613,7 @@ static void SV_AddACRequirement_f (void)
 
 	n->ip = *(uint32 *)from.ip;
 	n->mask = CalcMask(mask);
+	n->next = NULL;
 
 	if (sv.state)
 		Com_Printf ("Anticheat requirement added.\n", LOG_GENERAL);
