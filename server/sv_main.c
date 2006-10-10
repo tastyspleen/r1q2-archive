@@ -181,6 +181,9 @@ cvar_t	*sv_anticheat_badfile_max;
 cvar_t	*sv_anticheat_nag_time;
 cvar_t	*sv_anticheat_nag_message;
 
+cvar_t	*sv_anticheat_show_violation_reason;
+cvar_t	*sv_anticheat_client_disconnect_action;
+
 netblock_t	anticheat_exceptions;
 netblock_t	anticheat_requirements;
 #endif
@@ -1431,7 +1434,7 @@ gotnewcl:
 
 		newcl->anticheat_required = ANTICHEAT_NORMAL;
 
-		//r1: exception list
+		//r1: forced list
 		while (n->next)
 		{
 			n = n->next;
@@ -3048,12 +3051,18 @@ void SV_Init (void)
 	sv_anticheat_badfile_max->help = "Maximum number of bad files before a client will be kicked, regardless of sv_anticheat_badfile_action value. 0 = disabled. Default 0.\n";
 
 	sv_anticheat_nag_time = Cvar_Get ("sv_anticheat_nag_time", "0", 0);
-	sv_anticheat_nag_time->help = "Seconds to wait before letting a non-anticheat client into the game. The sv_anticheat_nag_message will be shown during this time. Default 0.\n";
+	sv_anticheat_nag_time->help = "Seconds to show the sv_anticheat_nag_message. Default 0.\n";
 
-	sv_anticheat_nag_message = Cvar_Get ("sv_anticheat_nag_message", "Please consider using anticheat on this server. See http://antiche.at/ for information and downloads.", 0);
-	sv_anticheat_nag_message->help = "Message to show to clients before letting them into the game if they are not using anticheat. \\n supported.";
+	sv_anticheat_nag_message = Cvar_Get ("sv_anticheat_nag_message", "Please use anticheat on this server.\nSee http://antiche.at/ for downloads.", 0);
+	sv_anticheat_nag_message->help = "Message to show to clients on joining the game if they are not using anticheat. \\n supported. Maximum of 40 characters per line.\n";
 	sv_anticheat_nag_message->changed = _expand_cvar_newlines;
 	ExpandNewLines (sv_anticheat_nag_message->string);
+
+	sv_anticheat_show_violation_reason = Cvar_Get ("sv_anticheat_show_violation_reason", "0", 0);
+	sv_anticheat_show_violation_reason->help = "Include the type of cheat detected when showing a client violation to other players. Default 0.\n";
+
+	sv_anticheat_client_disconnect_action = Cvar_Get ("sv_anticheat_client_disconnect_action", "0", 0);
+	sv_anticheat_client_disconnect_action->help = "Action to take when a client disconnects from the anticheat server mid-game. Default 0.\n0: Mark client as invalid.\n1: Kick client.\n";
 #endif
 
 	//r1: init pyroadmin

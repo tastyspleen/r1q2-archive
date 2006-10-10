@@ -478,9 +478,14 @@ void SV_InitGame (void)
 #ifdef ANTICHEAT
 	if (sv_require_anticheat->intvalue)
 	{
-		Cvar_FullSet ("anticheat", sv_require_anticheat->string, CVAR_SERVERINFO | CVAR_NOSET);
 		SV_AntiCheat_Connect ();
 		SV_AntiCheat_WaitForInitialConnect ();
+		if (SV_AntiCheat_IsConnected ())
+			Cvar_FullSet ("anticheat", sv_require_anticheat->string, CVAR_SERVERINFO | CVAR_NOSET);
+	}
+	else if (Cvar_FindVar ("anticheat"))
+	{
+		Cvar_FullSet ("anticheat", "0", CVAR_NOSET);
 	}
 #endif
 
@@ -580,7 +585,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	else if (l > 4 && !strcmp (level+l-4, ".dm2") )
 	{
 		if (!attractloop)
-			Com_Error (ERR_HARD, "Demos should be replayed using the 'demomap' command");
+			Com_Printf ("WARNING: Loading a Game DLL while playing back a demo. Use 'demomap' if you encounter problems.\n", LOG_GENERAL);
+			//Com_Error (ERR_HARD, "Demos should be replayed using the 'demomap' command");
 #ifndef DEDICATED_ONLY
 		SCR_BeginLoadingPlaque ();			// for local system
 #endif
@@ -624,7 +630,7 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 			cl = &svs.clients[i];
 			if (cl->state >= cs_connected && !cl->anticheat_valid)
 			{
-				if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required)
+				if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required == ANTICHEAT_REQUIRED)
 				{
 					SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " Due to a server connection problem, you must reconnect to re-enable anticheat.\n");
 					SV_DropClient (cl, true);

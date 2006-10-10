@@ -814,14 +814,19 @@ void SV_ClientBegin (client_t *cl)
 	//FIXME: make this into one big confusing statement
 	if (cl->anticheat_required != ANTICHEAT_EXEMPT)
 	{
+		///client is NOT EXEMPT
 		if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required == ANTICHEAT_REQUIRED)
 		{
+			//anticheat is REQUIRED
 			if (!cl->anticheat_valid)
 			{
+				//client is INVALID
 				if (!SV_AntiCheat_IsConnected())
 				{
+					//acserver is DOWN
 					if (sv_anticheat_error_action->intvalue == 1)
 					{
+						//anticheat server connection is DOWN, client is INVALID, anticheat is REQUIRED, error action is DENY.
 						Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], no anticheat response (no anticheat server).\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 						SV_ClientPrintf (cl, PRINT_HIGH, "This server is unable to take new connections right now. Please try again later.\n");
 						SV_DropClient (cl, true);
@@ -832,9 +837,11 @@ void SV_ClientBegin (client_t *cl)
 				{
 					if (cl->anticheat_query_sent == ANTICHEAT_QUERY_UNSENT)
 					{
+						//anticheat connection is UP, client is INVALID, anticheat is REQUIRED
 						SV_AntiCheat_QueryClient (cl);
 						return;
 					}
+					//anticheat connection is UP, client is STILL INVALID AFTER QUERY, anticheat is REQUIRED
 					Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], no anticheat response.\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 					SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_message->string);
 					SV_DropClient (cl, true);
@@ -844,10 +851,13 @@ void SV_ClientBegin (client_t *cl)
 		}
 		else if (sv_require_anticheat->intvalue == 1)
 		{
+			//anticheat is OPTIONAL
 			if (!cl->anticheat_valid)
 			{
+				//client is INVALID
 				if (cl->anticheat_query_sent == ANTICHEAT_QUERY_UNSENT && SV_AntiCheat_IsConnected())
 				{
+					//client is INVALID, query is UNSENT, anticheat is OPTIONAL
 					SV_AntiCheat_QueryClient (cl);
 					return;
 				}
@@ -855,6 +865,17 @@ void SV_ClientBegin (client_t *cl)
 		}
 	}
 #endif
+
+	if (cl->beginspawncount != svs.spawncount )
+	{
+		Com_Printf ("SV_ClientBegin from %s for a different level\n", LOG_SERVER|LOG_NOTICE, cl->name);
+		cl->state = cs_connected;
+
+		//ick
+		sv_client = cl;
+		SV_New_f ();
+		return;
+	}
 
 	cl->downloadsize = 0;
 
@@ -901,6 +922,7 @@ void SV_ClientBegin (client_t *cl)
 	//give them some movement
 
 	//r1: give appropriate amount of movement, except on a givemsec frame.
+	//FIXME this is broken for some framenums?
 	if (sv.framenum & 15)
 		cl->commandMsec = (int)((sv_msecs->value / 16.0f) * (16 - (sv.framenum % 16)));
 
@@ -937,6 +959,8 @@ static void SV_Begin_f (void)
 		SV_New_f ();
 		return;
 	}
+
+	sv_client->beginspawncount = atoi(Cmd_Argv(1));
 
 	SV_ClientBegin (sv_client);
 }

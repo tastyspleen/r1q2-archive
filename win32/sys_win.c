@@ -1365,7 +1365,11 @@ reInit:
 	if (!hAC)
 		return 0;
 
+	//this should never fail unless the anticheat.dll is bad
 	init = (FNINIT)GetProcAddress (hAC, "Initialize");
+	if (!init)
+		Sys_Error ("Couldn't GetProcAddress Initialize on anticheat.dll!\r\n\r\nPlease check you are using a valid anticheat.dll from http://antiche.at/");
+
 	anticheat = (anticheat_export_t *)init ();
 
 	if (!updated && !anticheat)

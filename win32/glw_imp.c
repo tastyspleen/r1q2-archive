@@ -116,7 +116,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 
 	if (fullscreen)
 	{
-		exstyle = 0;//WS_EX_TOPMOST;
+		exstyle = (FLOAT_NE_ZERO(vid_topmost->value) ? WS_EX_TOPMOST : 0);
 		stylebits = WS_POPUP|WS_VISIBLE;
 	}
 	else

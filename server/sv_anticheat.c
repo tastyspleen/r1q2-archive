@@ -50,7 +50,6 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr);
 
 #define DEFAULT_BACKOFF 5
 
-
 #define	AC_BUFFSIZE	131072
 
 int		packetLen;
@@ -66,6 +65,9 @@ int		acSendBufferLen;
 byte	acSendBuffer[AC_BUFFSIZE];
 
 int		antiCheatNumFileHashes;
+
+static unsigned	last_ping = 0;
+static qboolean ping_pending = false;
 
 typedef struct filehash_s
 {
@@ -85,6 +87,8 @@ enum acserverbytes_e
 	ACS_FILE_VIOLATION,
 	ACS_READY,
 	ACS_QUERYREPLY,
+	ACS_PONG,
+	ACS_UPDATE_REQUIRED,
 };
 
 enum q2serverbytes_e
@@ -96,7 +100,10 @@ enum q2serverbytes_e
 	Q2S_REQUESTCHALLENGE,
 	Q2S_CLIENTDISCONNECT,
 	Q2S_QUERYCLIENT,
+	Q2S_PING,
 };
+
+#define ANTICHEAT_PROTOCOL_VERSION	0xAC01
 
 static void SV_AntiCheat_ClearFileHashes (void)
 {
@@ -263,9 +270,11 @@ static void SV_AntiCheat_Unexpected_Disconnect (void)
 	closesocket (acSocket);
 	acSocket = 0;
 
-	anticheat_ready = false;
+	if (anticheat_ready)
+		retryBackOff = DEFAULT_BACKOFF;
+	else
+		retryBackOff += 30;	//this generally indicates a server problem
 
-	retryBackOff = DEFAULT_BACKOFF;
 	retryTime = time(NULL) + retryBackOff;
 
 	//reset everyone to failure status
@@ -275,20 +284,29 @@ static void SV_AntiCheat_Unexpected_Disconnect (void)
 		svs.clients[i].anticheat_file_failures = 0;
 	}
 
-	//inform
-	SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " This server has lost the connection to the anticheat server. Any anticheat clients are no longer valid.\n");
+	last_ping = 0;
+	ping_pending = false;
 
-	if (sv_require_anticheat->intvalue == 2)
-		SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " You will need to reconnect once the server has re-established the anticheat connection.\n");
+	//inform
+	if (anticheat_ready)
+	{
+		SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " This server has lost the connection to the anticheat server. Any anticheat clients are no longer valid.\n");
+
+		if (sv_require_anticheat->intvalue == 2)
+			SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " You will need to reconnect once the server has re-established the anticheat connection.\n");
+	}
 
 	Com_Printf ("ANTICHEAT WARNING: Lost connection to anticheat server! Will attempt to reconnect in %d seconds.\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT, retryBackOff);
+
+	anticheat_ready = false;
 }
 
 static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 {
+	int				len;
 	client_t		*cl;
 	unsigned short	clientID;
-	const char		*reason;
+	const char		*reason, *clientreason;
 
 	if (bufflen < 3)
 		return;
@@ -298,6 +316,16 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 	bufflen -= 2;
 
 	reason = (const char *)buff;
+
+	len = (int)strlen(reason) + 1;
+
+	buff += len;
+	bufflen -= len;
+
+	if (bufflen)
+		clientreason = (const char *)buff;
+	else
+		clientreason = NULL;
 
 	if (clientID >= maxclients->intvalue)
 	{
@@ -315,12 +343,22 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 		//fixme maybe
 		if (strcmp (reason, "disconnected"))
 		{
-			if (cl->state == cs_spawned)
-				SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s was kicked for anticheat violation\n", cl->name);
+			char	showreason[32];
+
+			if (sv_anticheat_show_violation_reason->intvalue)
+				Com_sprintf (showreason, sizeof(showreason), " (%s)", reason);
 			else
-				SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " %s was kicked for anticheat violation\n", cl->name);
+				showreason[0] = 0;
+
+			if (cl->state == cs_spawned)
+				SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s was kicked for anticheat violation%s\n", cl->name, showreason);
+			else
+				SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " %s was kicked for anticheat violation%s\n", cl->name, showreason);
 
 			Com_Printf ("ANTICHEAT VIOLATION: %s[%s] was kicked: '%s'\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), reason);
+
+			if (clientreason)
+				SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", clientreason);
 			SV_DropClient (cl, true);
 		}
 		else
@@ -330,8 +368,17 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 
 			Com_Printf ("ANTICHEAT DISCONNECT: %s[%s] disconnected from anticheat server\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 
-			SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server, client is no longer valid.\n", cl->name);
-			cl->anticheat_valid = false;
+			if (sv_anticheat_client_disconnect_action->intvalue == 1)
+			{
+				SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server.\n", cl->name);
+				SV_DropClient (cl, true);
+				return;
+			}
+			else
+			{
+				SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server, client is no longer valid.\n", cl->name);
+				cl->anticheat_valid = false;
+			}
 		}
 	}
 	else if (cl->state != cs_zombie)
@@ -457,7 +504,10 @@ static void SV_AntiCheat_ParseClientAck (byte *buff, int bufflen)
 
 static void SV_AntiCheat_ParseReady (void)
 {
-	SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " Anticheat server connection established. Please reconnect if you are using an anticheat-capable client.\n");
+	//SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " Anticheat server connection established. Please reconnect if you are using an anticheat-capable client.\n");
+	anticheat_ready = true;
+	retryBackOff = DEFAULT_BACKOFF;
+	Com_Printf ("ANTICHEAT: Ready to serve anticheat clients.\n", LOG_ANTICHEAT);
 }
 
 static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
@@ -491,9 +541,13 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 	if (buff[3] == 1)
 		cl->anticheat_valid = true;
 
-	if (sv_anticheat_nag_time->intvalue)
+	//aieeeeee XXX hack doom etc
+	/*if (sv_anticheat_nag_time->intvalue &&
+		strstr (cl->versionString, "Win32") || strstr (cl->versionString, "win32"))
+	{
 		cl->anticheat_nag_time = curtime;
-	else
+	}
+	else*/
 		SV_ClientBegin (cl);
 }
 
@@ -532,12 +586,33 @@ static void SV_AntiCheat_ParseBuffer (void)
 			SV_AntiCheat_Disconnect ();
 			Cvar_ForceSet ("sv_anticheat_required", "0");
 			break;
+		case ACS_UPDATE_REQUIRED:
+			Com_Printf ("ANTICHEAT WARNING: The anticheat server is no longer compatible with this version of R1Q2. Please make sure you are using the latest R1Q2 server version. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER);
+			SV_AntiCheat_Disconnect ();
+			Cvar_ForceSet ("sv_anticheat_required", "0");
+			break;
+		case ACS_PONG:
+			ping_pending = false;
+			break;
 		default:
 			Com_Printf ("ANTICHEAT WARNING: Unknown command byte %d, please make sure you are using the latest R1Q2 server version. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER, buff[0]);
 			SV_AntiCheat_Disconnect ();
 			Cvar_ForceSet ("sv_anticheat_required", "0");
 			break;
 	}
+}
+
+static qboolean SV_AntiCheat_Spin (void)
+{
+	while (acSendBufferLen >= AC_BUFFSIZE / 2)
+	{
+		//flush as much as we can
+		SV_AntiCheat_Run ();
+		if (!acSocket)
+			return false;
+		Sys_Sleep (1);
+	}
+	return true;
 }
 
 static void SV_AntiCheat_Hello (void)
@@ -558,12 +633,15 @@ static void SV_AntiCheat_Hello (void)
 	hostlen = strlen(host);
 	verlen = strlen(ver);
 
-	len = 13 + hostlen + verlen;
+	len = 15 + hostlen + verlen;
 	index = acSendBufferLen;
 
 	acSendBufferLen += 2;
 
 	acSendBuffer[acSendBufferLen++] = Q2S_VERSION;
+
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = ANTICHEAT_PROTOCOL_VERSION;
+	acSendBufferLen += sizeof(unsigned short);
 
 	memcpy (acSendBuffer + acSendBufferLen, &hostlen, sizeof(hostlen));
 	acSendBufferLen += sizeof(hostlen);
@@ -608,14 +686,8 @@ static void SV_AntiCheat_Hello (void)
 		if (acSendBufferLen + sizeof(*f) >= AC_BUFFSIZE)
 		{
 			Com_Printf ("ANTICHEAT WARNING: Anticheat send buffer length exceeded in SV_AntiCheat_Hello, spinning!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
-			while (acSendBufferLen >= AC_BUFFSIZE / 2)
-			{
-				//flush as much as we can
-				SV_AntiCheat_Run ();
-				if (!acSocket)
-					return;
-				Sys_Sleep (1);
-			}
+			if (!SV_AntiCheat_Spin ())
+				return;
 		}
 
 		memcpy (acSendBuffer + acSendBufferLen, f->hash, sizeof(f->hash));
@@ -636,12 +708,57 @@ static void SV_AntiCheat_Hello (void)
 		lastPath = f->quakePath;
 	}
 
-	anticheat_ready = true;
+	if (acSendBufferLen + 3 >= AC_BUFFSIZE)
+	{
+		if (!SV_AntiCheat_Spin())
+			return;
+	}
+
+	//ping in case server is actually frozen. NOTE: if server is unable to upload all hashes within
+	//15 seconds this will cause a problem. however a server with such slow upload should probably
+	//not be up anyway :).
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 1;
+	acSendBufferLen += 2;
+	acSendBuffer[acSendBufferLen++] = Q2S_PING;
+	last_ping = curtime;
+	ping_pending = true;
+	//anticheat_ready = true;
 }
 
-static void SV_AntiCheat_CheckQueryTimeOut (void)
+static void SV_AntiCheat_CheckTimeOuts (void)
 {
 	client_t		*cl;
+
+	if (ping_pending)
+	{
+		if ((unsigned)(curtime - last_ping) >= 15000)
+		{
+			ping_pending = false;
+			Com_Printf ("ANTICHEAT: Anticheat server ping timeout, disconnecting.\n", LOG_ANTICHEAT|LOG_WARNING);
+			SV_AntiCheat_Unexpected_Disconnect ();
+			return;
+		}
+	}
+
+	if (anticheat_ready)
+	{
+		//only ping if ready so we don't put data into the middle of a spin
+		if ((unsigned)(curtime - last_ping) >= 60000)
+		{
+			last_ping = curtime;
+			if (acSendBufferLen + 3 >= AC_BUFFSIZE)
+			{
+				SV_AntiCheat_Unexpected_Disconnect ();
+				return;
+			}
+
+			ping_pending = true;
+
+			*(unsigned short *)(acSendBuffer + acSendBufferLen) = 1;
+			acSendBufferLen += 2;
+			acSendBuffer[acSendBufferLen++] = Q2S_PING;
+		}
+	}
 
 	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 	{
@@ -654,11 +771,11 @@ static void SV_AntiCheat_CheckQueryTimeOut (void)
 				SV_ClientBegin (cl);
 				continue;
 			}
-			if (cl->anticheat_nag_time && (unsigned)(curtime - cl->anticheat_nag_time) > (int)(sv_anticheat_nag_time->value * 1000))
+			/*if (cl->anticheat_nag_time && (unsigned)(curtime - cl->anticheat_nag_time) > (int)(sv_anticheat_nag_time->value * 1000))
 			{
 				cl->anticheat_nag_time = 0;
 				SV_ClientBegin (cl);
-			}
+			}*/
 		}
 	}
 }
@@ -843,7 +960,6 @@ void SV_AntiCheat_Run (void)
 				Com_Printf ("ANTICHEAT: Connected to anticheat server!\n", LOG_SERVER|LOG_ANTICHEAT);
 				connect_pending = false;
 				retryTime = 0;
-				retryBackOff = DEFAULT_BACKOFF;
 				SV_AntiCheat_Hello ();
 			}
 		}
@@ -859,7 +975,7 @@ void SV_AntiCheat_Run (void)
 		return;
 	}
 
-	SV_AntiCheat_CheckQueryTimeOut ();
+	SV_AntiCheat_CheckTimeOuts ();
 
 	tv.tv_sec = tv.tv_usec = 0;
 
@@ -874,7 +990,10 @@ void SV_AntiCheat_Run (void)
 		{
 			ret = recv (acSocket, packetBuffer + packetLen, 2 - packetLen, 0);
 			if (ret <= 0)
+			{
 				SV_AntiCheat_Unexpected_Disconnect ();
+				return;
+			}
 
 			packetLen += ret;
 
@@ -894,7 +1013,10 @@ void SV_AntiCheat_Run (void)
 		{
 			ret = recv (acSocket, packetBuffer, expectedLength - packetLen, 0);
 			if (ret <= 0)
+			{
 				SV_AntiCheat_Unexpected_Disconnect ();
+				return;
+			}
 
 			packetLen += ret;
 
@@ -918,12 +1040,16 @@ void SV_AntiCheat_Run (void)
 		if (ret < 0)
 		{
 			SV_AntiCheat_Unexpected_Disconnect ();
+			return;
 		}
 		else if (ret == 1)
 		{
 			ret = send (acSocket, acSendBuffer, acSendBufferLen, 0);
 			if (ret <= 0)
+			{
 				SV_AntiCheat_Unexpected_Disconnect ();
+				return;
+			}
 			memmove (acSendBuffer, acSendBuffer + ret, acSendBufferLen - ret);
 			acSendBufferLen -= ret;
 		}
@@ -936,7 +1062,7 @@ void SV_AntiCheat_WaitForInitialConnect (void)
 	if (!acSocket)
 		return;
 
-	while (connect_pending && acSocket && !anticheat_ready)
+	while (acSocket && !anticheat_ready)
 	{
 		SV_AntiCheat_Run ();
 		Sys_Sleep (1);
@@ -1016,8 +1142,29 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 	if (!anticheat_ready)
 		return false;
 
-	if (sv_anticheat_nag_time->intvalue)
-		SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_nag_message->string);
+	if (sv_anticheat_nag_time->intvalue && (strstr (cl->versionString, "Win32") || strstr (cl->versionString, "win32")))
+	{
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString ("set _old_centertime $scr_centertime\n");
+		SV_AddMessage (cl, true);
+
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString (va ("set scr_centertime %g\n", sv_anticheat_nag_time->value));
+		SV_AddMessage (cl, true);
+
+		//force a buffer flush so the stufftexts go through (yuck)
+		SV_WriteReliableMessages (cl, cl->netchan.message.buffsize);
+		Netchan_Transmit (&cl->netchan, 0, NULL);
+
+		MSG_BeginWriting (svc_centerprint);
+		MSG_WriteString (sv_anticheat_nag_message->string);
+		SV_AddMessage (cl, true);
+
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString ("set scr_centertime $_old_centertime\n");
+		SV_AddMessage (cl, true);
+		//SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_nag_message->string);
+	}
 
 	if (acSendBufferLen + 7 >= AC_BUFFSIZE)
 	{

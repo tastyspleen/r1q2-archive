@@ -1003,10 +1003,10 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 		rewind (packhandle);
 
 		if (fread (&header, sizeof(header), 1, packhandle) != 1)
-			Com_Error (ERR_FATAL, "couldn't read pak header from %s", packfile);
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: Couldn't read pak header from %s", packfile);
 
 		if (LittleLong(header.ident) != IDPAKHEADER)
-			Com_Error (ERR_FATAL, "%s is not a valid packfile", packfile);
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: %s is not a valid pak file.", packfile);
 		
 	#if YOU_HAVE_A_BROKEN_COMPUTER
 		header.dirofs = LittleLong (header.dirofs);
@@ -1014,13 +1014,13 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 	#endif
 
 		if (header.dirlen % sizeof(packfile_t))
-			Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %u is not a multiple of %d)", packfile, header.dirlen, (int)sizeof(packfile_t));
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: Bad pak file %s (directory length %u is not a multiple of %d)", packfile, header.dirlen, (int)sizeof(packfile_t));
 
 		numpackfiles = header.dirlen / sizeof(packfile_t);
 
 		if (numpackfiles > MAX_FILES_IN_PACK)
 			//Com_Error (ERR_FATAL, "FS_LoadPackFile: packfile %s has %i files (max allowed %d)", packfile, numpackfiles, MAX_FILES_IN_PACK);
-			Com_Printf ("WARNING: packfile %s has %i files (max allowed %d) - may not be compatible with other clients\n", LOG_GENERAL, packfile, numpackfiles, MAX_FILES_IN_PACK);
+			Com_Printf ("WARNING: Pak file %s has %i files (max allowed %d) - may not be compatible with other clients\n", LOG_GENERAL, packfile, numpackfiles, MAX_FILES_IN_PACK);
 
 		if (!numpackfiles)
 		{
@@ -1033,10 +1033,10 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 		info = Z_TagMalloc (numpackfiles * sizeof(packfile_t), TAGMALLOC_FSLOADPAK);
 
 		if (fseek (packhandle, header.dirofs, SEEK_SET))
-			Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %u in %s failed. Pak file is possibly corrupt.", header.dirofs, packfile);
 
 		if ((int)fread (info, 1, header.dirlen, packhandle) != header.dirlen)
-			Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
+			Com_Error (ERR_FATAL, "FS_LoadPackFile: Error reading packfile directory from %s (failed to read %u bytes at %u). Pak file is possibly corrupt.", packfile, header.dirofs, header.dirlen);
 
 		pack = Z_TagMalloc (sizeof (pack_t), TAGMALLOC_FSLOADPAK);
 		pack->type = PAK_QUAKE;
@@ -1052,7 +1052,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 			info[i].filelen = LittleLong(info[i].filelen);
 #endif
 			if (info[i].filepos + info[i].filelen >= pakLen)
-				Com_Error (ERR_FATAL, "FS_LoadPackFile: file '%s' has illegal offset %u past end of file %u", info[i].name, info[i].filepos, pakLen);
+				Com_Error (ERR_FATAL, "FS_LoadPackFile: File '%.64s' in pak file %s has illegal offset %u past end of file %u. Pak file is possibly corrupt.", MakePrintable (info[i].name, 0), packfile, info[i].filepos, pakLen);
 			
 			newitem = rbsearch (info[i].name, pack->rb);
 			*newitem = &info[i];

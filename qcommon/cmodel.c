@@ -798,7 +798,7 @@ cmodel_t	*CM_InlineModel (const char *name)
 		Com_Error (ERR_DROP, "CM_InlineModel: bad name: %s", name);
 	num = atoi (name+1);
 	if (num < 1 || num >= numcmodels)
-		Com_Error (ERR_DROP, "CM_InlineModel: bad number: %d", num);
+		Com_Error (ERR_DROP, "CM_InlineModel: bad number: %d (%d total cmodels)", num, numcmodels);
 
 	return &map_cmodels[num];
 }

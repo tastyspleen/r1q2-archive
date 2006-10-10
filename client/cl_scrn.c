@@ -250,7 +250,7 @@ void SCR_CenterPrint (char *str)
 		itsTheSameAsBefore = false;
 
 	strncpy (scr_centerstring, str, sizeof(scr_centerstring)-1);
-	scr_centertime_off = (int)(cls.realtime + scr_centertime->value * 1000);
+	scr_centertime_off = (cls.realtime + (int)scr_centertime->value * 1000);
 	//scr_centertime_start = cl.time;
 
 	// count the number of lines for centering

@@ -140,6 +140,8 @@ cvar_t	*vid_gamma_pics;
 cvar_t	*gl_forcewidth;
 cvar_t	*gl_forceheight;
 
+cvar_t	*vid_topmost;
+
 //cvar_t	*gl_log;
 cvar_t	*gl_bitdepth;
 cvar_t	*gl_drawbuffer;
@@ -1376,6 +1378,8 @@ void R_Register( void )
 
 	gl_forcewidth = ri.Cvar_Get ("vid_forcewidth", "0", 0);
 	gl_forceheight = ri.Cvar_Get ("vid_forceheight", "0", 0);
+
+	vid_topmost = ri.Cvar_Get ("vid_topmost", "0", 0);
 	//r1ch end my shit
 
 	gl_drawbuffer = ri.Cvar_Get( "gl_drawbuffer", "GL_BACK", 0 );

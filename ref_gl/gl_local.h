@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.34"
+#define	REF_VERSION	"R1GL 0.1.5.35"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -247,6 +247,8 @@ extern cvar_t	*vid_gamma_pics;
 
 extern cvar_t	*gl_forcewidth;
 extern cvar_t	*gl_forceheight;
+
+extern cvar_t	*vid_topmost;
 
 extern cvar_t	*gl_particle_min_size;
 extern cvar_t	*gl_particle_max_size;

@@ -1977,14 +1977,24 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 		while (scaled_width > 1 || scaled_height > 1)
 		{
 			GL_MipMap ((byte *)scaled, scaled_width, scaled_height);
-			scaled_width >>= 1;
-			scaled_height >>= 1;
+
+			if (gl_config.r1gl_GL_ARB_texture_non_power_of_two)
+			{
+				scaled_width = (int)floor (width / pow(2, miplevel+1));
+				scaled_height = (int)floor (height / pow (2, miplevel+1));
+			}
+			else
+			{
+				scaled_width >>= 1;
+				scaled_height >>= 1;
+			}
+
 			if (scaled_width < 1)
 				scaled_width = 1;
 			if (scaled_height < 1)
 				scaled_height = 1;
 			miplevel++;
-			qglTexImage2D (GL_TEXTURE_2D, miplevel, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);
+			qglTexImage2D (GL_TEXTURE_2D, miplevel, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);;
 		}
 	}
 done: ;

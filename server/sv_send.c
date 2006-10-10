@@ -902,7 +902,7 @@ retryframe:
 					if (message->data[1] == TE_GUNSHOT || message->data[1] == TE_BULLET_SPARKS || message->data[1] == TE_SHOTGUN)
 					{
 						//randomly drop some of these
-						if (randomMT() < 0x80000000)
+						if (randomMT() & 1)
 							continue;
 					}
 

@@ -238,6 +238,7 @@ typedef struct client_s
 	unsigned					anticheat_query_time;
 	unsigned					anticheat_nag_time;
 #endif
+	int							beginspawncount;
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -669,6 +670,9 @@ extern	cvar_t	*sv_anticheat_message;
 
 extern cvar_t	*sv_anticheat_nag_time;
 extern cvar_t	*sv_anticheat_nag_message;
+
+extern cvar_t	*sv_anticheat_show_violation_reason;
+extern cvar_t	*sv_anticheat_client_disconnect_action;
 
 extern	int		antiCheatNumFileHashes;
 
