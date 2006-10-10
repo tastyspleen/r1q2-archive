@@ -630,7 +630,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 			cl = &svs.clients[i];
 			if (cl->state >= cs_connected && !cl->anticheat_valid)
 			{
-				if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required == ANTICHEAT_REQUIRED)
+				if (sv_require_anticheat->intvalue == 2 || cl->anticheat_required == ANTICHEAT_REQUIRED
+					&& !(cl->anticheat_required == ANTICHEAT_EXEMPT))
 				{
 					SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " Due to a server connection problem, you must reconnect to re-enable anticheat.\n");
 					SV_DropClient (cl, true);
