@@ -498,7 +498,6 @@ typedef struct
 	const char *version_string;
 	const char *extensions_string;
 
-	qboolean	allow_cds;
 	//qboolean	r1gl_GL_SGIS_generate_mipmap;
 	qboolean	r1gl_GL_ARB_point_sprite;
 	qboolean	r1gl_GL_EXT_texture_filter_anisotropic;

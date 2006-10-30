@@ -1016,6 +1016,11 @@ static qboolean AddVarBan (varban_t *list, char *cvar, char *blocktype, char *if
 			return false;
 		}
 	}
+	else if (blocktype[0] == '*' && blocktype[1])
+	{
+		Com_Printf ("Error: No value allowed after * (* is not a wildcard match!)\n", LOG_GENERAL);
+		return false;
+	}
 
 	//blocktype = Cmd_Argv(2);
 

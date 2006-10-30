@@ -1574,7 +1574,8 @@ void Q_strlwr (char *str)
 {
 	while (*str)
 	{
-		*str = tolower(*str);
+		if (isupper(*str))
+			*str = tolower(*str);
 		str++;
 	}
 }

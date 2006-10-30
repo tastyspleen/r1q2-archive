@@ -20,7 +20,7 @@ ALLSRC:=$(quake2_SRC)
 
 default: quake2
 
-TARGETS:=quake2
+TARGETS:=quake2 quake2-combine
 
 include ../make.inc
 

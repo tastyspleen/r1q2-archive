@@ -34,7 +34,7 @@ combine: r1q2ded-combine
 r1q2ded-combine: $(r1q2ded_SRC)
 	$(CC) -O2 -ffloat-store -DNDEBUG -DLINUX -DDEDICATED_ONLY -fwhole-program --combine -g -o $@ $^ $(LDFLAGS)
 
-TARGETS:=r1q2ded
+TARGETS:=r1q2ded r1q2ded-combine
 
 include ../make.inc
 

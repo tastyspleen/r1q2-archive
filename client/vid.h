@@ -24,6 +24,7 @@ typedef struct vrect_s
 	int32				x,y,width,height;
 } vrect_t;
 
+#define __VIDDEF_T
 typedef struct
 {
 	uint32		width, height;			// coordinates from main game

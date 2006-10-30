@@ -291,11 +291,6 @@ void Sys_Error (const char *error, ...)
 
 } 
 
-void Sys_DebugBreak (void)
-{
-	__asm ("int $3");
-}
-
 void Sys_Warn (char *warning, ...)
 { 
     va_list     argptr;
@@ -422,6 +417,12 @@ void *Sys_GetGameAPI (void *parms, int baseq2)
 	{
 		Com_sprintf (name, sizeof(name), "%s/%s/%s", curpath, BASEDIRNAME, gamename);
 		game_library = dlopen (name, RTLD_NOW );
+
+		if (game_library == NULL) {
+			Com_Printf ("dlopen(): %s\n", LOG_SERVER, dlerror());
+			Com_Printf ("Attempting to load with lazy symbols...", LOG_SERVER);
+			game_library = dlopen(name, RTLD_LAZY);
+		}
 	}
 	else
 	{

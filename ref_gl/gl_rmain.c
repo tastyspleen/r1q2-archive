@@ -1437,13 +1437,6 @@ qboolean R_SetMode (void)
 	rserr_t err;
 	qboolean fullscreen;
 
-	if ( vid_fullscreen->modified && !gl_config.allow_cds )
-	{
-		ri.Con_Printf( PRINT_ALL, "R_SetMode() - CDS not allowed with this driver\n" );
-		ri.Cvar_Set( "vid_fullscreen", Q_ftol (vid_fullscreen->value) ? "0" : "1");
-		vid_fullscreen->modified = false;
-	}
-
 	fullscreen = FLOAT_EQ_ZERO(vid_fullscreen->value) ? false : true;
 
 	vid_fullscreen->modified = false;
@@ -1623,29 +1616,11 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 		ri.Cvar_Set( "scr_drawall", "0" );
 	}
 
-#ifdef __linux__
-	ri.Cvar_SetValue( "gl_finish", 1 );
-#endif
-
 	// MCD has buffering issues
 	if ( gl_config.renderer == GL_RENDERER_MCD )
 	{
 		ri.Cvar_SetValue( "gl_finish", 1 );
 	}
-
-	if ( gl_config.renderer & GL_RENDERER_3DLABS )
-	{
-		gl_config.allow_cds = true;
-	}
-	else
-	{
-		gl_config.allow_cds = true;
-	}
-
-	if ( gl_config.allow_cds )
-		ri.Con_Printf( PRINT_ALL, "...allowing CDS\n" );
-	else
-		ri.Con_Printf( PRINT_ALL, "...disabling CDS\n" );
 
 	/*
 	** grab extensions

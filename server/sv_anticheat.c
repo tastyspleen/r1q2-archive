@@ -78,6 +78,34 @@ typedef struct filehash_s
 
 filehash_t	fileHashes;
 
+typedef enum
+{
+	OP_INVALID,
+	OP_EQUAL,
+	OP_NEQUAL,
+	OP_GTEQUAL,
+	OP_LTEQUAL,
+	OP_LT,
+	OP_GT,
+	OP_STREQUAL,
+	OP_STRNEQUAL,
+	OP_STRSTR,
+} cvarop_e;
+
+typedef struct cvarcheck_s
+{
+	struct cvarcheck_s	*next;
+	char				*var_name;
+	cvarop_e			op;
+	char				**var_values;
+	unsigned int		num_values;
+	char				*default_value;
+} cvarcheck_t;
+
+cvarcheck_t	cvarChecks;
+
+static int antiCheatNumCvarChecks;
+
 enum acserverbytes_e
 {
 	ACS_BAD,
@@ -96,14 +124,13 @@ enum q2serverbytes_e
 	Q2S_BAD,
 	Q2S_VERSION,
 	Q2S_PREF,
-	Q2S_CVARLOCKS,
 	Q2S_REQUESTCHALLENGE,
 	Q2S_CLIENTDISCONNECT,
 	Q2S_QUERYCLIENT,
 	Q2S_PING,
 };
 
-#define ANTICHEAT_PROTOCOL_VERSION	0xAC01
+#define ANTICHEAT_PROTOCOL_VERSION	0xAC02
 
 static void SV_AntiCheat_ClearFileHashes (void)
 {
@@ -124,6 +151,40 @@ static void SV_AntiCheat_ClearFileHashes (void)
 
 	fileHashes.next = NULL;
 	antiCheatNumFileHashes = 0;
+}
+
+static void SV_AntiCheat_ClearCvarChecks (void)
+{
+	int			i;
+	cvarcheck_t *f, *last = NULL;
+
+	f = &cvarChecks;
+
+	while (f->next)
+	{
+		f = f->next;
+		if (last)
+		{
+			Z_Free (last->var_name);
+			for (i = 0; i < last->num_values; i++)
+				Z_Free (last->var_values[i]);
+			Z_Free (last->var_values);
+			Z_Free (last);
+		}
+		last = f;
+	}
+
+	if (last)
+	{
+		for (i = 0; i < last->num_values; i++)
+			Z_Free (last->var_values[i]);
+		Z_Free (last->var_name);
+		Z_Free (last->var_values);
+		Z_Free (last);
+	}
+
+	cvarChecks.next = NULL;
+	antiCheatNumCvarChecks = 0;
 }
 
 int	HexToRaw (const char *c)
@@ -149,6 +210,227 @@ int	HexToRaw (const char *c)
 		return -1;
 
 	return temp;
+}
+
+static void SV_AntiCheat_ParseCvarLine (char *line)
+{
+	cvarcheck_t *checks;
+	char		*p, *q;
+	char		*var_name, *op, *var_value, *default_value;
+	cvarop_e	eop;
+	int			num_values, i;
+	char		**tokens;
+
+	p = strchr (line, '\n');
+	if (p)
+		p[0] = 0;
+
+	p = strchr (line, '\r');
+	if (p)
+		p[0] = 0;
+
+	if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
+		return;
+
+	p = strchr (line, '\t');
+	if (!p)
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		return;
+	}
+
+	var_name = line;
+
+	p[0] = 0;
+	p++;
+
+	op = p;
+
+	if (!p[0])
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		return;
+	}
+
+	p = strchr (op, '\t');
+	if (!p)
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		return;
+	}
+
+	p[0] = 0;
+	p++;
+
+	var_value = p;
+
+	if (!p[0])
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		return;
+	}
+
+	p = strchr (var_value, '\t');
+	if (!p)
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		return;
+	}
+
+	p[0] = 0;
+	p++;
+
+	default_value = p;
+
+	if (strlen (var_name) >= 64 || !var_name[0])
+	{
+		Com_Printf ("ANTICHEAT WARNING: Invalid cvar name '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, var_name);
+		return;
+	}
+
+	if (strlen (default_value) >= 64 || !default_value[0])
+	{
+		Com_Printf ("ANTICHEAT WARNING: Invalid default value '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, default_value);
+		return;
+	}
+
+	num_values = 1;
+
+	p = var_value;
+	while (p)
+	{
+		p = strchr (p, ',');
+		if (p)
+		{
+			num_values++;
+			p++;
+		}
+	}
+
+	if (num_values >= 255)
+	{
+		Com_Printf ("ANTICHEAT WARNING: Too many values on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		return;
+	}
+
+	tokens = Z_TagMalloc (num_values * sizeof(char *), TAGMALLOC_ANTICHEAT);
+
+	i = 0;
+	p = q = var_value;
+	while (p)
+	{
+		p = strchr (p, ',');
+		if (p)
+		{
+			p[0] = 0;
+			tokens[i++] = q;
+			p++;
+			q = p;
+		}
+		else
+			tokens[i++] = q;
+	}
+
+	for (i = 0; i < num_values; i++)
+	{
+		if (strlen (tokens[i]) > 64 || !tokens[i][0])
+		{
+			Com_Printf ("ANTICHEAT WARNING: Bad value '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, tokens[i], line);
+			Z_Free (tokens);
+			return;
+		}
+	}
+
+	if (!strcmp (op, "=") || !strcmp (op, "=="))
+	{
+		eop = OP_EQUAL;
+	}
+	else if (!strcmp (op, "!="))
+	{
+		eop = OP_NEQUAL;
+	}
+	else if (!strcmp (op, ">="))
+	{
+		if (num_values > 1)
+		{
+			Z_Free (tokens);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			return;
+		}
+		eop = OP_GTEQUAL;
+	}
+	else if (!strcmp (op, "<="))
+	{
+		if (num_values > 1)
+		{
+			Z_Free (tokens);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			return;
+		}
+		eop = OP_LTEQUAL;
+	}
+	else if (!strcmp (op, ">"))
+	{
+		if (num_values > 1)
+		{
+			Z_Free (tokens);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			return;
+		}
+		eop = OP_GT;
+	}
+	else if (!strcmp (op, "<"))
+	{
+		if (num_values > 1)
+		{
+			Z_Free (tokens);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			return;
+		}
+		eop = OP_LT;
+	}
+	else if (!strcmp (op, "eq"))
+	{
+		eop = OP_STREQUAL;
+	}
+	else if (!strcmp (op, "ne"))
+	{
+		eop = OP_STRNEQUAL;
+	}
+	else if (!strcmp (op, "~"))
+	{
+		eop = OP_STRSTR;
+	}
+	else
+	{
+		Z_Free (tokens);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt: unknown op '%s'\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line, op);
+		return;
+	}
+
+	checks = &cvarChecks;
+
+	while (checks->next)
+		checks = checks->next;
+
+	checks->next = Z_TagMalloc (sizeof (*checks), TAGMALLOC_ANTICHEAT);
+	checks = checks->next;
+
+	checks->next = NULL;
+	checks->var_name = CopyString (var_name, TAGMALLOC_ANTICHEAT);
+	checks->op = eop;
+
+	checks->var_values = Z_TagMalloc (num_values * sizeof(char *), TAGMALLOC_ANTICHEAT);
+	for (i = 0; i < num_values; i++)
+		checks->var_values[i] = CopyString (tokens[i], TAGMALLOC_ANTICHEAT);
+	
+	checks->num_values = num_values;
+
+	checks->default_value = CopyString (default_value, TAGMALLOC_ANTICHEAT);
+
+	Z_Free (tokens);
+	
+	antiCheatNumCvarChecks++;
 }
 
 static void SV_AntiCheat_ParseHashLine (char *line)
@@ -184,7 +466,7 @@ static void SV_AntiCheat_ParseHashLine (char *line)
 		return;
 	}
 
-	if (strlen (line) >= MAX_QPATH || strchr (line, '\\'))
+	if (strlen (p) >= MAX_QPATH || strchr (p, '\\'))
 	{
 		Com_Printf ("ANTICHEAT WARNING: Malformed quake path '%s' in anticheat-hashes.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
 		return;
@@ -207,22 +489,17 @@ static void SV_AntiCheat_ParseHashLine (char *line)
 	antiCheatNumFileHashes++;
 }
 
-static void SV_AntiCheat_ReadFileHashes (void)
+static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *))
 {
 	int			len;
 	char		line[256];
 	char		*q;
 	char		*buff, *ptr;
 
-	SV_AntiCheat_ClearFileHashes ();
-
-	len = FS_LoadFile ("anticheat-hashes.txt", (void **)&buff);
+	len = FS_LoadFile (filename, (void **)&buff);
 
 	if (len == -1)
-	{
-		Com_Printf ("ANTICHEAT WARNING: Missing anticheat-hashes.txt, not using any file checks.\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
-		return;
-	}
+		return false;
 
 	ptr = buff;
 	q = buff;
@@ -237,7 +514,7 @@ static void SV_AntiCheat_ReadFileHashes (void)
 				if (q)
 				{
 					Q_strncpy (line, q, sizeof(line)-1);
-					SV_AntiCheat_ParseHashLine (line);
+					func (line);
 					q = NULL;
 				}
 				buff++;
@@ -256,8 +533,7 @@ static void SV_AntiCheat_ReadFileHashes (void)
 
 	FS_FreeFile (ptr);
 
-	if (!fileHashes.next)
-		Com_Printf ("ANTICHEAT WARNING: No file hashes were loaded, please check the anticheat-hashes.txt.\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER);
+	return true;
 }
 
 static void SV_AntiCheat_Unexpected_Disconnect (void)
@@ -359,6 +635,10 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 
 			if (clientreason)
 				SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", clientreason);
+
+			//hack to fix late zombies race condition
+			cl->lastmessage = svs.realtime;
+
 			SV_DropClient (cl, true);
 		}
 		else
@@ -381,8 +661,8 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 			}
 		}
 	}
-	else if (cl->state != cs_zombie)
-		Com_Printf ("ANTICHEAT WARNING: Violation on %s[%s] in state %d: '%s'\n", LOG_SERVER|LOG_WARNING|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), cl->state, reason);
+	//else if (cl->state != cs_zombie)
+	//	Com_Printf ("ANTICHEAT WARNING: Violation on %s[%s] in state %d: '%s'\n", LOG_SERVER|LOG_WARNING|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), cl->state, reason);
 }
 
 static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
@@ -424,7 +704,10 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 				//show custom msg
 				if (sv_anticheat_badfile_message->string[0])
 					SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_badfile_message->string);
-					
+
+				//hack to fix late zombies race condition
+				cl->lastmessage = svs.realtime;
+				
 				SV_DropClient (cl, true);
 				return;
 			case 1:
@@ -455,7 +738,10 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 			//broadcasts are dropped until in-game, repeat if necessary so the client has a clue wtf is going on
 			if (cl->state != cs_spawned)
 				SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " %s was kicked for too many modified files\n", cl->name);
-				
+
+			//hack to fix late zombies race condition
+			cl->lastmessage = svs.realtime;
+
 			SV_DropClient (cl, true);
 			return;
 		}
@@ -469,8 +755,8 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 		bad->name = CopyString (quakePath, TAGMALLOC_ANTICHEAT);
 		bad->next = NULL;
 	}
-	else if (cl->state != cs_zombie)
-		Com_Printf ("ANTICHEAT WARNING: File violation on %s[%s] in state %d: '%s'\n", LOG_SERVER|LOG_WARNING|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), cl->state, quakePath);
+	//else if (cl->state > cs_zombie)
+	//	Com_Printf ("ANTICHEAT WARNING: File violation on %s[%s] in state %d: '%s'\n", LOG_SERVER|LOG_WARNING|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), cl->state, quakePath);
 }
 
 static void SV_AntiCheat_ParseClientAck (byte *buff, int bufflen)
@@ -622,6 +908,7 @@ static void SV_AntiCheat_Hello (void)
 	const char		*ver;
 	const char		*lastPath;
 	filehash_t		*f;
+	cvarcheck_t		*c;
 	int				index;
 
 	acSendBufferLen = 1;
@@ -633,7 +920,7 @@ static void SV_AntiCheat_Hello (void)
 	hostlen = strlen(host);
 	verlen = strlen(ver);
 
-	len = 15 + hostlen + verlen;
+	len = 19 + hostlen + verlen;
 	index = acSendBufferLen;
 
 	acSendBufferLen += 2;
@@ -658,10 +945,33 @@ static void SV_AntiCheat_Hello (void)
 	memcpy (acSendBuffer + acSendBufferLen, &server_port, sizeof(server_port));
 	acSendBufferLen += sizeof(server_port);
 
-	SV_AntiCheat_ReadFileHashes ();
+	SV_AntiCheat_ClearFileHashes ();
+
+	if (!SV_AntiCheat_ReadFile ("anticheat-hashes.txt", SV_AntiCheat_ParseHashLine))
+	{
+		Com_Printf ("ANTICHEAT WARNING: Missing anticheat-hashes.txt, not using any file checks.\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
+	}
+	else if (!fileHashes.next)
+	{
+		Com_Printf ("ANTICHEAT WARNING: No file hashes were loaded, please check the anticheat-hashes.txt.\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER);
+	}
+
+	SV_AntiCheat_ClearCvarChecks ();
+
+	if (!SV_AntiCheat_ReadFile ("anticheat-cvars.txt", SV_AntiCheat_ParseCvarLine))
+	{
+		Com_Printf ("ANTICHEAT WARNING: Missing anticheat-cvars.txt, not using any cvar checks.\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
+	}
+	else if (!cvarChecks.next)
+	{
+		Com_Printf ("ANTICHEAT WARNING: No cvar checks were loaded, please check the anticheat-cvars.txt.\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER);
+	}
 
 	memcpy (acSendBuffer + acSendBufferLen, &antiCheatNumFileHashes, sizeof(antiCheatNumFileHashes));
 	acSendBufferLen += sizeof(antiCheatNumFileHashes);
+
+	memcpy (acSendBuffer + acSendBufferLen, &antiCheatNumCvarChecks, sizeof(antiCheatNumCvarChecks));
+	acSendBufferLen += sizeof(antiCheatNumCvarChecks);
 
 	*(unsigned short *)(acSendBuffer + index) = len;
 
@@ -683,7 +993,7 @@ static void SV_AntiCheat_Hello (void)
 		f = f->next;
 
 		//ick ick ick...
-		if (acSendBufferLen + sizeof(*f) >= AC_BUFFSIZE)
+		if (acSendBufferLen + sizeof(*f) + 2 >= AC_BUFFSIZE)
 		{
 			Com_Printf ("ANTICHEAT WARNING: Anticheat send buffer length exceeded in SV_AntiCheat_Hello, spinning!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
 			if (!SV_AntiCheat_Spin ())
@@ -706,6 +1016,49 @@ static void SV_AntiCheat_Hello (void)
 			acSendBufferLen += length;
 		}
 		lastPath = f->quakePath;
+	}
+
+	c = &cvarChecks;
+	while (c->next)
+	{
+		int		length, i;
+		byte	b;
+
+		c = c->next;
+		
+		length = 1 + 1 + 1 + strlen(c->var_name) + strlen (c->default_value);
+
+		for (i = 0; i < c->num_values; i++)
+			length += strlen (c->var_values[i]) + 1;
+
+		//ick ick ick...
+		if (acSendBufferLen + length >= AC_BUFFSIZE)
+		{
+			Com_Printf ("ANTICHEAT WARNING: Anticheat send buffer length exceeded in SV_AntiCheat_Hello, spinning!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
+			if (!SV_AntiCheat_Spin ())
+				return;
+		}
+
+		b = (byte)strlen (c->var_name);
+		acSendBuffer[acSendBufferLen++] = b;
+		memcpy (acSendBuffer + acSendBufferLen, c->var_name, (size_t)b);
+		acSendBufferLen += b;
+
+		acSendBuffer[acSendBufferLen++] = (byte)c->op;
+		acSendBuffer[acSendBufferLen++] = (byte)c->num_values;
+
+		for (i = 0; i < c->num_values; i++)
+		{
+			b = (byte)strlen (c->var_values[i]);
+			acSendBuffer[acSendBufferLen++] = b;
+			memcpy (acSendBuffer + acSendBufferLen, c->var_values[i], (size_t)b);
+			acSendBufferLen += b;
+		}
+
+		b = (byte)strlen (c->default_value);
+		acSendBuffer[acSendBufferLen++] = b;
+		memcpy (acSendBuffer + acSendBufferLen, c->default_value, (size_t)b);
+		acSendBufferLen += b;
 	}
 
 	if (acSendBufferLen + 3 >= AC_BUFFSIZE)
@@ -1059,13 +1412,21 @@ void SV_AntiCheat_Run (void)
 //yuck, but necessary for synchronizing startup
 void SV_AntiCheat_WaitForInitialConnect (void)
 {
+	int	attempts;
+
 	if (!acSocket)
 		return;
+
+	attempts = 0;
 
 	while (acSocket && !anticheat_ready)
 	{
 		SV_AntiCheat_Run ();
 		Sys_Sleep (1);
+
+		//something is wrong, abort.
+		if (++attempts == 5000)
+			break;
 	}
 }
 

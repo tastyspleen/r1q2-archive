@@ -375,7 +375,7 @@ void VID_ReloadRefresh (void)
 		** refresh has changed
 		*/
 		vid_ref->modified = false;
-		vid_fullscreen->modified = true;
+		//vid_fullscreen->modified = true;
 		cl.refresh_prepped = false;
 		cl.frame.valid = false;
 		cls.disable_screen = true;

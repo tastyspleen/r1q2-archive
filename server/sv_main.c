@@ -2208,6 +2208,7 @@ static void SV_CheckTimeouts (void)
 
 		if (cl->state == cs_zombie && cl->lastmessage < zombiepoint)
 		{
+			Com_DPrintf ("Going from cs_zombie to cs_free for client %d\n", i);
 			SV_CleanClient (cl);
 			cl->state = cs_free;	// can now be reused
 			continue;

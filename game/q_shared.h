@@ -324,6 +324,11 @@ extern void __cdecl Q_fastfloats (float *f, int *out);
 //the overhead of using function pointer offsets any savings of using sse2 :/
 #else
 #define Q_ftol( f ) ( uint32 ) (f)
+static inline void Q_fastfloats(float *f, int *out) {
+	out[0] = Q_ftol(f[0]);
+	out[1] = Q_ftol(f[1]);
+	out[2] = Q_ftol(f[2]);
+}
 void Q_ftol2( float f, int *out );
 #endif
 

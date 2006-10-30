@@ -21,7 +21,7 @@ ALLSRC:=$(game_SRC)
 
 default: game$(ARCH).so
 
-TARGETS:=game$(ARCH).so
+TARGETS:=game$(ARCH).so game$(ARCH)-combine.so
 
 include ../make.inc
 

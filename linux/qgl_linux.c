@@ -13,10 +13,10 @@
 
 static FILE *log_fp = NULL;
 
-//FIXME: make this work
-void * qwglGetProcAddress (char *procname)
+void *GLimp_GetProcAddress(const char *procname);
+void * qwglGetProcAddress(const char *procname)
 {
-	return NULL;
+	return GLimp_GetProcAddress(procname);
 }
 
 void ( APIENTRY * qglActiveTextureARB) ( GLenum );
@@ -369,6 +369,16 @@ void ( APIENTRY * qglPointParameterfEXT)( GLenum param, GLfloat value );
 void ( APIENTRY * qglPointParameterfvEXT)( GLenum param, const GLfloat *value );
 void ( APIENTRY * qglPointParameterfARB) (GLenum, GLfloat);
 void ( APIENTRY * qglPointParameterfvARB) (GLenum, const GLfloat *);
+
+void  (APIENTRY *qglGenQueriesARB) (GLsizei, GLuint *);
+void (APIENTRY *qglDeleteQueriesARB) (GLsizei, const GLuint *);
+GLboolean (APIENTRY *qglIsQueryARB) (GLuint);
+void (APIENTRY *qglBeginQueryARB) (GLenum, GLuint);
+void (APIENTRY *qglEndQueryARB) (GLenum);
+void (APIENTRY *qglGetQueryivARB) (GLenum, GLenum, GLint *);
+void (APIENTRY *qglGetQueryObjectivARB) (GLuint, GLenum, GLint *);
+void (APIENTRY *qglGetQueryObjectuivARB) (GLuint, GLenum, GLuint *);
+
 
 void ( APIENTRY * qglMTexCoord2fvSGIS)( GLenum, GLfloat *);
 
@@ -3294,12 +3304,18 @@ qboolean QGL_Init( const char *dllname )
 	qglVertexPointer             = 	dllVertexPointer             = glVertexPointer;
 	qglViewport                  = 	dllViewport                  = glViewport;
 
-	qglPointParameterfEXT = 0;
-	qglPointParameterfvEXT = 0;
-	qglColorTableEXT = 0;
-	qglSelectTextureSGIS = 0;
-	qglMTexCoord2fSGIS = 0;
-	qglMTexCoord2fvSGIS = 0;
+	qglPointParameterfEXT = NULL;
+	qglPointParameterfvEXT = NULL;
+	qglColorTableEXT = NULL;
+	qglSelectTextureSGIS = NULL;
+	qglMTexCoord2fSGIS = NULL;
+	qglMTexCoord2fvSGIS = NULL;
+	qglBeginQueryARB = NULL;
+	qglEndQueryARB = NULL;
+	qglGenQueriesARB = NULL;
+	qglGetQueryivARB = NULL;
+	qglGetQueryObjectivARB = NULL;
+	qglGetQueryObjectuivARB = NULL;
 
 	return true;
 }

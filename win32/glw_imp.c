@@ -527,6 +527,8 @@ int _wglExtensionSupported(const char *extension)
 			//ri.Con_Printf (PRINT_ALL, "wglExtensions: %s\n", extensions);
         }
 
+		//ri.Con_Printf (PRINT_ALL, "WGL Extensions: %s\n", extensions);
+
         // It takes a bit of care to be fool-proof about parsing the
         // OpenGL extensions string.  Don't be fooled by sub-strings,
         // etc.

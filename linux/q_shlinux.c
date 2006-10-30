@@ -105,6 +105,11 @@ unsigned int Sys_Milliseconds (void)
 	return curtime;
 }
 
+void Sys_DebugBreak (void)
+{
+        __asm ("int $3");
+}
+
 void Sys_Mkdir (char *path)
 {
     mkdir (path, 0755);
