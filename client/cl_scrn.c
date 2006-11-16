@@ -663,6 +663,7 @@ void SCR_Init (void)
 	scr_chathud_highlight = Cvar_Get ("scr_chathud_highlight", "0", 0);
 
 	scr_chathud_lines->changed = SCR_Chathud_Changed;
+	scr_chathud_lines->changed (scr_chathud_lines, scr_chathud_lines->string, scr_chathud_lines->string);
 
 	scr_conheight->changed = SCR_Conheight_Changed;
 	scr_conheight->changed (scr_conheight, scr_conheight->string, scr_conheight->string);

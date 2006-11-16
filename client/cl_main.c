@@ -1545,7 +1545,11 @@ void CL_ConnectionlessPacket (void)
 safe:
 
 	if (type == CL_UNDEF)
-		Com_Printf ("%s: %s\n", LOG_CLIENT, NET_AdrToString (&net_from), c);
+	{
+		//r1: spamfix: don't echo packet type mid-game
+		if (cls.state < ca_active)
+			Com_Printf ("%s: %s\n", LOG_CLIENT, NET_AdrToString (&net_from), c);
+	}
 
 	// server connection
 	if (!strcmp(c, "client_connect"))
@@ -1785,17 +1789,25 @@ safe:
 				break;
 			default:
 				//BIG HACK to allow new client on old server!
-				Com_Printf ("%s", LOG_CLIENT, s);
-				if (!strstr (s, "full") &&
-					!strstr (s, "locked") &&
-					!strncmp (s, "Server is ", 10) &&
-					cls.serverProtocol != PROTOCOL_ORIGINAL)
-				{
-					Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, PROTOCOL_ORIGINAL);
-					cls.serverProtocol = PROTOCOL_ORIGINAL;
-					//force immediate retry
-					cls.connect_time = -99999;
 
+				//r1: spoofed spam fix, only allow print during connection process, other legit cases should be handled above
+				if (cls.state == ca_connecting || cls.state == ca_connected)
+					Com_Printf ("%s", LOG_CLIENT, s);
+
+				//r1: security fix: only do protocol fallback when connecting.
+				if (cls.state == ca_connecting)
+				{
+					if (!strstr (s, "full") &&
+						!strstr (s, "locked") &&
+						!strncmp (s, "Server is ", 10) &&
+						cls.serverProtocol != PROTOCOL_ORIGINAL)
+					{
+						Com_Printf ("Retrying with protocol %d.\n", LOG_CLIENT, PROTOCOL_ORIGINAL);
+						cls.serverProtocol = PROTOCOL_ORIGINAL;
+						//force immediate retry
+						cls.connect_time = -99999;
+
+					}
 				}
 				break;
 		}
@@ -1819,6 +1831,12 @@ safe:
 		int		protocol = PROTOCOL_ORIGINAL;
 		int		i;
 		char	*p;
+
+		if (cls.state != ca_connecting)
+		{
+			Com_DPrintf ("Illegal challenge from server whilst already connected, ignored.\n");
+			return;
+		}
 
 		cls.challenge = atoi(Cmd_Argv(1));
 
@@ -1854,13 +1872,14 @@ safe:
 	}
 
 	// echo request from server
-	if (!strcmp(c, "echo"))
+	//r1: removed, no real purpose and possible attack vector
+	/*if (!strcmp(c, "echo"))
 	{
 		Netchan_OutOfBandPrint (NS_CLIENT, &net_from, "%s", Cmd_Argv(1) );
 		return;
-	}
+	}*/
 
-	Com_Printf ("Unknown connectionless packet command %s\n", LOG_CLIENT, c);
+	Com_DPrintf ("Unknown connectionless packet command %s\n", c);
 }
 
 /*

@@ -1335,7 +1335,7 @@ int Sys_GetAntiCheatAPI (void)
 {
 	qboolean			updated = false;
 	HMODULE				hAC;
-	static FNINIT		init;
+	static FNINIT		init = NULL;
 
 	//windows version check
 	if (s_win95)
@@ -1366,9 +1366,12 @@ reInit:
 		return 0;
 
 	//this should never fail unless the anticheat.dll is bad
-	init = (FNINIT)GetProcAddress (hAC, "Initialize");
 	if (!init)
-		Sys_Error ("Couldn't GetProcAddress Initialize on anticheat.dll!\r\n\r\nPlease check you are using a valid anticheat.dll from http://antiche.at/");
+	{
+		init = (FNINIT)GetProcAddress (hAC, "Initialize");
+		if (!init)
+			Sys_Error ("Couldn't GetProcAddress Initialize on anticheat.dll!\r\n\r\nPlease check you are using a valid anticheat.dll from http://antiche.at/");
+	}
 
 	anticheat = (anticheat_export_t *)init ();
 
@@ -1377,11 +1380,13 @@ reInit:
 		updated = true;
 		FreeLibrary (hAC);
 		hAC = NULL;
+		init = NULL;
 		goto reInit;
 	}
 
 	if (!anticheat)
 		return 0;
+
 	return 1;
 }
 #endif
@@ -1869,7 +1874,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	else if (strstr (szModuleName, "ref_soft"))
 	{
 		gameMsg = 
-			"\r\nIt is very likely that the software renderer (ref_soft) is at fault. Software.\r\n"
+			"\r\nIt is very likely that the software renderer (ref_soft) is at fault. Software\r\n"
 			"rendering in Q2 has always been unreliable. If possible, please use OpenGL to avoid\r\n"
 			"crashes.";
 		wantUpload = FALSE;
