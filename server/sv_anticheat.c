@@ -781,7 +781,7 @@ static void SV_AntiCheat_ParseClientAck (byte *buff, int bufflen)
 
 	if (cl->state != cs_connected && cl->state != cs_spawning)
 	{
-		Com_Printf ("ANTICHEAT WARNING: ParseClientAck with client in state %d\n", LOG_ANTICHEAT|LOG_WARNING, cl->state);
+		Com_DPrintf ("ANTICHEAT WARNING: ParseClientAck with client in state %d\n",cl->state);
 		return;
 	}
 
@@ -816,7 +816,7 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 
 	if (cl->state != cs_spawning)
 	{
-		Com_Printf ("ANTICHEAT WARNING: ParseQueryReply with client in state %d\n", LOG_ANTICHEAT|LOG_WARNING, cl->state);
+		Com_DPrintf ("ANTICHEAT WARNING: ParseQueryReply with client in state %d\n", cl->state);
 		if (cl->state > cs_zombie)
 			SV_DropClient (cl, true);
 		return;
@@ -827,14 +827,7 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 	if (buff[3] == 1)
 		cl->anticheat_valid = true;
 
-	//aieeeeee XXX hack doom etc
-	/*if (sv_anticheat_nag_time->intvalue &&
-		strstr (cl->versionString, "Win32") || strstr (cl->versionString, "win32"))
-	{
-		cl->anticheat_nag_time = curtime;
-	}
-	else*/
-		SV_ClientBegin (cl);
+	SV_ClientBegin (cl);
 }
 
 static void SV_AntiCheat_ParseBuffer (void)
@@ -1078,6 +1071,40 @@ static void SV_AntiCheat_Hello (void)
 	//anticheat_ready = true;
 }
 
+static void SV_AntiCheat_Nag (client_t *cl)
+{
+	if (cl->anticheat_valid)
+	{
+		cl->anticheat_nag_time = 0;
+		return;
+	}
+
+	if (cl->netchan.reliable_length == 0 && (strstr (cl->versionString, "Win32") || strstr (cl->versionString, "win32")))
+	{
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString ("set _old_centertime $scr_centertime\n");
+		SV_AddMessage (cl, true);
+
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString (va ("set scr_centertime %g\n", sv_anticheat_nag_time->value));
+		SV_AddMessage (cl, true);
+
+		//force a buffer flush so the stufftexts go through (yuck)
+		SV_WriteReliableMessages (cl, cl->netchan.message.buffsize);
+		Netchan_Transmit (&cl->netchan, 0, NULL);
+
+		MSG_BeginWriting (svc_centerprint);
+		MSG_WriteString (sv_anticheat_nag_message->string);
+		SV_AddMessage (cl, true);
+
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString ("set scr_centertime $_old_centertime\n");
+		SV_AddMessage (cl, true);
+
+		cl->anticheat_nag_time = 0;
+	}
+}
+
 static void SV_AntiCheat_CheckTimeOuts (void)
 {
 	client_t		*cl;
@@ -1124,11 +1151,13 @@ static void SV_AntiCheat_CheckTimeOuts (void)
 				SV_ClientBegin (cl);
 				continue;
 			}
-			/*if (cl->anticheat_nag_time && (unsigned)(curtime - cl->anticheat_nag_time) > (int)(sv_anticheat_nag_time->value * 1000))
+		}
+		else if (cl->state == cs_spawned)
+		{
+			if (cl->anticheat_nag_time && (unsigned)(curtime - cl->anticheat_nag_time) >= sv_anticheat_nag_defer->intvalue * 1000)
 			{
-				cl->anticheat_nag_time = 0;
-				SV_ClientBegin (cl);
-			}*/
+				SV_AntiCheat_Nag (cl);
+			}
 		}
 	}
 }
@@ -1503,29 +1532,8 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 	if (!anticheat_ready)
 		return false;
 
-	if (sv_anticheat_nag_time->intvalue && (strstr (cl->versionString, "Win32") || strstr (cl->versionString, "win32")))
-	{
-		MSG_BeginWriting (svc_stufftext);
-		MSG_WriteString ("set _old_centertime $scr_centertime\n");
-		SV_AddMessage (cl, true);
-
-		MSG_BeginWriting (svc_stufftext);
-		MSG_WriteString (va ("set scr_centertime %g\n", sv_anticheat_nag_time->value));
-		SV_AddMessage (cl, true);
-
-		//force a buffer flush so the stufftexts go through (yuck)
-		SV_WriteReliableMessages (cl, cl->netchan.message.buffsize);
-		Netchan_Transmit (&cl->netchan, 0, NULL);
-
-		MSG_BeginWriting (svc_centerprint);
-		MSG_WriteString (sv_anticheat_nag_message->string);
-		SV_AddMessage (cl, true);
-
-		MSG_BeginWriting (svc_stufftext);
-		MSG_WriteString ("set scr_centertime $_old_centertime\n");
-		SV_AddMessage (cl, true);
-		//SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_nag_message->string);
-	}
+	if (sv_anticheat_nag_time->intvalue)
+		cl->anticheat_nag_time = curtime;
 
 	if (acSendBufferLen + 7 >= AC_BUFFSIZE)
 	{

@@ -925,7 +925,8 @@ void Sys_ConsoleOutput (const char *string)
 
 	while (p[0])
 	{
-		if (p[0] == '\n') {
+		if (p[0] == '\n')
+		{
 			*s++ = '\r';
 			//console_lines++;
 		}
@@ -938,7 +939,8 @@ void Sys_ConsoleOutput (const char *string)
 
 		p++;
 
-		if ((s - text) >= sizeof(text)-2) {
+		if ((s - text) >= sizeof(text)-2)
+		{
 			*s++ = '\n';
 			break;
 		}

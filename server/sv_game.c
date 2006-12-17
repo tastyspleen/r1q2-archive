@@ -641,6 +641,8 @@ qboolean EXPORT PF_inPHS (vec3_t p1, vec3_t p2)
 void EXPORT PF_StartSound (edict_t *entity, int channel, int sound_num, float volume,
     float attenuation, float timeofs)
 {
+	vec3_t		neworigin;
+
 	if (!entity)
 	{
 		if (sv_gamedebug->intvalue)
@@ -650,6 +652,63 @@ void EXPORT PF_StartSound (edict_t *entity, int channel, int sound_num, float vo
 			Sys_DebugBreak ();
 		return;
 	}
+
+	if (sound_num >= MAX_SOUNDS || sound_num < 0)
+	{
+		Com_Printf ("GAME ERROR: PF_StartSound with illegal soundindex %d, ignored\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sound_num);
+
+		if (sv_gamedebug->intvalue >= 2)
+			Sys_DebugBreak ();
+		return;
+	}
+
+	channel &= ~CHAN_SERVER_ATTN_CALC;
+
+	//r1: func_plat and friends trickery
+	if (sv_func_plat_hack->intvalue)
+	{
+		if (entity->solid == SOLID_BSP && (channel & CHAN_NO_PHS_ADD))
+		{
+			const char	*s;
+			int			type;
+
+			type = 0;
+
+			s = sv.configstrings[CS_SOUNDS + sound_num];
+
+			//this is where the cvar gets its name :)
+			if (!strcmp (s, "plats/pt1_strt.wav") || !strcmp (s, "plats/pt1_end.wav"))
+				type = 1;
+			else if (!strcmp (s, "doors/dr1_strt.wav") || !strcmp (s, "doors/dr1_end.wav"))
+				type = 2;
+			
+			if (type)
+			{
+				//door or plat, do special attn. calculations serverside
+				channel |= CHAN_SERVER_ATTN_CALC;
+				channel &= ~CHAN_NO_PHS_ADD;
+			
+				//platform
+				if (type == 1)
+				{
+					vec3_t	bounds;
+
+					VectorSubtract (entity->maxs, entity->mins, bounds);
+
+					neworigin[0] = entity->s.origin[0] + 0.5f * (entity->mins[0] + entity->maxs[0]);
+					neworigin[1] = entity->s.origin[1] + 0.5f * (entity->mins[1] + entity->maxs[1]);
+					neworigin[2] = entity->s.origin[2] + 0.5f * (entity->mins[2] + entity->maxs[2]);
+
+					//r1: force the sound to the top of the actual platform (the bit you ride on)
+					neworigin[2] += bounds[2] * 0.5f;
+
+					SV_StartSound (neworigin, entity, channel, sound_num, volume, attenuation, timeofs);
+					return;
+				}
+			}
+		}
+	}
+
 	SV_StartSound (NULL, entity, channel, sound_num, volume, attenuation, timeofs);
 }
 

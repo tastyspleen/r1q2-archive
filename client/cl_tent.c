@@ -829,6 +829,8 @@ void CL_ParseTEnt (void)
 	switch (type)
 	{
 	case TE_BLOOD:			// bullet hitting flesh
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BLOOD");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_ParticleEffect (pos, dir, 0xe8, 60);
@@ -838,6 +840,8 @@ void CL_ParseTEnt (void)
 	case TE_GUNSHOT:			// bullet hitting wall
 	case TE_SPARKS:
 	case TE_BULLET_SPARKS:
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_GUNSHOT/TE_SPARKS/TE_BULLET_SPARKS");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		if (type == TE_GUNSHOT)
@@ -864,6 +868,8 @@ void CL_ParseTEnt (void)
 		
 	case TE_SCREEN_SPARKS:
 	case TE_SHIELD_SPARKS:
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_SCREEN_SPARKS/TE_SHIELD_SPARKS");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		if (type == TE_SCREEN_SPARKS)
@@ -875,6 +881,8 @@ void CL_ParseTEnt (void)
 		break;
 		
 	case TE_SHOTGUN:			// bullet hitting wall
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_SHOTGUN");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_ParticleEffect (pos, dir, 0, 20);
@@ -882,6 +890,8 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_SPLASH:			// bullet hitting water
+		if (net_message.readcount + 9 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_SPLASH");
 		cnt = MSG_ReadByte (&net_message);
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
@@ -905,6 +915,8 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_LASER_SPARKS:
+		if (net_message.readcount + 9 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_LASER_SPARKS");
 		cnt = MSG_ReadByte (&net_message);
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
@@ -914,12 +926,16 @@ void CL_ParseTEnt (void)
 
 	// RAFAEL
 	case TE_BLUEHYPERBLASTER:
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BLUEHYPERBLASTER");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, dir);
 		CL_BlasterParticles (pos, dir);
 		break;
 
 	case TE_BLASTER:			// blaster hitting wall
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BLASTER");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_BlasterParticles (pos, dir);
@@ -949,7 +965,8 @@ void CL_ParseTEnt (void)
 		break;
 		
 	case TE_RAILTRAIL:			// railgun effect
-
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_RAILTRAIL");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
 
@@ -988,6 +1005,8 @@ void CL_ParseTEnt (void)
 	case TE_EXPLOSION2:
 	case TE_GRENADE_EXPLOSION:
 	case TE_GRENADE_EXPLOSION_WATER:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_EXPLOSION2/TE_GRENADE_EXPLOSION/TE_GRENADE_EXPLOSION_WATER");
 		MSG_ReadPos (&net_message, pos);
 
 		ex = CL_AllocExplosion ();
@@ -1012,6 +1031,8 @@ void CL_ParseTEnt (void)
 
 	// RAFAEL
 	case TE_PLASMA_EXPLOSION:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_PLASMA_EXPLOSION");
 		MSG_ReadPos (&net_message, pos);
 		ex = CL_AllocExplosion ();
 		FastVectorCopy (pos, ex->ent.origin);
@@ -1036,6 +1057,8 @@ void CL_ParseTEnt (void)
 	case TE_ROCKET_EXPLOSION:
 	case TE_ROCKET_EXPLOSION_WATER:
 	case TE_EXPLOSION1_NP:						// PMM
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_EXPLOSION %d", type);
 		MSG_ReadPos (&net_message, pos);
 
 		ex = CL_AllocExplosion ();
@@ -1076,6 +1099,8 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_BFG_EXPLOSION:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BFG_EXPLOSION");
 		MSG_ReadPos (&net_message, pos);
 		ex = CL_AllocExplosion ();
 		FastVectorCopy (pos, ex->ent.origin);
@@ -1093,17 +1118,23 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_BFG_BIGEXPLOSION:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BFG_BIGEXPLOSION");
 		MSG_ReadPos (&net_message, pos);
 		CL_BFGExplosionParticles (pos);
 		break;
 
 	case TE_BFG_LASER:
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BFG_LASER");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
 		CL_ParseLaser (0xd0d1d2d3, pos, pos2);
 		break;
 
 	case TE_BUBBLETRAIL:
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BUBBLETRAIL");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
 		CL_BubbleTrail (pos, pos2);
@@ -1111,21 +1142,29 @@ void CL_ParseTEnt (void)
 
 	case TE_PARASITE_ATTACK:
 	case TE_MEDIC_CABLE_ATTACK:
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_PARASITE_ATTACK/TE_MEDIC_CABLE_ATTACK");
 		CL_ParseBeam (cl_mod_parasite_segment);
 		break;
 
 	case TE_BOSSTPORT:			// boss teleporting to station
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BOSSTPORT");
 		MSG_ReadPos (&net_message, pos);
 		CL_BigTeleportParticles (pos);
 		S_StartSound (pos, 0, 0, S_RegisterSound ("misc/bigtele.wav"), 1, ATTN_NONE, 0);
 		break;
 
 	case TE_GRAPPLE_CABLE:
+		if (net_message.readcount + 20 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_GRAPPLE_CABLE");
 		CL_ParseBeam2 (cl_mod_grapple_cable);
 		break;
 
 	// RAFAEL
 	case TE_WELDING_SPARKS:
+		if (net_message.readcount + 9 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_WELDING_SPARKS");
 		cnt = MSG_ReadByte (&net_message);
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
@@ -1148,6 +1187,8 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_GREENBLOOD:
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_GREENBLOOD");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_ParticleEffect2 (pos, dir, 0xdf, 30);
@@ -1155,6 +1196,8 @@ void CL_ParseTEnt (void)
 
 	// RAFAEL
 	case TE_TUNNEL_SPARKS:
+		if (net_message.readcount + 9 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_TUNNEL_SPARKS");
 		cnt = MSG_ReadByte (&net_message);
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
@@ -1167,6 +1210,9 @@ void CL_ParseTEnt (void)
 		// PMM -following code integrated for flechette (different color)
 	case TE_BLASTER2:			// green blaster hitting wall
 	case TE_FLECHETTE:			// flechette
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BLASTER2/TE_FLECHETTE");
+
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		
@@ -1216,6 +1262,9 @@ void CL_ParseTEnt (void)
 
 
 	case TE_LIGHTNING:
+		if (net_message.readcount + 16 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_LIGHTNING");
+
 		if (!cl_mod_lightning)
 		{
 			cl_mod_lightning = re.RegisterModel ("models/proj/lightning/tris.md2");
@@ -1228,12 +1277,17 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_DEBUGTRAIL:
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_DEBUGTRAIL");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
 		CL_DebugTrail (pos, pos2);
 		break;
 
 	case TE_PLAIN_EXPLOSION:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_PLAIN_EXPLOSION");
+
 		MSG_ReadPos (&net_message, pos);
 
 		ex = CL_AllocExplosion ();
@@ -1257,12 +1311,16 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_FLASHLIGHT:
+		if (net_message.readcount + 8 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_FLASHLIGHT");
 		MSG_ReadPos(&net_message, pos);
 		ent = MSG_ReadShort(&net_message);
 		CL_Flashlight(ent, pos);
 		break;
 
 	case TE_FORCEWALL:
+		if (net_message.readcount + 13 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_FORCEWALL");
 		MSG_ReadPos(&net_message, pos);
 		MSG_ReadPos(&net_message, pos2);
 		color = MSG_ReadByte (&net_message);
@@ -1278,12 +1336,11 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_HEATBEAM_SPARKS:
-//		cnt = MSG_ReadByte (&net_message);
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_HEATBEAM_SPARKS");
 		cnt = 50;
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
-//		r = MSG_ReadByte (&net_message);
-//		magnitude = MSG_ReadShort (&net_message);
 		r = 8;
 		magnitude = 60;
 		color = r & 0xff;
@@ -1292,13 +1349,11 @@ void CL_ParseTEnt (void)
 		break;
 	
 	case TE_HEATBEAM_STEAM:
-//		cnt = MSG_ReadByte (&net_message);
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_HEATBEAM_STEAM");
 		cnt = 20;
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
-//		r = MSG_ReadByte (&net_message);
-//		magnitude = MSG_ReadShort (&net_message);
-//		color = r & 0xff;
 		color = 0xe0;
 		magnitude = 60;
 		CL_ParticleSteamEffect (pos, dir, color, cnt, magnitude);
@@ -1310,6 +1365,8 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_BUBBLETRAIL2:
+		if (net_message.readcount + 12 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_BUBBLETRAIL2");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
 		CL_BubbleTrail2 (pos, pos2, 8);
@@ -1317,18 +1374,24 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_MOREBLOOD:
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_MOREBLOOD");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_ParticleEffect (pos, dir, 0xe8, 250);
 		break;
 
 	case TE_CHAINFIST_SMOKE:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_CHAINFIST_SMOKE");
 		dir[0]=0; dir[1]=0; dir[2]=1;
 		MSG_ReadPos(&net_message, pos);
 		CL_ParticleSmokeEffect (pos, dir, 0, 20, 20);
 		break;
 
 	case TE_ELECTRIC_SPARKS:
+		if (net_message.readcount + 7 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_ELECTRIC_SPARKS");
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 //		CL_ParticleEffect (pos, dir, 109, 40);
@@ -1338,6 +1401,8 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_TRACKER_EXPLOSION:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_TRACKER_EXPLOSION");
 		MSG_ReadPos (&net_message, pos);
 		CL_ColorFlash (pos, 0, 150, -1, -1, -1);
 		CL_ColorExplosionParticles (pos, 0, 1);
@@ -1347,19 +1412,27 @@ void CL_ParseTEnt (void)
 
 	case TE_TELEPORT_EFFECT:
 	case TE_DBALL_GOAL:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_TELEPORT_EFFECT/TE_DBALL_GOAL");
 		MSG_ReadPos (&net_message, pos);
 		CL_TeleportParticles (pos);
 		break;
 
 	case TE_WIDOWBEAMOUT:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_WIDOWBEAMOUT");
 		CL_ParseWidow ();
 		break;
 
 	case TE_NUKEBLAST:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_NUKEBLAST");
 		CL_ParseNuke ();
 		break;
 
 	case TE_WIDOWSPLASH:
+		if (net_message.readcount + 6 > net_message.cursize)
+			Com_Error (ERR_DROP, "CL_ParseTEnt: Insufficient bytes for TE_WIDOWSPLASH");
 		MSG_ReadPos (&net_message, pos);
 		CL_WidowSplash (pos);
 		break;

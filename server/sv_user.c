@@ -923,8 +923,8 @@ void SV_ClientBegin (client_t *cl)
 
 	//r1: give appropriate amount of movement, except on a givemsec frame.
 	//FIXME this is broken for some framenums?
-	if (sv.framenum & 15)
-		cl->commandMsec = (int)((sv_msecs->value / 16.0f) * (16 - (sv.framenum % 16)));
+	//if (sv.framenum & 15)
+	cl->commandMsec = (int)((sv_msecs->value / 16.0f) * (16 - (sv.framenum % 16)));
 
 	cl->commandMsecOverflowCount = 0;
 	cl->totalMsecUsed = 0;
@@ -1908,6 +1908,107 @@ static void SV_Nextserver_f (void)
 	SV_Nextserver ();
 }
 
+static void SV_Lag_f (void)
+{
+	int			clientID;
+	client_t	*cl;
+	const char	*substring, *s2c;
+	char		buff[32];
+	int			avg_ping;
+	float		ccq;
+
+	if (Cmd_Argc() == 1)
+	{
+		cl = sv_client;
+	}
+	else
+	{
+		substring = Cmd_Argv (1);
+
+		clientID = -1;
+
+		if (StringIsNumeric (substring))
+		{
+			clientID = atoi (substring);
+			if (clientID >= maxclients->intvalue || clientID < 0)
+			{
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "Invalid client ID.\n");
+				return;
+			}
+		}
+		else
+		{
+			for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+			{
+				if (cl->state < cs_spawned)
+					continue;
+
+				if (strstr (cl->name, substring))
+				{
+					clientID = cl - svs.clients;
+					break;
+				}
+			}
+		}
+
+		if (clientID == -1)
+		{
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "Player not found.\n");
+			return;
+		}
+
+		cl = &svs.clients[clientID];
+	}
+
+	if (cl->state < cs_spawned)
+	{
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "Player is not active.\n");
+		return;
+	}
+
+	if (cl->avg_ping_count)
+		avg_ping = cl->avg_ping_time / cl->avg_ping_count;
+	else
+		avg_ping = cl->ping;
+
+	if (sv_lag_stats->intvalue)
+	{
+		int	dropped;
+
+		//evil hack for a pending response :/
+		dropped = cl->pl_dropped_packets;
+		if (dropped == 1)
+			dropped = 0;
+
+		Com_sprintf (buff, sizeof(buff), "%.2f%%", (float)dropped / (float)cl->pl_sent_packets * 100);
+		s2c = buff;
+	}
+	else
+		s2c = "(disabled on this server)";
+
+	ccq = (50.0f * (2.0f - (cl->commandMsecOverflowCount > 2 ? 2 : cl->commandMsecOverflowCount)));
+
+	SV_ClientPrintf (sv_client, PRINT_HIGH, 
+		"Lag stats for %s:\n"
+		"RTT (min/avg/max)  : %d ms / %d ms / %d ms\n"
+		"Connection quality : %.2f%%\n"
+		"Server to Client PL: %s\n"
+		"Client to Server PL: %.2f%%\n",
+		cl->name,
+		cl->min_ping, avg_ping, cl->max_ping,
+		ccq,
+		s2c,
+		((float)cl->netchan.total_dropped / (float)cl->netchan.total_received) * 100);
+}
+
+static void SV_PLResult_f (void)
+{
+	if (!sv_lag_stats->intvalue)
+		return;
+
+	sv_client->pl_dropped_packets--;
+}
+
 typedef struct
 {
 	char	/*@null@*/ *name;
@@ -1934,6 +2035,8 @@ static ucmd_t ucmds[] =
 	{"\177n", Q_NullFunc},
 
 	{"nogamedata", SV_NoGameData_f},
+	{"lag", SV_Lag_f},
+	{"\177p", SV_PLResult_f},
 
 #ifdef ANTICHEAT
 	{"aclist", SV_ACList_f},

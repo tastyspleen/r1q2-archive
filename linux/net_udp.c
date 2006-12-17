@@ -13,6 +13,9 @@
 #include <sys/uio.h>
 #include <errno.h>
 
+#include <linux/types.h>
+#include <linux/errqueue.h>
+
 #ifdef NeXT
 #include <libc.h>
 #endif
@@ -151,6 +154,12 @@ LOOPBACK BUFFERS FOR LOCAL PLAYER
 
 //=============================================================================
 
+struct probehdr
+{
+	uint32_t ttl;
+	struct timeval tv;
+};
+
 int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 {
 	int 	ret;
@@ -179,11 +188,61 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 
 		if (err == EWOULDBLOCK)
 			return 0;
+
 		if (err == ECONNREFUSED)
 		{
+			//linux makes this needlessly complex, couldn't just return the source of the error in from, oh no...
+			struct probehdr	rcvbuf;
+			struct iovec	iov;
+			struct msghdr	msg;
+			struct cmsghdr	*cmsg;
+
+			char		cbuf[512];
+
+			struct sock_extended_err *e;
+
+			iov.iov_base = &rcvbuf;
+			iov.iov_len = sizeof (rcvbuf);
+
+			msg.msg_name = (uint8_t *)&from;
+			msg.msg_namelen = sizeof (from);
+			msg.msg_iov = &iov;
+			msg.msg_iovlen = 1;
+			msg.msg_flags = 0;
+			msg.msg_control = cbuf;
+			msg.msg_controllen = sizeof (cbuf);
+
+			ret = recvmsg (net_socket, &msg, MSG_ERRQUEUE);
+			if (ret == -1)
+				return 0;
+
+			e = NULL;
+
+			for (cmsg = CMSG_FIRSTHDR (&msg); cmsg; cmsg = CMSG_NXTHDR (&msg, cmsg))
+			{
+				if (cmsg->cmsg_level == SOL_IP)
+				{
+					if (cmsg->cmsg_type == IP_RECVERR)
+					{
+						e = (struct sock_extended_err *) CMSG_DATA (cmsg);
+					}
+				}
+			}
+
+			if (!e)
+				return 0;
+
 			SockadrToNetadr (&from, net_from);
-			Com_Printf ("NET_GetPacket: %s from %s\n", LOG_NET, NET_ErrorString(), NET_AdrToString (net_from));
-			return -1;
+
+			switch (e->ee_errno)
+			{
+				case ECONNREFUSED:
+				case EHOSTUNREACH:
+				case ENETUNREACH:
+					return -1;
+			}
+
+			return 0;
 		}
 		Com_Printf ("NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
@@ -298,6 +357,12 @@ int NET_IPSocket (char *net_interface, int port)
 	{
 		Com_Printf ("UDP_OpenSocket: Couldn't set SO_BROADCAST: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
+	}
+
+	// r1: accept icmp unreachables for quick disconnects
+	if (setsockopt (newsocket, IPPROTO_IP, IP_RECVERR, (char *)&i, sizeof(i)) == -1)
+	{
+		Com_Printf ("UDP_OpenSocket: Couldn't set IP_RECVERR: %s\n", LOG_NET, NET_ErrorString());
 	}
 
 	if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost"))

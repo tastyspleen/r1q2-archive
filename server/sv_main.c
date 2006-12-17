@@ -169,6 +169,9 @@ cvar_t	*sv_optimize_deltas;
 cvar_t	*sv_predict_on_lag;
 cvar_t	*sv_format_string_hack;
 
+cvar_t	*sv_lag_stats;
+cvar_t	*sv_func_plat_hack;
+
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
 cvar_t	*sv_anticheat_error_action;
@@ -180,6 +183,7 @@ cvar_t	*sv_anticheat_badfile_max;
 
 cvar_t	*sv_anticheat_nag_time;
 cvar_t	*sv_anticheat_nag_message;
+cvar_t	*sv_anticheat_nag_defer;
 
 cvar_t	*sv_anticheat_show_violation_reason;
 cvar_t	*sv_anticheat_client_disconnect_action;
@@ -313,7 +317,7 @@ void SV_KickClient (client_t *cl, const char /*@null@*/*reason, const char /*@nu
 }
 
 //r1: this does the final cleaning up of a client after zombie state.
-static void SV_CleanClient (client_t *drop)
+void SV_CleanClient (client_t *drop)
 {
 #ifdef ANTICHEAT
 	linkednamelist_t	*bad, *last;
@@ -1413,6 +1417,8 @@ gotnewcl:
 		}
 	}
 
+	newcl->min_ping = 9999;
+
 	//moved netchan to here so userinfo changes can see remote address
 	Netchan_Setup (NS_SERVER, &newcl->netchan, adr, protocol, qport, msglen);
 
@@ -1912,7 +1918,7 @@ static void SV_CalcPings (void)
 	for (i=0 ; i<maxclients->intvalue ; i++)
 	{
 		cl = &svs.clients[i];
-		if (cl->state != cs_spawned )
+		if (cl->state != cs_spawned)
 			continue;
 
 		if (sv_calcpings_method->intvalue == 1)
@@ -1931,6 +1937,29 @@ static void SV_CalcPings (void)
 				cl->ping = 0;
 			else
 				cl->ping = total / count;
+
+			if (cl->ping)
+			{
+				if (cl->ping < cl->min_ping)
+					cl->min_ping = cl->ping;
+				else if (cl->ping > cl->max_ping)
+					cl->max_ping = cl->ping;
+			}
+
+			if (sv.framenum % 100 == 0)
+			{
+				cl->avg_ping_count++;
+				cl->avg_ping_time += cl->ping;
+
+				if (cl->state == cs_spawned && sv_lag_stats->intvalue)
+				{
+					MSG_BeginWriting (svc_stufftext);
+					MSG_WriteString ("cmd \177p\n");
+					SV_AddMessage (cl, false);
+					cl->pl_sent_packets++;
+					cl->pl_dropped_packets++;
+				}
+			}
 		}
 		else if (sv_calcpings_method->intvalue == 2)
 		{
@@ -1944,6 +1973,29 @@ static void SV_CalcPings (void)
 			}
 
 			cl->ping = best != 9999 ? best : 0;
+
+			if (cl->ping)
+			{
+				if (cl->ping < cl->min_ping)
+					cl->min_ping = cl->ping;
+				else if (cl->ping > cl->max_ping)
+					cl->max_ping = cl->ping;
+			}
+
+			if (sv.framenum % 100 == 0)
+			{
+				cl->avg_ping_count++;
+				cl->avg_ping_time += cl->ping;
+
+				if (cl->state == cs_spawned && sv_lag_stats->intvalue)
+				{
+					MSG_BeginWriting (svc_stufftext);
+					MSG_WriteString ("cmd \177p\n");
+					SV_AddMessage (cl, false);
+					cl->pl_sent_packets++;
+					cl->pl_dropped_packets++;
+				}
+			}
 		}
 		else
 		{
@@ -2084,6 +2136,8 @@ static void SV_ReadPackets (void)
 					continue;
 
 				SV_KickClient (cl, "connection reset by peer", NULL);
+				SV_CleanClient (cl);
+				cl->state = cs_free;	// don't bother with zombie state
 				break;
 			}
 			continue;
@@ -3019,10 +3073,16 @@ void SV_Init (void)
 
 	//r1: test lag stuff
 	sv_predict_on_lag = Cvar_Get ("sv_predict_on_lag", "0", 0);
-	sv_predict_on_lag->help = "Try to predict movement of lagged players to avoid frozen/warping players (experimental). Default 0.";
+	sv_predict_on_lag->help = "Try to predict movement of lagged players to avoid frozen/warping players (experimental). Default 0.\n";
 
 	sv_format_string_hack = Cvar_Get ("sv_format_string_hack", "0", 0);
-	sv_format_string_hack->help = "Remove %% from user-supplied strings to mitigate format string vulnerabilities in the Game DLL. Default 0.";
+	sv_format_string_hack->help = "Remove %% from user-supplied strings to mitigate format string vulnerabilities in the Game DLL. Default 0.\n";
+
+	sv_lag_stats = Cvar_Get ("sv_lag_stats", "0", 0);
+	sv_lag_stats->help = "Generate lag statistics for clients. This will cause an extra few bytes of data per client every second, used to generate the packetloss statistics for the 'lag' command. Default 0.\n";
+
+	sv_func_plat_hack = Cvar_Get ("sv_func_entities_hack", "0", 0);
+	sv_func_plat_hack->help = "Use an ugly hack to change global sounds from moving func_plat (lifts) and func_door (doors) into local sounds for those near the entity only. Will also move func_plat sounds to the top of the platform. Default 0.\n";
 
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
@@ -3058,6 +3118,9 @@ void SV_Init (void)
 	sv_anticheat_nag_message->help = "Message to show to clients on joining the game if they are not using anticheat. \\n supported. Maximum of 40 characters per line.\n";
 	sv_anticheat_nag_message->changed = _expand_cvar_newlines;
 	ExpandNewLines (sv_anticheat_nag_message->string);
+
+	sv_anticheat_nag_defer = Cvar_Get ("sv_anticheat_nag_defer", "0", 0);
+	sv_anticheat_nag_defer->help = "Delay the anticheat nag message for this many seconds after the player connects. Default 0.\n";
 
 	sv_anticheat_show_violation_reason = Cvar_Get ("sv_anticheat_show_violation_reason", "0", 0);
 	sv_anticheat_show_violation_reason->help = "Include the type of cheat detected when showing a client violation to other players. Default 0.\n";

@@ -1823,7 +1823,10 @@ static void CL_AddPacketEntities (const frame_t *frame)
 			if (effects & EF_ROCKET)
 			{
 				CL_RocketTrail (cent->lerp_origin, ent.origin, cent);
-				V_AddLight (ent.origin, 200, 1, 0.23f, 0);
+				if (cl_original_dlights->intvalue)
+					V_AddLight (ent.origin, 200, 1, 1, 0);
+				else
+					V_AddLight (ent.origin, 200, 1, 0.23f, 0);
 			}
 			// PGM - Do not reorder EF_BLASTER and EF_HYPERBLASTER. 
 			// EF_BLASTER | EF_TRACKER is a special case for EF_BLASTER2... Cheese!
@@ -1848,7 +1851,12 @@ static void CL_AddPacketEntities (const frame_t *frame)
 				if (effects & EF_TRACKER)						// PGM	overloaded for blaster2.
 					V_AddLight (ent.origin, 200, 0, 1, 0);		// PGM
 				else											// PGM
-					V_AddLight (ent.origin, 250, 1, 1, 1);
+				{
+					if (cl_original_dlights->intvalue)
+						V_AddLight (ent.origin, 250, 1, 1, 0);
+					else
+						V_AddLight (ent.origin, 250, 1, 1, 1);
+				}
 			}
 			else if (effects & EF_GIB)
 			{

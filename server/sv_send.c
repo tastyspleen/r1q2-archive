@@ -532,6 +532,7 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 	client_t	*client;
 //	sizebuf_t	*to;
 	qboolean	force_pos= false;
+	qboolean	calc_attn;
 
 	if (FLOAT_LT_ZERO(volume) || volume > 1.0f)
 		Com_Error (ERR_DROP, "SV_StartSound: volume = %f", volume);
@@ -554,6 +555,14 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 	}
 	else
 		use_phs = true;
+
+	if (channel & CHAN_SERVER_ATTN_CALC)
+	{
+		calc_attn = true;
+		channel &= ~CHAN_SERVER_ATTN_CALC;
+	}
+	else
+		calc_attn = false;
 
 	sendchan = (ent<<3) | (channel&7);
 
@@ -625,6 +634,46 @@ void EXPORT SV_StartSound (vec3_t origin, edict_t *entity, int channel,
 					flags |= SND_POS;
 				else
 					flags &= ~SND_POS;
+			}
+
+			//server side attenuation calculations, used on doors/plats to avoid multicasting over entire map
+			if (calc_attn)
+			{
+				float	distance;
+				float	distance_multiplier;
+				vec3_t	source_vec;
+
+				distance_multiplier = attenuation * 0.001f;
+
+				VectorSubtract (origin, client->edict->s.origin, source_vec);
+
+				distance = VectorNormalize(source_vec);
+				distance -= 80.0f;
+
+				if (FLOAT_LT_ZERO(distance))
+					distance = 0;
+
+				distance *= distance_multiplier;
+
+				//inaudible, plus 0.5 for lag compensation
+				if (distance > 1.5f)
+				{
+#ifndef NPROFILE
+					svs.r1q2AttnBytes += 3;
+					if (flags & SND_VOLUME)
+						svs.r1q2AttnBytes++;
+					if (flags & SND_ATTENUATION)
+						svs.r1q2AttnBytes++;
+					if (flags & SND_OFFSET)
+						svs.r1q2AttnBytes++;
+					if (flags & SND_ENT)
+						svs.r1q2AttnBytes += 2;
+					if (flags & SND_POS)
+						svs.r1q2AttnBytes += 6;
+#endif
+					Com_DPrintf ("Dropping out of range sound %s to %s, distance = %g.\n", sv.configstrings[CS_SOUNDS+soundindex], client->name, distance);
+					continue;
+				}
 			}
 		}
 
@@ -1050,6 +1099,8 @@ retryframe:
 	if (ret == -1)
 	{
 		SV_KickClient (client, "connection reset by peer", NULL);
+		SV_CleanClient (client);
+		client->state = cs_free;	// don't bother with zombie state
 		return false;
 	}
 

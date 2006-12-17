@@ -31,6 +31,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // Structure containing functions exported from refresh DLL
 refexport_t	re;
 
+static HWND old_hwnd = 0;
+
 cvar_t *win_noalttab;
 //cvar_t *win_nopriority;
 
@@ -705,6 +707,12 @@ void EXPORT VID_NewWindow ( int width, int height)
 	viddef.width  = width;
 	viddef.height = height;
 
+	//r1: reset input on new window (sw mode mouse fix)
+	if (old_hwnd && cl_hwnd != old_hwnd)
+		IN_Restart_f ();
+
+	old_hwnd = cl_hwnd;
+
 	cl.force_refdef = true;		// can't use a paused refdef
 }
 
@@ -905,7 +913,6 @@ void VID_ReloadRefresh (void)
 	char errMessage[256];
 	char attempted[512];
 	char name[MAX_OSPATH];
-	static HWND old_hwnd = 0;
 
 	attempted[0] = 0;
 
@@ -969,9 +976,9 @@ void VID_ReloadRefresh (void)
 		}
 
 		//r1ch: restart our sound/input devices as the window handle most likely changed
-		if (old_hwnd && cl_hwnd != old_hwnd) {
+		if (old_hwnd && cl_hwnd != old_hwnd)
 			IN_Restart_f ();
-		}
+
 		old_hwnd = cl_hwnd;
 		//cls.disable_screen = false;
 		Con_CheckResize();

@@ -148,6 +148,8 @@ cvar_t	*cl_railtrail;
 cvar_t	*cl_test = &uninitialized_cvar;
 cvar_t	*cl_test2;
 
+cvar_t	*cl_original_dlights;
+
 #ifdef NO_SERVER
 cvar_t	*allow_download;
 cvar_t *allow_download_players;
@@ -3402,6 +3404,8 @@ void CL_InitLocal (void)
 	//misc for testing
 	cl_test = Cvar_Get ("cl_test", "0", 0);
 	cl_test2 = Cvar_Get ("cl_test2", "0", 0);
+
+	cl_original_dlights = Cvar_Get ("cl_original_dlights", "1", 0);
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "1", CVAR_ARCHIVE);

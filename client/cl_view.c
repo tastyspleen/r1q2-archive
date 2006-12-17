@@ -349,7 +349,7 @@ void CL_PrepRefresh (void)
 	else
 		cl.model_clip[1] = NULL;
 
-	if (cl_defermodels->intvalue)
+	if (cl_defermodels->intvalue && !cl_timedemo->intvalue)
 	{
 		deferred_model_index = 1;
 		for (i = 2; i < MAX_MODELS; i++)
@@ -452,7 +452,10 @@ void CL_PrepRefresh (void)
 	S_StopAllSounds ();
 
 	//can't use cls.realtime - could be out of date :)
-	cl.defer_rendering = (int)(Sys_Milliseconds() + (cl_defertimer->value * 1000));
+	if (!cl_timedemo->intvalue)
+		cl.defer_rendering = (int)(Sys_Milliseconds() + (cl_defertimer->value * 1000));
+	else
+		cl.defer_rendering = 0;
 
 	// start the cd track
 #ifdef CD_AUDIO

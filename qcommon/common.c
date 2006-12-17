@@ -268,6 +268,17 @@ void Com_Printf (const char *fmt, int level, ...)
 	{
 		char	name[MAX_QPATH];
 		char	timestamp[64];
+		char	*p;
+
+		//r1: strip highbits and control chars
+		p = msg;
+		while (p[0])
+		{
+			p[0] &= ~128;
+			if (p[0] < 32 && p[0] != '\n')
+				p[0] = '-';
+			p++;
+		}
 
 		if (!logfile)
 		{
@@ -912,7 +923,7 @@ void MSG_ReadDir (sizebuf_t *sb, vec3_t dir)
 	int		b;
 
 	b = MSG_ReadByte (sb);
-	if (b >= NUMVERTEXNORMALS)
+	if (b == -1 || b >= NUMVERTEXNORMALS)
 		Com_Error (ERR_DROP, "MSG_ReadDir: out of range (%d)", b);
 	VectorCopy (bytedirs[b], dir);
 }

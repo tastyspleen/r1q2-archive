@@ -1275,10 +1275,12 @@ typedef enum
 #define	CHAN_VOICE              2
 #define	CHAN_ITEM               3
 #define	CHAN_BODY               4
+
 // modifier flags
 #define	CHAN_NO_PHS_ADD			8	// send to all clients, not just ones in PHS (ATTN 0 will also do this)
 #define	CHAN_RELIABLE			16	// send by reliable message, not datagram
-
+//R1Q2 SPECIFIC XXX
+#define	CHAN_SERVER_ATTN_CALC	32
 
 // sound attenuation values
 #define	ATTN_NONE               0	// full volume the entire level

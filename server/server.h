@@ -239,6 +239,11 @@ typedef struct client_s
 	unsigned					anticheat_nag_time;
 #endif
 	int							beginspawncount;
+
+	unsigned					pl_dropped_packets;
+	unsigned					pl_sent_packets;
+
+	unsigned					min_ping, avg_ping_count, avg_ping_time, max_ping;
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -295,6 +300,7 @@ typedef struct
 	unsigned long		proto35CompressionBytes;
 	unsigned long		r1q2OptimizedBytes;
 	unsigned long		r1q2CustomBytes;
+	unsigned long		r1q2AttnBytes;
 #endif
 } server_static_t;
 
@@ -370,6 +376,9 @@ extern	cvar_t		*sv_enhanced_setplayer;
 extern	cvar_t		*sv_predict_on_lag;
 extern	cvar_t		*sv_format_string_hack;
 
+extern	cvar_t		*sv_lag_stats;
+extern	cvar_t		*sv_func_plat_hack;
+
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;
 #endif
@@ -410,6 +419,8 @@ void SV_InitOperatorCommands (void);
 
 void SV_SendServerinfo (client_t *client);
 void SV_UserinfoChanged (client_t *cl);
+
+void SV_CleanClient (client_t *drop);
 
 //void SV_UpdateUserinfo (client_t *cl, qboolean notifyGame);
 
@@ -670,6 +681,7 @@ extern	cvar_t	*sv_anticheat_message;
 
 extern cvar_t	*sv_anticheat_nag_time;
 extern cvar_t	*sv_anticheat_nag_message;
+extern cvar_t	*sv_anticheat_nag_defer;
 
 extern cvar_t	*sv_anticheat_show_violation_reason;
 extern cvar_t	*sv_anticheat_client_disconnect_action;

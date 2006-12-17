@@ -388,6 +388,9 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 		, sequence);
 	}
 
+	//r1: pl stats
+	chan->total_received++;
+	chan->total_dropped += chan->dropped;
 
 //
 // if the current outgoing reliable message has been acknowledged
@@ -410,6 +413,11 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 //
 // the message can now be read from the current message pointer
 //
+	if (chan->last_received)
+		chan->received_delta = curtime - chan->last_received;
+	else
+		chan->received_delta = 0;
+
 	chan->last_received = curtime;
 
 	return true;

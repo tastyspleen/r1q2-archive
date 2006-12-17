@@ -1011,7 +1011,12 @@ void CL_ParseStartSoundPacket(void)
 	float	ofs;
 
 	flags = MSG_ReadByte (&net_message);
+	if (flags == -1)
+		Com_Error (ERR_DROP, "CL_ParseStartSoundPacket: End of message while reading flags");
+
 	sound_num = MSG_ReadByte (&net_message);
+	if (sound_num == -1)
+		Com_Error (ERR_DROP, "CL_ParseStartSoundPacket: End of message while reading sound_num");
 
     if (flags & SND_VOLUME)
 		volume = MSG_ReadByte (&net_message) / 255.0f;
@@ -1019,18 +1024,34 @@ void CL_ParseStartSoundPacket(void)
 		volume = DEFAULT_SOUND_PACKET_VOLUME;
 	
     if (flags & SND_ATTENUATION)
-		attenuation = MSG_ReadByte (&net_message) / 64.0f;
+	{
+		int	attn;
+		attn = MSG_ReadByte (&net_message);
+		if (attn == -1)
+			Com_Error (ERR_DROP, "CL_ParseStartSoundPacket: End of message while reading attenuation");
+		attenuation = attn / 64.0f;
+	}
 	else
 		attenuation = DEFAULT_SOUND_PACKET_ATTENUATION;	
 
     if (flags & SND_OFFSET)
-		ofs = MSG_ReadByte (&net_message) / 1000.0f;
+	{
+		int	offset;
+		offset = MSG_ReadByte (&net_message);
+		if (offset == -1)
+			Com_Error (ERR_DROP, "CL_ParseStartSoundPacket: End of message while reading offset");
+
+		ofs = offset / 1000.0f;
+	}
 	else
 		ofs = 0;
 
 	if (flags & SND_ENT)
 	{	// entity reletive
 		channel = MSG_ReadShort(&net_message); 
+		if (channel == -1)
+			Com_Error (ERR_DROP, "CL_ParseStartSoundPacket: End of message while reading channel");
+
 		ent = channel>>3;
 
 		if (ent < 0 || ent > MAX_EDICTS)

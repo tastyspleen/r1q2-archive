@@ -447,7 +447,9 @@ extern	cvar_t	*cl_http_proxy;
 extern	cvar_t	*cl_http_max_connections;
 #endif
 
-extern cvar_t *vid_fullscreen;
+extern	cvar_t	*cl_original_dlights;
+
+extern	cvar_t *vid_fullscreen;
 
 #ifndef DEDICATED_ONLY
 extern	qboolean send_packet_now;

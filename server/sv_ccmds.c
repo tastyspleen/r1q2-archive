@@ -2132,8 +2132,9 @@ static void SV_Status_f (void)
 		Com_Printf ("R1Q2 playerstate quantization optimization has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2OptimizedBytes);
 		Com_Printf ("R1Q2 entity quantization optimization has saved %lu bytes.\n", LOG_GENERAL, r1q2DeltaOptimizedBytes);
 		Com_Printf ("R1Q2 custom delta management has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2CustomBytes);
+		Com_Printf ("R1Q2 sv_func_entities_hack has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2AttnBytes);
 
-		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes + r1q2DeltaOptimizedBytes;
+		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes + r1q2DeltaOptimizedBytes + svs.r1q2AttnBytes;
 
 		Com_Printf ("Total byte savings: %lu (%.2f MB)\n", LOG_GENERAL, total, (float)total / 1024.0 / 1024.0);
 	}

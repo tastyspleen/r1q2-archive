@@ -846,6 +846,10 @@ typedef struct
 // message is copied to this buffer when it is first transfered
 	int			reliable_length;
 	byte		reliable_buf[MAX_USABLEMSG];	// unacked reliable message
+
+	unsigned	total_dropped;
+	unsigned	total_received;
+	unsigned	received_delta;
 } netchan_t;
 
 extern	netadr_t	net_from;
