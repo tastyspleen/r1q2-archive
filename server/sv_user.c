@@ -2009,6 +2009,29 @@ static void SV_PLResult_f (void)
 	sv_client->pl_dropped_packets--;
 }
 
+static void SV_PacketDup_f (void)
+{
+	unsigned	i;
+
+	if (Cmd_Argc() == 1)
+	{
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "Server is sending you %d duplicate packets.\n", sv_client->netchan.packetdup);
+		return;
+	}
+
+	i = atoi (Cmd_Argv(1));
+
+	if (i > sv_max_packetdup->intvalue)
+	{
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "Invalid packetdup value, this server allows a maximum of %d duplicate packets.\n", sv_max_packetdup->intvalue);
+		return;
+	}
+
+
+	sv_client->netchan.packetdup = i;
+	SV_ClientPrintf (sv_client, PRINT_HIGH, "Duplicate packets now set to %d.\n", i);
+}
+
 typedef struct
 {
 	char	/*@null@*/ *name;
@@ -2037,6 +2060,7 @@ static ucmd_t ucmds[] =
 	{"nogamedata", SV_NoGameData_f},
 	{"lag", SV_Lag_f},
 	{"\177p", SV_PLResult_f},
+	{"packetdup", SV_PacketDup_f},
 
 #ifdef ANTICHEAT
 	{"aclist", SV_ACList_f},

@@ -849,7 +849,7 @@ typedef struct
 
 	unsigned	total_dropped;
 	unsigned	total_received;
-	unsigned	received_delta;
+	unsigned	packetdup;
 } netchan_t;
 
 extern	netadr_t	net_from;

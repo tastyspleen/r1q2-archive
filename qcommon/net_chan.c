@@ -204,6 +204,7 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 	byte		send_buf[MAX_MSGLEN];
 	qboolean	send_reliable;
 	uint32		w1, w2;
+	unsigned	i;
 
 	// check for message overflow (this is only for client now ?)
 	if (chan->message.overflowed)
@@ -283,8 +284,11 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 	}
 
 // send the datagram
-	if (NET_SendPacket (chan->sock, send.cursize, send_buf, &chan->remote_address) == -1)
-		return -1;
+	for (i = 0; i <= chan->packetdup; i++)
+	{
+		if (NET_SendPacket (chan->sock, send.cursize, send_buf, &chan->remote_address) == -1)
+			return -1;
+	}
 
 	if (showpackets->intvalue)
 	{
@@ -413,10 +417,6 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 //
 // the message can now be read from the current message pointer
 //
-	if (chan->last_received)
-		chan->received_delta = curtime - chan->last_received;
-	else
-		chan->received_delta = 0;
 
 	chan->last_received = curtime;
 

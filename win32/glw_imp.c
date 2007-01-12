@@ -108,8 +108,17 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		wc.lpszMenuName  = 0;
 		wc.lpszClassName = WINDOW_CLASS_NAME;
 
-		if (!RegisterClass (&wc) )
-			ri.Sys_Error (ERR_FATAL, "Couldn't register window class (%d)", GetLastError());
+		if (!RegisterClass (&wc))
+		{
+			char	*noglMsg = "";
+			char	*msg;
+			FormatMessage (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&msg, 0, NULL);
+
+			if (Q_strncasecmp (gl_driver->string, "opengl32", 8))
+				noglMsg = va ("\r\n\r\nYou may be getting this message because your gl_driver is set to '%s'. Try adding 'set gl_driver \"opengl32\"' to your baseq2/r1gl.cfg if problems persist.", gl_driver->string);
+
+			ri.Sys_Error (ERR_FATAL, "R1GL: Couldn't register window class: %s\r\n\r\nPlease make sure you have installed the latest drivers for your video card.%s", msg, noglMsg);
+		}
 
 		window_class_registered = true;
 	}
@@ -1268,6 +1277,8 @@ qboolean GLimp_InitGL (void)
 			ReleaseDC (temphwnd, hDC);
 			DestroyWindow (temphwnd);
 			temphwnd = NULL;
+
+			UnregisterClass (OPENGL_CLASS, glw_state.hInstance);
 
 			//glw_state.hDC = GetDC (glw_state.hWnd);
 			if ( ( glw_state.hDC = GetDC( glw_state.hWnd ) ) == NULL )

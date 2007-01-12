@@ -242,6 +242,7 @@ typedef struct client_s
 
 	unsigned					pl_dropped_packets;
 	unsigned					pl_sent_packets;
+	unsigned					pl_last_packet_frame;
 
 	unsigned					min_ping, avg_ping_count, avg_ping_time, max_ping;
 } client_t;
@@ -378,6 +379,7 @@ extern	cvar_t		*sv_format_string_hack;
 
 extern	cvar_t		*sv_lag_stats;
 extern	cvar_t		*sv_func_plat_hack;
+extern	cvar_t		*sv_max_packetdup;
 
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;

@@ -1295,6 +1295,10 @@ void CL_ParseFrame (int extrabits)
 
 	CL_ParsePlayerstate (old, &cl.frame, extraflags);
 
+	//r1: allow fov override during demo playback
+	if (cl.attractloop)
+		cl.frame.playerstate.fov = fov->value;
+
 	// read packet entities
 	if (cls.serverProtocol != PROTOCOL_R1Q2)
 	{

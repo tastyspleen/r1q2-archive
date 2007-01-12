@@ -448,6 +448,7 @@ extern	cvar_t	*cl_http_max_connections;
 #endif
 
 extern	cvar_t	*cl_original_dlights;
+extern	cvar_t	*fov;
 
 extern	cvar_t *vid_fullscreen;
 

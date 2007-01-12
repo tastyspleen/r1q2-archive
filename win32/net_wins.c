@@ -38,8 +38,6 @@ static uint64 net_packets_out;
 static cvar_t	*net_rcvbuf;
 static cvar_t	*net_sndbuf;
 
-static	cvar_t	*net_ignore_icmp;
-
 static SOCKET		ip_sockets[2];
 int			server_port;
 //int			ipx_sockets[2];
@@ -112,7 +110,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 		{
 			if (net_ignore_icmp->intvalue)
 			{
-				return 0;
+				return -2;
 			}
 			else
 			{
@@ -132,7 +130,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 			//       cause errors, silently ignore them.
 			if (err != WSAEMSGSIZE)
 				Com_Printf ("WARNING! NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
-		return 0;
+			return 0;
 	}
 
 	net_packets_in++;
@@ -392,17 +390,18 @@ void NET_Init (void)
 //	WORD	wVersionRequested; 
 	int		r;
 
-//	wVersionRequested = MAKEWORD(1, 1); 
+//	wVersionRequested = MAKEWORD(1, 1);
+	
 
 	r = WSAStartup (MAKEWORD(1, 1), &winsockdata);
 
 	if (r)
 		Com_Error (ERR_FATAL,"Winsock initialization failed.");
 
+	NET_Common_Init ();
+
 	net_rcvbuf = Cvar_Get ("net_rcvbuf", "0", 0);
 	net_sndbuf = Cvar_Get ("net_sndbuf", "0", 0);
-
-	net_ignore_icmp = Cvar_Get ("net_ignore_icmp", "0", 0);
 
 	//r1: needed for pyroadmin hooks
 #ifndef NO_SERVER
@@ -412,8 +411,7 @@ void NET_Init (void)
 
 	Com_Printf("Winsock Initialized\n", LOG_NET);
 
-	Cmd_AddCommand ("net_restart", Net_Restart_f);
-	Cmd_AddCommand ("net_stats", Net_Stats_f);
+
 
 
 	//noudp = Cvar_Get ("noudp", "0", CVAR_NOSET);

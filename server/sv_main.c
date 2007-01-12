@@ -171,6 +171,7 @@ cvar_t	*sv_format_string_hack;
 
 cvar_t	*sv_lag_stats;
 cvar_t	*sv_func_plat_hack;
+cvar_t	*sv_max_packetdup;
 
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
@@ -786,6 +787,9 @@ challenge, they must give a valid IP address.
 static qboolean SV_ChallengeIsInUse (uint32 challenge)
 {
 	client_t	*cl;
+
+	if (!challenge)
+		return true;
 
 	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 	{
@@ -1950,9 +1954,14 @@ static void SV_CalcPings (void)
 			{
 				cl->avg_ping_count++;
 				cl->avg_ping_time += cl->ping;
+			}
 
-				if (cl->state == cs_spawned && sv_lag_stats->intvalue)
+			if (cl->state == cs_spawned && sv_lag_stats->intvalue)
+			{
+				if ((unsigned)((unsigned)sv.framenum - cl->pl_last_packet_frame) >= 50)
 				{
+					//randomize framenums used for pl testing to account for timed pl
+					cl->pl_last_packet_frame = (unsigned)sv.framenum + (unsigned)(random() * 3);
 					MSG_BeginWriting (svc_stufftext);
 					MSG_WriteString ("cmd \177p\n");
 					SV_AddMessage (cl, false);
@@ -1986,9 +1995,14 @@ static void SV_CalcPings (void)
 			{
 				cl->avg_ping_count++;
 				cl->avg_ping_time += cl->ping;
+			}
 
-				if (cl->state == cs_spawned && sv_lag_stats->intvalue)
+			if (cl->state == cs_spawned && sv_lag_stats->intvalue)
+			{
+				if ((unsigned)((unsigned)sv.framenum - cl->pl_last_packet_frame) >= 50)
 				{
+					//randomize framenums used for pl testing to account for timed pl
+					cl->pl_last_packet_frame = (unsigned)sv.framenum + (unsigned)(random() * 3);
 					MSG_BeginWriting (svc_stufftext);
 					MSG_WriteString ("cmd \177p\n");
 					SV_AddMessage (cl, false);
@@ -2117,8 +2131,12 @@ static void SV_ReadPackets (void)
 	for (;;)
 	{
 		j = NET_GetPacket (NS_SERVER, &net_from, &net_message);
+
 		if (!j)
 			break;
+
+		if (j == -2)
+			continue;
 
 		if (j == -1)
 		{
@@ -2128,12 +2146,30 @@ static void SV_ReadPackets (void)
 				if (cl->state <= cs_zombie)
 					continue;
 
-				if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
-					continue;
+				// r1: workaround for broken linux kernel
+				if (net_from.port == 0)
+				{
+					if (!NET_CompareBaseAdr (&net_from, &cl->netchan.remote_address))
+						continue;
+				}
+				else
+				{
+					if (!NET_CompareAdr (&net_from, &cl->netchan.remote_address))
+						continue;
+				}
 
-				// r1: only drop if we haven't seen a packet for a bit
-				if (cl->lastmessage > svs.realtime - 1500)
-					continue;
+				// r1: only drop if we haven't seen a packet for a bit to prevent spoofed ICMPs from kicking people
+				if (cl->state == cs_spawned)
+				{
+					if (cl->lastmessage > svs.realtime - 1500)
+						continue;
+				}
+				else
+				{
+					// r1: longer delay if they are still loading
+					if (cl->lastmessage > svs.realtime - 10000)
+						continue;
+				}
 
 				SV_KickClient (cl, "connection reset by peer", NULL);
 				SV_CleanClient (cl);
@@ -3083,6 +3119,9 @@ void SV_Init (void)
 
 	sv_func_plat_hack = Cvar_Get ("sv_func_entities_hack", "0", 0);
 	sv_func_plat_hack->help = "Use an ugly hack to change global sounds from moving func_plat (lifts) and func_door (doors) into local sounds for those near the entity only. Will also move func_plat sounds to the top of the platform. Default 0.\n";
+
+	sv_max_packetdup = Cvar_Get ("sv_max_packetdup", "0", 0);
+	sv_max_packetdup->help = "Maximum number of duplicate packets a client can request. Each duplicate causes the client to consume more bandwidth, Default 0.\n";
 
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);

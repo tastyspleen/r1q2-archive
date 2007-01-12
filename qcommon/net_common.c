@@ -27,6 +27,19 @@ int NET_IPSocket (char *net_interface, int port);
 
 int _true = 1;
 
+static	cvar_t	*net_ignore_icmp;
+
+void Net_Restart_f (void);
+void Net_Stats_f (void);
+
+void NET_Common_Init (void)
+{
+	net_ignore_icmp = Cvar_Get ("net_ignore_icmp", "0", 0);
+
+	Cmd_AddCommand ("net_restart", Net_Restart_f);
+	Cmd_AddCommand ("net_stats", Net_Stats_f);
+}
+
 #define SockadrToNetadr(s,a) \
 	a->type = NA_IP; \
 	*(int *)&a->ip = ((struct sockaddr_in *)s)->sin_addr.s_addr; \

@@ -1184,7 +1184,7 @@ void Key_Init (void)
 	Cmd_AddCommand ("unbindall",Key_Unbindall_f);
 	Cmd_AddCommand ("bindlist",Key_Bindlist_f);
 
-	cl_cmdcomplete = Cvar_Get ("cl_cmdcomplete", "2", 0);
+	cl_cmdcomplete = Cvar_Get ("cl_cmdcomplete", "0", 0);
 }
 
 void Key_GenerateRepeats (void)

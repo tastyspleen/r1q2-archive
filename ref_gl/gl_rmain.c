@@ -1779,12 +1779,12 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 	gl_config.r1gl_GL_EXT_texture_filter_anisotropic = false;
 	if ( strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic" ) )
 	{
-		//if ( gl_ext_texture_filter_anisotropic->value ) {
+		if ( gl_ext_texture_filter_anisotropic->value ) {
 			ri.Con_Printf( PRINT_ALL, "...using GL_EXT_texture_filter_anisotropic\n" );
 			gl_config.r1gl_GL_EXT_texture_filter_anisotropic = true;
-		//} else {
-		//	ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_texture_filter_anisotropic\n" );		
-		//}
+		} else {
+			ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_texture_filter_anisotropic\n" );		
+		}
 	} else {
 		ri.Con_Printf( PRINT_ALL, "...GL_EXT_texture_filter_anisotropic not found\n" );
 	}
@@ -1908,13 +1908,19 @@ void GL_UpdateAnisotropy(void)
 {
 	int		i;
 	image_t	*glt;
+	float	value;
+
+	if (!gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
+		value = 0;
+	else
+		value = gl_ext_max_anisotropy->value;
 
 	for (i=0, glt=gltextures ; i<numgltextures ; i++, glt++)
 	{
 		if (glt->type != it_pic && glt->type != it_sky )
 		{
 			GL_Bind (glt->texnum);
-			qglTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, gl_ext_max_anisotropy->value);
+			qglTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, value);
 		}
 	}
 }
@@ -2042,6 +2048,24 @@ void EXPORT R_BeginFrame( float camera_separation )
 	{
 		GL_UpdateAnisotropy ();
 		gl_ext_max_anisotropy->modified = false;
+	}
+
+	if (gl_ext_texture_filter_anisotropic->modified)
+	{
+		gl_config.r1gl_GL_EXT_texture_filter_anisotropic = false;
+		if ( strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic" ) )
+		{
+			if ( gl_ext_texture_filter_anisotropic->value ) {
+				ri.Con_Printf( PRINT_ALL, "...using GL_EXT_texture_filter_anisotropic\n" );
+				gl_config.r1gl_GL_EXT_texture_filter_anisotropic = true;
+			} else {
+				ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_texture_filter_anisotropic\n" );		
+			}
+		} else {
+			ri.Con_Printf( PRINT_ALL, "...GL_EXT_texture_filter_anisotropic not found\n" );
+		}
+		GL_UpdateAnisotropy ();
+		gl_ext_texture_filter_anisotropic->modified = false;
 	}
 
 	if (gl_hudscale->modified)

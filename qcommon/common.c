@@ -275,7 +275,7 @@ void Com_Printf (const char *fmt, int level, ...)
 		while (p[0])
 		{
 			p[0] &= ~128;
-			if (p[0] < 32 && p[0] != '\n')
+			if (p[0] < 32 && !isspace(p[0]))
 				p[0] = '-';
 			p++;
 		}

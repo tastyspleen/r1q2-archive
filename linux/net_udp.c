@@ -34,6 +34,8 @@ static int			ip_sockets[2];
 
 char *NET_ErrorString (void);
 
+cvar_t	*net_no_recverr;
+
 //Aiee...
 #include "../qcommon/net_common.c"
 
@@ -179,42 +181,74 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 		return 0;
 
 	fromlen = sizeof(from);
+
 	ret = recvfrom (net_socket, net_message->data, net_message->maxsize
 		, 0, (struct sockaddr *)&from, &fromlen);
 
 	if (ret == -1)
 	{
+		//linux makes this needlessly complex, couldn't just return the source of the error in from, oh no...
+		struct probehdr	rcvbuf;
+		struct iovec	iov;
+		struct msghdr	msg;
+		struct cmsghdr	*cmsg;
+
+		char		cbuf[1024];
+
+		struct sock_extended_err *e;
+
 		err = errno;
 
-		if (err == EWOULDBLOCK)
-			return 0;
+		memset (&rcvbuf, 0, sizeof(rcvbuf));
 
-		if (err == ECONNREFUSED)
+		iov.iov_base = &rcvbuf;
+		iov.iov_len = sizeof (rcvbuf);
+
+		memset (&from, 0, sizeof(from));
+
+		msg.msg_name = (void *)&from;
+		msg.msg_namelen = sizeof (from);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+		msg.msg_flags = 0;
+		msg.msg_control = cbuf;
+		msg.msg_controllen = sizeof (cbuf);
+
+		for (;;)
 		{
-			//linux makes this needlessly complex, couldn't just return the source of the error in from, oh no...
-			struct probehdr	rcvbuf;
-			struct iovec	iov;
-			struct msghdr	msg;
-			struct cmsghdr	*cmsg;
-
-			char		cbuf[512];
-
-			struct sock_extended_err *e;
-
-			iov.iov_base = &rcvbuf;
-			iov.iov_len = sizeof (rcvbuf);
-
-			msg.msg_name = (uint8_t *)&from;
-			msg.msg_namelen = sizeof (from);
-			msg.msg_iov = &iov;
-			msg.msg_iovlen = 1;
-			msg.msg_flags = 0;
-			msg.msg_control = cbuf;
-			msg.msg_controllen = sizeof (cbuf);
-
 			ret = recvmsg (net_socket, &msg, MSG_ERRQUEUE);
 			if (ret == -1)
+			{
+				if (errno == EWOULDBLOCK || errno == EAGAIN)
+				{
+					if (err == EWOULDBLOCK || err == EAGAIN)
+					{
+						return 0;
+					}
+					else
+					{
+						errno = err;
+						Com_Printf ("NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
+						return 0;
+					}
+				}
+				else
+				{
+					Com_DPrintf ("NET_GetPacket: recvmsg(): %s\n", NET_ErrorString());
+					return 0;
+				}
+			}
+			else if (!ret)
+			{
+				Com_DPrintf ("NET_GetPacket: recvmsg(): EOF\n");
 				return 0;
+			}
+
+			errno = err;
+			Com_DPrintf ("NET_GetPacket: Called recvmsg() for extended error details for %s\n", NET_ErrorString());
+
+			//linux 2.2 (maybe others) fails to properly fill in the msg_name structure.
+			Com_DPrintf ("(msgname) family %d, host: %s, port: %d, flags: %d\n", from.sin_family, inet_ntoa (from.sin_addr), from.sin_port, msg.msg_flags);
 
 			e = NULL;
 
@@ -226,11 +260,36 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 					{
 						e = (struct sock_extended_err *) CMSG_DATA (cmsg);
 					}
+					else
+						Com_DPrintf ("cmsg type = %d\n", cmsg->cmsg_type);
 				}
 			}
 
 			if (!e)
-				return 0;
+			{
+				Com_DPrintf ("NET_GetPacket: recvmsg(): no extended info available\n");
+				continue;
+			}
+
+			if (e->ee_origin == SO_EE_ORIGIN_ICMP)
+			{
+				//for some unknown reason, the kernel zeroes out the port in SO_EE_OFFENDER, so this is pretty much useless
+				struct sockaddr_in *sin = (struct sockaddr_in *)SO_EE_OFFENDER(e);
+				Com_DPrintf ("(ICMP) family %d, host: %s, port: %d\n", sin->sin_family, inet_ntoa (sin->sin_addr), sin->sin_port);
+
+				//but better than nothing if using  buggy kernel?
+				if (from.sin_family == AF_UNSPEC)
+				{
+					memcpy (&from, sin, sizeof(from));
+					//can't trust port, may be buggy kernel (again)
+					from.sin_port = 0;
+				}
+			}
+			else
+			{
+				Com_DPrintf ("NET_GetPacket: recvmsg(): error origin is %d\n", e->ee_origin);
+				continue;
+			}
 
 			SockadrToNetadr (&from, net_from);
 
@@ -239,12 +298,19 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 				case ECONNREFUSED:
 				case EHOSTUNREACH:
 				case ENETUNREACH:
-					return -1;
+					Com_Printf ("NET_GetPacket: %s from %s\n", LOG_NET, strerror(e->ee_errno), NET_AdrToString (net_from));
+					if (net_ignore_icmp->intvalue)
+						return 0;
+					else
+						return -1;
+				default:
+					Com_Printf ("NET_GetPacket: %s from %s\n", LOG_NET, strerror(e->ee_errno), NET_AdrToString (net_from));
+					continue;
 			}
-
-			return 0;
 		}
-		Com_Printf ("NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
+
+		//errno = err;
+		//Com_Printf ("NET_GetPacket: %s\n", LOG_NET, NET_ErrorString());
 		return 0;
 	}
 
@@ -320,7 +386,8 @@ NET_Init
 */
 void NET_Init (void)
 {
-	Cmd_AddCommand ("net_stats", Net_Stats_f);
+	NET_Common_Init ();
+	net_no_recverr = Cvar_Get ("net_no_recverr", "0", 0);
 }
 
 
@@ -360,9 +427,12 @@ int NET_IPSocket (char *net_interface, int port)
 	}
 
 	// r1: accept icmp unreachables for quick disconnects
-	if (setsockopt (newsocket, IPPROTO_IP, IP_RECVERR, (char *)&i, sizeof(i)) == -1)
+	if (!net_no_recverr->intvalue)
 	{
-		Com_Printf ("UDP_OpenSocket: Couldn't set IP_RECVERR: %s\n", LOG_NET, NET_ErrorString());
+		if (setsockopt (newsocket, IPPROTO_IP, IP_RECVERR, (char *)&i, sizeof(i)) == -1)
+		{
+			Com_Printf ("UDP_OpenSocket: Couldn't set IP_RECVERR: %s\n", LOG_NET, NET_ErrorString());
+		}
 	}
 
 	if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost"))

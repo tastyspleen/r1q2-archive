@@ -212,7 +212,7 @@ int	HexToRaw (const char *c)
 	return temp;
 }
 
-static void SV_AntiCheat_ParseCvarLine (char *line)
+static void SV_AntiCheat_ParseCvarLine (char *line, int line_number)
 {
 	cvarcheck_t *checks;
 	char		*p, *q;
@@ -235,7 +235,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 	p = strchr (line, '\t');
 	if (!p)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
@@ -248,14 +248,14 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 
 	if (!p[0])
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
 	p = strchr (op, '\t');
 	if (!p)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
@@ -266,14 +266,14 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 
 	if (!p[0])
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
 	p = strchr (var_value, '\t');
 	if (!p)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
@@ -284,13 +284,13 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 
 	if (strlen (var_name) >= 64 || !var_name[0])
 	{
-		Com_Printf ("ANTICHEAT WARNING: Invalid cvar name '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, var_name);
+		Com_Printf ("ANTICHEAT WARNING: Invalid cvar name '%s' in anticheat-cvars.txt at line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, var_name, line_number);
 		return;
 	}
 
 	if (strlen (default_value) >= 64 || !default_value[0])
 	{
-		Com_Printf ("ANTICHEAT WARNING: Invalid default value '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, default_value);
+		Com_Printf ("ANTICHEAT WARNING: Invalid default value '%s' in anticheat-cvars.txt at line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, default_value, line_number);
 		return;
 	}
 
@@ -309,7 +309,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 
 	if (num_values >= 255)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Too many values on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Too many values on line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
@@ -335,7 +335,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 	{
 		if (strlen (tokens[i]) > 64 || !tokens[i][0])
 		{
-			Com_Printf ("ANTICHEAT WARNING: Bad value '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, tokens[i], line);
+			Com_Printf ("ANTICHEAT WARNING: Bad value '%s' on line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, tokens[i], line_number, line);
 			Z_Free (tokens);
 			return;
 		}
@@ -354,7 +354,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 		if (num_values > 1)
 		{
 			Z_Free (tokens);
-			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line_number, line);
 			return;
 		}
 		eop = OP_GTEQUAL;
@@ -364,7 +364,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 		if (num_values > 1)
 		{
 			Z_Free (tokens);
-			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line_number, line);
 			return;
 		}
 		eop = OP_LTEQUAL;
@@ -374,7 +374,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 		if (num_values > 1)
 		{
 			Z_Free (tokens);
-			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line_number, line);
 			return;
 		}
 		eop = OP_GT;
@@ -384,7 +384,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 		if (num_values > 1)
 		{
 			Z_Free (tokens);
-			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line);
+			Com_Printf ("ANTICHEAT WARNING: Unsupported multiple values with op '%s' on line %d '%s' in anticheat-cvars.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, op, line_number, line);
 			return;
 		}
 		eop = OP_LT;
@@ -404,7 +404,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 	else
 	{
 		Z_Free (tokens);
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-cvars.txt: unknown op '%s'\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line, op);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-cvars.txt: unknown op '%s'\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line, op);
 		return;
 	}
 
@@ -433,7 +433,7 @@ static void SV_AntiCheat_ParseCvarLine (char *line)
 	antiCheatNumCvarChecks++;
 }
 
-static void SV_AntiCheat_ParseHashLine (char *line)
+static void SV_AntiCheat_ParseHashLine (char *line, int line_number)
 {
 	filehash_t	*hashes;
 	int			i;
@@ -453,7 +453,7 @@ static void SV_AntiCheat_ParseHashLine (char *line)
 	p = strchr (line, '\t');
 	if (!p)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line '%s' in anticheat-hashes.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-hashes.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
 		return;
 	}
 
@@ -462,13 +462,13 @@ static void SV_AntiCheat_ParseHashLine (char *line)
 
 	if (strlen (p) != 40)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed hash '%s' in anticheat-hashes.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, p);
+		Com_Printf ("ANTICHEAT WARNING: Malformed hash '%s' in anticheat-hashes.txt on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, p, line_number);
 		return;
 	}
 
 	if (strlen (p) >= MAX_QPATH || strchr (p, '\\'))
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed quake path '%s' in anticheat-hashes.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed quake path '%s' in anticheat-hashes.txt on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line, line_number);
 		return;
 	}
 
@@ -489,12 +489,13 @@ static void SV_AntiCheat_ParseHashLine (char *line)
 	antiCheatNumFileHashes++;
 }
 
-static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *))
+static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *, int))
 {
 	int			len;
 	char		line[256];
 	char		*q;
 	char		*buff, *ptr;
+	int			line_number;
 
 	len = FS_LoadFile (filename, (void **)&buff);
 
@@ -503,6 +504,8 @@ static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *
 
 	ptr = buff;
 	q = buff;
+
+	line_number = 1;
 
 	while (len)
 	{
@@ -514,8 +517,9 @@ static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *
 				if (q)
 				{
 					Q_strncpy (line, q, sizeof(line)-1);
-					func (line);
+					func (line, line_number);
 					q = NULL;
+					line_number++;
 				}
 				buff++;
 				break;

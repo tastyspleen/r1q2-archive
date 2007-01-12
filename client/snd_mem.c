@@ -229,7 +229,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 		info = GetWavinfo (s->name, data, size);
 		if (info.channels != 1)
 		{
-			Com_Printf ("%s is an unsupported stereo sample\n", LOG_CLIENT|LOG_WARNING, s->name);
+			Com_DPrintf ("%s is an unsupported stereo sample\n", s->name);
 			FS_FreeFile (data);
 			return NULL;
 		}
@@ -239,7 +239,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 
 		if (info.samples == 0 || len == 0)
 		{
-			Com_Printf ("WARNING: Zero length sound encountered: %s\n", LOG_CLIENT|LOG_WARNING, s->name);
+			Com_DPrintf ("WARNING: Zero length sound encountered: %s\n", s->name);
 			FS_FreeFile (data);
 			return NULL;
 		}

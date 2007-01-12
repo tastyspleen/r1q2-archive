@@ -1044,7 +1044,7 @@ LRESULT CALLBACK LowLevelKeyboardProc( int nCode, WPARAM wParam, LPARAM lParam )
 		else
 			key = K_RWINKEY;
 
-		Key_Event (key, down, sys_msg_time);
+		Key_Event (key, down, ((KBDLLHOOKSTRUCT *)lParam)->time);
         return 1;
 	}
     else
