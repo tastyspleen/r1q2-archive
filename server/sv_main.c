@@ -172,6 +172,8 @@ cvar_t	*sv_format_string_hack;
 cvar_t	*sv_lag_stats;
 cvar_t	*sv_func_plat_hack;
 cvar_t	*sv_max_packetdup;
+cvar_t	*sv_redirect_address;
+
 
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
@@ -1347,7 +1349,7 @@ static void SVC_DirectConnect (void)
 
 	if (!newcl)
 	{
-		if (!reserved)
+		if (sv_reserved_slots->intvalue && !reserved)
 		{
 			Com_DPrintf ("    reserved slots full\n");
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer and reserved slots are full.\n");
@@ -1356,7 +1358,36 @@ static void SVC_DirectConnect (void)
 		{
 			Com_DPrintf ("    server full\n");
 			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nServer is full.\n");
+		
+			//aiee... just look away now and pretend you never saw this code
+			if (sv_redirect_address->string[0])
+			{
+				netchan_t	chan;
+				byte		data[1024];
+				byte		string[256];
+				int			len, datalen;
+
+				data[0] = svc_print;
+				data[1] = PRINT_CHAT;
+
+				datalen = 2;
+
+				len = Com_sprintf (string, sizeof(string), "This server is full, redirecting you to %s\n", sv_redirect_address->string);
+				memcpy (data + datalen, string, len + 1);
+				datalen += len + 1;
+
+				data[datalen++] = svc_stufftext;
+
+				len = Com_sprintf (string, sizeof(string), "connect %s\n", sv_redirect_address->string);
+				memcpy (data + datalen, string, len + 1);
+				datalen += len + 1;
+
+				Netchan_Setup (NS_SERVER, &chan, &net_from, protocol, qport, msglen);
+				Netchan_OutOfBandPrint (NS_SERVER, adr, "client_connect");
+				Netchan_Transmit (&chan, datalen, data);
+			}
 		}
+
 		return;
 	}
 
@@ -1958,10 +1989,10 @@ static void SV_CalcPings (void)
 
 			if (cl->state == cs_spawned && sv_lag_stats->intvalue)
 			{
-				if ((unsigned)((unsigned)sv.framenum - cl->pl_last_packet_frame) >= 50)
+				if ((unsigned)((unsigned)sv.framenum - cl->pl_last_packet_frame) >= 55)
 				{
 					//randomize framenums used for pl testing to account for timed pl
-					cl->pl_last_packet_frame = (unsigned)sv.framenum + (unsigned)(random() * 3);
+					cl->pl_last_packet_frame = (unsigned)sv.framenum - (unsigned)(random() * 5);
 					MSG_BeginWriting (svc_stufftext);
 					MSG_WriteString ("cmd \177p\n");
 					SV_AddMessage (cl, false);
@@ -1999,10 +2030,10 @@ static void SV_CalcPings (void)
 
 			if (cl->state == cs_spawned && sv_lag_stats->intvalue)
 			{
-				if ((unsigned)((unsigned)sv.framenum - cl->pl_last_packet_frame) >= 50)
+				if ((unsigned)((unsigned)sv.framenum - cl->pl_last_packet_frame) >= 55)
 				{
 					//randomize framenums used for pl testing to account for timed pl
-					cl->pl_last_packet_frame = (unsigned)sv.framenum + (unsigned)(random() * 3);
+					cl->pl_last_packet_frame = (unsigned)sv.framenum - (unsigned)(random() * 5);
 					MSG_BeginWriting (svc_stufftext);
 					MSG_WriteString ("cmd \177p\n");
 					SV_AddMessage (cl, false);
@@ -3122,6 +3153,9 @@ void SV_Init (void)
 
 	sv_max_packetdup = Cvar_Get ("sv_max_packetdup", "0", 0);
 	sv_max_packetdup->help = "Maximum number of duplicate packets a client can request. Each duplicate causes the client to consume more bandwidth, Default 0.\n";
+
+	sv_redirect_address = Cvar_Get ("sv_redirect_address", "", 0);
+	sv_redirect_address->help = "Address to redirect clients to if the server is full. Can be a hostname or IP. Default empty.\n";
 
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
