@@ -2026,11 +2026,31 @@ RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 {
 	zhead_t	*z;
 
+	//malloc can crash if negative size is passed, woops.
+	if (size < 0)
+		Com_Error (ERR_DIE, "Z_TagMalloc: Illegal allocation size of %d bytes from %p for tag %d", size,
+#if defined _WIN32
+		_ReturnAddress (),
+#elif defined LINUX
+		__builtin_return_address (0), 
+#else
+		NULL,
+#endif
+		tag);
+
 	size = size + sizeof(zhead_t);
 	z = malloc(size);
 
 	if (!z)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for %s (already %li bytes in %li blocks)", size, tagmalloc_tags[tag].name, z_bytes, z_count);
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for tag %d from %p (already %li bytes in %li blocks)", size, tag,
+#if defined _WIN32
+		_ReturnAddress (),
+#elif defined LINUX
+		__builtin_return_address (0), 
+#else
+		NULL,
+#endif		
+		z_bytes, z_count);
 
 	z_count++;
 
@@ -2834,8 +2854,14 @@ void ExpandNewLines (char *string)
 			*s++ = *q;
 		}
 		q++;
+
+		//crashfix, check if we reached eol on an expansion.
+		if (!*q)
+			break;
 	}
-	*s++ = *q;
+
+	if (*q)
+		*s++ = *q;
 	*s = '\0';
 }
 

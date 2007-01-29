@@ -543,13 +543,14 @@ Any variables with latched values will now be updated
 void Cvar_GetLatchedVars (void)
 {
 	cvar_t	*var;
+	char	*old_string;
 
 	for (var = cvar_vars ; var ; var = var->next)
 	{
 		if (!var->latched_string)
 			continue;
 
-		Z_Free (var->string);
+		old_string = var->string;
 
 		var->string = var->latched_string;
 		var->latched_string = NULL;
@@ -559,6 +560,11 @@ void Cvar_GetLatchedVars (void)
 		//r1: fix 0 case
 		if (!var->intvalue && FLOAT_NE_ZERO(var->value))
 			var->intvalue = 1;
+
+		if (var->changed)
+			var->changed (var, old_string, var->string);
+
+		Z_Free (old_string);
 
 		if (!strcmp(var->name, "game"))
 		{

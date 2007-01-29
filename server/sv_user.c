@@ -507,7 +507,12 @@ static void SV_New_f (void)
 	if (!sv_client->versionString)
 	{
 		MSG_BeginWriting (svc_stufftext);
-		MSG_WriteString ("cmd \177c version $version\n");
+		MSG_WriteString ("cmd \177c version $version\n"
+		//as much as I hate to do it this way, wasting userinfo space is equally bad
+#ifdef ANTICHEAT
+		"cmd actoken $actoken\n"
+#endif
+		);
 		SV_AddMessage (sv_client, true);
 	}
 
@@ -1514,10 +1519,12 @@ static void SV_ACList_f (void)
 	SV_ClientPrintf (sv_client, PRINT_HIGH, 
 		"+----------------+--------+-----+\n");
 
+	SV_ClientPrintf (sv_client, PRINT_HIGH, "File check list in use: %s\n", antiCheatNumFileHashes ? anticheat_hashlist_name : "none");
+
 	if (sv_require_anticheat->intvalue)
-		SV_ClientPrintf (sv_client, PRINT_HIGH, "This Quake II server is %scurrently connected to the anticheat server.\nFor information on anticheat, please visit http://antiche.at/\n", SV_AntiCheat_IsConnected () ? "" : "NOT ");
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "This Quake II server is %sconnected to the anticheat server.\nFor information on anticheat, please visit http://antiche.at/\n", SV_AntiCheat_IsConnected () ? "" : "NOT ");
 	else
-		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is currently disabled on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is disabled on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
 }
 
 static void SV_ACInfo_f (void)
@@ -2032,6 +2039,37 @@ static void SV_PacketDup_f (void)
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "Duplicate packets now set to %d.\n", i);
 }
 
+#ifdef ANTICHEAT
+static void SV_ACToken_f (void)
+{
+	const char *token;
+
+	if (Cmd_Argc() != 2)
+		return;
+
+	token = SV_AntiCheat_CheckToken (Cmd_Argv(1));
+	if (token)
+	{
+		client_t *cl;
+		for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+		{
+			if (cl->state <= cs_zombie)
+				continue;
+
+			//note, we only store pointer, actual string value is irrelevant
+			if (cl->anticheat_token == token)
+			{
+				SV_KickClient (cl, "duplicate anticheat token", "Your anticheat token was used by another player so you have been disconnected.");
+				continue;
+			}
+		}
+
+		Com_Printf ("ANTICHEAT: %s bypassed anticheat requirements with token '%s'\n", LOG_ANTICHEAT|LOG_SERVER, sv_client->name, token);
+		sv_client->anticheat_required = ANTICHEAT_EXEMPT;
+	}
+}
+#endif
+
 typedef struct
 {
 	char	/*@null@*/ *name;
@@ -2061,10 +2099,12 @@ static ucmd_t ucmds[] =
 	{"lag", SV_Lag_f},
 	{"\177p", SV_PLResult_f},
 	{"packetdup", SV_PacketDup_f},
+	
 
 #ifdef ANTICHEAT
 	{"aclist", SV_ACList_f},
 	{"acinfo", SV_ACInfo_f},
+	{"actoken", SV_ACToken_f},
 #endif
 
 	{"download", SV_BeginDownload_f},

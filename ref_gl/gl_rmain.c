@@ -180,6 +180,7 @@ cvar_t	*vid_fullscreen;
 cvar_t	*vid_gamma;
 cvar_t	*vid_ref;
 cvar_t	*vid_forcedrefresh;
+cvar_t	*vid_optimalrefresh;
 cvar_t	*vid_nowgl;
 cvar_t	*vid_restore_on_switch;
 
@@ -1372,6 +1373,7 @@ void R_Register( void )
 	gl_overbrights = ri.Cvar_Get ("gl_overbrights", "0", 0);
 
 	vid_forcedrefresh = ri.Cvar_Get ("vid_forcedrefresh", "0", 0);
+	vid_optimalrefresh = ri.Cvar_Get ("vid_optimalrefresh", "0", 0);
 	vid_gamma_pics = ri.Cvar_Get ("vid_gamma_pics", "0", 0);
 	vid_nowgl = ri.Cvar_Get ("vid_nowgl", "0", 0);
 	vid_restore_on_switch = ri.Cvar_Get ("vid_flip_on_switch", "0", 0);
@@ -1581,9 +1583,9 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 		gl_config.renderer = GL_RENDERER_PCX2;
 	else if ( strstr( renderer_buffer, "verite" ) )
 		gl_config.renderer = GL_RENDERER_RENDITION;
-	else if ( strstr (renderer_buffer, "ati tech"))
+	else if ( strstr (vendor_buffer, "ati tech"))
 		gl_config.renderer = GL_RENDERER_ATI;
-	else if ( strstr (renderer_buffer, "nvidia corp"))
+	else if ( strstr (vendor_buffer, "nvidia corp"))
 		gl_config.renderer = GL_RENDERER_NV;
 	else
 		gl_config.renderer = GL_RENDERER_OTHER;

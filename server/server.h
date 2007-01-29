@@ -237,6 +237,7 @@ typedef struct client_s
 	linkednamelist_t			anticheat_bad_files;
 	unsigned					anticheat_query_time;
 	unsigned					anticheat_nag_time;
+	const char *				anticheat_token;
 #endif
 	int							beginspawncount;
 
@@ -664,6 +665,8 @@ extern	unsigned int		sv_tracecount;
 qboolean StringIsNumeric (const char *s);
 uint32 CalcMask (int32 bits);
 
+extern netblock_t	blackhole_exceptions;
+
 #ifdef ANTICHEAT
 void SV_AntiCheat_WaitForInitialConnect (void);
 void SV_AntiCheat_Disconnect (void);
@@ -673,6 +676,7 @@ qboolean SV_AntiCheat_Disconnect_Client (client_t *cl);
 qboolean SV_AntiCheat_QueryClient (client_t *cl);
 void SV_AntiCheat_Run (void);
 qboolean SV_AntiCheat_Challenge (netadr_t *from, client_t *cl);
+const char *SV_AntiCheat_CheckToken (const char *token);
 #define ANTICHEATMESSAGE "\220\xe1\xee\xf4\xe9\xe3\xe8\xe5\xe1\xf4\221"
 extern	cvar_t	*sv_anticheat_server_address;
 extern	cvar_t	*sv_anticheat_error_action;
@@ -709,6 +713,8 @@ enum
 
 extern netblock_t	anticheat_exceptions;
 extern netblock_t	anticheat_requirements;
+
+extern char anticheat_hashlist_name[256];
 
 #endif
 

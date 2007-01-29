@@ -100,6 +100,70 @@ qboolean StringIsNumeric (const char *s)
 	return true;
 }
 
+static int MaskBits (uint32 mask)
+{
+	int		i;
+	int		bits;
+
+	bits = 0;
+
+	for (i = 0; i < 32; i++)
+	{
+		if (mask & (1 << i))
+			bits++;
+	}
+
+	return bits;
+}
+
+static qboolean ValidateIPMask (char *ip, netadr_t *from, int *outmask)
+{
+	char	*s;
+	int		mask;
+
+	s = strchr (ip, '/');
+	if (s)
+	{
+		s[0] = 0;
+		s++;
+		if (!*s)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return false;
+		}
+		mask = atoi (s);
+		if (mask < 0 || mask > 32)
+		{
+			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
+			return false;
+		}
+	}
+	else
+	{
+		mask = 32;
+	}
+
+	if (!(NET_StringToAdr (ip, from)))
+	{
+		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, ip);
+		return false;
+	}
+
+	*outmask = mask;
+
+	return true;
+}
+
+static void DumpNetBlockList (netblock_t *list)
+{
+	while (list->next)
+	{
+		list = list->next;
+
+		Com_Printf ("%s/%d\n", LOG_GENERAL, NET_inet_ntoa (NET_ntohl(list->ip)), MaskBits (NET_ntohl (list->mask)));
+	}
+}
+
 /*
 ==================
 SV_SetPlayer
@@ -1148,22 +1212,6 @@ static void SV_AddUserinfoBan_f (void)
 		Com_Printf ("userinfoban for '%s %s' added.\n", LOG_GENERAL, cvar, blocktype);
 }
 
-static int MaskBits (uint32 mask)
-{
-	int		i;
-	int		bits;
-
-	bits = 0;
-
-	for (i = 0; i < 32; i++)
-	{
-		if (mask & (1 << i))
-			bits++;
-	}
-
-	return bits;
-}
-
 //===============================================================
 
 static void SV_Listholes_f (void)
@@ -1440,11 +1488,8 @@ static void SV_ListServerAliases_f (void)
 static void SV_Addhole_f (void)
 {
 	netadr_t	adr;
-
 	int			method;
 	int			mask;
-	char		*ip;
-	char		*s;
 
 	if (Cmd_Argc() < 4)
 	{
@@ -1455,29 +1500,8 @@ static void SV_Addhole_f (void)
 		return;
 	}
 
-	ip = Cmd_Argv(1);
-
-	s = strchr (Cmd_Argv(1), '/');
-	if (s)
-	{
-		s[0] = 0;
-		s++;
-		if (!*s)
-		{
-			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
-			return;
-		}
-		mask = atoi (s);
-		if (mask < 0 || mask > 32)
-		{
-			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
-			return;
-		}
-	}
-	else
-	{
-		mask = 32;
-	}
+	if (!ValidateIPMask (Cmd_Argv(1), &adr, &mask))
+		return;
 
 	if (!Q_stricmp (Cmd_Argv(2), "SILENT"))
 		method = BLACKHOLE_SILENT;
@@ -1489,25 +1513,110 @@ static void SV_Addhole_f (void)
 		return;
 	}
 
-	if (!(NET_StringToAdr (ip, &adr)))
+	Blackhole (&adr, false, mask, method, "%s", Cmd_Args2(3));
+}
+
+static qboolean ValidateAndAddToNetBlockList (char *ip, netblock_t *list, int tag)
+{
+	int			mask;
+	netadr_t	from;
+	netblock_t	*n;
+
+	if (!ValidateIPMask (ip, &from, &mask))
+		return false;
+
+	n = list;
+	while (n->next)
+		n = n->next;
+
+	n->next = Z_TagMalloc (sizeof(*n), tag);
+	n = n->next;
+
+	n->ip = NET_htonl (*(uint32 *)from.ip);
+	n->mask = NET_htonl (CalcMask(mask));
+	n->next = NULL;
+
+	return true;
+}
+
+static qboolean ValidateAndRemoveFromNetBlockList (char *ip, netblock_t *list)
+{
+	int			mask;
+	netadr_t	from;
+	netblock_t	*n, *last;
+	uint32		network_ip, network_mask;
+
+	if (!ValidateIPMask (ip, &from, &mask))
+		return -1;
+
+	network_ip = NET_htonl (*(uint32 *)from.ip);
+	network_mask = NET_htonl (CalcMask (mask));
+
+	n = last = list;
+
+	while (n->next)
 	{
-		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, Cmd_Argv(1));
+		n = n->next;
+
+		if (n->ip == network_ip && n->mask == network_mask)
+		{
+			last->next = n->next;
+			Z_Free (n);
+			return 0;
+		}
+	}
+
+	return -2;
+}
+
+static void SV_AddWhiteHole_f (void)
+{
+	if (Cmd_Argc() == 1)
+	{
+		Com_Printf ("Purpose: Allow a given IP block to bypass a blackhole filter.\n"
+					"Syntax : addwhitehole <ip-address/mask>\n"
+					"Example: addwhitehole 192.168.0.1\n", LOG_GENERAL);
 		return;
 	}
 
-	Blackhole (&adr, false, mask, method, "%s", Cmd_Args2(3));
+	if (ValidateAndAddToNetBlockList (Cmd_Argv(1), &blackhole_exceptions, TAGMALLOC_BLACKHOLE))
+	{
+		if (sv.state)
+			Com_Printf ("Blackhole exception added.\n", LOG_GENERAL);
+	}
+}
+
+static void SV_DelWhiteHole_f (void)
+{
+	int	ret;
+
+	if (Cmd_Argc() == 1)
+	{
+		Com_Printf ("Purpose: Remove a blackhole bypass entry.\n"
+					"Syntax : delwhitehole <ip-address/mask>\n"
+					"Example: delwhitehole 192.168.0.1\n", LOG_GENERAL);
+		return;
+	}
+
+	ret = ValidateAndRemoveFromNetBlockList (Cmd_Argv(1), &blackhole_exceptions);
+
+	if (sv.state)
+	{
+		if (!ret)
+			Com_Printf ("Blackhole exception removed.\n", LOG_GENERAL);
+		else if (ret == -2)
+			Com_Printf ("Entry not found.\n", LOG_GENERAL);
+	}
+}
+
+static void SV_ListWhiteHoles_f (void)
+{
+	DumpNetBlockList (&blackhole_exceptions);
 }
 
 #ifdef ANTICHEAT
 static void SV_AddACException_f (void)
 {
-	netadr_t	from;
-	netblock_t	*n;
-
-	int			mask;
-	char		*ip;
-	char		*s;
-
 	if (Cmd_Argc() == 1)
 	{
 		Com_Printf ("Purpose: Allow a given IP block to bypass anticheat requirements.\n"
@@ -1516,60 +1625,43 @@ static void SV_AddACException_f (void)
 		return;
 	}
 
-	ip = Cmd_Argv(1);
-
-	s = strchr (Cmd_Argv(1), '/');
-	if (s)
+	if (ValidateAndAddToNetBlockList (Cmd_Argv(1), &anticheat_exceptions, TAGMALLOC_ANTICHEAT))
 	{
-		s[0] = 0;
-		s++;
-		if (!*s)
-		{
-			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
-			return;
-		}
-		mask = atoi (s);
-		if (mask < 0 || mask > 32)
-		{
-			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
-			return;
-		}
+		if (sv.state)
+			Com_Printf ("Anticheat exception added.\n", LOG_GENERAL);
 	}
-	else
-	{
-		mask = 32;
-	}
+}
 
-	if (!(NET_StringToAdr (ip, &from)))
+static void SV_DelACException_f (void)
+{
+	int	ret;
+
+	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, Cmd_Argv(1));
+		Com_Printf ("Purpose: Remove a given IP block from the anticheat bypass list.\n"
+					"Syntax : delacexception <ip-address/mask>\n"
+					"Example: delacexception 192.168.0.1\n", LOG_GENERAL);
 		return;
 	}
 
-	n = &anticheat_exceptions;
-	while (n->next)
-		n = n->next;
-
-	n->next = Z_TagMalloc (sizeof(*n), TAGMALLOC_ANTICHEAT);
-	n = n->next;
-
-	n->ip = *(uint32 *)from.ip;
-	n->mask = CalcMask(mask);
-	n->next = NULL;
+	ret = ValidateAndRemoveFromNetBlockList (Cmd_Argv(1), &anticheat_exceptions);
 
 	if (sv.state)
-		Com_Printf ("Anticheat exception added.\n", LOG_GENERAL);
+	{
+		if (!ret)
+			Com_Printf ("Anticheat exception removed.\n", LOG_GENERAL);
+		else if (ret == -2)
+			Com_Printf ("Entry not found.\n", LOG_GENERAL);
+	}
+}
+
+static void SV_ListACExceptions_f (void)
+{
+	DumpNetBlockList (&anticheat_exceptions);
 }
 
 static void SV_AddACRequirement_f (void)
 {
-	netadr_t	from;
-	netblock_t	*n;
-
-	int			mask;
-	char		*ip;
-	char		*s;
-
 	if (Cmd_Argc() == 1)
 	{
 		Com_Printf ("Purpose: Force a given IP block to require anticheat.\n"
@@ -1578,50 +1670,39 @@ static void SV_AddACRequirement_f (void)
 		return;
 	}
 
-	ip = Cmd_Argv(1);
-
-	s = strchr (Cmd_Argv(1), '/');
-	if (s)
+	if (ValidateAndAddToNetBlockList (Cmd_Argv(1), &anticheat_requirements, TAGMALLOC_ANTICHEAT))
 	{
-		s[0] = 0;
-		s++;
-		if (!*s)
-		{
-			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
-			return;
-		}
-		mask = atoi (s);
-		if (mask < 0 || mask > 32)
-		{
-			Com_Printf ("Invalid IP mask.\n", LOG_GENERAL);
-			return;
-		}
+		if (sv.state)
+			Com_Printf ("Anticheat requirement added.\n", LOG_GENERAL);
 	}
-	else
-	{
-		mask = 32;
-	}
+}
 
-	if (!(NET_StringToAdr (ip, &from)))
+static void SV_DelACRequirement_f (void)
+{
+	int	ret;
+
+	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("Can't find address for '%s'\n", LOG_GENERAL, Cmd_Argv(1));
+		Com_Printf ("Purpose: Remove a given IP block from the anticheat requirement list.\n"
+					"Syntax : delacrequirement <ip-address/mask>\n"
+					"Example: delacrequirement 192.168.0.1\n", LOG_GENERAL);
 		return;
 	}
 
-	//FIXME dupe code
-	n = &anticheat_requirements;
-	while (n->next)
-		n = n->next;
-
-	n->next = Z_TagMalloc (sizeof(*n), TAGMALLOC_ANTICHEAT);
-	n = n->next;
-
-	n->ip = *(uint32 *)from.ip;
-	n->mask = CalcMask(mask);
-	n->next = NULL;
+	ret = ValidateAndRemoveFromNetBlockList (Cmd_Argv(1), &anticheat_requirements);
 
 	if (sv.state)
-		Com_Printf ("Anticheat requirement added.\n", LOG_GENERAL);
+	{
+		if (!ret)
+			Com_Printf ("Anticheat requirement removed.\n", LOG_GENERAL);
+		else if (ret == -2)
+			Com_Printf ("Entry not found.\n", LOG_GENERAL);
+	}
+}
+
+static void SV_ListACRequirements_f (void)
+{
+	DumpNetBlockList (&anticheat_requirements);
 }
 #endif
 
@@ -2594,6 +2675,10 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("listlrconcmds", SV_ListLrconCmds_f);
 	Cmd_AddCommand ("dellrconcmd", SV_DelLrconCmd_f);
 
+	Cmd_AddCommand ("addwhitehole", SV_AddWhiteHole_f);
+	Cmd_AddCommand ("delwhitehole", SV_DelWhiteHole_f);
+	Cmd_AddCommand ("listwhiteholes", SV_ListWhiteHoles_f);
+
 	//r1: service support
 #ifdef _WIN32
 #ifdef DEDICATED_ONLY
@@ -2612,7 +2697,14 @@ void SV_InitOperatorCommands (void)
 #ifdef ANTICHEAT
 	Cmd_AddCommand ("svaclist", SVCmd_SVACList_f);
 	Cmd_AddCommand ("svacinfo", SVCmd_SVACInfo_f);
+
 	Cmd_AddCommand ("addacexception", SV_AddACException_f);
+	Cmd_AddCommand ("delacexception", SV_DelACException_f);
+	Cmd_AddCommand ("listacexceptions", SV_ListACExceptions_f);
+
 	Cmd_AddCommand ("addacrequirement", SV_AddACRequirement_f);
+	Cmd_AddCommand ("delacrequirement", SV_DelACRequirement_f);
+	Cmd_AddCommand ("listacrequirements", SV_ListACRequirements_f);
+
 #endif
 }

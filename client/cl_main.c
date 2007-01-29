@@ -149,6 +149,7 @@ cvar_t	*cl_test = &uninitialized_cvar;
 cvar_t	*cl_test2;
 
 cvar_t	*cl_original_dlights;
+cvar_t	*cl_default_location;
 
 #ifdef NO_SERVER
 cvar_t	*allow_download;
@@ -2353,7 +2354,7 @@ const char *CL_Get_Loc_There (void)
 	vec3_t		end;
 
 	if (!cl_locations.next)
-		return "";
+		return cl_default_location->string;
 
 	end[0] = cl.refdef.vieworg[0] + cl.v_forward[0] * 65556 + cl.v_right[0];
 	end[1] = cl.refdef.vieworg[1] + cl.v_forward[1] * 65556 + cl.v_right[1];
@@ -2370,7 +2371,7 @@ const char *CL_Get_Loc_There (void)
 const char *CL_Get_Loc_Here (void)
 {
 	if (!cl_locations.next)
-		return "";
+		return cl_default_location->string;
 
 	return CL_Loc_Get (cl.refdef.vieworg);
 }
@@ -3406,6 +3407,8 @@ void CL_InitLocal (void)
 	cl_test2 = Cvar_Get ("cl_test2", "0", 0);
 
 	cl_original_dlights = Cvar_Get ("cl_original_dlights", "1", 0);
+
+	cl_default_location = Cvar_Get ("cl_default_location", "", 0);
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "1", CVAR_ARCHIVE);

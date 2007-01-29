@@ -208,6 +208,9 @@ linkednamelist_t	nullcmds;
 linkednamelist_t	lrconcmds;
 linkedvaluelist_t	serveraliases;
 
+//i hate you snake
+netblock_t			blackhole_exceptions;
+
 int		pyroadminid;
 
 //void Master_Shutdown (void);
@@ -1467,9 +1470,12 @@ gotnewcl:
 #ifdef ANTICHEAT
 	if (sv_require_anticheat->intvalue)
 	{
+		uint32		network_ip;
 		netblock_t	*n;
 
 		ac = " ac=1";
+
+		network_ip = NET_htonl (*(uint32 *)net_from.ip);
 
 		n = &anticheat_requirements;
 
@@ -1479,7 +1485,7 @@ gotnewcl:
 		while (n->next)
 		{
 			n = n->next;
-			if ((*(uint32 *)net_from.ip & n->mask) == (n->ip & n->mask))
+			if ((network_ip & n->mask) == (n->ip & n->mask))
 			{
 				newcl->anticheat_required = ANTICHEAT_REQUIRED;
 				break;
@@ -1492,7 +1498,7 @@ gotnewcl:
 		while (n->next)
 		{
 			n = n->next;
-			if ((*(uint32 *)net_from.ip & n->mask) == (n->ip & n->mask))
+			if ((network_ip & n->mask) == (n->ip & n->mask))
 			{
 				newcl->anticheat_required = ANTICHEAT_EXEMPT;
 				ac = "";
@@ -1601,8 +1607,8 @@ void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, cons
 
 	temp->next = NULL;
 
-	temp->ip = *(uint32 *)from->ip;
-	temp->mask = CalcMask(mask);
+	temp->ip = NET_htonl (*(uint32 *)from->ip);
+	temp->mask = NET_htonl (CalcMask(mask));
 	temp->method = method;
 
 	temp->ratelimit.period = 1000;
@@ -1858,24 +1864,45 @@ connectionless packets.
 */
 static void SV_ConnectionlessPacket (void)
 {
+	netblock_t	*whitehole = &blackhole_exceptions;
 	blackhole_t *blackhole = &blackholes;
-	char	*s;
-	char	*c;
+	char		*s;
+	char		*c;
+	qboolean	whiteholed;
+	uint32		network_ip;
+
+	network_ip = NET_htonl(*(uint32 *)net_from.ip);
+
+	whiteholed = false;
+
+	//r1: whiteholes (thanks WORM!)
+	while (whitehole->next)
+	{
+		whitehole = whitehole->next;
+		if ((network_ip & whitehole->mask) == (whitehole->ip & whitehole->mask))
+		{
+			whiteholed = true;
+			break;
+		}
+	}
 
 	//r1: ignore packets if IP is blackholed for abuse
-	while (blackhole->next)
+	if (!whiteholed)
 	{
-		blackhole = blackhole->next;
-		if ((*(uint32 *)net_from.ip & blackhole->mask) == (blackhole->ip & blackhole->mask))
+		while (blackhole->next)
 		{
-			//do rate limiting in case there is some long-ish reason
-			if (blackhole->method == BLACKHOLE_MESSAGE)
+			blackhole = blackhole->next;
+			if ((network_ip & blackhole->mask) == (blackhole->ip & blackhole->mask))
 			{
-				RateSample (&blackhole->ratelimit);
-				if (!RateLimited (&blackhole->ratelimit, 2))
-					Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s\n", blackhole->reason);
+				//do rate limiting in case there is some long-ish reason
+				if (blackhole->method == BLACKHOLE_MESSAGE)
+				{
+					RateSample (&blackhole->ratelimit);
+					if (!RateLimited (&blackhole->ratelimit, 2))
+						Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s\n", blackhole->reason);
+				}
+				return;
 			}
-			return;
 		}
 	}
 
@@ -2174,7 +2201,7 @@ static void SV_ReadPackets (void)
 			// check for packets from connected clients
 			for (i=0, cl=svs.clients ; i<maxclients->intvalue ; i++,cl++)
 			{
-				if (cl->state <= cs_zombie)
+				if (cl->state == cs_free)
 					continue;
 
 				// r1: workaround for broken linux kernel
@@ -2202,7 +2229,9 @@ static void SV_ReadPackets (void)
 						continue;
 				}
 
-				SV_KickClient (cl, "connection reset by peer", NULL);
+				if (cl->state > cs_zombie)
+					SV_KickClient (cl, "connection reset by peer", NULL);
+
 				SV_CleanClient (cl);
 				cl->state = cs_free;	// don't bother with zombie state
 				break;
@@ -2830,7 +2859,7 @@ static void _anticheat_changed (cvar_t *var, char *o, char *n)
 
 static void _expand_cvar_newlines (cvar_t *var, char *o, char *n)
 {
-	ExpandNewLines (var->string);
+	ExpandNewLines (n);
 }
 
 /*

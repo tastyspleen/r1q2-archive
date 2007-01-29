@@ -45,6 +45,7 @@ glwstate_t glw_state;
 extern cvar_t *vid_fullscreen;
 extern cvar_t *vid_ref;
 extern cvar_t *vid_forcedrefresh;
+extern cvar_t *vid_optimalrefresh;
 extern cvar_t *vid_nowgl;
 
 DEVMODE		originalDesktopMode;
@@ -81,7 +82,7 @@ BOOL WINAPI DllMain(HINSTANCE hDll,DWORD dwReason,LPVOID lpReserved)
 ** VID_CreateWindow
 */
 #define	WINDOW_CLASS_NAME	"Quake 2"
-#define OPENGL_CLASS		"OpenGLDummyPFDWindow"
+char	OPENGL_CLASS[32];
 
 static qboolean		window_class_registered = false;
 
@@ -93,9 +94,15 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	int				stylebits;
 	int				x, y, w, h;
 	int				exstyle;
+
+	if (!OPENGL_CLASS[0])
+		Com_sprintf (OPENGL_CLASS, sizeof(OPENGL_CLASS), "R1GLOpenGLDummyPFDWindow-%u", GetTickCount());
 	
 	if (!window_class_registered)
 	{
+		if (GetClassInfo (glw_state.hModule, WINDOW_CLASS_NAME, &wc))
+			UnregisterClass (WINDOW_CLASS_NAME, wc.hInstance);
+
 		/* Register the frame class */
 		wc.style         = 0;
 		wc.lpfnWndProc   = (WNDPROC)glw_state.wndproc;
@@ -236,6 +243,10 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 	{
 		DEVMODE dm;
 
+		int		index = 0;
+		int		bestFrequency = 0;
+		DEVMODE	settings;
+
 		EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &originalDesktopMode);
 
 		ri.Con_Printf( PRINT_ALL, "...attempting fullscreen\n" );
@@ -248,13 +259,6 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 		dm.dmPelsHeight = height;
 		dm.dmFields     = DM_PELSWIDTH | DM_PELSHEIGHT;
 
-		//r1: allow refresh overriding
-		if (FLOAT_NE_ZERO(vid_forcedrefresh->value))
-		{
-			dm.dmFields |= DM_DISPLAYFREQUENCY;
-			dm.dmDisplayFrequency = Q_ftol(vid_forcedrefresh->value);
-		}
-
 		if ( FLOAT_NE_ZERO(gl_bitdepth->value) )
 		{
 			dm.dmBitsPerPel = Q_ftol(gl_bitdepth->value);
@@ -264,7 +268,56 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 		else
 		{
 			ri.Con_Printf( PRINT_ALL, "...using desktop display depth of %d\n", originalDesktopMode.dmBitsPerPel );
+
+			//r1: be explicit about this just in case
+			dm.dmFields |= DM_BITSPERPEL;
+			dm.dmBitsPerPel = originalDesktopMode.dmBitsPerPel;
 		}
+
+		memset (&settings, 0, sizeof(settings));
+		settings.dmSize = sizeof(dm);
+
+		while ((EnumDisplaySettings (NULL, index, &settings)))
+		{
+			if (!(settings.dmFields & (DM_BITSPERPEL|DM_DISPLAYFREQUENCY|DM_PELSWIDTH|DM_PELSHEIGHT)))
+				continue;
+
+			if (settings.dmBitsPerPel == dm.dmBitsPerPel &&
+				settings.dmPelsWidth == dm.dmPelsWidth &&
+				settings.dmPelsHeight == dm.dmPelsHeight)
+			{
+				if (settings.dmDisplayFrequency > bestFrequency)
+					bestFrequency = settings.dmDisplayFrequency;
+			}
+			index++;
+		}
+
+		//r1: if running q2 at desktop res, inherit desktop refresh rate
+		if (originalDesktopMode.dmFields & (DM_BITSPERPEL|DM_DISPLAYFREQUENCY|DM_PELSWIDTH|DM_PELSHEIGHT) &&
+			originalDesktopMode.dmPelsWidth == dm.dmPelsWidth &&
+			originalDesktopMode.dmPelsHeight == dm.dmPelsHeight &&
+			originalDesktopMode.dmBitsPerPel == dm.dmBitsPerPel)
+		{
+			dm.dmFields |= DM_DISPLAYFREQUENCY;
+			dm.dmDisplayFrequency = originalDesktopMode.dmDisplayFrequency;
+		}
+
+		//r1: allow refresh overriding
+		if (originalDesktopMode.dmFields & DM_DISPLAYFREQUENCY)
+		{
+			if (FLOAT_NE_ZERO (vid_optimalrefresh->value))
+			{
+				dm.dmFields |= DM_DISPLAYFREQUENCY;
+				dm.dmDisplayFrequency = bestFrequency;
+			}
+			else if (FLOAT_NE_ZERO(vid_forcedrefresh->value))
+			{
+				dm.dmFields |= DM_DISPLAYFREQUENCY;
+				dm.dmDisplayFrequency = Q_ftol(vid_forcedrefresh->value);
+			}
+		}
+		else
+			ri.Con_Printf (PRINT_ALL, "...ignoring frequencies, no driver support\n");
 
 		ri.Con_Printf( PRINT_ALL, "...calling CDS: " );
 		if ( ChangeDisplaySettings( &dm, CDS_FULLSCREEN ) == DISP_CHANGE_SUCCESSFUL )
@@ -280,6 +333,13 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 				return rserr_invalid_mode;
 
 			EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &fullScreenMode);
+
+			if (originalDesktopMode.dmFields & DM_DISPLAYFREQUENCY)
+			{
+				if (fullScreenMode.dmDisplayFrequency < bestFrequency)
+					ri.Con_Printf (PRINT_ALL, "\2NOTE: You are currently using a refresh rate of %d Hz. Your monitor can support up to %d Hz at %dx%d. Consider increasing your refresh rate for better performance by setting vid_optimalrefresh 1\n", fullScreenMode.dmDisplayFrequency, bestFrequency, fullScreenMode.dmPelsWidth, fullScreenMode.dmPelsHeight);
+			}
+
 			return rserr_ok;
 		}
 		else
@@ -292,6 +352,9 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 			ri.Con_Printf( PRINT_ALL, "...calling CDS assuming dual monitors:" );
 
 			dm.dmPelsWidth = width * 2;
+			
+			//should already still be set
+			/*
 			dm.dmPelsHeight = height;
 			dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
 
@@ -299,7 +362,7 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 			{
 				dm.dmBitsPerPel = Q_ftol(gl_bitdepth->value);
 				dm.dmFields |= DM_BITSPERPEL;
-			}
+			}*/
 
 			/*
 			** our first CDS failed, so maybe we're running on some weird dual monitor
@@ -609,27 +672,33 @@ static LRESULT CALLBACK StupidOpenGLProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM
 // Registers the window classes
 BOOL RegisterOpenGLWindow(HINSTANCE hInst)
 {
-  WNDCLASSEX wcex;
+	WNDCLASSEX wcex;
 
-  // Initialize our Window class
-  wcex.cbSize = sizeof(wcex);
-  if (GetClassInfoEx(hInst, OPENGL_CLASS, &wcex))
+	// Initialize our Window class
+	wcex.cbSize = sizeof(wcex);
+	if (GetClassInfoEx(hInst, OPENGL_CLASS, &wcex))
+		UnregisterClass (OPENGL_CLASS, wcex.hInstance);
+
+	// register main one
+	ZeroMemory(&wcex,sizeof(wcex));
+
+	// now the stupid one
+	wcex.cbSize			= sizeof(wcex);
+	wcex.style			= CS_OWNDC;
+	wcex.cbWndExtra		= 0; /* space for our pointer */
+	wcex.lpfnWndProc	= StupidOpenGLProc;
+	wcex.hbrBackground	= NULL;
+	wcex.hInstance		= hInst;
+	wcex.hCursor		= LoadCursor(NULL,IDC_ARROW);
+	wcex.lpszClassName	= OPENGL_CLASS;
+
+	if (!RegisterClassEx (&wcex))
+	{
+		ri.Sys_Error (ERR_FATAL, "R1GL: Unable to register OpenGL window (%d).\r\n\r\nTry adding 'set vid_nowgl 1' to your baseq2/r1gl.cfg", GetLastError());
+		return FALSE;
+	}
+
 	return TRUE;
-
-  // register main one
-  ZeroMemory(&wcex,sizeof(wcex));
-
-  // now the stupid one
-  wcex.cbSize			= sizeof(wcex);
-  wcex.style			= CS_OWNDC;
-  wcex.cbWndExtra		= 0; /* space for our pointer */
-  wcex.lpfnWndProc		= StupidOpenGLProc;
-  wcex.hbrBackground	= NULL;
-  wcex.hInstance		= hInst;
-  wcex.hCursor			= LoadCursor(NULL,IDC_ARROW);
-  wcex.lpszClassName	= OPENGL_CLASS;
-
-  return RegisterClassEx(&wcex);
 }
 
 qboolean init_regular (void)
@@ -1024,7 +1093,7 @@ qboolean GLimp_InitGL (void)
 		}
 	}
 
-	RegisterOpenGLWindow (glw_state.hInstance);
+	RegisterOpenGLWindow (glw_state.hModule);
 
 	//if (1)
 	{
@@ -1059,16 +1128,19 @@ qboolean GLimp_InitGL (void)
 		};
 		HGLRC hGLRC;
 
-		HWND temphwnd = CreateWindowEx(0L,OPENGL_CLASS,"R1GL OpenGL PFD Detection Window",WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,0,0,1,1,glw_state.hWnd,0,glw_state.hInstance,NULL);
+		HWND temphwnd = CreateWindowEx(0L,OPENGL_CLASS, "R1GL OpenGL PFD Detection Window",WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,0,0,1,1,glw_state.hWnd,0,glw_state.hModule,NULL);
 
 		HDC hDC = GetDC (temphwnd);
+
+		if (!temphwnd)
+			ri.Sys_Error (ERR_FATAL, "R1GL: Couldn't create OpenGL PFD Detection Window (%d).\r\n\r\nTry 'set vid_nowgl 1' in your baseq2/r1gl.cfg.", GetLastError());
 
 		// Set up OpenGL
 		pixelFormat = ChoosePixelFormat(hDC, &temppfd);
 
 		if (!pixelFormat)
 		{
-			ri.Con_Printf (PRINT_ALL, "«ÃÈÌﬂ…ÓÈÙ«Ã®©†≈ÚÚÔÚ∫†ChoosePixelFormat (%dc/%dd/%da/%ds) failed. Error %d.\n", (int)gl_colorbits->value, (int)gl_depthbits->value, (int)gl_alphabits->value, (int)gl_stencilbits->value, GetLastError());
+			ri.Con_Printf (PRINT_ALL, "«ÃÈÌﬂ…ÓÈÙ«Ã®©†≈ÚÚÔÚ∫†ChoosePixelFormat (%dc/%dd/%da/%ds) failed. Error %.8x.\n", (int)gl_colorbits->value, (int)gl_depthbits->value, (int)gl_alphabits->value, (int)gl_stencilbits->value, GetLastError());
 			ReleaseDC (temphwnd, hDC);
 			DestroyWindow (temphwnd);
 			temphwnd = NULL;
@@ -1077,7 +1149,7 @@ qboolean GLimp_InitGL (void)
 
 		if (SetPixelFormat(hDC, pixelFormat, &temppfd) == FALSE)
 		{
-			ri.Con_Printf (PRINT_ALL, "«ÃÈÌﬂ…ÓÈÙ«Ã®©†≈ÚÚÔÚ∫ SetPixelFormat (%d) failed. Error %d.\n", pixelFormat, GetLastError());
+			ri.Con_Printf (PRINT_ALL, "«ÃÈÌﬂ…ÓÈÙ«Ã®©†≈ÚÚÔÚ∫ SetPixelFormat (%d) failed. Error %.8x.\n", pixelFormat, GetLastError());
 			ReleaseDC (temphwnd, hDC);
 			DestroyWindow (temphwnd);
 			temphwnd = NULL;
@@ -1421,16 +1493,18 @@ void EXPORT GLimp_EndFrame (void)
 		{
 			if ( !qwglSwapBuffers( glw_state.hDC ) )
 			{
+				int err = GetLastError();
 				if (!IsIconic (glw_state.hWnd))
-					ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+					ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed: %d\n", err);
 			}
 		}
 		else
 		{
 			if ( !SwapBuffers( glw_state.hDC ) )
 			{
+				int err = GetLastError();
 				if (!IsIconic (glw_state.hWnd))
-					ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+					ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed: %d\n", err);
 			}
 		}
 	}

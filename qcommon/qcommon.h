@@ -807,6 +807,9 @@ void		NET_Sleep(int msec);
 #endif
 int NET_Client_Sleep (int msec);
 
+uint32 NET_htonl (uint32 ip);
+uint32 NET_ntohl (uint32 ip);
+
 //============================================================================
 
 //#define	OLD_AVG		0.99		// total = oldtotal*OLD_AVG + new*(1-OLD_AVG)

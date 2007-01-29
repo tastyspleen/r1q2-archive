@@ -171,6 +171,16 @@ char	*NET_inet_ntoa (uint32 ip)
 	return inet_ntoa (*(struct in_addr *)&ip);
 }
 
+uint32 NET_htonl (uint32 ip)
+{
+	return htonl (ip);
+}
+
+uint32 NET_ntohl (uint32 ip)
+{
+	return ntohl (ip);
+}
+
 char	*NET_AdrToString (netadr_t *a)
 {
 	static	char	s[32];

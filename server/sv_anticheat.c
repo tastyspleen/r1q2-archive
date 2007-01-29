@@ -78,6 +78,8 @@ typedef struct filehash_s
 
 filehash_t	fileHashes;
 
+char anticheat_hashlist_name[256];
+
 typedef enum
 {
 	OP_INVALID,
@@ -105,6 +107,8 @@ typedef struct cvarcheck_s
 cvarcheck_t	cvarChecks;
 
 static int antiCheatNumCvarChecks;
+
+linkednamelist_t	anticheat_tokens;
 
 enum acserverbytes_e
 {
@@ -185,6 +189,32 @@ static void SV_AntiCheat_ClearCvarChecks (void)
 
 	cvarChecks.next = NULL;
 	antiCheatNumCvarChecks = 0;
+}
+
+static void SV_AntiCheat_ClearTokens (void)
+{
+	linkednamelist_t	*t, *last = NULL;
+
+	t = &anticheat_tokens;
+
+	while (t->next)
+	{
+		t = t->next;
+		if (last)
+		{
+			Z_Free (last->name);
+			Z_Free (last);
+		}
+		last = t;
+	}
+
+	if (last)
+	{
+		Z_Free (last->name);
+		Z_Free (last);
+	}
+
+	anticheat_tokens.next = NULL;
 }
 
 int	HexToRaw (const char *c)
@@ -450,6 +480,13 @@ static void SV_AntiCheat_ParseHashLine (char *line, int line_number)
 	if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
 		return;
 
+	if (line[0] == '!')
+	{
+		strncpy (anticheat_hashlist_name, line + 1, sizeof(anticheat_hashlist_name)-1);
+		ExpandNewLines (anticheat_hashlist_name);
+		return;
+	}
+
 	p = strchr (line, '\t');
 	if (!p)
 	{
@@ -487,6 +524,34 @@ static void SV_AntiCheat_ParseHashLine (char *line, int line_number)
 
 	strcpy (hashes->quakePath, line);
 	antiCheatNumFileHashes++;
+}
+
+static void SV_AntiCheat_ParseToken (char *line, int line_number)
+{
+	linkednamelist_t	*t;
+	char				*p;
+
+	p = strchr (line, '\n');
+	if (p)
+		p[0] = 0;
+
+	p = strchr (line, '\r');
+	if (p)
+		p[0] = 0;
+
+	if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
+		return;
+
+	t = &anticheat_tokens;
+
+	while (t->next)
+		t = t->next;
+
+	t->next = Z_TagMalloc (sizeof(*t), TAGMALLOC_ANTICHEAT);
+	t = t->next;
+
+	t->next = NULL;
+	t->name = CopyString (line, TAGMALLOC_ANTICHEAT);
 }
 
 static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *, int))
@@ -674,7 +739,8 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 	linkednamelist_t	*bad;
 	client_t			*cl;
 	unsigned short		clientID;
-	const char			*quakePath;
+	const char			*quakePath, *failedhash;
+	int					len;
 
 	if (bufflen < 3)
 		return;
@@ -684,6 +750,16 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 	bufflen -= 2;
 
 	quakePath = (const char *)buff;
+
+	len = (int)strlen(quakePath) + 1;
+
+	buff += len;
+	bufflen -= len;
+
+	if (bufflen)
+		failedhash = (const char *)buff;
+	else
+		failedhash = "no hash?";
 
 	if (clientID >= maxclients->intvalue)
 	{
@@ -696,7 +772,7 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 	{
 		cl->anticheat_file_failures++;
 
-		Com_Printf ("ANTICHEAT FILE VIOLATION: %s[%s] has a modified %s\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), quakePath);
+		Com_Printf ("ANTICHEAT FILE VIOLATION: %s[%s] has a modified %s [%s]\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), quakePath, failedhash);
 		switch (sv_anticheat_badfile_action->intvalue)
 		{
 			case 0:
@@ -953,6 +1029,9 @@ static void SV_AntiCheat_Hello (void)
 		Com_Printf ("ANTICHEAT WARNING: No file hashes were loaded, please check the anticheat-hashes.txt.\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER);
 	}
 
+	if (antiCheatNumFileHashes && !anticheat_hashlist_name[0])
+		Com_sprintf (anticheat_hashlist_name, sizeof(anticheat_hashlist_name), "unknown (%d %s)", antiCheatNumFileHashes, antiCheatNumFileHashes == 1 ? "entry" : "entries");
+
 	SV_AntiCheat_ClearCvarChecks ();
 
 	if (!SV_AntiCheat_ReadFile ("anticheat-cvars.txt", SV_AntiCheat_ParseCvarLine))
@@ -963,6 +1042,9 @@ static void SV_AntiCheat_Hello (void)
 	{
 		Com_Printf ("ANTICHEAT WARNING: No cvar checks were loaded, please check the anticheat-cvars.txt.\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER);
 	}
+
+	SV_AntiCheat_ClearTokens ();
+	SV_AntiCheat_ReadFile ("anticheat-tokens.txt", SV_AntiCheat_ParseToken);
 
 	memcpy (acSendBuffer + acSendBufferLen, &antiCheatNumFileHashes, sizeof(antiCheatNumFileHashes));
 	acSendBufferLen += sizeof(antiCheatNumFileHashes);
@@ -1555,6 +1637,23 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 	memcpy (acSendBuffer + acSendBufferLen, &num, sizeof(num));
 	acSendBufferLen += sizeof(num);
 	return true;
+}
+
+const char *SV_AntiCheat_CheckToken (const char *token)
+{
+	linkednamelist_t	*t;
+
+	t = &anticheat_tokens;
+
+	while (t->next)
+	{
+		t = t->next;
+
+		if (!strcmp (t->name, token))
+			return t->name;
+	}
+
+	return NULL;
 }
 
 void SV_AntiCheat_Disconnect (void)

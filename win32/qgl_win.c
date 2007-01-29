@@ -1195,7 +1195,7 @@ qboolean QGL_Init( const char *dllname )
 		return false;
 	}
 
-	gl_config.allow_cds = true;
+	//gl_config.allow_cds = true;
 
 	//qglAccum                     =  GPA( "glAccum" );
 	qglAlphaFunc                 =  GPA( "glAlphaFunc" );

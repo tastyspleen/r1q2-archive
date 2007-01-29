@@ -945,6 +945,7 @@ void VID_ReloadRefresh (void)
 		errMessage[0] = 0;
 		if ( !VID_LoadRefresh( name, errMessage ) )
 		{
+			Com_Printf ("\2Failed to load %s: %s\n", LOG_GENERAL, name, errMessage);
 			if (attempted[0])
 				strcat (attempted, "\n");
 			strcat (attempted, name);
