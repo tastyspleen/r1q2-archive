@@ -87,13 +87,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#pragma intrinsic(memset)
 
 #if _MSC_VER > 14000
-#define NORETURN __declspec(noreturn)
-#define RESTRICT __declspec(restrict)
-#define NOALIAS __declspec(noalias)
+	#define NORETURN __declspec(noreturn)
+	#define RESTRICT __declspec(restrict)
+	#define NOALIAS __declspec(noalias)
 #else
-#define RESTRICT
-#define NORETURN
-#define NOALIAS
+	#define RESTRICT
+	#define NORETURN
+	#define NOALIAS
 #endif
 
 #define alloca _alloca
@@ -103,8 +103,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#define Q_snprintf _snprintf
 #define Q_vsnprintf _vsnprintf
 #ifndef _M_AMD64
-#define Q_stricmp _strcmpi	//odd, amd64 libc is missing this...
-#define Q_strncasecmp _strnicmp
+	#define Q_stricmp _strcmpi	//odd, amd64 libc is missing this...
+	#define Q_strncasecmp _strnicmp
 #endif
 #define strdup _strdup
 #ifndef fileno
@@ -176,7 +176,7 @@ typedef unsigned char 		byte;
 typedef enum {false, true}	qboolean;
 
 //r1: set this to 1 if you have a stupid endian thingy
-#define YOU_HAVE_A_BROKEN_COMPUTER 0
+#define Q_BIGENDIAN 0
 
 //#define random()	(randomMT() / ((float)0xFFFFFFFFU))
 
@@ -274,7 +274,7 @@ MULTICAST_PVS_R
 
 int16   ShortSwap (int16 l);
 
-#if !YOU_HAVE_A_BROKEN_COMPUTER
+#if !Q_BIGENDIAN
 #define LittleShort(l) (l)
 #define LittleLong(l) (l)
 #define LittleFloat(l) (l)
@@ -450,7 +450,7 @@ int Q_strncasecmp (const char *s1, const char *s2, size_t n);
 
 //=============================================
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if Q_BIGENDIAN
 int16	LittleShort(int16 l);
 int32		LittleLong (int32 l);
 float	LittleFloat (float l);
@@ -678,6 +678,15 @@ typedef struct cplane_s
 	byte	signbits;		// signx + (signy<<1) + (signz<<1)
 	byte	pad[2];
 } cplane_t;
+
+//r1: "fast" plane for server calcs
+typedef struct fplane_s
+{
+	int		type;			// for fast side tests
+	float	dist;
+	vec3_t	normal;
+	int		signbits;		// signx + (signy<<1) + (signz<<1)
+} fplane_t;
 
 // structure offset for asm code
 #define CPLANE_NORMAL_X			0

@@ -149,7 +149,7 @@ cvar_t	*cl_test = &uninitialized_cvar;
 cvar_t	*cl_test2;
 
 cvar_t	*cl_original_dlights;
-cvar_t	*cl_default_location;
+cvar_t	*cl_default_location = &uninitialized_cvar;
 
 #ifdef NO_SERVER
 cvar_t	*allow_download;

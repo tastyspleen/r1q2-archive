@@ -670,7 +670,7 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	memset ( &clip, 0, sizeof ( moveclip_t ) );
 
 	//r1: server-side hax for bad looping traces
-	if (++sv_tracecount >= sv_max_traces_per_frame->intvalue)
+	if (0 && ++sv_tracecount >= sv_max_traces_per_frame->intvalue)
 	{
 		Com_Printf ("GAME ERROR: Bad SV_Trace: %u calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
 		if (sv_gamedebug->intvalue >= 2)

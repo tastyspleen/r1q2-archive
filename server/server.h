@@ -238,6 +238,7 @@ typedef struct client_s
 	unsigned					anticheat_query_time;
 	unsigned					anticheat_nag_time;
 	const char *				anticheat_token;
+	int							anticheat_client_type;
 #endif
 	int							beginspawncount;
 
@@ -677,7 +678,10 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl);
 void SV_AntiCheat_Run (void);
 qboolean SV_AntiCheat_Challenge (netadr_t *from, client_t *cl);
 const char *SV_AntiCheat_CheckToken (const char *token);
+void SV_AntiCheat_UpdatePrefs (cvar_t *v, char *oldVal, char *newVal);
+
 #define ANTICHEATMESSAGE "\220\xe1\xee\xf4\xe9\xe3\xe8\xe5\xe1\xf4\221"
+
 extern	cvar_t	*sv_anticheat_server_address;
 extern	cvar_t	*sv_anticheat_error_action;
 extern	cvar_t	*sv_anticheat_badfile_action;
@@ -692,10 +696,14 @@ extern cvar_t	*sv_anticheat_nag_defer;
 extern cvar_t	*sv_anticheat_show_violation_reason;
 extern cvar_t	*sv_anticheat_client_disconnect_action;
 
+extern cvar_t	*sv_anticheat_disable_play;
+
 extern	int		antiCheatNumFileHashes;
 
 void SVCmd_SVACList_f (void);
 void SVCmd_SVACInfo_f (void);
+void SVCmd_SVACUpdate_f (void);
+void SVCmd_SVACInvalidate_f (void);
 
 enum
 {
@@ -715,6 +723,8 @@ extern netblock_t	anticheat_exceptions;
 extern netblock_t	anticheat_requirements;
 
 extern char anticheat_hashlist_name[256];
+
+extern const char *anticheat_client_names[];
 
 #endif
 

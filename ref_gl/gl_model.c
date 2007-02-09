@@ -354,7 +354,7 @@ Mod_LoadVisibility
 */
 void Mod_LoadVisibility (lump_t *l)
 {
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	int		i;
 #endif
 
@@ -367,7 +367,7 @@ void Mod_LoadVisibility (lump_t *l)
 	loadmodel->vis = Hunk_Alloc ( l->filelen);	
 	memcpy (loadmodel->vis, mod_base + l->fileofs, l->filelen);
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	loadmodel->vis->numclusters = LittleLong (loadmodel->vis->numclusters);
 
 	for (i=0 ; i<loadmodel->vis->numclusters ; i++)
@@ -390,7 +390,7 @@ void Mod_LoadVertexes (lump_t *l)
 	mvertex_t	*out;
 	int			count;
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	int			i;
 #endif
 
@@ -404,7 +404,7 @@ void Mod_LoadVertexes (lump_t *l)
 	loadmodel->vertexes = out;
 	loadmodel->numvertexes = count;
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	for ( i=0 ; i<count ; i++, in++, out++)
 	{
 		out->position[0] = LittleFloat (in->point[0]);
@@ -576,7 +576,7 @@ void Mod_LoadTexinfo (lump_t *l)
 
 	for ( i=0 ; i<count ; i++, in++, out++)
 	{
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 		out->vecs[0][0] = LittleFloat (in->vecs[0][0]);
 		out->vecs[0][1] = LittleFloat (in->vecs[0][1]);
 		out->vecs[0][2] = LittleFloat (in->vecs[0][2]);
@@ -1014,7 +1014,7 @@ void Mod_LoadSurfedges (lump_t *l)
 	int		count;
 	int		*in, *out;
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	int		i;
 #endif
 	
@@ -1031,7 +1031,7 @@ void Mod_LoadSurfedges (lump_t *l)
 	loadmodel->surfedges = out;
 	loadmodel->numsurfedges = count;
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	for ( i=0 ; i<count ; i++)
 		out[i] = LittleLong (in[i]);
 #else
@@ -1168,7 +1168,7 @@ Mod_LoadAliasModel
 void Mod_LoadAliasModel (model_t *mod, void *buffer)
 {
 	unsigned int		i;
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	int j;
 #endif
 	dmdl_t				header;
@@ -1192,7 +1192,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 	pheader = &header;
 	
 	// byte swap the header fields and sanity check
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	for (i=0 ; i<sizeof(dmdl_t)/4 ; i++)
 		((int *)pheader)[i] = LittleLong (((int *)buffer)[i]);
 #else
@@ -1268,7 +1268,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 	pinst = (dstvert_t *) ((byte *)pinmodel + pheader->ofs_st);
 	poutst = (dstvert_t *) ((byte *)pheader + pheader->ofs_st);
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	for (i=0 ; i<pheader->num_st ; i++)
 	{
 		poutst[i].s = LittleShort (pinst[i].s);
@@ -1284,7 +1284,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 	pintri = (dtriangle_t *) ((byte *)pinmodel + pheader->ofs_tris);
 	pouttri = (dtriangle_t *) ((byte *)pheader + pheader->ofs_tris);
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	for (i=0 ; i<pheader->num_tris ; i++)
 	{
 		pouttri[i].index_xyz[j] = LittleShort (pintri[i].index_xyz[0]);
@@ -1308,7 +1308,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 		poutframe = (daliasframe_t *) ((byte *)pheader 
 			+ pheader->ofs_frames + i * pheader->framesize);
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 
 		memcpy (poutframe->name, pinframe->name, sizeof(poutframe->name));
 		for (j=0 ; j<3 ; j++)
@@ -1334,7 +1334,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 	pincmd = (int *) ((byte *)pinmodel + pheader->ofs_glcmds);
 	poutcmd = (int *) ((byte *)pheader + pheader->ofs_glcmds);
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if BIGENDIAN
 	for (i=0 ; i<pheader->num_glcmds ; i++)
 		poutcmd[i] = LittleLong (pincmd[i]);
 #else

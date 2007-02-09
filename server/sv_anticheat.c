@@ -46,6 +46,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 void SV_AntiCheat_Disconnect(void);
 qboolean SV_AntiCheat_Connect (void);
+static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *, int, const char *));
 qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr);
 
 #define DEFAULT_BACKOFF 5
@@ -74,6 +75,7 @@ typedef struct filehash_s
 	struct filehash_s	*next;
 	byte				hash[20];
 	char				quakePath[MAX_QPATH];
+	int					flags;
 } filehash_t;
 
 filehash_t	fileHashes;
@@ -121,6 +123,8 @@ enum acserverbytes_e
 	ACS_QUERYREPLY,
 	ACS_PONG,
 	ACS_UPDATE_REQUIRED,
+	ACS_DISCONNECT,
+	ACS_ERROR,
 };
 
 enum q2serverbytes_e
@@ -132,9 +136,27 @@ enum q2serverbytes_e
 	Q2S_CLIENTDISCONNECT,
 	Q2S_QUERYCLIENT,
 	Q2S_PING,
+	Q2S_UPDATECHECKS,
+	Q2S_SETPREFERENCES,
 };
 
-#define ANTICHEAT_PROTOCOL_VERSION	0xAC02
+const char *anticheat_client_names[] = 
+{
+	"???",
+	"R1Q2",
+	"EGL",
+	"Apr GL",
+	"Apr SW",
+	"Q2PRO",
+};
+
+#define ACP_BLOCKPLAY	(1<<0)
+
+//note, max of 8 unless SV_AntiCheat_SendFileAndCvarChecks is changed also
+#define	ACH_REQUIRED	(1<<0)
+#define	ACH_NEGATIVE	(1<<1)
+
+#define ANTICHEAT_PROTOCOL_VERSION	0xAC03
 
 static void SV_AntiCheat_ClearFileHashes (void)
 {
@@ -242,7 +264,7 @@ int	HexToRaw (const char *c)
 	return temp;
 }
 
-static void SV_AntiCheat_ParseCvarLine (char *line, int line_number)
+static void SV_AntiCheat_ParseCvarLine (char *line, int line_number, const char *filename)
 {
 	cvarcheck_t *checks;
 	char		*p, *q;
@@ -250,17 +272,6 @@ static void SV_AntiCheat_ParseCvarLine (char *line, int line_number)
 	cvarop_e	eop;
 	int			num_values, i;
 	char		**tokens;
-
-	p = strchr (line, '\n');
-	if (p)
-		p[0] = 0;
-
-	p = strchr (line, '\r');
-	if (p)
-		p[0] = 0;
-
-	if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
-		return;
 
 	p = strchr (line, '\t');
 	if (!p)
@@ -463,22 +474,12 @@ static void SV_AntiCheat_ParseCvarLine (char *line, int line_number)
 	antiCheatNumCvarChecks++;
 }
 
-static void SV_AntiCheat_ParseHashLine (char *line, int line_number)
+static void SV_AntiCheat_ParseHashLine (char *line, int line_number, const char *filename)
 {
 	filehash_t	*hashes;
 	int			i;
-	char		*p;
-
-	p = strchr (line, '\n');
-	if (p)
-		p[0] = 0;
-
-	p = strchr (line, '\r');
-	if (p)
-		p[0] = 0;
-
-	if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
-		return;
+	int			flags;
+	char		*p, *hash;
 
 	if (line[0] == '!')
 	{
@@ -490,23 +491,53 @@ static void SV_AntiCheat_ParseHashLine (char *line, int line_number)
 	p = strchr (line, '\t');
 	if (!p)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in anticheat-hashes.txt\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line);
+		Com_Printf ("ANTICHEAT WARNING: Malformed line %d '%s' in %s\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line_number, line, filename);
 		return;
 	}
 
 	p[0] = 0;
 	p++;
 
-	if (strlen (p) != 40)
+	hash = p;
+
+	p = strchr (hash, '\t');
+	if (p)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed hash '%s' in anticheat-hashes.txt on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, p, line_number);
+		p[0] = 0;
+		p++;
+	}
+
+	if (strlen (hash) != 40)
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed hash '%s' in %s on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, hash, filename, line_number);
 		return;
 	}
 
-	if (strlen (p) >= MAX_QPATH || strchr (p, '\\'))
+	for (i = 0; i < 40; i++)
 	{
-		Com_Printf ("ANTICHEAT WARNING: Malformed quake path '%s' in anticheat-hashes.txt on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line, line_number);
+		if (!isxdigit (hash[i]))
+		{
+			Com_Printf ("ANTICHEAT WARNING: Malformed hash '%s' in %s on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, hash, filename, line_number);
+			return;
+		}
+	}
+
+	if (strlen (line) >= MAX_QPATH || strchr (line, '\\') || !isalnum(line[0]))
+	{
+		Com_Printf ("ANTICHEAT WARNING: Malformed quake path '%s' in %s on line %d\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line, filename, line_number);
 		return;
+	}
+
+	Q_strlwr (line);
+
+	flags = 0;
+
+	if (p && p[0])
+	{
+		if (strstr (p, "required"))
+			flags |= ACH_REQUIRED;
+		if (strstr (p, "negative"))
+			flags |= ACH_NEGATIVE;
 	}
 
 	hashes = &fileHashes;
@@ -516,31 +547,20 @@ static void SV_AntiCheat_ParseHashLine (char *line, int line_number)
 
 	hashes->next = Z_TagMalloc (sizeof(*hashes), TAGMALLOC_ANTICHEAT);
 	hashes = hashes->next;
+	hashes->next = NULL;
 
 	for (i = 0; i < 20; i++)
-		hashes->hash[i] = HexToRaw (p + i*2);
-
-	hashes->next = NULL;
+		hashes->hash[i] = HexToRaw (hash + i*2);
+	
+	hashes->flags = flags;
 
 	strcpy (hashes->quakePath, line);
 	antiCheatNumFileHashes++;
 }
 
-static void SV_AntiCheat_ParseToken (char *line, int line_number)
+static void SV_AntiCheat_ParseToken (char *line, int line_number, const char *filename)
 {
 	linkednamelist_t	*t;
-	char				*p;
-
-	p = strchr (line, '\n');
-	if (p)
-		p[0] = 0;
-
-	p = strchr (line, '\r');
-	if (p)
-		p[0] = 0;
-
-	if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
-		return;
 
 	t = &anticheat_tokens;
 
@@ -554,7 +574,7 @@ static void SV_AntiCheat_ParseToken (char *line, int line_number)
 	t->name = CopyString (line, TAGMALLOC_ANTICHEAT);
 }
 
-static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *, int))
+static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *, int, const char *))
 {
 	int			len;
 	char		line[256];
@@ -581,8 +601,43 @@ static qboolean SV_AntiCheat_ReadFile (const char *filename, void (*func)(char *
 				buff[0] = 0;
 				if (q)
 				{
+					qboolean	parse;
+					char		*p;
+
 					Q_strncpy (line, q, sizeof(line)-1);
-					func (line, line_number);
+					parse = true;
+
+					p = strchr (line, '\n');
+					if (p)
+						p[0] = 0;
+
+					p = strchr (line, '\r');
+					if (p)
+						p[0] = 0;
+
+					if (line[0] == '#' || line[0] == '/' || line[0] == '\0')
+						parse = false;
+					else if (line[0] == '\\')
+					{
+						if (!strncmp (line + 1, "include ", 8))
+						{
+							char	*path;
+
+							path = line + 9;
+
+							if (!SV_AntiCheat_ReadFile (path, func))
+								Com_Printf ("ANTICHEAT WARNING: Unable to read included file '%s' from line %d of %s\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, path, line_number, filename);
+						}
+						else
+						{
+							Com_Printf ("ANTICHEAT WARNING: Unknown directive '%s' on line %d of %s\n", LOG_WARNING|LOG_ANTICHEAT|LOG_SERVER, line + 1, line_number, filename);
+						}
+
+						parse = false;
+					}
+
+					if (parse)
+						func (line, line_number, filename);
 					q = NULL;
 					line_number++;
 				}
@@ -646,12 +701,15 @@ static void SV_AntiCheat_Unexpected_Disconnect (void)
 	anticheat_ready = false;
 }
 
-static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
+//this is different from the violation "disconnected" as this message is only sent if
+//the client manually disconnected and exists to prevent the race condition of the server
+//seeing the disconnect violation before the udp message and thus showing "%s lost connection"
+//right before the player leaves the server
+static void SV_AntiCheat_ParseDisconnect (byte *buff, int bufflen)
 {
-	int				len;
 	client_t		*cl;
 	unsigned short	clientID;
-	const char		*reason, *clientreason;
+	uint32			challenge;
 
 	if (bufflen < 3)
 		return;
@@ -659,6 +717,49 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 	clientID = *(unsigned short *)buff;
 	buff += 2;
 	bufflen -= 2;
+
+	//we check challenge to ensure we don't get a race condition if a client reconnects.
+	challenge = *(uint32 *)buff;
+	buff += 4;
+	bufflen -= 4;
+
+	if (clientID >= maxclients->intvalue)
+	{
+		Com_Printf ("ANTICHEAT WARNING: ParseDisconnect with illegal client ID %d\n", LOG_ANTICHEAT|LOG_WARNING, clientID);
+		return;
+	}
+
+	cl = &svs.clients[clientID];
+
+	if (cl->challenge != challenge)
+		return;
+
+	if (cl->state >= cs_connected)
+	{
+		Com_Printf ("Dropping %s, anticheat disconnect message.\n", LOG_SERVER, cl->name);
+		SV_DropClient (cl, false);
+	}
+}
+
+static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
+{
+	int				len;
+	client_t		*cl;
+	unsigned short	clientID;
+	const char		*reason, *clientreason;
+	uint32			challenge;
+
+	if (bufflen < 7)
+		return;
+
+	clientID = *(unsigned short *)buff;
+	buff += 2;
+	bufflen -= 2;
+
+	//we check challenge to ensure we don't get a race condition if a client reconnects.
+	challenge = *(uint32 *)buff;
+	buff += 4;
+	bufflen -= 4;
 
 	reason = (const char *)buff;
 
@@ -679,6 +780,10 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 	}
 
 	cl = &svs.clients[clientID];
+
+	if (cl->challenge != challenge)
+		return;
+
 	if (cl->state >= cs_connected)
 	{
 		//FIXME: should we notify other players about anticheat violations found before clientbegin?
@@ -741,13 +846,19 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 	unsigned short		clientID;
 	const char			*quakePath, *failedhash;
 	int					len;
+	uint32				challenge;
 
-	if (bufflen < 3)
+	if (bufflen < 7)
 		return;
 
 	clientID = *(unsigned short *)buff;
 	buff += 2;
 	bufflen -= 2;
+
+	//we check challenge to ensure we don't get a race condition if a client reconnects.
+	challenge = *(uint32 *)buff;
+	buff += 4;
+	bufflen -= 4;
 
 	quakePath = (const char *)buff;
 
@@ -768,12 +879,35 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 	}
 
 	cl = &svs.clients[clientID];
+
+	if (cl->challenge != challenge)
+		return;
+
 	if (cl->state >= cs_connected)
 	{
+		int			action;
+		filehash_t	*f;
+
 		cl->anticheat_file_failures++;
 
+		action = sv_anticheat_badfile_action->intvalue;
+
+		f = &fileHashes;
+		while (f->next)
+		{
+			f = f->next;
+			if (!strcmp (f->quakePath, quakePath))
+			{
+				if (f->flags & ACH_REQUIRED)
+				{
+					action = 1;
+					break;
+				}
+			}
+		}
+
 		Com_Printf ("ANTICHEAT FILE VIOLATION: %s[%s] has a modified %s [%s]\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address), quakePath, failedhash);
-		switch (sv_anticheat_badfile_action->intvalue)
+		switch (action)
 		{
 			case 0:
 				if (cl->state == cs_spawned)
@@ -843,13 +977,22 @@ static void SV_AntiCheat_ParseClientAck (byte *buff, int bufflen)
 {
 	client_t		*cl;
 	unsigned short	clientID;
+	uint32			challenge;
+	int				client_type;
 
-	if (bufflen < 2)
+	if (bufflen < 7)
 		return;
 
 	clientID = *(unsigned short *)buff;
 	buff += 2;
 	bufflen -= 2;
+
+	//we check challenge to ensure we don't get a race condition if a client reconnects.
+	challenge = *(uint32 *)buff;
+	buff += 4;
+	bufflen -= 4;
+
+	client_type = (int)(*buff);
 
 	if (clientID >= maxclients->intvalue)
 	{
@@ -859,12 +1002,16 @@ static void SV_AntiCheat_ParseClientAck (byte *buff, int bufflen)
 
 	cl = &svs.clients[clientID];
 
+	if (cl->challenge != challenge)
+		return;
+
 	if (cl->state != cs_connected && cl->state != cs_spawning)
 	{
 		Com_DPrintf ("ANTICHEAT WARNING: ParseClientAck with client in state %d\n",cl->state);
 		return;
 	}
 
+	cl->anticheat_client_type = client_type;
 	cl->anticheat_valid = true;
 }
 
@@ -880,11 +1027,22 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 {
 	client_t		*cl;
 	unsigned short	clientID;
+	uint32			challenge;
+	int				client_type;
 
-	if (bufflen < 3)
+	if (bufflen < 7)
 		return;
 
 	clientID = *(unsigned short *)buff;
+	bufflen -= 2;
+	buff += 2;
+
+	//we check challenge to ensure we don't get a race condition if a client reconnects.
+	challenge = *(uint32 *)buff;
+	buff += 4;
+	bufflen -= 4;
+
+	client_type = (int) (*buff);
 
 	if (clientID >= maxclients->intvalue)
 	{
@@ -893,6 +1051,9 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 	}
 
 	cl = &svs.clients[clientID];
+
+	if (cl->challenge != challenge)
+		return;
 
 	if (cl->state != cs_spawning)
 	{
@@ -905,7 +1066,10 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 	cl->anticheat_query_sent = ANTICHEAT_QUERY_DONE;
 
 	if (buff[3] == 1)
+	{
+		cl->anticheat_client_type = client_type;
 		cl->anticheat_valid = true;
+	}
 
 	SV_ClientBegin (cl);
 }
@@ -940,6 +1104,11 @@ static void SV_AntiCheat_ParseBuffer (void)
 		case ACS_QUERYREPLY:
 			SV_AntiCheat_ParseQueryReply (buff + 1, bufflen - 1);
 			break;
+		case ACS_ERROR:
+			Com_Printf ("ANTICHEAT ERROR: %s\n", LOG_ANTICHEAT|LOG_ERROR|LOG_SERVER, buff + 1);
+			SV_AntiCheat_Disconnect ();
+			Cvar_ForceSet ("sv_anticheat_required", "0");
+			break;
 		case ACS_NOACCESS:
 			Com_Printf ("ANTICHEAT WARNING: You do not have permission to use the anticheat server. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER);
 			SV_AntiCheat_Disconnect ();
@@ -950,11 +1119,14 @@ static void SV_AntiCheat_ParseBuffer (void)
 			SV_AntiCheat_Disconnect ();
 			Cvar_ForceSet ("sv_anticheat_required", "0");
 			break;
+		case ACS_DISCONNECT:
+			SV_AntiCheat_ParseDisconnect (buff + 1, bufflen - 1);
+			break;
 		case ACS_PONG:
 			ping_pending = false;
 			break;
 		default:
-			Com_Printf ("ANTICHEAT WARNING: Unknown command byte %d, please make sure you are using the latest R1Q2 server version. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER, buff[0]);
+			Com_Printf ("ANTICHEAT ERROR: Unknown command byte %d, please make sure you are using the latest R1Q2 server version. Anticheat disabled.\n", LOG_ANTICHEAT|LOG_WARNING|LOG_SERVER, buff[0]);
 			SV_AntiCheat_Disconnect ();
 			Cvar_ForceSet ("sv_anticheat_required", "0");
 			break;
@@ -974,49 +1146,36 @@ static qboolean SV_AntiCheat_Spin (void)
 	return true;
 }
 
-static void SV_AntiCheat_Hello (void)
+static int SV_AntiCheat_SendPreferences (void)
 {
-	unsigned short	len, hostlen, verlen;
-	const char		*host;
-	const char		*ver;
-	const char		*lastPath;
-	filehash_t		*f;
-	cvarcheck_t		*c;
-	int				index;
+	uint32	preferences;
 
-	acSendBufferLen = 1;
-	acSendBuffer[0] = '\x02';
+	preferences = 0;
 
-	host = hostname->string;
-	ver = R1Q2_VERSION_STRING;
+	if (sv_anticheat_disable_play->intvalue)
+		preferences |= ACP_BLOCKPLAY;
 
-	hostlen = strlen(host);
-	verlen = strlen(ver);
-
-	len = 19 + hostlen + verlen;
-	index = acSendBufferLen;
-
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 5;
 	acSendBufferLen += 2;
 
-	acSendBuffer[acSendBufferLen++] = Q2S_VERSION;
+	acSendBuffer[acSendBufferLen++] = Q2S_SETPREFERENCES;
 
-	*(unsigned short *)(acSendBuffer + acSendBufferLen) = ANTICHEAT_PROTOCOL_VERSION;
-	acSendBufferLen += sizeof(unsigned short);
+	memcpy (acSendBuffer + acSendBufferLen, &preferences, sizeof(preferences));
+	acSendBufferLen += sizeof(preferences);
 
-	memcpy (acSendBuffer + acSendBufferLen, &hostlen, sizeof(hostlen));
-	acSendBufferLen += sizeof(hostlen);
+	return 1;
+}
 
-	memcpy (acSendBuffer + acSendBufferLen, host, hostlen);
-	acSendBufferLen += hostlen;
+void SV_AntiCheat_UpdatePrefs (cvar_t *v, char *oldVal, char *newVal)
+{
+	SV_AntiCheat_SendPreferences ();
+}
 
-	memcpy (acSendBuffer + acSendBufferLen, &verlen, sizeof(verlen));
-	acSendBufferLen += sizeof(verlen);
-
-	memcpy (acSendBuffer + acSendBufferLen, ver, verlen);
-	acSendBufferLen += verlen;
-
-	memcpy (acSendBuffer + acSendBufferLen, &server_port, sizeof(server_port));
-	acSendBufferLen += sizeof(server_port);
+static int SV_AntiCheat_SendFileAndCvarChecks (void)
+{
+	filehash_t		*f;
+	cvarcheck_t		*c;
+	const char		*lastPath;
 
 	SV_AntiCheat_ClearFileHashes ();
 
@@ -1046,14 +1205,16 @@ static void SV_AntiCheat_Hello (void)
 	SV_AntiCheat_ClearTokens ();
 	SV_AntiCheat_ReadFile ("anticheat-tokens.txt", SV_AntiCheat_ParseToken);
 
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 9;
+	acSendBufferLen += 2;
+
+	acSendBuffer[acSendBufferLen++] = Q2S_UPDATECHECKS;
+
 	memcpy (acSendBuffer + acSendBufferLen, &antiCheatNumFileHashes, sizeof(antiCheatNumFileHashes));
 	acSendBufferLen += sizeof(antiCheatNumFileHashes);
 
 	memcpy (acSendBuffer + acSendBufferLen, &antiCheatNumCvarChecks, sizeof(antiCheatNumCvarChecks));
 	acSendBufferLen += sizeof(antiCheatNumCvarChecks);
-
-	*(unsigned short *)(acSendBuffer + index) = len;
-
 
 	//this gets really nasty now, since file hashes are plentiful they will go way above the 64k
 	//packet limit and maybe even the whole sendbuffer size. so we can block here, hopefully we don't
@@ -1062,7 +1223,7 @@ static void SV_AntiCheat_Hello (void)
 	//flush as much as we can
 	SV_AntiCheat_Run ();
 	if (!acSocket)
-		return;
+		return 0;
 
 	lastPath = NULL;
 	f = &fileHashes;
@@ -1074,13 +1235,15 @@ static void SV_AntiCheat_Hello (void)
 		//ick ick ick...
 		if (acSendBufferLen + sizeof(*f) + 2 >= AC_BUFFSIZE)
 		{
-			Com_Printf ("ANTICHEAT WARNING: Anticheat send buffer length exceeded in SV_AntiCheat_Hello, spinning!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
+			Com_Printf ("ANTICHEAT WARNING: Send buffer length exceeded, server may be frozen for a short while!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
 			if (!SV_AntiCheat_Spin ())
-				return;
+				return 0;
 		}
 
 		memcpy (acSendBuffer + acSendBufferLen, f->hash, sizeof(f->hash));
 		acSendBufferLen += sizeof(f->hash);
+
+		acSendBuffer[acSendBufferLen++] = (byte)f->flags;
 
 		if (lastPath && !strcmp (f->quakePath, lastPath))
 		{
@@ -1113,9 +1276,9 @@ static void SV_AntiCheat_Hello (void)
 		//ick ick ick...
 		if (acSendBufferLen + length >= AC_BUFFSIZE)
 		{
-			Com_Printf ("ANTICHEAT WARNING: Anticheat send buffer length exceeded in SV_AntiCheat_Hello, spinning!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
+			Com_Printf ("ANTICHEAT WARNING: Send buffer length exceeded, server may be frozen for a short while!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
 			if (!SV_AntiCheat_Spin ())
-				return;
+				return 0;
 		}
 
 		b = (byte)strlen (c->var_name);
@@ -1140,8 +1303,61 @@ static void SV_AntiCheat_Hello (void)
 		acSendBufferLen += b;
 	}
 
+	return 1;
+}
+
+static void SV_AntiCheat_Hello (void)
+{
+	unsigned short	len, hostlen, verlen;
+	const char		*host;
+	const char		*ver;
+	int				index;
+
+	acSendBufferLen = 1;
+	acSendBuffer[0] = '\x02';
+
+	host = hostname->string;
+	ver = R1Q2_VERSION_STRING;
+
+	hostlen = strlen(host);
+	verlen = strlen(ver);
+
+	len = 22 + hostlen + verlen;
+	index = acSendBufferLen;
+
+	acSendBufferLen += 2;
+
+	acSendBuffer[acSendBufferLen++] = Q2S_VERSION;
+
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = ANTICHEAT_PROTOCOL_VERSION;
+	acSendBufferLen += sizeof(unsigned short);
+
+	memcpy (acSendBuffer + acSendBufferLen, &hostlen, sizeof(hostlen));
+	acSendBufferLen += sizeof(hostlen);
+
+	memcpy (acSendBuffer + acSendBufferLen, host, hostlen);
+	acSendBufferLen += hostlen;
+
+	memcpy (acSendBuffer + acSendBufferLen, &verlen, sizeof(verlen));
+	acSendBufferLen += sizeof(verlen);
+
+	memcpy (acSendBuffer + acSendBufferLen, ver, verlen);
+	acSendBufferLen += verlen;
+
+	memcpy (acSendBuffer + acSendBufferLen, &server_port, sizeof(server_port));
+	acSendBufferLen += sizeof(server_port);
+
+	*(unsigned short *)(acSendBuffer + index) = len;
+
+	if (!SV_AntiCheat_SendFileAndCvarChecks ())
+		return;
+
+	if (!SV_AntiCheat_SendPreferences ())
+		return;
+
 	if (acSendBufferLen + 3 >= AC_BUFFSIZE)
 	{
+		Com_Printf ("ANTICHEAT WARNING: Send buffer length exceeded, server may be frozen for a short while!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
 		if (!SV_AntiCheat_Spin())
 			return;
 	}
@@ -1152,7 +1368,7 @@ static void SV_AntiCheat_Hello (void)
 	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 1;
 	acSendBufferLen += 2;
 	acSendBuffer[acSendBufferLen++] = Q2S_PING;
-	last_ping = curtime;
+	last_ping = Sys_Milliseconds ();
 	ping_pending = true;
 	//anticheat_ready = true;
 }
@@ -1248,6 +1464,25 @@ static void SV_AntiCheat_CheckTimeOuts (void)
 	}
 }
 
+void SVCmd_SVACInvalidate_f (void)
+{
+	client_t	*cl;
+
+	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+	{
+		if (cl->state > cs_connected)
+			SV_AntiCheat_Disconnect_Client (cl);
+	}
+
+	Com_Printf ("All clients marked as invalid.\n", LOG_GENERAL);
+}
+
+void SVCmd_SVACUpdate_f (void)
+{
+	SV_AntiCheat_SendFileAndCvarChecks ();
+	Com_Printf ("Anticheat configuration updated.\n", LOG_GENERAL);
+}
+
 //FIXME duplicated code
 void SVCmd_SVACList_f (void)
 {
@@ -1263,9 +1498,9 @@ void SVCmd_SVACList_f (void)
 	substring = Cmd_Argv (1);
 
 	Com_Printf (
-		"+----------------+--------+-----+\n"
-		"|  Player Name   |AC Valid|Files|\n"
-		"+----------------+--------+-----+\n", LOG_GENERAL);
+		"+----------------+--------+-----+------+\n"
+		"|  Player Name   |AC Valid|Files|Client|\n"
+		"+----------------+--------+-----+------+\n", LOG_GENERAL);
 
 	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 	{
@@ -1276,18 +1511,22 @@ void SVCmd_SVACList_f (void)
 		{
 			if (cl->anticheat_valid)
 			{
-				Com_Printf ("|%-16s|%s| %3d |\n", LOG_GENERAL,
-					cl->name, "   yes  ", cl->anticheat_file_failures);
+				int	index;
+				index = cl->anticheat_client_type;
+				if (index >= sizeof(anticheat_client_names) / sizeof(anticheat_client_names[0]))
+					index = 0;
+				Com_Printf ("|%-16s|%s| %3d |%-6s|\n", LOG_GENERAL,
+					cl->name, "   yes  ", cl->anticheat_file_failures, anticheat_client_names[index]);
 			}
 			else
 			{
-				Com_Printf ("|%-16s|%s| N/A |\n", LOG_GENERAL,
+				Com_Printf ("|%-16s|%s| N/A | N/A  |\n", LOG_GENERAL,
 					cl->name, "   NO   ");
 			}
 		}
 	}
 
-	Com_Printf ("+----------------+--------+-----+\n", LOG_GENERAL);
+	Com_Printf ("+----------------+--------+-----+------+\n", LOG_GENERAL);
 }
 
 //FIXME duplicated code
@@ -1445,66 +1684,12 @@ void SV_AntiCheat_Run (void)
 
 	SV_AntiCheat_CheckTimeOuts ();
 
-	tv.tv_sec = tv.tv_usec = 0;
-
-	ret = select (acSocket + 1, &set, NULL, NULL, &tv);
-	if (ret < 0)
-	{
-		SV_AntiCheat_Unexpected_Disconnect ();
-	}
-	else if (ret == 1)
-	{
-		if (!expectedLength)
-		{
-			ret = recv (acSocket, packetBuffer + packetLen, 2 - packetLen, 0);
-			if (ret <= 0)
-			{
-				SV_AntiCheat_Unexpected_Disconnect ();
-				return;
-			}
-
-			packetLen += ret;
-
-			if (packetLen == 2)
-			{
-				expectedLength = *(unsigned short *)&packetBuffer[0];		
-				packetLen = 0;
-
-				if (expectedLength > sizeof(packetBuffer))
-				{
-					Com_Printf ("ANTICHEAT WARNING: Expected packet length %d exceeds buffer size %d!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT, expectedLength, (int)sizeof(packetBuffer));
-					expectedLength = sizeof(packetBuffer);
-				}
-			}
-		}
-		else
-		{
-			ret = recv (acSocket, packetBuffer, expectedLength - packetLen, 0);
-			if (ret <= 0)
-			{
-				SV_AntiCheat_Unexpected_Disconnect ();
-				return;
-			}
-
-			packetLen += ret;
-
-			if (packetLen == expectedLength)
-			{
-				SV_AntiCheat_ParseBuffer ();
-				packetLen = 0;
-				expectedLength = 0;
-			}
-		}
-	}
-
-	if (acSendBufferLen)
+	for (;;)
 	{
 		FD_ZERO (&set);
 		FD_SET (acSocket, &set);
-
 		tv.tv_sec = tv.tv_usec = 0;
-
-		ret = select (acSocket + 1, NULL, &set, NULL, &tv);
+		ret = select (acSocket + 1, &set, NULL, NULL, &tv);
 		if (ret < 0)
 		{
 			SV_AntiCheat_Unexpected_Disconnect ();
@@ -1512,14 +1697,82 @@ void SV_AntiCheat_Run (void)
 		}
 		else if (ret == 1)
 		{
-			ret = send (acSocket, acSendBuffer, acSendBufferLen, 0);
-			if (ret <= 0)
+			if (!expectedLength)
+			{
+				ret = recv (acSocket, packetBuffer + packetLen, 2 - packetLen, 0);
+				if (ret <= 0)
+				{
+					SV_AntiCheat_Unexpected_Disconnect ();
+					return;
+				}
+
+				packetLen += ret;
+
+				if (packetLen == 2)
+				{
+					expectedLength = *(unsigned short *)&packetBuffer[0];		
+					packetLen = 0;
+
+					if (expectedLength > sizeof(packetBuffer))
+					{
+						Com_Printf ("ANTICHEAT WARNING: Expected packet length %d exceeds buffer size %d!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT, expectedLength, (int)sizeof(packetBuffer));
+						expectedLength = sizeof(packetBuffer);
+					}
+				}
+			}
+			else
+			{
+				ret = recv (acSocket, packetBuffer, expectedLength - packetLen, 0);
+				if (ret <= 0)
+				{
+					SV_AntiCheat_Unexpected_Disconnect ();
+					return;
+				}
+
+				packetLen += ret;
+
+				if (packetLen == expectedLength)
+				{
+					SV_AntiCheat_ParseBuffer ();
+					packetLen = 0;
+					expectedLength = 0;
+				}
+			}
+		}
+		else
+			break;
+	}
+
+	if (acSendBufferLen)
+	{
+		for (;;)
+		{
+			FD_ZERO (&set);
+			FD_SET (acSocket, &set);
+			tv.tv_sec = tv.tv_usec = 0;
+
+			ret = select (acSocket + 1, NULL, &set, NULL, &tv);
+			if (ret < 0)
 			{
 				SV_AntiCheat_Unexpected_Disconnect ();
 				return;
 			}
-			memmove (acSendBuffer, acSendBuffer + ret, acSendBufferLen - ret);
-			acSendBufferLen -= ret;
+			else if (ret == 1)
+			{
+				ret = send (acSocket, acSendBuffer, acSendBufferLen, 0);
+				if (ret <= 0)
+				{
+					SV_AntiCheat_Unexpected_Disconnect ();
+					return;
+				}
+				memmove (acSendBuffer, acSendBuffer + ret, acSendBufferLen - ret);
+				acSendBufferLen -= ret;
+			}
+			else
+				break;
+			
+			if (!acSendBufferLen)
+				break;
 		}
 	}
 }
@@ -1561,7 +1814,7 @@ qboolean SV_AntiCheat_Disconnect_Client (client_t *cl)
 		return false;
 	}
 
-	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 5;
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 9;
 	acSendBufferLen += 2;
 
 	acSendBuffer[acSendBufferLen++] = Q2S_CLIENTDISCONNECT;
@@ -1570,6 +1823,9 @@ qboolean SV_AntiCheat_Disconnect_Client (client_t *cl)
 
 	memcpy (acSendBuffer + acSendBufferLen, &num, sizeof(num));
 	acSendBufferLen += sizeof(num);
+
+	memcpy (acSendBuffer + acSendBufferLen, &cl->challenge, sizeof(cl->challenge));
+	acSendBufferLen += sizeof(cl->challenge);
 
 	return true;
 }
@@ -1621,13 +1877,13 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 	if (sv_anticheat_nag_time->intvalue)
 		cl->anticheat_nag_time = curtime;
 
-	if (acSendBufferLen + 7 >= AC_BUFFSIZE)
+	if (acSendBufferLen + 11 >= AC_BUFFSIZE)
 	{
 		Com_Printf ("ANTICHEAT WARNING: Anticheat send buffer length exceeded in SV_AntiCheat_QueryClient!\n", LOG_WARNING|LOG_SERVER|LOG_ANTICHEAT);
 		return false;
 	}
 
-	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 5;
+	*(unsigned short *)(acSendBuffer + acSendBufferLen) = 9;
 	acSendBufferLen += 2;
 
 	acSendBuffer[acSendBufferLen++] = Q2S_QUERYCLIENT;
@@ -1636,6 +1892,10 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 
 	memcpy (acSendBuffer + acSendBufferLen, &num, sizeof(num));
 	acSendBufferLen += sizeof(num);
+
+	memcpy (acSendBuffer + acSendBufferLen, &cl->challenge, sizeof(cl->challenge));
+	acSendBufferLen += sizeof(cl->challenge);
+
 	return true;
 }
 

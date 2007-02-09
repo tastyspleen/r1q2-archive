@@ -723,6 +723,7 @@ void VID_FreeReflib (void)
 	memset (&re, 0, sizeof(re));
 	reflib_library = NULL;
 	reflib_active  = false;
+	cl_hwnd = NULL;
 }
 
 //Wrapper function for externally added commands to ensure unclean shutdown
@@ -945,6 +946,7 @@ void VID_ReloadRefresh (void)
 		errMessage[0] = 0;
 		if ( !VID_LoadRefresh( name, errMessage ) )
 		{
+			cl_hwnd = NULL;
 			Com_Printf ("\2Failed to load %s: %s\n", LOG_GENERAL, name, errMessage);
 			if (attempted[0])
 				strcat (attempted, "\n");
@@ -954,8 +956,8 @@ void VID_ReloadRefresh (void)
 			strcat (attempted, ")");
 
 			if ( strcmp (vid_ref->string, "soft") == 0 )
-				Com_Error (ERR_FATAL, 	"Unable to load a renderer! Please check you are running R1Q2 from your Quake II directory.\n\n"
-										"The following DLLs failed to load:\n\n"
+				Com_Error (ERR_FATAL, 	"Unable to initialize video output! Please check that your video card drivers are installed and up to date and that Quake II is installed properly. If you continue to get this error, try using R1GL from http://www.r1ch.net/stuff/r1gl/ and ensure your gl_driver is set to 'opengl32' in your autoexec.cfg\n\n"
+										"The following renderer DLLs failed to load:\n\n"
 										"%s",
 										attempted);
 			Cvar_Set( "vid_ref", "soft" );

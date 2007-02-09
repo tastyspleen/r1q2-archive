@@ -419,20 +419,22 @@ Returns 1, 2, or 1 + 2
 ==================
 */
 #if !id386 || defined __linux__ || defined __FreeBSD__
-int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
+int EXPORT BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
 	float	dist1, dist2;
 	int		sides;
 
 // fast axial cases
-	if (p->type < 3)
+	//r1: these never seem to hit?
+	/*if (p->type < 3)
 	{
+		Sys_DebugBreak ();
 		if (p->dist <= emins[p->type])
 			return 1;
 		if (p->dist >= emaxs[p->type])
 			return 2;
 		return 3;
-	}
+	}*/
 	
 // general case
 	switch (p->signbits)
@@ -1010,7 +1012,7 @@ void COM_DefaultExtension (char *path, const char *extension)
 */
 
 //r1: endianness sucks. this is a waste of function calls for everything.
-//define YOU_HAVE_A_BROKEN_COMPUTER if you're on a mac or some other big endian system.
+//define Q_BIGENDIAN if you're on a mac or some other big endian system.
 
 //need this for network ports
 int16 ShortSwap (int16 l)
@@ -1035,7 +1037,7 @@ int32    LongSwap (int32 l)
 	return ((int)b1<<24) + ((int)b2<<16) + ((int)b3<<8) + b4;
 }
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if Q_BIGENDIAN
 
 qboolean	bigendien;
 

@@ -87,11 +87,12 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 	Q_strncpy (copy, s, sizeof(copy)-1);
 
 	// strip off a trailing :port if present
-	for (colon = copy ; colon[0] ; colon++) {
+	for (colon = copy ; colon[0] ; colon++)
+	{
 		if (colon[0] == ':')
 		{
 			colon[0] = 0;
-			((struct sockaddr_in *)sadr)->sin_port = htons((int16)atoi(colon+1));
+			((struct sockaddr_in *)sadr)->sin_port = htons ((int16)atoi(colon+1));
 			break;
 		}
 	}
@@ -318,6 +319,8 @@ void NET_Sleep(int msec)
 
 	if (!ip_sockets[NS_SERVER] || !dedicated->intvalue)
 		return; // we're not a server, just run full speed
+
+	//Com_Printf ("NET_Sleep (%d)\n", LOG_GENERAL, msec);
 
 	FD_ZERO(&fdset);
 	FD_SET(ip_sockets[NS_SERVER], &fdset); // network socket

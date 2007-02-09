@@ -79,6 +79,8 @@ cvar_t	*showtrace;
 cvar_t	*dedicated = &uninitialized_cvar;
 #endif
 
+cvar_t	*sys_loopstyle = &uninitialized_cvar;
+
 //r1: unload DLLs on crash?
 cvar_t	*dbg_unload = &uninitialized_cvar;
 
@@ -2462,6 +2464,8 @@ void Qcommon_Init (int argc, char **argv)
 
 	z_chain.next = z_chain.prev = &z_chain;
 
+	uninitialized_cvar.string = "";
+
 	// prepare enough of the subsystems to handle
 	// cvar and command buffer management
 	COM_InitArgv (argc, argv);
@@ -2494,6 +2498,8 @@ void Qcommon_Init (int argc, char **argv)
 #endif
 
 	Cmd_AddCommand ("msg_stats", Msg_Stats_f);
+	Cmd_AddCommand ("processtimes", Sys_ProcessTimes_f);
+	Cmd_AddCommand ("spinstats", Sys_Spinstats_f);
 
 	// we need to add the early commands twice, because
 	// a basedir or cddir needs to be set before execing
@@ -2540,6 +2546,8 @@ void Qcommon_Init (int argc, char **argv)
 	dedicated = Cvar_Get ("dedicated", "0", CVAR_NOSET);
 #endif
 #endif
+
+	sys_loopstyle = Cvar_Get ("sys_loopstyle", "1", 0);
 	
 	err_fatal = Cvar_Get ("err_fatal", "0", 0);
 
@@ -2622,6 +2630,8 @@ void Qcommon_Frame (int msec)
 		return;			// an ERR_DROP was thrown
 #endif
 
+	//Com_Printf ("frame time: %d ms\n", LOG_GENERAL, msec);
+
 	/*if ( log_stats->modified )
 	{
 		log_stats->modified = false;
@@ -2654,8 +2664,12 @@ void Qcommon_Frame (int msec)
 	{
 		msec = (int)(msec * timescale->value);
 
-		if (msec < 1)
-			msec = 1;
+		//r1: allow server to run zero msec frames to avoid spinloop
+		if (!dedicated->intvalue)
+		{
+			if (msec < 1)
+				msec = 1;
+		}
 	}
 
 #ifndef DEDICATED_ONLY

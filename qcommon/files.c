@@ -38,7 +38,7 @@ QUAKE FILESYSTEM
 
 typedef struct
 {
-	union
+	union filehandle_type
 	{
 		FILE			*handle;
 		unzFile			*zhandle;
@@ -68,7 +68,7 @@ typedef enum
 typedef struct pack_s
 {
 	char			filename[MAX_OSPATH];
-	union
+	union packhandle_type
 	{
 		FILE			*handle;
 		unzFile			*zhandle;

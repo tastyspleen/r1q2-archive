@@ -22,6 +22,7 @@
 #define _GNU_SOURCE
 #include <link.h>
 #include <sys/ucontext.h>
+#include <sys/resource.h>
 
 //for old headers
 #ifndef REG_EIP
@@ -40,6 +41,8 @@
 
 cvar_t *nostdin;
 cvar_t *nostdout;
+
+extern cvar_t *sys_loopstyle;
 
 unsigned	sys_frame_time;
 
@@ -92,6 +95,16 @@ int Sys_FileLength (const char *path)
 		return -1;
 
 	return st.st_size;
+}
+
+void Sys_getrusage_f (void)
+{
+	struct rusage usage;
+
+	getrusage (RUSAGE_SELF, &usage);
+
+	//FIXME
+	Com_Printf ("user:", LOG_GENERAL);
 }
 
 void Sys_Sleep (int msec)
@@ -238,6 +251,53 @@ void Sys_Backtrace (int sig, siginfo_t *siginfo, void *secret)
 	free (strings);
 
 	raise (SIGSEGV);
+}
+
+void Sys_ProcessTimes_f (void)
+{
+	struct rusage	usage;
+	int		days, hours, minutes;
+	double		seconds;
+	
+	if (getrusage (RUSAGE_SELF, &usage))
+	{
+		Com_Printf ("getrusage(): %s\n", LOG_GENERAL, strerror(errno));
+		return;
+	}
+
+	//1 second = 1 000 000 microseconds
+	days = usage.ru_stime.tv_sec / 86400;
+	usage.ru_stime.tv_sec -= days * 86400;
+
+	hours = usage.ru_stime.tv_sec / 3600;
+	usage.ru_stime.tv_sec -= hours * 3600;
+
+	minutes = usage.ru_stime.tv_sec / 60;
+	usage.ru_stime.tv_sec -= minutes * 60;
+
+	seconds = usage.ru_stime.tv_sec + (usage.ru_stime.tv_usec / 1000000);
+	
+	Com_Printf ("%dd %dh %dm %gs kernel\n", LOG_GENERAL, days, hours, minutes, seconds);
+
+	days = usage.ru_utime.tv_sec / 86400;
+	usage.ru_utime.tv_sec -= days * 86400;
+
+	hours = usage.ru_utime.tv_sec / 3600;
+	usage.ru_utime.tv_sec -= hours * 3600;
+
+	minutes = usage.ru_utime.tv_sec / 60;
+	usage.ru_utime.tv_sec -= minutes * 60;
+
+	seconds = usage.ru_utime.tv_sec + (usage.ru_utime.tv_usec / 1000000);
+
+	Com_Printf ("%dd %dh %dm %gs user\n", LOG_GENERAL, days, hours, minutes, seconds);
+}
+
+static unsigned int goodspins, badspins;
+
+void Sys_Spinstats_f (void)
+{
+	Com_Printf ("%u fast spins, %u slow spins, %.2f%% slow.\n", LOG_GENERAL, goodspins, badspins, ((float)badspins / (float)(goodspins+badspins)) * 100.0f);
 }
 
 void Sys_Init(void)
@@ -498,7 +558,7 @@ char *Sys_GetClipboardData(void)
 
 int main (int argc, char **argv)
 {
-	unsigned int 	time, oldtime, newtime;
+	unsigned int 	time, oldtime, newtime, spins;
 
 	// go back to real user for config loads
 	//saved_euid = geteuid();
@@ -524,12 +584,30 @@ int main (int argc, char **argv)
     oldtime = Sys_Milliseconds ();
     while (1)
     {
-// find time spent rendering last frame
-		do {
+		// find time spent rendering last frame
+		if (dedicated->intvalue && sys_loopstyle->intvalue)
+		{
 			newtime = Sys_Milliseconds ();
 			time = newtime - oldtime;
-		} while (time < 1);
-        Qcommon_Frame (time);
+			spins = 0;
+		}
+		else
+		{
+			spins = 0;
+			do
+			{
+				newtime = Sys_Milliseconds ();
+				time = newtime - oldtime;
+				spins++;
+			} while (time < 1);
+		}
+
+		if (spins > 500)
+			badspins++;
+		else
+			goodspins++;
+		
+		Qcommon_Frame (time);
 		oldtime = newtime;
     }
 

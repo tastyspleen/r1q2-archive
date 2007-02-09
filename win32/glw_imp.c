@@ -94,13 +94,10 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	int				stylebits;
 	int				x, y, w, h;
 	int				exstyle;
-
-	if (!OPENGL_CLASS[0])
-		Com_sprintf (OPENGL_CLASS, sizeof(OPENGL_CLASS), "R1GLOpenGLDummyPFDWindow-%u", GetTickCount());
 	
 	if (!window_class_registered)
 	{
-		if (GetClassInfo (glw_state.hModule, WINDOW_CLASS_NAME, &wc))
+		if (GetClassInfo (glw_state.hInstance, WINDOW_CLASS_NAME, &wc))
 			UnregisterClass (WINDOW_CLASS_NAME, wc.hInstance);
 
 		/* Register the frame class */
@@ -108,7 +105,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		wc.lpfnWndProc   = (WNDPROC)glw_state.wndproc;
 		wc.cbClsExtra    = 0;
 		wc.cbWndExtra    = 0;
-		wc.hInstance     = glw_state.hModule;
+		wc.hInstance     = glw_state.hInstance;
 		wc.hIcon         = 0;
 		wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
 		wc.hbrBackground = (HBRUSH)COLOR_GRAYTEXT;
@@ -172,7 +169,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		 x, y, w, h,
 		 NULL,
 		 NULL,
-		 glw_state.hModule,
+		 glw_state.hInstance,
 		 NULL);
 
 	if (!glw_state.hWnd)
@@ -422,7 +419,7 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 */
 void GLimp_Shutdown( void )
 {
-
+	WNDCLASS		wc;
 
 #ifdef USE_MSGLOG
   if(hMsgLog) FreeLibrary(hMsgLog);
@@ -456,8 +453,11 @@ void GLimp_Shutdown( void )
 		glw_state.log_fp = 0;
 	}
 
-	UnregisterClass (WINDOW_CLASS_NAME, glw_state.hModule);
-	UnregisterClass (OPENGL_CLASS, glw_state.hModule);
+	if (GetClassInfo (glw_state.hInstance, WINDOW_CLASS_NAME, &wc))
+		UnregisterClass (WINDOW_CLASS_NAME, wc.hInstance);
+
+	if (GetClassInfo (glw_state.hInstance, OPENGL_CLASS, &wc))
+		UnregisterClass (OPENGL_CLASS, wc.hInstance);
 
 	window_class_registered = false;
 
@@ -481,6 +481,9 @@ qboolean GLimp_Init( void *hinstance, void *wndproc )
 #define OSR2_BUILD_NUMBER 1111
 
 	OSVERSIONINFO	vinfo;
+
+	if (!OPENGL_CLASS[0])
+		Com_sprintf (OPENGL_CLASS, sizeof(OPENGL_CLASS), "R1GLOpenGLDummyPFDWindow-%u", GetTickCount());
 
 	_controlfp( _PC_24, _MCW_PC );
 
@@ -676,7 +679,7 @@ BOOL RegisterOpenGLWindow(HINSTANCE hInst)
 
 	// Initialize our Window class
 	wcex.cbSize = sizeof(wcex);
-	if (GetClassInfoEx(hInst, OPENGL_CLASS, &wcex))
+	if (GetClassInfoEx (hInst, OPENGL_CLASS, &wcex))
 		UnregisterClass (OPENGL_CLASS, wcex.hInstance);
 
 	// register main one
@@ -1093,7 +1096,7 @@ qboolean GLimp_InitGL (void)
 		}
 	}
 
-	RegisterOpenGLWindow (glw_state.hModule);
+	RegisterOpenGLWindow (glw_state.hInstance);
 
 	//if (1)
 	{
@@ -1128,7 +1131,12 @@ qboolean GLimp_InitGL (void)
 		};
 		HGLRC hGLRC;
 
-		HWND temphwnd = CreateWindowEx(0L,OPENGL_CLASS, "R1GL OpenGL PFD Detection Window",WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,0,0,1,1,glw_state.hWnd,0,glw_state.hModule,NULL);
+		HWND temphwnd =
+			CreateWindowEx (
+				0L,OPENGL_CLASS, "R1GL OpenGL PFD Detection Window",
+				WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 1, 1,
+				glw_state.hWnd, 0, glw_state.hInstance, NULL
+			);
 
 		HDC hDC = GetDC (temphwnd);
 

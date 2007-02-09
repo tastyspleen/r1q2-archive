@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 typedef struct
 {
 	cplane_t	*plane;
+	fplane_t	*fastplane;
 	int			children[2];		// negative numbers are leafs
 } cnode_t;
 
@@ -61,6 +62,7 @@ mapsurface_t	map_surfaces[MAX_MAP_TEXINFO];
 
 static int			numplanes;
 static cplane_t	map_planes[MAX_MAP_PLANES+6];		// extra for box hull
+static fplane_t	map_fastplanes[MAX_MAP_PLANES+6];		// extra for box hull
 
 static int			numnodes;
 static cnode_t		map_nodes[MAX_MAP_NODES+6];		// extra for box hull
@@ -223,7 +225,8 @@ void CMod_LoadNodes (lump_t *l)
 
 	for (i=0 ; i<count ; i++, out++, in++)
 	{
-		out->plane = map_planes + LittleLong(in->planenum);
+		out->plane = map_planes + LittleLong (in->planenum);
+		out->fastplane = map_fastplanes + LittleLong (in->planenum);
 		for (j=0 ; j<2 ; j++)
 		{
 			child = LittleLong (in->children[j]);
@@ -331,6 +334,7 @@ void CMod_LoadPlanes (lump_t *l)
 {
 	int			i, j;
 	cplane_t	*out;
+	fplane_t	*fout;
 	dplane_t 	*in;
 	int			count;
 	int			bits;
@@ -347,10 +351,11 @@ void CMod_LoadPlanes (lump_t *l)
 	if (count > MAX_MAP_PLANES)
 		Com_Error (ERR_DROP, "Map has too many planes");
 
-	out = map_planes;	
+	out = map_planes;
+	fout = map_fastplanes;
 	numplanes = count;
 
-	for ( i=0 ; i<count ; i++, in++, out++)
+	for ( i=0 ; i<count ; i++, in++, out++, fout++)
 	{
 		bits = 0;
 		for (j=0 ; j<3 ; j++)
@@ -364,7 +369,13 @@ void CMod_LoadPlanes (lump_t *l)
 		if (in->type > 5)
 			Com_Error (ERR_DROP, "CMod_LoadPlanes: bad plane type %u (expected 0-5)", in->type);
 		out->type = (byte)LittleLong (in->type);
-		out->signbits = bits;
+		out->signbits = (byte)bits;
+
+		//r1ch: "fast" planes, less byte->int work needed
+		fout->dist = out->dist;
+		fout->type = LittleLong (in->type);
+		fout->signbits = bits;
+		FastVectorCopy (out->normal, fout->normal);
 	}
 }
 
@@ -847,6 +858,7 @@ __inline int	 CM_LeafArea (int leafnum)
 //=======================================================================
 
 
+fplane_t	*fbox_planes;
 cplane_t	*box_planes;
 int			box_headnode;
 cbrush_t	*box_brush;
@@ -866,10 +878,13 @@ void CM_InitBoxHull (void)
 	int			side;
 	cnode_t		*c;
 	cplane_t	*p;
+	fplane_t	*f;
 	cbrushside_t	*s;
 
 	box_headnode = numnodes;
 	box_planes = &map_planes[numplanes];
+	fbox_planes = &map_fastplanes[numplanes];
+
 	if (numnodes+6 > MAX_MAP_NODES
 		|| numbrushes+1 > MAX_MAP_BRUSHES
 		|| numleafbrushes+1 > MAX_MAP_LEAFBRUSHES
@@ -901,7 +916,9 @@ void CM_InitBoxHull (void)
 		// nodes
 		c = &map_nodes[box_headnode+i];
 		c->plane = map_planes + (numplanes+i*2);
+		c->fastplane = map_fastplanes + (numplanes+i*2);
 		c->children[side] = -1 - emptyleaf;
+
 		if (i != 5)
 			c->children[side^1] = box_headnode+i + 1;
 		else
@@ -919,6 +936,18 @@ void CM_InitBoxHull (void)
 		p->signbits = 0;
 		VectorClear (p->normal);
 		p->normal[i>>1] = -1;
+
+		f = &fbox_planes[i*2];
+		f->type = i>>1;
+		f->signbits = 0;
+		VectorClear (f->normal);
+		f->normal[i>>1] = 1;
+
+		f = &fbox_planes[i*2+1];
+		f->type = 3 + (i>>1);
+		f->signbits = 0;
+		VectorClear (f->normal);
+		f->normal[i>>1] = -1;
 	}	
 }
 
@@ -933,18 +962,18 @@ BSP trees instead of being compared directly.
 */
 int	CM_HeadnodeForBox (const vec3_t mins, const vec3_t maxs)
 {
-	box_planes[0].dist = maxs[0];
-	box_planes[1].dist = -maxs[0];
-	box_planes[2].dist = mins[0];
-	box_planes[3].dist = -mins[0];
-	box_planes[4].dist = maxs[1];
-	box_planes[5].dist = -maxs[1];
-	box_planes[6].dist = mins[1];
-	box_planes[7].dist = -mins[1];
-	box_planes[8].dist = maxs[2];
-	box_planes[9].dist = -maxs[2];
-	box_planes[10].dist = mins[2];
-	box_planes[11].dist = -mins[2];
+	box_planes[0].dist = fbox_planes[0].dist = maxs[0];
+	box_planes[1].dist = fbox_planes[1].dist = -maxs[0];
+	box_planes[2].dist = fbox_planes[2].dist = mins[0];
+	box_planes[3].dist = fbox_planes[3].dist = -mins[0];
+	box_planes[4].dist = fbox_planes[4].dist = maxs[1];
+	box_planes[5].dist = fbox_planes[5].dist = -maxs[1];
+	box_planes[6].dist = fbox_planes[6].dist = mins[1];
+	box_planes[7].dist = fbox_planes[7].dist = -mins[1];
+	box_planes[8].dist = fbox_planes[8].dist = maxs[2];
+	box_planes[9].dist = fbox_planes[9].dist = -maxs[2];
+	box_planes[10].dist = fbox_planes[10].dist = mins[2];
+	box_planes[11].dist = fbox_planes[11].dist = -mins[2];
 
 	return box_headnode;
 }
@@ -960,12 +989,12 @@ int CM_PointLeafnum_r (const vec3_t p, int num)
 {
 	float		d;
 	cnode_t		*node;
-	cplane_t	*plane;
+	fplane_t	*plane;
 
 	while (num >= 0)
 	{
-		node = map_nodes + num;
-		plane = node->plane;
+		node = &map_nodes[num];
+		plane = node->fastplane;
 		
 		if (plane->type < 3)
 			d = p[plane->type] - plane->dist;
@@ -1390,7 +1419,7 @@ CM_RecursiveHullCheck
 void CM_RecursiveHullCheck (int num, float p1f, float p2f, vec3_t p1, vec3_t p2)
 {
 	cnode_t		*node;
-	cplane_t	*plane;
+	fplane_t	*plane;
 	float		t1, t2, offset;
 	float		frac, frac2;
 	float		idist;
@@ -1415,8 +1444,11 @@ void CM_RecursiveHullCheck (int num, float p1f, float p2f, vec3_t p1, vec3_t p2)
 	// find the point distances to the seperating plane
 	// and the offset for the size of the box
 	//
-	node = map_nodes + num;
-	plane = node->plane;
+	node = &map_nodes[num];
+	plane = node->fastplane;
+
+	//if (node->plane->type != plane->type || node->plane->dist != plane->dist || !VectorCompare (node->plane->normal, plane->normal))
+	//	Sys_DebugBreak ();
 
 	if (plane->type < 3)
 	{
@@ -1505,7 +1537,8 @@ return;
 	mid[1] = p1[1] + frac2*(p2[1] - p1[1]);
 	mid[2] = p1[2] + frac2*(p2[2] - p1[2]);
 
-	CM_RecursiveHullCheck (node->children[side^1], midf, p2f, mid, p2);
+	//if (trace_trace.fraction > midf)
+		CM_RecursiveHullCheck (node->children[side^1], midf, p2f, mid, p2);
 }
 
 

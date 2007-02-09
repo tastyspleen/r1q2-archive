@@ -1341,7 +1341,8 @@ void R_Register( void )
 	//gl_ext_swapinterval = ri.Cvar_Get( "gl_ext_swapinterval", "1", CVAR_ARCHIVE );
 	//gl_ext_palettedtexture = ri.Cvar_Get( "gl_ext_palettedtexture", "0", CVAR_ARCHIVE );
 	gl_ext_multitexture = ri.Cvar_Get( "gl_ext_multitexture", "1", CVAR_ARCHIVE );
-	gl_ext_pointparameters = ri.Cvar_Get( "gl_ext_pointparameters", "1", CVAR_ARCHIVE );
+	
+	//note, pointparams moved to init to handle defaults
 	//gl_ext_compiled_vertex_array = ri.Cvar_Get( "gl_ext_compiled_vertex_array", "1", CVAR_ARCHIVE );
 
 	//r1ch: my extensions
@@ -1654,21 +1655,19 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 	if ( strstr( gl_config.extensions_string, "GL_EXT_point_parameters" ) )
 	{
 		if ( gl_config.renderer == GL_RENDERER_ATI)
+			gl_ext_pointparameters = ri.Cvar_Get( "gl_ext_pointparameters", "0", CVAR_ARCHIVE );
+		else
+			gl_ext_pointparameters = ri.Cvar_Get( "gl_ext_pointparameters", "1", CVAR_ARCHIVE );
+
+		if ( FLOAT_NE_ZERO(gl_ext_pointparameters->value) )
 		{
-			ri.Con_Printf (PRINT_ALL, "...ignoring GL_EXT_point_parameters on ATi\n");
+			qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qwglGetProcAddress( "glPointParameterfEXT" );
+			qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qwglGetProcAddress( "glPointParameterfvEXT" );
+			ri.Con_Printf( PRINT_ALL, "...using GL_EXT_point_parameters\n" );
 		}
 		else
 		{
-			if ( FLOAT_NE_ZERO(gl_ext_pointparameters->value) )
-			{
-				qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qwglGetProcAddress( "glPointParameterfEXT" );
-				qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qwglGetProcAddress( "glPointParameterfvEXT" );
-				ri.Con_Printf( PRINT_ALL, "...using GL_EXT_point_parameters\n" );
-			}
-			else
-			{
-				ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_point_parameters\n" );
-			}
+			ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_point_parameters\n" );
 		}
 	}
 	else

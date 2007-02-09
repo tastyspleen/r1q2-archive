@@ -59,9 +59,7 @@ cvar_t	*sv_noreload;			// don't reload level state when reentering
 
 cvar_t	*maxclients;			// FIXME: rename sv_maxclients
 
-#ifndef DEDICATED_ONLY
 cvar_t	*sv_showclamp;
-#endif
 
 cvar_t	*hostname;
 cvar_t	*public_server;			// should heartbeats be sent
@@ -190,6 +188,9 @@ cvar_t	*sv_anticheat_nag_defer;
 
 cvar_t	*sv_anticheat_show_violation_reason;
 cvar_t	*sv_anticheat_client_disconnect_action;
+
+cvar_t	*sv_anticheat_disable_play;
+cvar_t	*sv_anticheat_client_restrictions;
 
 netblock_t	anticheat_exceptions;
 netblock_t	anticheat_requirements;
@@ -1375,13 +1376,13 @@ static void SVC_DirectConnect (void)
 
 				datalen = 2;
 
-				len = Com_sprintf (string, sizeof(string), "This server is full, redirecting you to %s\n", sv_redirect_address->string);
+				len = Com_sprintf ((char *)string, sizeof(string), "This server is full, redirecting you to %s\n", sv_redirect_address->string);
 				memcpy (data + datalen, string, len + 1);
 				datalen += len + 1;
 
 				data[datalen++] = svc_stufftext;
 
-				len = Com_sprintf (string, sizeof(string), "connect %s\n", sv_redirect_address->string);
+				len = Com_sprintf ((char *)string, sizeof(string), "connect %s\n", sv_redirect_address->string);
 				memcpy (data + datalen, string, len + 1);
 				datalen += len + 1;
 
@@ -1468,14 +1469,14 @@ gotnewcl:
 
 	//r1: netchan init was here
 #ifdef ANTICHEAT
-	if (sv_require_anticheat->intvalue)
+	if (sv_require_anticheat->intvalue && reconnected)
 	{
 		uint32		network_ip;
 		netblock_t	*n;
 
 		ac = " ac=1";
 
-		network_ip = NET_htonl (*(uint32 *)net_from.ip);
+		network_ip = *(uint32 *)net_from.ip;
 
 		n = &anticheat_requirements;
 
@@ -1575,18 +1576,7 @@ static int Rcon_Validate (void)
 
 uint32 CalcMask (int32 bits)
 {
-	int				i;
-	uint32			mask;
-
-	mask = 0xFFFFFFFF;
-
-	for (i = 0; i < 32; i++)
-	{
-		if (i >= bits)
-			mask &= ~(1 << i);
-	}
-
-	return mask;
+	return 0xFFFFFFFF << (32 - bits);
 }
 
 void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, const char *fmt, ...)
@@ -1607,7 +1597,7 @@ void Blackhole (netadr_t *from, qboolean isAutomatic, int mask, int method, cons
 
 	temp->next = NULL;
 
-	temp->ip = NET_htonl (*(uint32 *)from->ip);
+	temp->ip = *(uint32 *)from->ip;
 	temp->mask = NET_htonl (CalcMask(mask));
 	temp->method = method;
 
@@ -1871,7 +1861,7 @@ static void SV_ConnectionlessPacket (void)
 	qboolean	whiteholed;
 	uint32		network_ip;
 
-	network_ip = NET_htonl(*(uint32 *)net_from.ip);
+	network_ip = *(uint32 *)net_from.ip;
 
 	whiteholed = false;
 
@@ -2222,7 +2212,7 @@ static void SV_ReadPackets (void)
 					if (cl->lastmessage > svs.realtime - 1500)
 						continue;
 				}
-				else
+				else if (cl->state > cs_zombie)
 				{
 					// r1: longer delay if they are still loading
 					if (cl->lastmessage > svs.realtime - 10000)
@@ -2475,10 +2465,8 @@ static void SV_RunGameFrame (void)
 		// never get more than one tic behind
 		if (sv.time < svs.realtime)
 		{
-#ifndef DEDICATED_ONLY
 			if (sv_showclamp->intvalue)
-				Com_Printf ("sv highclamp\n", LOG_SERVER);
-#endif
+				Com_Printf ("sv highclamp: %u < %d = %d\n", LOG_SERVER, sv.time, svs.realtime, svs.realtime - sv.time);
 			svs.realtime = sv.time;
 		}
 	}
@@ -2568,10 +2556,8 @@ void SV_Frame (int msec)
 		// never let the time get too far off
 		if (sv.time - svs.realtime > 100)
 		{
-#ifndef DEDICATED_ONLY
 			if (sv_showclamp->intvalue)
-				Com_Printf ("sv lowclamp\n", LOG_SERVER);
-#endif
+				Com_Printf ("sv lowclamp: %u - %d = %d\n", LOG_SERVER, sv.time, svs.realtime, sv.time - svs.realtime);
 			svs.realtime = sv.time - 100;
 		}
 
@@ -2582,9 +2568,12 @@ void SV_Frame (int msec)
 			if (!svs.initialized)
 				return;
 		}
-		NET_Sleep(sv.time - svs.realtime);
+
+		NET_Sleep (sv.time - svs.realtime);
 		return;
 	}
+
+	//Com_Printf ("** game tick (%d drift)**\n", LOG_GENERAL, sv.time - svs.realtime);
 
 	//r1: execute commands now
 	Cbuf_Execute();
@@ -2906,9 +2895,7 @@ void SV_Init (void)
 	zombietime = Cvar_Get ("zombietime", "3", 0);
 	zombietime->help = "Number of seconds during which packets from a recently disconnected client are ignored. Default 3.\n";
 
-#ifndef DEDICATED_ONLY
 	sv_showclamp = Cvar_Get ("showclamp", "0", 0);
-#endif
 
 	sv_paused = Cvar_Get ("paused", "0", 0);
 	sv_timedemo = Cvar_Get ("timedemo", "0", 0);
@@ -3229,6 +3216,13 @@ void SV_Init (void)
 
 	sv_anticheat_client_disconnect_action = Cvar_Get ("sv_anticheat_client_disconnect_action", "0", 0);
 	sv_anticheat_client_disconnect_action->help = "Action to take when a client disconnects from the anticheat server mid-game. Default 0.\n0: Mark client as invalid.\n1: Kick client.\n";
+
+	sv_anticheat_disable_play = Cvar_Get ("sv_anticheat_disable_play", "0", 0);
+	sv_anticheat_disable_play->help = "Disable the use of the 'play' command if a player is using anticheat. default 0.\n";
+	sv_anticheat_disable_play->changed = SV_AntiCheat_UpdatePrefs;
+
+	sv_anticheat_client_restrictions = Cvar_Get ("sv_anticheat_client_restrictions", "0", 0);
+	sv_anticheat_client_restrictions->help = "Restrict the use of certain clients, even if they are anticheat valid. See the anticheat admin forum for further information. Default 0.\n";
 #endif
 
 	//r1: init pyroadmin

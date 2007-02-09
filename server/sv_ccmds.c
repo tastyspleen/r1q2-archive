@@ -160,7 +160,7 @@ static void DumpNetBlockList (netblock_t *list)
 	{
 		list = list->next;
 
-		Com_Printf ("%s/%d\n", LOG_GENERAL, NET_inet_ntoa (NET_ntohl(list->ip)), MaskBits (NET_ntohl (list->mask)));
+		Com_Printf ("%s/%d\n", LOG_GENERAL, NET_inet_ntoa (list->ip), MaskBits (NET_ntohl (list->mask)));
 	}
 }
 
@@ -1532,7 +1532,7 @@ static qboolean ValidateAndAddToNetBlockList (char *ip, netblock_t *list, int ta
 	n->next = Z_TagMalloc (sizeof(*n), tag);
 	n = n->next;
 
-	n->ip = NET_htonl (*(uint32 *)from.ip);
+	n->ip = *(uint32 *)from.ip;
 	n->mask = NET_htonl (CalcMask(mask));
 	n->next = NULL;
 
@@ -1549,7 +1549,7 @@ static qboolean ValidateAndRemoveFromNetBlockList (char *ip, netblock_t *list)
 	if (!ValidateIPMask (ip, &from, &mask))
 		return -1;
 
-	network_ip = NET_htonl (*(uint32 *)from.ip);
+	network_ip = *(uint32 *)from.ip;
 	network_mask = NET_htonl (CalcMask (mask));
 
 	n = last = list;
@@ -2697,6 +2697,8 @@ void SV_InitOperatorCommands (void)
 #ifdef ANTICHEAT
 	Cmd_AddCommand ("svaclist", SVCmd_SVACList_f);
 	Cmd_AddCommand ("svacinfo", SVCmd_SVACInfo_f);
+	Cmd_AddCommand ("svacupdate", SVCmd_SVACUpdate_f);
+	Cmd_AddCommand ("svacinvalidate", SVCmd_SVACInvalidate_f);
 
 	Cmd_AddCommand ("addacexception", SV_AddACException_f);
 	Cmd_AddCommand ("delacexception", SV_DelACException_f);
@@ -2705,6 +2707,5 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("addacrequirement", SV_AddACRequirement_f);
 	Cmd_AddCommand ("delacrequirement", SV_DelACRequirement_f);
 	Cmd_AddCommand ("listacrequirements", SV_ListACRequirements_f);
-
 #endif
 }

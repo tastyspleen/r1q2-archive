@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <conio.h>
 #include <process.h>
 #include <dbghelp.h>
+#include <Richedit.h>
 
 #ifdef USE_OPENSSL
 #define OPENSSLEXPORT __cdecl
@@ -96,11 +97,7 @@ char		*argv[MAX_NUM_ARGVS];
 //cvar_t	*win_priority;
 
 sizebuf_t	console_buffer;
-byte console_buff[8192];
-//int console_lines = 0;
-
-int consoleBufferPointer = 0;
-byte consoleFullBuffer[16384];
+byte		console_buff[16384];
 
 //r1: service support
 #ifdef DEDICATED_ONLY
@@ -155,7 +152,8 @@ NORETURN void Sys_Error (const char *error, ...)
 	int			ret;
 
 #ifndef DEDICATED_ONLY
-	DestroyWindow (cl_hwnd);
+	if (cl_hwnd && IsWindow (cl_hwnd))
+		DestroyWindow (cl_hwnd);
 #endif
 
 	Qcommon_Shutdown ();
@@ -478,10 +476,11 @@ void Sys_UpdateConsoleBuffer (void)
 		return;
 #endif
 
-	if (console_buffer.cursize) {
-		int len, buflen;
+	if (console_buffer.cursize)
+	{
+		int len;
 
-		buflen = console_buffer.cursize + 1024;
+		/*buflen = console_buffer.cursize + 1024;
 		
 		if (consoleBufferPointer + buflen >= sizeof(consoleFullBuffer))
 		{
@@ -500,13 +499,22 @@ void Sys_UpdateConsoleBuffer (void)
 		}
 
 		memcpy (consoleFullBuffer+consoleBufferPointer, console_buffer.data, console_buffer.cursize);
-		consoleBufferPointer += (console_buffer.cursize - 1);
+		consoleBufferPointer += (console_buffer.cursize - 1);*/
 
-		if (!Minimized) {
-			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, WM_SETTEXT, 0, (LPARAM)consoleFullBuffer);
-			len = (int)SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0);
-			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_LINESCROLL, 0, len);
+		SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
+		SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_REPLACESEL, 0, (LPARAM)console_buffer.data);
+
+		while ((len = (int)SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0)) > 1000)
+		{
+			int	line_length;
+			line_length = (int)SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_LINELENGTH, 0, 0);
+
+			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_SETSEL, 0, line_length + 1);
+			SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_REPLACESEL, 0, (LPARAM)"");
 		}
+
+		SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
+		SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, WM_VSCROLL, SB_BOTTOM, 0);
 
 		SZ_Clear (&console_buffer);
 	}
@@ -559,16 +567,11 @@ LRESULT CALLBACK ServerWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 			{
 				int minimized = (BOOL)HIWORD(wParam);
 
-				if (Minimized && !minimized) {
-					int len;
-					SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, WM_SETTEXT, 0, (LPARAM)consoleFullBuffer);
-					len = (int)SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_GETLINECOUNT, 0, 0);
-					SendDlgItemMessage (hwnd_Server, IDC_CONSOLE, EM_LINESCROLL, 0, len);
-				}
-
 				Minimized = minimized;
-				if (procShell_NotifyIcon) {
-					if (minimized && LOWORD(wParam) == WA_INACTIVE) {
+				if (procShell_NotifyIcon)
+				{
+					if (minimized && LOWORD(wParam) == WA_INACTIVE)
+					{
 						Minimized = true;
 						ShowWindow (hwnd_Server, SW_HIDE);
 						return FALSE;
@@ -719,6 +722,9 @@ void Sys_Init (void)
 			if (!global_Service)
 #endif
 			{
+				if (!LoadLibrary ("Riched20"))
+					Sys_Error ("Couldn't load RICHED20.DLL. GetLastError() = %d", GetLastError());
+
 				hwnd_Server = CreateDialog (global_hInstance, MAKEINTRESOURCE(IDD_SERVER_GUI), NULL, (DLGPROC)ServerWindowProc);
 
 				if (!hwnd_Server)
@@ -776,6 +782,8 @@ Sys_ConsoleInput
 */
 char *Sys_ConsoleInput (void)
 {
+	Sys_UpdateConsoleBuffer ();
+
 	if (!oldStyleConsole)
 	{
 		return NULL;
@@ -858,8 +866,37 @@ char *Sys_ConsoleInput (void)
 
 void Sys_ConsoleOutputOld (const char *string)
 {
-	int		dummy;
-	char	text[256];
+	int			dummy;
+	char		text[256];
+	char		cleanstring[2048];
+	const char	*p;
+	char		*s;
+
+	p = string;
+	s = cleanstring;
+
+	while (p[0])
+	{
+		if (p[0] == '\n')
+		{
+			*s++ = '\r';
+		}
+
+		//r1: strip high bits here
+		*s = (p[0]) & 127;
+
+		if (s[0] >= 32 || s[0] == '\n' || s[0] == '\t')
+			s++;
+
+		p++;
+
+		if ((s - text) >= sizeof(text)-2)
+		{
+			*s++ = '\n';
+			break;
+		}
+	}
+	s[0] = '\0';
 
 	if (console_textlen)
 	{
@@ -870,7 +907,7 @@ void Sys_ConsoleOutputOld (const char *string)
 		WriteFile(houtput, text, console_textlen+2, &dummy, NULL);
 	}
 
-	WriteFile(houtput, string, (DWORD)strlen(string), &dummy, NULL);
+	WriteFile(houtput, cleanstring, (DWORD)strlen(cleanstring), &dummy, NULL);
 
 	if (console_textlen)
 		WriteFile(houtput, console_text, console_textlen, &dummy, NULL);
@@ -928,7 +965,6 @@ void Sys_ConsoleOutput (const char *string)
 		if (p[0] == '\n')
 		{
 			*s++ = '\r';
-			//console_lines++;
 		}
 
 		//r1: strip high bits here
@@ -950,8 +986,6 @@ void Sys_ConsoleOutput (const char *string)
 	//MessageBox (NULL, text, "hi", MB_OK);
 	//if (console_buffer.cursize + strlen(text)+2 > console_buffer.maxsize)
 	SZ_Print (&console_buffer, text);
-
-	Sys_UpdateConsoleBuffer();
 	Sys_ReleaseConsoleMutex();
 }
 
@@ -1342,13 +1376,13 @@ int Sys_GetAntiCheatAPI (void)
 	//windows version check
 	if (s_win95)
 	{
-		Com_Printf ("anticheat requires Windows 2000/XP/2003.\n", LOG_GENERAL);
+		Com_Printf ("ERROR: Anticheat requires Windows 2000/XP/2003/Vista.\n", LOG_GENERAL);
 		return 0;
 	}
 
 	if (IsWow64())
 	{
-		Com_Printf ("anticheat is incompatible with 64 bit Windows.\n", LOG_GENERAL);
+		Com_Printf ("ERROR: Anticheat is currently incompatible with 64 bit Windows.\n", LOG_GENERAL);
 		return 0;
 	}
 
@@ -1363,7 +1397,11 @@ int Sys_GetAntiCheatAPI (void)
 
 reInit:
 
+#if defined(_DEBUG)
+	hAC = LoadLibrary ("anticheatd");
+#else
 	hAC = LoadLibrary ("anticheat");
+#endif
 	if (!hAC)
 		return 0;
 
@@ -2088,7 +2126,64 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
+const __int64 nano100SecInWeek= (__int64)10000000*60*60*24*7;
+const __int64 nano100SecInDay = (__int64)10000000*60*60*24;
+const __int64 nano100SecInHour= (__int64)10000000*60*60;
+const __int64 nano100SecInMin = (__int64)10000000*60;
+const __int64 nano100SecInSec = (__int64)10000000;
 
+void Sys_ProcessTimes_f (void)
+{
+	FILETIME		createTime, exitTime, kernelTime, userTime;
+	__int64			total, tmp;
+	DWORD			days, hours, mins;
+	double			seconds;
+
+	GetProcessTimes (GetCurrentProcess(), &createTime, &exitTime, &kernelTime, &userTime);
+
+	total = *(__int64 *)&kernelTime;
+
+	tmp = total / nano100SecInDay;
+	days = (DWORD)tmp;
+	total -= tmp * nano100SecInDay;
+
+	tmp = total / nano100SecInHour;
+	hours = (DWORD)tmp;
+	total -= tmp * nano100SecInHour;
+
+	tmp = total / nano100SecInMin;
+	mins = (DWORD)tmp;
+	total -= tmp * nano100SecInMin;
+
+	seconds = (double)total / (double)nano100SecInSec;
+	
+	Com_Printf ("%ud %uh %um %gs kernel\n", LOG_GENERAL, days, hours, mins, seconds);
+
+	total = *(__int64 *)&userTime;
+
+	tmp = total / nano100SecInDay;
+	days = (DWORD)tmp;
+	total -= tmp * nano100SecInDay;
+
+	tmp = total / nano100SecInHour;
+	hours = (DWORD)tmp;
+	total -= tmp * nano100SecInHour;
+
+	tmp = total / nano100SecInMin;
+	mins = (DWORD)tmp;
+	total -= tmp * nano100SecInMin;
+
+	seconds = (double)total / (double)nano100SecInSec;
+
+	Com_Printf ("%ud %uh %um %gs user\n", LOG_GENERAL, days, hours, mins, seconds);
+}
+
+static unsigned int badspins, goodspins;
+
+void Sys_Spinstats_f (void)
+{
+	Com_Printf ("%u fast spins, %u slow spins, %.2f%% slow.\n", LOG_GENERAL, goodspins, badspins, ((float)badspins / (float)(goodspins+badspins)) * 100.0f);
+}
 
 /*
 ==================
@@ -2101,13 +2196,17 @@ HINSTANCE	global_hInstance;
 //#define FLOAT2INTCAST(f)(*((int *)(&f)))
 //#define FLOAT_GT_ZERO(f) (FLOAT2INTCAST(f) > 0)
 
+extern cvar_t	*sys_loopstyle;
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 #ifndef NO_SERVER
 //	unsigned int	handle;
 #endif
     MSG				msg;
-	unsigned int				time, oldtime, newtime;
+	unsigned int	time, oldtime, newtime;
+	int				spins;
+
+	badspins = goodspins = 0;
 
     /* previous instances do not exist in Win32 */
     if (hPrevInstance)
@@ -2155,7 +2254,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			//	Sleep (1);
 			//}
 
-			while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
+			/*while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 			{
 				//if (GetMessage (&msg, NULL, 0, 0) == -1)
 				//	Com_Quit ();
@@ -2170,13 +2269,61 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	#ifndef NO_SERVER
 				}
 	#endif
-			}
+			}*/
 
-			do
+			if (dedicated->intvalue && sys_loopstyle->intvalue)
 			{
+				while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
+				{
+					//if (GetMessage (&msg, NULL, 0, 0) == -1)
+					//	Com_Quit ();
+					sys_msg_time = msg.time;
+
+		#ifndef NO_SERVER
+					if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
+					{
+		#endif
+						TranslateMessage (&msg);
+						DispatchMessage (&msg);
+		#ifndef NO_SERVER
+					}
+		#endif
+				}
 				newtime = Sys_Milliseconds ();
 				time = newtime - oldtime;
-			} while (time < 1);
+				spins = 0;
+			}
+			else
+			{
+				spins = 0;
+				do
+				{
+					while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
+					{
+						//if (GetMessage (&msg, NULL, 0, 0) == -1)
+						//	Com_Quit ();
+						sys_msg_time = msg.time;
+
+			#ifndef NO_SERVER
+						if (!hwnd_Server || !IsDialogMessage(hwnd_Server, &msg))
+						{
+			#endif
+							TranslateMessage (&msg);
+   							DispatchMessage (&msg);
+			#ifndef NO_SERVER
+						}
+			#endif
+					}
+					newtime = Sys_Milliseconds ();
+					time = newtime - oldtime;
+					spins ++;
+				} while (time < 1);
+			}
+
+			if (spins > 500)
+				badspins++;
+			else
+				goodspins++;
 
 			Qcommon_Frame (time);
 

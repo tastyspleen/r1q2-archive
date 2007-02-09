@@ -1178,7 +1178,7 @@ void PutClientInServer (edict_t *ent)
 	ent->waterlevel = 0;
 	ent->watertype = 0;
 	ent->flags &= ~FL_NO_KNOCKBACK;
-	ent->svflags &= ~SVF_DEADMONSTER;
+	ent->svflags = 0;
 
 	VectorCopy (mins, ent->mins);
 	VectorCopy (maxs, ent->maxs);

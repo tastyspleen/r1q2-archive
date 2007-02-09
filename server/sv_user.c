@@ -339,7 +339,7 @@ static void SV_New_f (void)
 			char	aliasSet[4][8];
 
 			char	aliasJunk[10][8];
-			char	randomIP[10][22];
+			char	randomIP[10][64];
 
 			for (i = 0; i < sizeof(sv_client->reconnect_var)-1; i++)
 			{
@@ -909,17 +909,21 @@ void SV_ClientBegin (client_t *cl)
 #ifdef ANTICHEAT
 	if (sv_require_anticheat->intvalue)
 	{
-		if (cl->anticheat_valid)
+		//r1: possibly kicked by game in clientbegin? check.
+		if (cl->state > cs_zombie)
 		{
-			if (cl->anticheat_file_failures)
-				SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s failed %d file check%s.\n", cl->name, cl->anticheat_file_failures, cl->anticheat_file_failures == 1 ? "" : "s");
-		}
-		else
-		{
-			if (cl->anticheat_required == ANTICHEAT_EXEMPT)
-				SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s is exempt from using anticheat.\n", cl->name);
+			if (cl->anticheat_valid)
+			{
+				if (cl->anticheat_file_failures)
+					SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s failed %d file check%s.\n", cl->name, cl->anticheat_file_failures, cl->anticheat_file_failures == 1 ? "" : "s");
+			}
 			else
-				SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s is not using anticheat.\n", cl->name);
+			{
+				if (cl->anticheat_required == ANTICHEAT_EXEMPT)
+					SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s is exempt from using anticheat.\n", cl->name);
+				else
+					SV_BroadcastPrintf (PRINT_MEDIUM, ANTICHEATMESSAGE " %s is not using anticheat.\n", cl->name);
+			}
 		}
 	}
 #endif
@@ -1492,9 +1496,9 @@ static void SV_ACList_f (void)
 	substring = Cmd_Argv (1);
 
 	SV_ClientPrintf (sv_client, PRINT_HIGH, 
-		"+----------------+--------+-----+\n"
-		"|  Player Name   |AC Valid|Files|\n"
-		"+----------------+--------+-----+\n");
+		"+----------------+--------+-----+------+\n"
+		"|  Player Name   |AC Valid|Files|Client|\n"
+		"+----------------+--------+-----+------+\n");
 
 	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 	{
@@ -1505,26 +1509,31 @@ static void SV_ACList_f (void)
 		{
 			if (cl->anticheat_valid)
 			{
-				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| %3d |\n",
-					cl->name, "   yes  ", cl->anticheat_file_failures);
+				int	index;
+				index = cl->anticheat_client_type;
+				if (index >= 6)
+					index = 0;
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| %3d |%-6s|\n",
+					cl->name, "   yes  ", cl->anticheat_file_failures, anticheat_client_names[index]);
 			}
 			else
 			{
-				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A |\n",
-					cl->name, "   NO   ");
+				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A |%6s|\n",
+					cl->name, "   NO   ", " N/A ");
 			}
 		}
 	}
 
 	SV_ClientPrintf (sv_client, PRINT_HIGH, 
-		"+----------------+--------+-----+\n");
+		"+----------------+--------+-----+------+\n");
 
-	SV_ClientPrintf (sv_client, PRINT_HIGH, "File check list in use: %s\n", antiCheatNumFileHashes ? anticheat_hashlist_name : "none");
+	if (SV_AntiCheat_IsConnected())
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "File check list in use: %s\n", antiCheatNumFileHashes ? anticheat_hashlist_name : "none");
 
 	if (sv_require_anticheat->intvalue)
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "This Quake II server is %sconnected to the anticheat server.\nFor information on anticheat, please visit http://antiche.at/\n", SV_AntiCheat_IsConnected () ? "" : "NOT ");
 	else
-		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is disabled on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is not in use on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
 }
 
 static void SV_ACInfo_f (void)

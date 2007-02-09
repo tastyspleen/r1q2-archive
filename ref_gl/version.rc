@@ -84,7 +84,7 @@ BEGIN
             VALUE "Comments", "http://www.r1ch.net/stuff/r1gl/"
             VALUE "CompanyName", "r1ch.net"
             VALUE "FileDescription", "R1GL - Enhanced OpenGL Renderer for Quake II"
-            VALUE "FileVersion", "0, 1, 5, 36"
+            VALUE "FileVersion", "0, 1, 5, 37"
             VALUE "InternalName", "r1gl"
             VALUE "LegalCopyright", "Copyright (C) 2002-2007"
             VALUE "OriginalFilename", "ref_r1gl.dll"

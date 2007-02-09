@@ -443,6 +443,7 @@ Cmd_Exec_f
 */
 void Cmd_Exec_f (void)
 {
+	const char *path;
 	char	*f, *p;
 	int	len;
 	char	f2[COMMAND_BUFFER_SIZE+2];
@@ -453,28 +454,46 @@ void Cmd_Exec_f (void)
 		return;
 	}
 
+	path = Cmd_Argv(1);
+
+	//r1: normalize
+	while ((p = strchr (path, '\\')))
+		p[0] = '/';
+
+	//r1: deny traversing outside the q2 directory
+	p = strstr (path, "../");
+	if (p)
+	{
+		p += 3;
+		if (strstr (p, "../"))
+		{
+			Com_Printf ("WARNING: Illegal config path '%s'\n", LOG_GENERAL, path);
+			return;
+		}
+	}
+
 	//r1: sanity check length first so people don't exec pak0.pak and eat 300MB ram
-	len = FS_LoadFile (Cmd_Argv(1), NULL);
+	len = FS_LoadFile (path, NULL);
 	if (len > COMMAND_BUFFER_SIZE - 2)
 	{
-		Com_Printf ("warning, %s exceeds maximum config file length\n", LOG_GENERAL, Cmd_Argv(1));
+		Com_Printf ("WARNING: %s exceeds maximum config file length\n", LOG_GENERAL, Cmd_Argv(1));
 		len = COMMAND_BUFFER_SIZE - 2;
 	}
 
-	FS_LoadFile (Cmd_Argv(1), (void **)&f);
+	FS_LoadFile (path, (void **)&f);
 	if (!f || !len)
 	{
-		Com_Printf ("couldn't exec %s\n", LOG_GENERAL, Cmd_Argv(1));
+		Com_Printf ("couldn't exec %s\n", LOG_GENERAL, path);
 		return;
 	}
 
 #ifndef DEDICATED_ONLY
 	if (Com_ServerState())
 #endif
-		Com_Printf ("execing %s\n", LOG_GENERAL, Cmd_Argv(1));
+		Com_Printf ("execing %s\n", LOG_GENERAL, path);
 #ifndef DEDICATED_ONLY
 	else
-		Com_DPrintf ("execing %s\n",Cmd_Argv(1));
+		Com_DPrintf ("execing %s\n",path);
 #endif
 
 	// the file doesn't have a trailing 0, so we need to copy it off
@@ -487,7 +506,7 @@ void Cmd_Exec_f (void)
 	f2[len+1] = 0;
 
 	if ((p = strchr(f2, '\r')) && *(p+1) != '\n')
-		Com_Printf ("WARNING: Raw \\r found in config file %s\n", LOG_GENERAL|LOG_WARNING, Cmd_Argv(1));
+		Com_Printf ("WARNING: Raw \\r found in config file %s\n", LOG_GENERAL|LOG_WARNING, path);
 
 	Cbuf_InsertText (f2);
 

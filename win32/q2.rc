@@ -69,29 +69,12 @@ EXSTYLE WS_EX_APPWINDOW
 CAPTION "r1q2 server console (hostname)"
 FONT 10, "Courier New", 0, 0, 0x0
 BEGIN
-    EDITTEXT        IDC_COMMAND,0,209,305,12,ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "Send",IDOK,307,209,50,12
-    EDITTEXT        IDC_CONSOLE,0,0,354,207,ES_MULTILINE | WS_VSCROLL
+    EDITTEXT        IDC_COMMAND,0,210,305,12,ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "Send",IDOK,307,210,50,12
+     CONTROL         "",IDC_CONSOLE,"RichEdit20A",ES_MULTILINE | 
+                    ES_AUTOVSCROLL | WS_BORDER | WS_VSCROLL | WS_TABSTOP,0,0,
+                    357,208
 END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// DESIGNINFO
-//
-
-#ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO 
-BEGIN
-    IDD_SERVER_GUI, DIALOG
-    BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 354
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 215
-    END
-END
-#endif    // APSTUDIO_INVOKED
 
 #endif    // English (U.S.) resources
 /////////////////////////////////////////////////////////////////////////////
@@ -112,8 +95,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 7,0,1,1
- PRODUCTVERSION 7,0,1,1
+ FILEVERSION 7,1,8,5
+ PRODUCTVERSION 7,1,8,5
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x3L
@@ -131,7 +114,7 @@ BEGIN
             VALUE "Comments", "http://www.r1ch.net/stuff/r1q2/"
             VALUE "CompanyName", "r1ch.net"
             VALUE "FileDescription", "R1Q2 - Enhanced Quake II Client/Server"
-            VALUE "FileVersion", "7, 0, 1, 1"
+            VALUE "FileVersion", "7, 1, 8, 5"
             VALUE "InternalName", "r1q2"
             VALUE "LegalCopyright", "Copyright (C) 2002-2004"
             VALUE "OriginalFilename", "r1q2.exe"
