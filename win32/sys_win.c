@@ -890,7 +890,7 @@ void Sys_ConsoleOutputOld (const char *string)
 
 		p++;
 
-		if ((s - text) >= sizeof(text)-2)
+		if ((s - cleanstring) >= sizeof(cleanstring)-2)
 		{
 			*s++ = '\n';
 			break;
