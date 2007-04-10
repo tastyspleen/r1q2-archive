@@ -745,7 +745,7 @@ store:
 				//max = colors[0] + colors[1] + colors[2];
 				//max /= 3;
 				if (FLOAT_NE_ZERO (gl_r1gl_test->value))
-					max = 0.289f * colors[0] + 0.587f * colors[1] + 0.114f * colors[2];
+					max = (int)(0.289f * colors[0] + 0.587f * colors[1] + 0.114f * colors[2]);
 				else
 					max = (colors[0] + colors[1] + colors[2]) / 3;
 				if (FLOAT_EQ_ZERO (gl_coloredlightmaps->value))

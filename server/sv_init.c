@@ -210,7 +210,11 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 #endif
 		cmd = Cmd_MacroExpandString("$sv_beginmapcmd");
 		if (cmd)
-			Cmd_ExecuteString (cmd);
+		{
+			Cbuf_AddText (cmd);
+			Cbuf_AddText ("\n");
+			Cbuf_Execute ();
+		}
 		else
 			Com_Printf ("WARNING: Error expanding $sv_beginmapcmd, ignored.\n", LOG_SERVER|LOG_WARNING);
 #ifndef DEDICATED_ONLY
@@ -365,6 +369,23 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 	// set serverinfo variable
 	Cvar_FullSet ("mapname", sv.name, CVAR_SERVERINFO | CVAR_NOSET);
 
+#ifndef DEDICATED_ONLY
+	if (dedicated->intvalue)
+	{
+#endif
+		cmd = Cmd_MacroExpandString("$sv_postbeginmapcmd");
+		if (cmd)
+		{
+			Cbuf_AddText (cmd);
+			Cbuf_AddText ("\n");
+			Cbuf_Execute ();
+		}
+		else
+			Com_Printf ("WARNING: Error expanding $sv_postbeginmapcmd, ignored.\n", LOG_SERVER|LOG_WARNING);
+#ifndef DEDICATED_ONLY
+	}
+#endif
+
 	Com_Printf ("-------------------------------------\n", LOG_SERVER);
 	Z_Verify("SV_SpawnServer:END");
 }
@@ -480,12 +501,6 @@ void SV_InitGame (void)
 	{
 		SV_AntiCheat_Connect ();
 		SV_AntiCheat_WaitForInitialConnect ();
-		if (SV_AntiCheat_IsConnected ())
-			Cvar_FullSet ("anticheat", sv_require_anticheat->string, CVAR_SERVERINFO | CVAR_NOSET);
-	}
-	else if (Cvar_FindVar ("anticheat"))
-	{
-		Cvar_FullSet ("anticheat", "0", CVAR_NOSET);
 	}
 #endif
 
@@ -530,7 +545,11 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	{
 		cmd = Cmd_MacroExpandString("$sv_endmapcmd");
 		if (cmd)
-			Cmd_ExecuteString (cmd);
+		{
+			Cbuf_AddText (cmd);
+			Cbuf_AddText ("\n");
+			Cbuf_Execute ();
+		}
 		else
 			Com_Printf ("WARNING: Error expanding $sv_endmapcmd, ignored.\n", LOG_SERVER|LOG_WARNING);
 	}

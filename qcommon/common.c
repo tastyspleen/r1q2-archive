@@ -134,7 +134,9 @@ char *svc_strings[256] =
 	"svc_deltapacketentities",
 	"svc_frame",
 	"svc_zpacket",
-	"svc_zdownload"
+	"svc_zdownload",
+	"svc_playerupdate",
+	"svc_setting",
 };
 
 tagmalloc_tag_t tagmalloc_tags[] =
@@ -929,26 +931,6 @@ void MSG_ReadDir (sizebuf_t *sb, vec3_t dir)
 		Com_Error (ERR_DROP, "MSG_ReadDir: out of range (%d)", b);
 	VectorCopy (bytedirs[b], dir);
 }
-
-//performs comparison on encoded byte differences - pointless sending 0.00 -> 0.01 if both end up as 0 on net.
-#define Vec_ByteCompare(v1,v2) \
-	((int)(v1[0]*8)==(int)(v2[0]*8) && \
-	(int)(v1[1]*8)==(int)(v2[1]*8) && \
-	(int)(v1[2]*8) == (int)(v2[2]*8))
-
-#define Vec_RoughCompare(v1,v2) \
-	(*(int *)&(v1[0])== *(int *)&(v2[0]) && \
-	*(int *)&(v1[1]) == *(int *)&(v2[1]) && \
-	*(int *)&(v1[2]) == *(int *)&(v2[2]))
-
-#define Float_ByteCompare(v1,v2) \
-	((int)(v1)*8==(int)(v2)*8)
-
-#define Float_RoughCompare(v1,v2) \
-	(*(int *)&(v1) == *(int *)&(v2))
-
-#define Float_AngleCompare(v1,v2) \
-	(((int)((v1)*256/360) & 255) == ((int)((v2)*256/360) & 255))
 
 unsigned long r1q2DeltaOptimizedBytes = 0;
 
@@ -2904,6 +2886,12 @@ const char *MakePrintable (const void *subject, size_t numchars)
 	char		tmp[8];
 	char		*p;
 	const byte	*s;
+
+	if (!subject)
+	{
+		strcpy (printable, "(null)");
+		return printable;
+	}
 
 	s = (const byte *)subject;
 	p = printable;

@@ -1211,6 +1211,9 @@ void SV_SendClientMessages (void)
 		if (c->state == cs_free)
 			continue;
 
+		c->last_incoming_sequence = c->netchan.incoming_sequence;
+		c->player_updates_sent = 0;
+
 		//r1: totally rewrote how reliable/datagram works. concept of overflow
 		//is now obsolete.
 

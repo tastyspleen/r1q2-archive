@@ -276,13 +276,13 @@ typedef struct
 #define	LUMP_POP			16
 #define	LUMP_AREAS			17
 #define	LUMP_AREAPORTALS	18
-#define	HEADER_LUMPS		19
+#define	MAX_LUMPS			19
 
 typedef struct
 {
 	int32		ident;
 	int32		version;	
-	lump_t		lumps[HEADER_LUMPS];
+	lump_t		lumps[MAX_LUMPS];
 } PACKED_STRUCT dheader_t;
 
 typedef struct

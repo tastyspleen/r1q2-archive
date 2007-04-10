@@ -362,6 +362,26 @@ typedef union
 #define VectorMA(a,s,b,c)		(c[0]=a[0]+(float)(s)*b[0],c[1]=a[1]+(float)(s)*b[1],c[2]=a[2]+(float)(s)*b[2])
 #define ClearBounds(mins,maxs)	(mins[0]=mins[1]=mins[2]=99999,maxs[0]=maxs[1]=maxs[2]=-99999)
 
+//performs comparison on encoded byte differences - pointless sending 0.00 -> 0.01 if both end up as 0 on net.
+#define Vec_ByteCompare(v1,v2) \
+	((int)(v1[0]*4)==(int)(v2[0]*4) && \
+	(int)(v1[1]*4)==(int)(v2[1]*4) && \
+	(int)(v1[2]*4) == (int)(v2[2]*4))
+
+#define Vec_RoughCompare(v1,v2) \
+	(*(int *)&(v1[0])== *(int *)&(v2[0]) && \
+	*(int *)&(v1[1]) == *(int *)&(v2[1]) && \
+	*(int *)&(v1[2]) == *(int *)&(v2[2]))
+
+#define Float_ByteCompare(v1,v2) \
+	((int)(v1)*8==(int)(v2)*8)
+
+#define Float_RoughCompare(v1,v2) \
+	(*(int *)&(v1) == *(int *)&(v2))
+
+#define Float_AngleCompare(v1,v2) \
+	(((int)((v1)*256/360) & 255) == ((int)((v2)*256/360) & 255))
+
 //to keep ms vc auto complete happy
 #ifdef UNDEFINED
 void CrossProduct (vec3_t v1, vec3_t v2, vec3_t cross);

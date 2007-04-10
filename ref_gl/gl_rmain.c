@@ -1435,9 +1435,9 @@ void R_Register( void )
 R_SetMode
 ==================
 */
-qboolean R_SetMode (void)
+int R_SetMode (void)
 {
-	rserr_t err;
+	int err;
 	qboolean fullscreen;
 
 	fullscreen = FLOAT_EQ_ZERO(vid_fullscreen->value) ? false : true;
@@ -1451,21 +1451,25 @@ qboolean R_SetMode (void)
 	if (FLOAT_NE_ZERO(gl_forceheight->value))
 		vid.height = (int)gl_forceheight->value;
 
-	if ( ( err = GLimp_SetMode( &vid.width, &vid.height, Q_ftol(gl_mode->value), fullscreen ) ) == rserr_ok )
+	if ( ( err = GLimp_SetMode( &vid.width, &vid.height, Q_ftol(gl_mode->value), fullscreen ) ) == VID_ERR_NONE )
 	{
 		gl_state.prev_mode = Q_ftol(gl_mode->value);
 	}
 	else
 	{
-		if ( err == rserr_invalid_fullscreen )
+		if ( err & VID_ERR_RETRY_QGL)
+		{
+			return err;
+		}
+		else if ( err & VID_ERR_FULLSCREEN_FAILED )
 		{
 			ri.Cvar_SetValue( "vid_fullscreen", 0);
 			vid_fullscreen->modified = false;
 			ri.Con_Printf( PRINT_ALL, "ref_gl::R_SetMode() - fullscreen unavailable in this mode\n" );
-			if ( ( err = GLimp_SetMode( &vid.width, &vid.height, Q_ftol(gl_mode->value), false ) ) == rserr_ok )
-				return true;
+			if ( ( err = GLimp_SetMode( &vid.width, &vid.height, Q_ftol(gl_mode->value), false ) ) == VID_ERR_NONE )
+				return VID_ERR_NONE;
 		}
-		else if ( err == rserr_invalid_mode )
+		else if ( err & VID_ERR_FAIL )
 		{
 			ri.Cvar_SetValue( "gl_mode", (float)gl_state.prev_mode );
 			gl_mode->modified = false;
@@ -1473,13 +1477,13 @@ qboolean R_SetMode (void)
 		}
 
 		// try setting it back to something safe
-		if ( ( err = GLimp_SetMode( &vid.width, &vid.height, gl_state.prev_mode, false ) ) != rserr_ok )
+		if ( ( err = GLimp_SetMode( &vid.width, &vid.height, gl_state.prev_mode, false ) ) != VID_ERR_NONE )
 		{
 			ri.Con_Printf( PRINT_ALL, "ref_gl::R_SetMode() - could not revert to safe mode\n" );
-			return false;
+			return VID_ERR_FAIL;
 		}
 	}
-	return true;
+	return VID_ERR_NONE;
 }
 
 /*
@@ -1512,12 +1516,25 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 
 	gl_overbrights->modified = false;
 
+retryQGL:
+
 	// initialize our QGL dynamic bindings
 	ri.Con_Printf (PRINT_DEVELOPER, "QGL_Init()\n");
 	if ( !QGL_Init( gl_driver->string ) )
 	{
 		QGL_Shutdown();
-        ri.Con_Printf (PRINT_ALL, "ref_gl::R_Init() - could not load \"%s\"\n", gl_driver->string );
+
+		ri.Con_Printf (PRINT_ALL, "ref_gl::R_Init() - could not load \"%s\"\n", gl_driver->string );
+
+#ifdef _WIN32
+		if (strcmp (gl_driver->string, "opengl32"))
+		{
+			ri.Con_Printf (PRINT_ALL, "ref_gl::R_Init() - retrying with gl_driver opengl32\n");
+			ri.Cvar_Set ("gl_driver", "opengl32");
+			goto retryQGL;
+		}
+#endif
+        
 		return -1;
 	}
 
@@ -1535,9 +1552,13 @@ int EXPORT R_Init( void *hinstance, void *hWnd )
 
 	// create the window and set up the context
 	ri.Con_Printf (PRINT_DEVELOPER, "R_SetMode()\n");
-	if ( !R_SetMode () )
+	err = R_SetMode ();
+	if (err != VID_ERR_NONE)
 	{
 		QGL_Shutdown();
+		if (err & VID_ERR_RETRY_QGL)
+			goto retryQGL;
+
         ri.Con_Printf (PRINT_ALL, "ref_gl::R_Init() - could not R_SetMode()\n" );
 		return -1;
 	}

@@ -60,8 +60,10 @@ static qboolean VerifyDriver( void )
 	Q_strncpy( buffer, qglGetString( GL_RENDERER ), sizeof(buffer)-1);
 	strlwr( buffer );
 	if ( strcmp( buffer, "gdi generic" ) == 0 )
+	{
 		if ( !glw_state.mcd_accelerated )
 			return false;
+	}
 	return true;
 }
 
@@ -86,7 +88,8 @@ char	OPENGL_CLASS[32];
 
 static qboolean		window_class_registered = false;
 
-qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
+qboolean init_regular (void);
+int VID_CreateWindow( int width, int height, qboolean fullscreen )
 {
 	WNDCLASS		wc;
 	RECT			r;
@@ -94,11 +97,17 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	int				stylebits;
 	int				x, y, w, h;
 	int				exstyle;
+	int				error;
 	
 	if (!window_class_registered)
 	{
+		ri.Con_Printf (PRINT_DEVELOPER, "window class is not registered\n");
 		if (GetClassInfo (glw_state.hInstance, WINDOW_CLASS_NAME, &wc))
+		{
+			ri.Con_Printf (PRINT_DEVELOPER, "q2 window class already exists, unregistering: ");
 			UnregisterClass (WINDOW_CLASS_NAME, wc.hInstance);
+			ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
+		}
 
 		/* Register the frame class */
 		wc.style         = 0;
@@ -112,10 +121,14 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		wc.lpszMenuName  = 0;
 		wc.lpszClassName = WINDOW_CLASS_NAME;
 
+		ri.Con_Printf (PRINT_DEVELOPER, "registering q2 window class: ");
 		if (!RegisterClass (&wc))
 		{
 			char	*noglMsg = "";
 			char	*msg;
+
+			ri.Con_Printf (PRINT_DEVELOPER, "failed\n");
+
 			FormatMessage (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&msg, 0, NULL);
 
 			if (Q_strncasecmp (gl_driver->string, "opengl32", 8))
@@ -123,6 +136,8 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 
 			ri.Sys_Error (ERR_FATAL, "R1GL: Couldn't register window class: %s\r\n\r\nPlease make sure you have installed the latest drivers for your video card.%s", msg, noglMsg);
 		}
+		else
+			ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
 
 		window_class_registered = true;
 	}
@@ -173,16 +188,25 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		 NULL);
 
 	if (!glw_state.hWnd)
-		ri.Sys_Error (ERR_FATAL, "Couldn't create window");
+		ri.Sys_Error (ERR_FATAL, "Couldn't create window: %d", GetLastError());
 	
 	ShowWindow( glw_state.hWnd, SW_SHOW );
 	UpdateWindow( glw_state.hWnd );
 
 	// init all the gl stuff for the window
-	if (!GLimp_InitGL ())
+	error = GLimp_InitGL ();
+
+	if (error != VID_ERR_NONE)
 	{
-		ri.Con_Printf( PRINT_ALL, "VID_CreateWindow() - GLimp_InitGL failed\n");
-		return false;
+		if (error & VID_ERR_RETRY_QGL)
+			return error;
+
+		error = init_regular ();
+		if (error != VID_ERR_NONE)
+		{
+			ri.Con_Printf( PRINT_ALL, "VID_CreateWindow() - GLimp_InitGL failed\n");
+			return error;
+		}
 	}
 
 	SetForegroundWindow( glw_state.hWnd );
@@ -206,8 +230,9 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 /*
 ** GLimp_SetMode
 */
-rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen )
+int GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen )
 {
+	int	error;
 	int width, height;
 	const char *win_fs[] = { "W", "FS" };
 
@@ -218,7 +243,7 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 	if ( !ri.Vid_GetModeInfo( &width, &height, mode ) )
 	{
 		ri.Con_Printf( PRINT_ALL, " invalid mode\n" );
-		return rserr_invalid_mode;
+		return VID_ERR_INVALID_MODE;
 	}
 
 	if (FLOAT_NE_ZERO(gl_forcewidth->value))
@@ -326,9 +351,11 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 
 			ri.Con_Printf( PRINT_ALL, "ok\n" );
 
-			if ( !VID_CreateWindow (width, height, true) )
-				return rserr_invalid_mode;
+			error = VID_CreateWindow (width, height, true);
+			if (error != VID_ERR_NONE)
+				return error;
 
+			ri.Con_Printf (PRINT_DEVELOPER, "Checking fullscreen frequencies: \n");
 			EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &fullScreenMode);
 
 			if (originalDesktopMode.dmFields & DM_DISPLAYFREQUENCY)
@@ -336,8 +363,9 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 				if (fullScreenMode.dmDisplayFrequency < bestFrequency)
 					ri.Con_Printf (PRINT_ALL, "\2NOTE: You are currently using a refresh rate of %d Hz. Your monitor can support up to %d Hz at %dx%d. Consider increasing your refresh rate for better performance by setting vid_optimalrefresh 1\n", fullScreenMode.dmDisplayFrequency, bestFrequency, fullScreenMode.dmPelsWidth, fullScreenMode.dmPelsHeight);
 			}
+			ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
 
-			return rserr_ok;
+			return VID_ERR_NONE;
 		}
 		else
 		{
@@ -376,19 +404,23 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 				*pwidth = width;
 				*pheight = height;
 				gl_state.fullscreen = false;
-				if ( !VID_CreateWindow (width, height, false) )
-					return rserr_invalid_mode;
-				return rserr_invalid_fullscreen;
+				error = VID_CreateWindow (width, height, false);
+				if (error != VID_ERR_NONE)
+				{
+					error |= VID_ERR_FULLSCREEN_FAILED;
+					return error;
+				}
 			}
 			else
 			{
 				ri.Con_Printf( PRINT_ALL, " ok\n" );
-				if ( !VID_CreateWindow (width, height, true) )
-					return rserr_invalid_mode;
+				error = VID_CreateWindow (width, height, true);
+				if (error != VID_ERR_NONE)
+					return error;
 
 				EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &fullScreenMode);
 				gl_state.fullscreen = true;
-				return rserr_ok;
+				return VID_ERR_NONE;
 			}
 		}
 	}
@@ -401,11 +433,12 @@ rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qb
 		*pwidth = width;
 		*pheight = height;
 		gl_state.fullscreen = false;
-		if ( !VID_CreateWindow (width, height, false) )
-			return rserr_invalid_mode;
+		error = VID_CreateWindow (width, height, true);
+		if (error != VID_ERR_NONE)
+			return error;
 	}
 
-	return rserr_ok;
+	return VID_ERR_NONE;
 }
 
 /*
@@ -454,10 +487,18 @@ void GLimp_Shutdown( void )
 	}
 
 	if (GetClassInfo (glw_state.hInstance, WINDOW_CLASS_NAME, &wc))
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "unregistering q2 window class: ");
 		UnregisterClass (WINDOW_CLASS_NAME, wc.hInstance);
+		ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
+	}
 
 	if (GetClassInfo (glw_state.hInstance, OPENGL_CLASS, &wc))
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "unregistering opengl class: ");
 		UnregisterClass (OPENGL_CLASS, wc.hInstance);
+		ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
+	}
 
 	window_class_registered = false;
 
@@ -483,7 +524,7 @@ qboolean GLimp_Init( void *hinstance, void *wndproc )
 	OSVERSIONINFO	vinfo;
 
 	if (!OPENGL_CLASS[0])
-		Com_sprintf (OPENGL_CLASS, sizeof(OPENGL_CLASS), "R1GLOpenGLDummyPFDWindow-%u", GetTickCount());
+		Com_sprintf (OPENGL_CLASS, sizeof(OPENGL_CLASS), "R1GLOpenGLPFD-%u", GetTickCount());
 
 	_controlfp( _PC_24, _MCW_PC );
 
@@ -679,8 +720,13 @@ BOOL RegisterOpenGLWindow(HINSTANCE hInst)
 
 	// Initialize our Window class
 	wcex.cbSize = sizeof(wcex);
+
 	if (GetClassInfoEx (hInst, OPENGL_CLASS, &wcex))
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "opengl class already exists, unregistering: ");
 		UnregisterClass (OPENGL_CLASS, wcex.hInstance);
+		ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
+	}
 
 	// register main one
 	ZeroMemory(&wcex,sizeof(wcex));
@@ -689,17 +735,22 @@ BOOL RegisterOpenGLWindow(HINSTANCE hInst)
 	wcex.cbSize			= sizeof(wcex);
 	wcex.style			= CS_OWNDC;
 	wcex.cbWndExtra		= 0; /* space for our pointer */
-	wcex.lpfnWndProc	= StupidOpenGLProc;
+	//wcex.lpfnWndProc	= StupidOpenGLProc;
+	wcex.lpfnWndProc	= DefWindowProc;
 	wcex.hbrBackground	= NULL;
 	wcex.hInstance		= hInst;
 	wcex.hCursor		= LoadCursor(NULL,IDC_ARROW);
 	wcex.lpszClassName	= OPENGL_CLASS;
 
+	ri.Con_Printf (PRINT_DEVELOPER, "registering opengl window class: ");
 	if (!RegisterClassEx (&wcex))
 	{
+		ri.Con_Printf (PRINT_DEVELOPER, "failed\n");
 		ri.Sys_Error (ERR_FATAL, "R1GL: Unable to register OpenGL window (%d).\r\n\r\nTry adding 'set vid_nowgl 1' to your baseq2/r1gl.cfg", GetLastError());
 		return FALSE;
 	}
+
+	ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
 
 	return TRUE;
 }
@@ -766,7 +817,7 @@ qboolean init_regular (void)
     if ( ( glw_state.hDC = GetDC( glw_state.hWnd ) ) == NULL )
 	{
 		ri.Con_Printf( PRINT_ALL, "GLimp_Init() - GetDC failed\n" );
-		return false;
+		return VID_ERR_FAIL;
 	}
 
 	if ( glw_state.minidriver )
@@ -774,12 +825,12 @@ qboolean init_regular (void)
 		if ( (pixelformat = qwglChoosePixelFormat( glw_state.hDC, &pfd)) == 0 )
 		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - qwglChoosePixelFormat failed\n");
-			return false;
+			return VID_ERR_FAIL;
 		}
 		if ( qwglSetPixelFormat( glw_state.hDC, pixelformat, &pfd) == FALSE )
 		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - qwglSetPixelFormat failed\n");
-			return false;
+			return VID_ERR_FAIL;
 		}
 		qwglDescribePixelFormat( glw_state.hDC, pixelformat, sizeof( pfd ), &pfd );
 	}
@@ -788,12 +839,12 @@ qboolean init_regular (void)
 		if ( ( pixelformat = ChoosePixelFormat( glw_state.hDC, &pfd)) == 0 )
 		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - ChoosePixelFormat failed\n");
-			return false;
+			return VID_ERR_FAIL;
 		}
 		if ( SetPixelFormat( glw_state.hDC, pixelformat, &pfd) == FALSE )
 		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - SetPixelFormat failed\n");
-			return false;
+			return VID_ERR_FAIL;
 		}
 		DescribePixelFormat( glw_state.hDC, pixelformat, sizeof( pfd ), &pfd );
 
@@ -844,7 +895,36 @@ qboolean init_regular (void)
 
 	if ( !VerifyDriver() )
 	{
+		const char *extraMsg;
+
 		ri.Con_Printf( PRINT_ALL, "GLimp_Init() - no hardware acceleration detected\n" );
+
+		if (strcmp (gl_driver->string, "opengl32"))
+		{
+			ri.Con_Printf( PRINT_ALL, "GLimp_Init() - trying again with gl_driver 'opengl32'\n" );
+			ri.Cvar_Set ("gl_driver", "opengl32");
+
+			if ( glw_state.hGLRC )
+			{
+				qwglDeleteContext( glw_state.hGLRC );
+				glw_state.hGLRC = NULL;
+			}
+
+			if ( glw_state.hDC )
+			{
+				ReleaseDC( glw_state.hWnd, glw_state.hDC );
+				glw_state.hDC = NULL;
+			}
+
+			return VID_ERR_RETRY_QGL;
+		}
+
+		if (GetFileAttributes("opengl32.dll") != -1)
+			extraMsg = "\r\n\r\nYou may also be getting this problem due to an invalid opengl32.dll file in your Quake II directory. Delete it and try running R1GL again.";
+		else
+			extraMsg = "";
+
+		ri.Sys_Error (ERR_FATAL, "R1GL could not setup a hardware accelerated OpenGL window.\r\n\r\nPlease check you have installed the latest drivers for your video card and that it supports OpenGL.%s", extraMsg);
 		goto fail;
 	}
 
@@ -853,7 +933,7 @@ qboolean init_regular (void)
 	*/
 	ri.Con_Printf( PRINT_ALL, "GL PFD: color(%d-bits) Z(%d-bit)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits );
 
-	return true;
+	return VID_ERR_NONE;
 
 fail:
 	if ( glw_state.hGLRC )
@@ -867,7 +947,7 @@ fail:
 		ReleaseDC( glw_state.hWnd, glw_state.hDC );
 		glw_state.hDC = NULL;
 	}
-	return false;
+	return VID_ERR_FAIL;
 }
 /*
 qboolean init_regular (void)
@@ -973,7 +1053,11 @@ fail:
 
 qboolean GLimp_InitGL (void)
 {
-    PIXELFORMATDESCRIPTOR pfd = 
+	HGLRC	hGLRC;
+	HWND	temphwnd;
+	HDC		hDC;
+
+    /*PIXELFORMATDESCRIPTOR pfd = 
 	{
 		sizeof(PIXELFORMATDESCRIPTOR),	// size of this pfd
 		1,								// version number
@@ -996,7 +1080,7 @@ qboolean GLimp_InitGL (void)
 		0, 0, 0							// layer masks ignored
     };
 
-    int  pixelformat;
+    int  pixelformat;*/
 #ifdef STEREO_SUPPORT
 	cvar_t *stereo;
 #endif
@@ -1022,36 +1106,13 @@ qboolean GLimp_InitGL (void)
 	if (FLOAT_NE_ZERO(vid_nowgl->value))
 		return init_regular ();
 
-	/*
-	** figure out if we're running on a minidriver or not
-	*/
-	//if ( strstr( gl_driver->string, "opengl32" ) != 0 )
-		glw_state.minidriver = false;
-	//else
-	//	glw_state.minidriver = true;
+	glw_state.minidriver = false;
 
 	/*
 	** Get a DC for the specified window
 	*/
 	if ( glw_state.hDC != NULL )
 		ri.Con_Printf( PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº non-NULL DC exists\n" );
-
-	if ( glw_state.minidriver )
-	{
-		ri.Con_Printf (PRINT_ALL, "WARNING: MINIDRIVER DETECTED! r1gl has not been tested with minidrivers! it may crash or completely fail to work. if you are running on 3dfx or other non-opengl compatible hardware, set vid_nowgl 1 before loading r1gl, otherwise be sure gl_driver is set to opengl32\n");
-		//ri.Sys_Error (ERR_DROP, "unsupported gl_driver");
-		if ( (pixelformat = qwglChoosePixelFormat( glw_state.hDC, &pfd)) == 0 )
-		{
-			ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº qwglChoosePixelFormat failed\n");
-			return false;
-		}
-		if ( qwglSetPixelFormat( glw_state.hDC, pixelformat, &pfd) == FALSE )
-		{
-			ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº qwglSetPixelFormat failed\n");
-			return false;
-		}
-		qwglDescribePixelFormat( glw_state.hDC, pixelformat, sizeof( pfd ), &pfd );
-	}
 
 	{
 		WORD ramps[3][256];
@@ -1085,12 +1146,15 @@ qboolean GLimp_InitGL (void)
 			ri.Cvar_Set ("gl_stencilbits", dm.dmBitsPerPel == 32 ? "8" : "0");
 	}
 
-	if (gl_colorbits->value < 24) {
-		if (FLOAT_NE_ZERO(gl_alphabits->value)) {
+	if (gl_colorbits->value < 24)
+	{
+		if (FLOAT_NE_ZERO(gl_alphabits->value))
+		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - disabling gl_alphabits with colorbits %d\n", (int)gl_colorbits->value);
 			ri.Cvar_Set ("gl_alphabits", "0");
 		}
-		if (FLOAT_NE_ZERO(gl_stencilbits->value)) {
+		if (FLOAT_NE_ZERO(gl_stencilbits->value))
+		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - disabling gl_stencilbits with colorbits %d\n", (int)gl_colorbits->value);
 			ri.Cvar_Set ("gl_stencilbits", "0");
 		}
@@ -1098,7 +1162,6 @@ qboolean GLimp_InitGL (void)
 
 	RegisterOpenGLWindow (glw_state.hInstance);
 
-	//if (1)
 	{
 		int     iAttributes[30];
 		float   fAttributes[] = {0, 0};
@@ -1129,19 +1192,20 @@ qboolean GLimp_InitGL (void)
 			0,                     // reserved 
 			0, 0, 0                // layer masks ignored 
 		};
-		HGLRC hGLRC;
 
-		HWND temphwnd =
+		temphwnd =
 			CreateWindowEx (
 				0L,OPENGL_CLASS, "R1GL OpenGL PFD Detection Window",
 				WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 1, 1,
 				glw_state.hWnd, 0, glw_state.hInstance, NULL
 			);
 
-		HDC hDC = GetDC (temphwnd);
-
 		if (!temphwnd)
 			ri.Sys_Error (ERR_FATAL, "R1GL: Couldn't create OpenGL PFD Detection Window (%d).\r\n\r\nTry 'set vid_nowgl 1' in your baseq2/r1gl.cfg.", GetLastError());
+
+		hDC = GetDC (temphwnd);
+
+		hGLRC = NULL;
 
 		// Set up OpenGL
 		pixelFormat = ChoosePixelFormat(hDC, &temppfd);
@@ -1149,47 +1213,56 @@ qboolean GLimp_InitGL (void)
 		if (!pixelFormat)
 		{
 			ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº ChoosePixelFormat (%dc/%dd/%da/%ds) failed. Error %.8x.\n", (int)gl_colorbits->value, (int)gl_depthbits->value, (int)gl_alphabits->value, (int)gl_stencilbits->value, GetLastError());
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
-			return init_regular();
+			goto fail2;
 		}
 
 		if (SetPixelFormat(hDC, pixelFormat, &temppfd) == FALSE)
 		{
 			ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº SetPixelFormat (%d) failed. Error %.8x.\n", pixelFormat, GetLastError());
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
-			return init_regular();
+			goto fail2;
 		}
 
 		// Create a rendering context
 		hGLRC = qwglCreateContext(hDC);
-		if (!hGLRC) {
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
+		if (!hGLRC)
+		{
 			ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº qwglCreateContext failed\n");
-			return init_regular();
+			goto fail2;
 		}
 
 		// Make the rendering context current
-		if (!(qwglMakeCurrent(hDC, hGLRC))) {
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
+		if (!(qwglMakeCurrent(hDC, hGLRC)))
+		{
 			ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº qwglMakeCurrent failed\n");
-			return init_regular();
+			goto fail2;
 		}
 
 		{
 			const char *s;
 			s = qglGetString( GL_RENDERER );
 
-			if (strcmp (s, "GDI Generic") == 0) {
+			if (strcmp (s, "GDI Generic") == 0)
+			{
 				ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº no hardware accelerated pixelformats matching your current settings (try editing gl_colorbits/gl_alphabits/gl_depthbits/gl_stencilbits)\n");
-				return init_regular();
+
+				// make no rendering context current
+				qwglMakeCurrent(NULL, NULL);
+
+				// Destroy the rendering context...
+				qwglDeleteContext(hGLRC);
+				hGLRC = NULL;
+				ReleaseDC (temphwnd, hDC);
+				DestroyWindow (temphwnd);
+				temphwnd = NULL;
+
+				if (strcmp (gl_driver->string, "opengl32"))
+				{
+					ri.Con_Printf (PRINT_ALL, "Retrying with gl_driver opengl32\n");
+					ri.Cvar_Set ("gl_driver", "opengl32");
+					return VID_ERR_RETRY_QGL;
+				}
+				
+				return VID_ERR_FAIL;
 			}
 			ri.Cvar_Get ("vid_renderer", s, CVAR_NOSET);
 			ri.Con_Printf (PRINT_ALL, "Getting capabilities of '%s'\n", s);
@@ -1200,29 +1273,15 @@ qboolean GLimp_InitGL (void)
 
 		if (!wglGetExtensionsStringARB || !wglGetExtensionsStringARB)
 		{
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - qwglGetProcAddress (wglGetExtensionsString) failed, falling back to regular PFD\n");
-			if (!init_regular()) {
-				ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº init_regular () failed\n");
-				return false;
-			} else {
-				return true;
-			}
+			goto fail2;
+			
 		}
 
-		if (!(init_extensions ())) {
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
+		if (!(init_extensions ()))
+		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - init_extensions () failed, falling back to regular PFD\n");
-			if (!init_regular()) {
-				ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº init_regular () failed\n");
-				return false;
-			} else {
-				return true;
-			}
+			goto fail2;
 		}
 
 		// make no rendering context current
@@ -1235,17 +1294,10 @@ qboolean GLimp_InitGL (void)
 		// Get the number of pixel format available
 		iAttributes[0] = WGL_NUMBER_PIXEL_FORMATS_ARB;
 
-		if (wglGetPixelFormatAttribivARB(hDC, 0, 0, 1, iAttributes, iResults) == GL_FALSE) {
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
+		if (wglGetPixelFormatAttribivARB(hDC, 0, 0, 1, iAttributes, iResults) == GL_FALSE)
+		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - wglGetPixelFormatAttribivARB failed, falling back to regular PFD\n");
-			if (!init_regular()) {
-				ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº init_regular () failed\n");
-				return false;
-			} else {
-				return true;
-			}
+			goto fail2;
 		}
 
 		//nPFD = iResults[0];
@@ -1280,16 +1332,8 @@ qboolean GLimp_InitGL (void)
 		// Failure happens not only when the function fails, but also when no matching pixel format has been found
 		if (status == FALSE || numFormats == 0)
 		{
-			ReleaseDC (temphwnd, hDC);
-			DestroyWindow (temphwnd);
-			temphwnd = NULL;
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - wglChoosePixelFormatARB failed, falling back to regular PFD\n");
-			if (!init_regular()) {
-				ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº init_regular () failed\n");
-				return false;
-			} else {
-				return true;
-			}
+			goto fail2;
 		}
 		else
 		{
@@ -1324,20 +1368,20 @@ qboolean GLimp_InitGL (void)
 			iAttributes[23] = WGL_SUPPORT_GDI_ARB;
 			iAttributes[24] = WGL_SUPPORT_OPENGL_ARB;
 
-			if (wglGetPixelFormatAttribivARB(hDC, pixelFormat, 0, 25, iAttributes, iResults) == GL_FALSE) {
+			if (wglGetPixelFormatAttribivARB(hDC, pixelFormat, 0, 25, iAttributes, iResults) == GL_FALSE)
+			{
 				ri.Con_Printf (PRINT_ALL, "ÇÌéíðßÉîéôÇÌ¨© Åòòïòº wglGetPixelFormatAttribivARB failed\n");
-				ReleaseDC (temphwnd, hDC);
-				DestroyWindow (temphwnd);
-				temphwnd = NULL;
-				return init_regular();
+				goto fail2;
 			}
 
 			ri.Con_Printf ( PRINT_ALL ,"R1GL PFD: %d matching formats, chose %d\n  color(%d-bits (red:%d, green:%d, blue:%d)), z(%d-bits), alpha(%d-bits), stencil(%d-bits)\n",
 				numFormats, pixelFormat, iResults[1], iResults[2], iResults[3], iResults[4], iResults[6], iResults[5], iResults[7]);
 
-			if (_is_multisample) {
+			if (_is_multisample)
+			{
 				qglEnable(GL_MULTISAMPLE_ARB);
-				if (gl_config.r1gl_GL_EXT_nv_multisample_filter_hint) {
+				if (gl_config.r1gl_GL_EXT_nv_multisample_filter_hint)
+				{
 					if (!strcmp (gl_ext_nv_multisample_filter_hint->string, "nicest"))
 						qglHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST);
 					else
@@ -1350,7 +1394,8 @@ qboolean GLimp_InitGL (void)
 					ri.Con_Printf ( PRINT_ALL ,"  multisampling (FSAA) setup FAILED.\n");
 			}
 
-			if (iResults[15] != WGL_FULL_ACCELERATION_ARB) {
+			if (iResults[15] != WGL_FULL_ACCELERATION_ARB)
+			{
 				ri.Con_Printf ( PRINT_ALL, "********** WARNING **********\npixelformat %d is NOT hardware accelerated!\n*****************************\n", pixelFormat);
 			}
 
@@ -1358,7 +1403,9 @@ qboolean GLimp_InitGL (void)
 			DestroyWindow (temphwnd);
 			temphwnd = NULL;
 
+			ri.Con_Printf (PRINT_DEVELOPER, "unregistering opengl window class: ");
 			UnregisterClass (OPENGL_CLASS, glw_state.hInstance);
+			ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
 
 			//glw_state.hDC = GetDC (glw_state.hWnd);
 			if ( ( glw_state.hDC = GetDC( glw_state.hWnd ) ) == NULL )
@@ -1400,20 +1447,26 @@ qboolean GLimp_InitGL (void)
 		gl_config.bitDepth = pfd.cColorBits;*/
 	}
 
-	
+	return VID_ERR_NONE;
 
-	
+fail2:
+	// make no rendering context current
+	qwglMakeCurrent (NULL, NULL);
 
+	// Destroy the rendering context...
+	if (hGLRC)
+	{
+		qwglDeleteContext( hGLRC);
+		hGLRC = NULL;
+	}
 
+	ReleaseDC (temphwnd, hDC);
+	DestroyWindow (temphwnd);
 
-
-
-
-
-
-
-
-	return true;
+	ri.Con_Printf (PRINT_DEVELOPER, "unregistering opengl window class: ");
+	UnregisterClass (OPENGL_CLASS, glw_state.hInstance);
+	ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
+	return VID_ERR_FAIL;
 
 fail:
 	if ( glw_state.hGLRC )
@@ -1427,7 +1480,7 @@ fail:
 		ReleaseDC( glw_state.hWnd, glw_state.hDC );
 		glw_state.hDC = NULL;
 	}
-	return false;
+	return VID_ERR_FAIL;
 }
 
 /*
@@ -1537,7 +1590,7 @@ void RestoreQ2Settings (void)
 /*
 ** GLimp_AppActivate
 */
-qboolean R_SetMode (void);
+int R_SetMode (void);
 void EXPORT GLimp_AppActivate( qboolean active )
 {
 	if ( active )

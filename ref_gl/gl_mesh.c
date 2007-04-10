@@ -698,7 +698,7 @@ void R_DrawAliasModel (entity_t *e)
 	if ( currententity->flags & RF_MINLIGHT )
 	{
 		for (i=0 ; i<3 ; i++)
-			if (shadelight[i] > 0.1)
+			if (shadelight[i] > 0.1f)
 				break;
 		if (i == 3)
 		{

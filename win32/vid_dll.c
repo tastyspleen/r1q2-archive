@@ -49,6 +49,8 @@ cvar_t		*vid_xpos;			// X coordinate of window position
 cvar_t		*vid_ypos;			// Y coordinate of window position
 cvar_t		*vid_fullscreen;
 
+cvar_t		*vid_noexceptionhandler = &uninitialized_cvar;
+
 // Global variables used internally by this module
 viddef_t	viddef;				// global video state; used by other modules
 HINSTANCE	reflib_library;		// Handle to refresh DLL 
@@ -736,6 +738,31 @@ void EXPORT Cmd_AddCommand_RefCopy (const char *cmd_name, xcommand_t function)
 	Cmd_AddCommand (newname, function);
 }
 
+DWORD VidDLLExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionInfo, char *errstr)
+{
+	WNDCLASS				wc;
+	CONTEXT					context = *exceptionInfo->ContextRecord;
+
+	if (vid_noexceptionhandler->intvalue)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	//may have left a stale window class after crashing, check
+	if (GetClassInfo (global_hInstance, "Quake 2", &wc))
+		UnregisterClass ("Quake 2", global_hInstance);
+
+	VID_FreeReflib ();
+
+	sprintf (errstr, "Exception 0x%8x at 0x%8x while initializing", exceptionCode,
+#ifdef _M_AMD64
+		context.Rip
+#else
+		context.Eip
+#endif
+	);
+
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
 /*
 ==============
 VID_LoadRefresh
@@ -745,7 +772,7 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 {
 	refimport_t		ri;
 	refimportnew_t	rx;
-
+	WNDCLASS		wc;
 	GetRefAPI_t		GetRefAPI;
 	GetExtraAPI_t	GetExtraAPI;
 	
@@ -850,16 +877,19 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 		{
 			Com_DPrintf ("re.Init failed :(\n");
 			Com_DPrintf ("gl_driver: %s\n", Cvar_VariableString ("gl_driver"));
-			//re.Shutdown();
+			re.Shutdown();
 			VID_FreeReflib ();
 			strcpy (errstr, "re.Init() failed");
+
+			//may have left a stale window class after crashing, check
+			if (GetClassInfo (global_hInstance, "Quake 2", &wc))
+				UnregisterClass ("Quake 2", global_hInstance);
+
 			return false;
 		}
 	}
-	__except (EXCEPTION_EXECUTE_HANDLER)
+	__except (VidDLLExceptionHandler (GetExceptionCode (), GetExceptionInformation(), errstr))
 	{
-		VID_FreeReflib ();
-		sprintf (errstr, "Exception 0x%8x while initializing", GetExceptionCode ());
 		return false;
 	}
 
@@ -1120,6 +1150,8 @@ void VID_Init (void)
 	
 	win_noalttab->changed = VID_AltTab_Modified;
 	win_noalttab->changed (win_noalttab, win_noalttab->string, win_noalttab->string);
+
+	vid_noexceptionhandler = Cvar_Get ("vid_noexceptionhandler", "0", 0);
 
 	/*
 	** this is a gross hack but necessary to clamp the mode for 3Dfx

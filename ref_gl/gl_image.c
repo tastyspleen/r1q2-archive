@@ -433,6 +433,44 @@ PCX LOADING
 =================================================================
 */
 
+qboolean GetPCXInfo (const char *filename, int *width, int *height)
+{
+	if (rx.FS_FOpenFile)
+	{
+		pcx_t		pcx;
+		FILE		*fh;
+		qboolean	closeFile;
+
+		rx.FS_FOpenFile (filename, &fh, HANDLE_OPEN, &closeFile);
+		if (!fh)
+			return false;
+
+		rx.FS_Read (&pcx, sizeof(pcx), fh);
+
+		*width = pcx.xmax + 1;
+		*height = pcx.ymax + 1;
+
+		if (closeFile)
+			rx.FS_FCloseFile (fh);
+	}
+	else
+	{
+		pcx_t	*pcx;
+		byte	*raw;
+
+		ri.FS_LoadFile (filename, (void **)&raw);
+		if (!raw)
+			return false;
+
+		pcx = (pcx_t *)raw;
+
+		*width = pcx->xmax + 1;
+		*height = pcx->ymax + 1;
+
+		ri.FS_FreeFile (raw);
+	}
+	return true;
+}
 
 /*
 ==============
@@ -2201,7 +2239,7 @@ nonscrap:
 		}
 		else
 		{
-			ri.Con_Printf (PRINT_DEVELOPER, "Warning, texture '%s' has hi-res replacement smaller than the original! (%d x %d) < (%d x %d)\n", name, image->width, image->height, global_hax_texture_x, global_hax_texture_y);
+			ri.Con_Printf (PRINT_DEVELOPER, "Warning, image '%s' has hi-res replacement smaller than the original! (%d x %d) < (%d x %d)\n", name, image->width, image->height, global_hax_texture_x, global_hax_texture_y);
 		}	
 	}
 
@@ -2352,7 +2390,18 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 	if (!strcmp(name+len-4, ".pcx"))
 	{
 		static char png_name[MAX_QPATH];
+
 		memcpy (png_name, name, len+1);
+
+		if (type == it_pic)
+		{
+			if (!GetPCXInfo (name, &global_hax_texture_x, &global_hax_texture_y))
+			{
+				global_hax_texture_x = global_hax_texture_y = 0;
+				ri.Con_Printf (PRINT_ALL, "Missing PCX file: %s\n", name);
+			}
+		}
+
 		if (load_tga_pics)
 		{
 			//png_name[len-3] = 't';

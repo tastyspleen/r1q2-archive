@@ -147,17 +147,6 @@ do { \
 	if ((x)[2] > (maxv)) (x)[2] = (maxv); else if ((x)[2] < (minv)) x[2] = (minv); \
 } while(0)
 
-//performs comparison on encoded byte differences - pointless sending 0.00 -> 0.01 if both end up as 0 on net.
-#define Vec_ByteCompare(v1,v2) \
-	((int)(v1[0]*4)==(int)(v2[0]*4) && \
-	(int)(v1[1]*4)==(int)(v2[1]*4) && \
-	(int)(v1[2]*4) == (int)(v2[2]*4))
-
-#define Vec_RoughCompare(v1,v2) \
-	(*(int *)&(v1[0])== *(int *)&(v2[0]) && \
-	*(int *)&(v1[1]) == *(int *)&(v2[1]) && \
-	*(int *)&(v1[2]) == *(int *)&(v2[2]))
-
 /*
 =============
 SV_WritePlayerstateToClient
@@ -686,6 +675,95 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	return extraflags;
 }
 
+void SV_SendPlayerUpdates (int msec_to_next_frame)
+{
+	client_t		*cl, *target;
+	client_frame_t	*frame;
+	entity_state_t	*ent;
+	int				framenum, i, interval;
+	unsigned		requested;
+	sizebuf_t		buff;
+	byte			playerbuff[1024];
+	qboolean		wrote;
+
+	if (!sv_max_player_updates->intvalue)
+		return;
+
+	framenum = sv.framenum + sv.randomframe;
+
+	SZ_Init (&buff, playerbuff, sizeof(playerbuff));
+	buff.allowoverflow = true;
+
+	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+	{
+		if (cl->state != cs_spawned)
+			continue;
+
+		if (cl->protocol != PROTOCOL_R1Q2)
+			continue;
+
+		requested = cl->settings[CLSET_PLAYERUPDATE_REQUESTS];
+
+		if (!requested)
+			continue;
+
+		if (requested > sv_max_player_updates->intvalue)
+			requested = sv_max_player_updates->intvalue;
+
+		//due to timer inaccuracies this can happen
+		if (cl->player_updates_sent == requested)
+			continue;
+
+		requested++;
+
+		interval = 100 / requested; 
+		if ((100 - msec_to_next_frame) / interval > cl->player_updates_sent)
+		{
+			cl->player_updates_sent = (100 - msec_to_next_frame) / interval;
+
+			Com_DPrintf ("sending update to %s (%d for %d)\n", cl->name, msec_to_next_frame, cl->player_updates_sent);
+
+			buff.cursize = 0;
+			wrote = false;
+
+			frame = &cl->frames[framenum & UPDATE_MASK];
+
+			for (i = 0; i < frame->num_entities; i++)
+			{
+				ent = &svs.client_entities[(frame->first_entity+i)%svs.num_client_entities];
+				if (ent->number <= maxclients->intvalue)
+				{
+					target = svs.clients + ent->number - 1;
+					if (target != cl)
+					{
+						if (!wrote)
+						{
+							MSG_BeginWriting (svc_playerupdate);
+							wrote = true;
+						}
+						MSG_WritePos (target->edict->s.origin);
+					}
+				}
+			}
+
+			if (wrote)
+				MSG_EndWriting (&buff);
+
+			if (buff.cursize && !buff.overflowed)
+			{
+				unsigned	real_sequence;
+
+				//im so very sorry... but we can't let the client know we've received their usercmd
+				//until we send out the playerstate to them, or cl prediction screws up since it
+				//acts on stuff we've never sent
+				real_sequence = cl->netchan.incoming_sequence;
+				cl->netchan.incoming_sequence = cl->last_incoming_sequence;
+				Netchan_Transmit (&cl->netchan, buff.cursize, buff.data);
+				cl->netchan.incoming_sequence = real_sequence;
+			}
+		}
+	}
+}
 
 /*
 ==================

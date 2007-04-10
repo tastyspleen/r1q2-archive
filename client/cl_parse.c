@@ -1080,8 +1080,20 @@ void CL_ParseStartSoundPacket(void)
 	S_StartSound (pos, ent, channel, cl.sound_precache[sound_num], volume, attenuation, ofs);
 }       
 
+static void CL_ParseSetting (void)
+{
+	uint32	setting, value;
 
-void SHOWNET(char *s)
+	setting = MSG_ReadLong (&net_message);
+	value = MSG_ReadLong (&net_message);
+
+	if (setting >= SVSET_MAX)
+		return;
+
+	cl.settings[setting] = value;
+}
+
+void SHOWNET(const char *s)
 {
 	if (cl_shownet->intvalue>=2)
 		Com_Printf ("%3i:%s\n", LOG_CLIENT, net_message.readcount-1, s);
@@ -1092,12 +1104,12 @@ void SHOWNET(char *s)
 CL_ParseServerMessage
 =====================
 */
-void CL_ParseServerMessage (void)
+qboolean CL_ParseServerMessage (void)
 {
 	int			cmd, extrabits;
 	char		*s;
 	int			i, oldReadCount;
-	qboolean	gotFrame;
+	qboolean	gotFrame, ret;
 
 //
 // if recording demos, copy the message out
@@ -1109,6 +1121,7 @@ void CL_ParseServerMessage (void)
 
 	serverPacketCount++;
 	gotFrame = false;
+	ret = true;
 
 //
 // parse the message
@@ -1274,7 +1287,7 @@ void CL_ParseServerMessage (void)
 		case svc_serverdata:
 			Cbuf_Execute ();		// make sure any stuffed commands are done
 			if (!CL_ParseServerData ())
-				return;
+				return true;
 			CL_WriteDemoMessage (net_message.data + oldReadCount, net_message.readcount - oldReadCount, false);
 			break;
 			
@@ -1321,6 +1334,16 @@ void CL_ParseServerMessage (void)
 		case svc_zdownload:
 			CL_ParseDownload(true);
 			break;
+
+		case svc_playerupdate:
+			gotFrame = true;
+			ret = false;
+			CL_ParsePlayerUpdate ();
+			break;
+
+		case svc_setting:
+			CL_ParseSetting ();
+			break;
 		// ************** r1q2 specific END ******************
 
 		default:
@@ -1355,4 +1378,6 @@ void CL_ParseServerMessage (void)
 		noFrameFromServerPacket++;
 	else
 		noFrameFromServerPacket = 0;
+
+	return ret;
 }

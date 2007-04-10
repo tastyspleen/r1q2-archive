@@ -824,13 +824,19 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 
 			if (sv_anticheat_client_disconnect_action->intvalue == 1)
 			{
-				SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server.\n", cl->name);
+				if (cl->state == cs_spawned)
+					SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server.\n", cl->name);
+				else
+					SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " Your connection to the anticheat server was lost.\n");
 				SV_DropClient (cl, true);
 				return;
 			}
 			else
 			{
-				SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server, client is no longer valid.\n", cl->name);
+				if (cl->state == cs_spawned)
+					SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server, client is no longer valid.\n", cl->name);
+				else
+					SV_ClientPrintf (cl, PRINT_HIGH, ANTICHEATMESSAGE " Your connection to the anticheat server was lost.\n");
 				cl->anticheat_valid = false;
 			}
 		}
@@ -1021,6 +1027,8 @@ static void SV_AntiCheat_ParseReady (void)
 	anticheat_ready = true;
 	retryBackOff = DEFAULT_BACKOFF;
 	Com_Printf ("ANTICHEAT: Ready to serve anticheat clients.\n", LOG_ANTICHEAT);
+
+	Cvar_FullSet ("anticheat", sv_require_anticheat->string, CVAR_SERVERINFO | CVAR_NOSET);
 }
 
 static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
@@ -1468,6 +1476,12 @@ void SVCmd_SVACInvalidate_f (void)
 {
 	client_t	*cl;
 
+	if (!svs.initialized)
+	{
+		Com_Printf ("No server running.\n", LOG_GENERAL);
+		return;
+	}
+
 	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 	{
 		if (cl->state > cs_connected)
@@ -1479,6 +1493,12 @@ void SVCmd_SVACInvalidate_f (void)
 
 void SVCmd_SVACUpdate_f (void)
 {
+	if (!svs.initialized)
+	{
+		Com_Printf ("No server running.\n", LOG_GENERAL);
+		return;
+	}
+
 	SV_AntiCheat_SendFileAndCvarChecks ();
 	Com_Printf ("Anticheat configuration updated.\n", LOG_GENERAL);
 }
@@ -1521,7 +1541,7 @@ void SVCmd_SVACList_f (void)
 			else
 			{
 				Com_Printf ("|%-16s|%s| N/A | N/A  |\n", LOG_GENERAL,
-					cl->name, "   NO   ");
+					cl->name, cl->anticheat_required == ANTICHEAT_EXEMPT ? " exempt " : "   NO   ");
 			}
 		}
 	}
@@ -1925,6 +1945,8 @@ void SV_AntiCheat_Disconnect (void)
 	acSocket = 0;
 	retryTime = 0;
 	anticheat_ready = false;
+
+	Cvar_FullSet ("anticheat", "0", CVAR_NOSET);
 }
 
 qboolean SV_AntiCheat_IsConnected (void)

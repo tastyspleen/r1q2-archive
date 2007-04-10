@@ -64,6 +64,18 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 		return;
 	}
 
+	//r1: workaround some buggy mods methods of disconnecting players
+	if (sv_disconnect_hack->intvalue)
+	{
+		if ((MSG_GetLength () == 1 && MSG_GetData()[0] == svc_disconnect) ||
+			(MSG_GetLength () > 11 && MSG_GetData()[0] == svc_stufftext && !strncmp (MSG_GetData()+1, "disconnect\n", 11)))
+		{
+			MSG_FreeData ();
+			Com_Printf ("Dropping %s, sv_disconnect_hack\n", LOG_SERVER, client->name);
+			SV_DropClient (client, true);
+			return;
+		}
+	}
 	SV_AddMessage (client, reliable);
 }
 
@@ -309,12 +321,22 @@ void EXPORT PF_Configstring (int index, char *val)
 {
 	char	safestring[MAX_QPATH];
 	size_t	length;
+			
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
 		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)", index, MakePrintable(val, 0));
 
 	if (!val)
 		val = "";
+
+	if (sv.state == ss_dead)
+	{
+		if (sv_gamedebug->intvalue)
+			Com_Printf ("GAME WARNING: configstring index %i (%s) set before server startup will not be saved.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
+
+		if (sv_gamedebug->intvalue >= 1)
+			Sys_DebugBreak ();
+	}
 
 	//r1: note, only checking up to maxclients. some mod authors are unaware of CS_GENERAL
 	//and override playerskins with custom info, ugh :(

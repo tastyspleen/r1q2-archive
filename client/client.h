@@ -272,6 +272,10 @@ typedef struct client_state_s
 
 	byte			demoFrame[1400];
 	sizebuf_t		demoBuff;
+
+	unsigned		settings[SVSET_MAX];
+	int				player_update_time;
+	float			playerlerp;
 } client_state_t;
 
 extern	client_state_t	cl;
@@ -449,6 +453,7 @@ extern	cvar_t	*cl_http_max_connections;
 
 extern	cvar_t	*cl_original_dlights;
 extern	cvar_t	*cl_default_location;
+extern	cvar_t	*cl_player_updates;
 
 extern	cvar_t	*fov;
 
@@ -697,13 +702,13 @@ void CL_Record_f (void);
 extern	int	serverPacketCount;
 extern	int noFrameFromServerPacket;
 
-void CL_ParseServerMessage (void);
+qboolean CL_ParseServerMessage (void);
 void CL_LoadClientinfo (clientinfo_t *ci, char *s);
-void SHOWNET(char *s);
+void SHOWNET(const char *s);
 void CL_ParseClientinfo (int player);
 void CL_Download_f (void);
 void CL_Passive_f (void);
-
+void CL_ParsePlayerUpdate (void);
 //
 // cl_view.c
 //

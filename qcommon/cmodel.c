@@ -121,6 +121,7 @@ int		c_traces, c_brush_traces;
 */
 
 byte	*cmod_base;
+int		cmod_size;
 
 /*
 =================
@@ -392,14 +393,17 @@ void CMod_LoadLeafBrushes (lump_t *l)
 	int			count;
 	
 	in = (void *)(cmod_base + l->fileofs);
+
 	if (l->filelen % sizeof(*in))
 		Com_Error (ERR_DROP, "CMod_LoadLeafBrushes: funny lump size");
+
 	count = l->filelen / sizeof(*in);
 
 	if (count < 1)
 		Com_Error (ERR_DROP, "Map with no planes");
+
 	// need to save space for box planes
-	if (count > MAX_MAP_LEAFBRUSHES)
+	if (count >= MAX_MAP_LEAFBRUSHES)
 		Com_Error (ERR_DROP, "Map has too many leafbrushes");
 
 	out = map_leafbrushes;
@@ -486,7 +490,7 @@ CMod_LoadAreaPortals
 */
 void CMod_LoadAreaPortals (lump_t *l)
 {
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if Q_BIGENDIAN
 	int			i;
 #endif
 	dareaportal_t		*out;
@@ -505,7 +509,7 @@ void CMod_LoadAreaPortals (lump_t *l)
 	out = map_areaportals;
 	numareaportals = count;
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if Q_BIGENDIAN
 	for ( i=0 ; i<count ; i++, in++, out++)
 	{
 		out->portalnum = LittleLong (in->portalnum);
@@ -523,7 +527,7 @@ CMod_LoadVisibility
 */
 void CMod_LoadVisibility (lump_t *l)
 {
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if Q_BIGENDIAN
 	int		i;
 #endif
 
@@ -533,7 +537,7 @@ void CMod_LoadVisibility (lump_t *l)
 
 	memcpy (map_visibility, cmod_base + l->fileofs, l->filelen);
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+#if Q_BIGENDIAN
 	map_vis->numclusters = LittleLong (map_vis->numclusters);
 	for (i=0 ; i<map_vis->numclusters ; i++)
 	{
@@ -587,9 +591,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 {
 	char			newname[MAX_QPATH];
 	byte			*buf;
-#if YOU_HAVE_A_BROKEN_COMPUTER
 	int				i;
-#endif
 	dheader_t		header;
 	uint32			length;
 	uint32			override_bits;
@@ -747,7 +749,22 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 
 	header = *(dheader_t *)buf;
 
-#if YOU_HAVE_A_BROKEN_COMPUTER
+	cmod_base = (byte *)buf;
+	cmod_size = length;
+
+	//r1: check header pointers point within allocated data
+	for (i = 0; i < MAX_LUMPS; i++)
+	{
+		//for some reason there are unused lumps with invalid values
+		if (i == LUMP_POP)
+			continue;
+
+		if (header.lumps[i].fileofs < 0 || header.lumps[i].filelen < 0 ||
+			header.lumps[i].fileofs + header.lumps[i].filelen > cmod_size)
+			Com_Error (ERR_DROP, "CM_LoadMap: lump %d offset %d of size %d is out of bounds\n%s is probably truncated or otherwise corrupted", i, header.lumps[i].fileofs, header.lumps[i].filelen, name);
+	}
+
+#if Q_BIGENDIAN
 	for (i=0 ; i<sizeof(dheader_t)/4 ; i++)
 		((int *)&header)[i] = LittleLong ( ((int *)&header)[i]);
 #endif
@@ -759,8 +776,6 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 		Com_Error (ERR_DROP, "CM_LoadMap: %s has wrong version number (%i should be %i)"
 		, name, header.version, BSPVERSION);
 	}
-
-	cmod_base = (byte *)buf;
 
 	// load into heap
 	// FIXME: any of these functions can Com_Error, we need to free buf.

@@ -150,6 +150,7 @@ cvar_t	*cl_test2;
 
 cvar_t	*cl_original_dlights;
 cvar_t	*cl_default_location = &uninitialized_cvar;
+cvar_t	*cl_player_updates;
 
 #ifdef NO_SERVER
 cvar_t	*allow_download;
@@ -658,7 +659,7 @@ CL_Pause_f
 void CL_Pause_f (void)
 {
 	// never pause in multiplayer
-	if (Cvar_IntValue ("maxclients") > 1 || !Com_ServerState ())
+	if (!cl.attractloop && (Cvar_IntValue ("maxclients") > 1 || !Com_ServerState ()))
 	{
 		Cvar_Set ("paused", "0");
 		return;
@@ -1329,7 +1330,12 @@ void CL_Changing_f (void)
 
 	cmd = Cmd_MacroExpandString("$cl_endmapcmd");
 	if (cmd)
-		Cmd_ExecuteString (cmd);
+	{
+		//note, can't use Cmd_ExecuteString as it doesn't handle ;
+		Cbuf_AddText (cmd);
+		Cbuf_AddText ("\n");
+		Cbuf_Execute ();
+	}
 	else
 		Com_Printf ("WARNING: Error expanding $cl_endmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
 
@@ -1949,12 +1955,13 @@ void CL_ReadPackets (void)
 				Com_Printf ("r", LOG_CLIENT);
 		}
 
-		CL_ParseServerMessage ();
+		if (CL_ParseServerMessage ())
+		{
+			CL_AddNetgraph ();
 
-		CL_AddNetgraph ();
-
-		if (scr_sizegraph->intvalue)
-			CL_AddSizegraph ();
+			if (scr_sizegraph->intvalue)
+				CL_AddSizegraph ();
+		}
 
 		//
 		// we don't know if it is ok to save a demo message until
@@ -3007,6 +3014,11 @@ skipplayer:;
 		MSG_WriteShort (CLSET_NOGUN);
 		MSG_WriteShort (cl_gun->intvalue ? 0 : 1);
 		MSG_EndWriting (&cls.netchan.message);
+
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_PLAYERUPDATE_REQUESTS);
+		MSG_WriteShort (cl_player_updates->intvalue);
+		MSG_EndWriting (&cls.netchan.message);
 	}
 
 	MSG_WriteByte (clc_stringcmd);
@@ -3015,7 +3027,11 @@ skipplayer:;
 
 	cmd = Cmd_MacroExpandString("$cl_beginmapcmd");
 	if (cmd)
-		Cmd_ExecuteString (cmd);
+	{
+		Cbuf_AddText (cmd);
+		Cbuf_AddText ("\n");
+		Cbuf_Execute ();
+	}
 	else
 		Com_Printf ("WARNING: Error expanding $cl_beginmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
 
@@ -3278,6 +3294,25 @@ void _gun_changed (cvar_t *c, char *old, char *new)
 	}
 }
 
+void _player_updates_changed (cvar_t *c, char *old, char *new)
+{
+	if (c->intvalue > 10)
+		Cvar_Set (c->name, "10");
+	else if (c->intvalue < 0)
+		Cvar_Set (c->name, "0");
+
+	if (cls.state >= ca_connected && cls.serverProtocol == PROTOCOL_R1Q2)
+	{	
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_PLAYERUPDATE_REQUESTS);
+		MSG_WriteShort (cl_player_updates->intvalue);
+		MSG_EndWriting (&cls.netchan.message);
+	}
+
+	if (c->intvalue == 0)
+		cl.player_update_time = 0;
+}
+
 /*
 =================
 CL_InitLocal
@@ -3409,6 +3444,14 @@ void CL_InitLocal (void)
 	cl_original_dlights = Cvar_Get ("cl_original_dlights", "1", 0);
 
 	cl_default_location = Cvar_Get ("cl_default_location", "", 0);
+
+#ifdef _DEBUG
+	cl_player_updates = Cvar_Get ("cl_player_updates", "0", 0);
+#else
+	cl_player_updates = Cvar_Get ("cl_player_updates", "0", CVAR_NOSET);
+#endif
+
+	cl_player_updates->changed = _player_updates_changed;
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "1", CVAR_ARCHIVE);
@@ -3605,6 +3648,10 @@ void _cheatcvar_changed (cvar_t *cvar, char *oldValue, char *newValue)
 {
 	int			i;
 	cheatvar_t	*var;
+
+#ifdef _DEBUG
+	return;
+#endif
 
 	if (cls.state == ca_disconnected || cl.attractloop || Com_ServerState() == ss_demo || cl.maxclients == 1)
 		return;		// single player can cheat
@@ -3887,8 +3934,8 @@ void CL_Frame (int msec)
 #endif
 
 #ifdef _DEBUG
-	if (!ActiveApp)
-		NET_Client_Sleep (50);
+	//if (!ActiveApp)
+		//NET_Client_Sleep (50);
 
 	if (dbg_framesleep->intvalue)
 		Sys_Sleep (dbg_framesleep->intvalue);

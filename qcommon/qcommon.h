@@ -360,6 +360,8 @@ enum svc_ops_e
 	// ********** r1q2 specific ***********
 	svc_zpacket,
 	svc_zdownload,
+	svc_playerupdate,
+	svc_setting,
 	// ********** end r1q2 specific *******
 
 	svc_max_enttypes
@@ -370,8 +372,15 @@ typedef enum
 	CLSET_NOGUN,
 	CLSET_NOBLEND,
 	CLSET_RECORDING,
+	CLSET_PLAYERUPDATE_REQUESTS,
 	CLSET_MAX
 } clientsetting_t;
+
+typedef enum
+{
+	SVSET_PLAYERUPDATES,
+	SVSET_MAX
+} serversetting_t;
 
 //==============================================
 

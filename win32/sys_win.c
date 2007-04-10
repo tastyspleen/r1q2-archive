@@ -165,7 +165,7 @@ NORETURN void Sys_Error (const char *error, ...)
 	text[sizeof(text)-1] = 0;
 
 	if (strlen(text) < 900)
-		strcat (text, "\n\nWould you like to debug? (DEVELOPERS ONLY!)\n");
+		strcat (text, "\r\n\r\nWould you like to debug? (DEVELOPERS ONLY!)\n");
 
 rebox:;
 
@@ -657,6 +657,9 @@ void Sys_Init (void)
 	OSVERSIONINFO	vinfo;
 
 	timeBeginPeriod( 1 );
+
+	//initializes base time
+	Sys_Milliseconds ();
 
 	vinfo.dwOSVersionInfoSize = sizeof(vinfo);
 
@@ -1873,7 +1876,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	InstructionPtr = context.Rip;
 	frame.AddrPC.Offset = InstructionPtr;
 	frame.AddrFrame.Offset = context.Rbp;
-	frame.AddrPC.Offset = context.Rsp;
+	frame.AddrStack.Offset = context.Rsp;
 #else
 	InstructionPtr = context.Eip;
 	frame.AddrPC.Offset = InstructionPtr;

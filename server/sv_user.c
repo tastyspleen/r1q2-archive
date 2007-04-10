@@ -1493,45 +1493,47 @@ static void SV_ACList_f (void)
 	client_t	*cl;
 	const char	*substring;
 
-	substring = Cmd_Argv (1);
-
-	SV_ClientPrintf (sv_client, PRINT_HIGH, 
-		"+----------------+--------+-----+------+\n"
-		"|  Player Name   |AC Valid|Files|Client|\n"
-		"+----------------+--------+-----+------+\n");
-
-	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+	if (sv_require_anticheat->intvalue)
 	{
-		if (cl->state < cs_spawned)
-			continue;
+		substring = Cmd_Argv (1);
 
-		if (!substring[0] || strstr (cl->name, substring))
+		SV_ClientPrintf (sv_client, PRINT_HIGH, 
+			"+----------------+--------+-----+------+\n"
+			"|  Player Name   |AC Valid|Files|Client|\n"
+			"+----------------+--------+-----+------+\n");
+
+		for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
 		{
-			if (cl->anticheat_valid)
+			if (cl->state < cs_spawned)
+				continue;
+
+			if (!substring[0] || strstr (cl->name, substring))
 			{
-				int	index;
-				index = cl->anticheat_client_type;
-				if (index >= 6)
-					index = 0;
-				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| %3d |%-6s|\n",
-					cl->name, "   yes  ", cl->anticheat_file_failures, anticheat_client_names[index]);
-			}
-			else
-			{
-				SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A |%6s|\n",
-					cl->name, "   NO   ", " N/A ");
+				if (cl->anticheat_valid)
+				{
+					int	index;
+					index = cl->anticheat_client_type;
+					if (index >= 6)
+						index = 0;
+					SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| %3d |%-6s|\n",
+						cl->name, "   yes  ", cl->anticheat_file_failures, anticheat_client_names[index]);
+				}
+				else
+				{
+					SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A |%6s|\n",
+						cl->name, "   NO   ", " N/A ");
+				}
 			}
 		}
-	}
 
-	SV_ClientPrintf (sv_client, PRINT_HIGH, 
-		"+----------------+--------+-----+------+\n");
+		SV_ClientPrintf (sv_client, PRINT_HIGH, 
+			"+----------------+--------+-----+------+\n");
 
-	if (SV_AntiCheat_IsConnected())
-		SV_ClientPrintf (sv_client, PRINT_HIGH, "File check list in use: %s\n", antiCheatNumFileHashes ? anticheat_hashlist_name : "none");
+		if (SV_AntiCheat_IsConnected())
+			SV_ClientPrintf (sv_client, PRINT_HIGH, "File check list in use: %s\n", antiCheatNumFileHashes ? anticheat_hashlist_name : "none");
 
-	if (sv_require_anticheat->intvalue)
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "This Quake II server is %sconnected to the anticheat server.\nFor information on anticheat, please visit http://antiche.at/\n", SV_AntiCheat_IsConnected () ? "" : "NOT ");
+	}
 	else
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is not in use on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
 }
@@ -1543,6 +1545,12 @@ static void SV_ACInfo_f (void)
 	const char			*filesubstring;
 	client_t			*cl;
 	linkednamelist_t	*bad;
+
+	if (!sv_require_anticheat->intvalue)
+	{
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "The anticheat module is not in use on this server.\nFor information on anticheat, please visit http://antiche.at/\n");
+		return;
+	}
 
 	if (Cmd_Argc() == 1)
 	{
@@ -1592,6 +1600,12 @@ static void SV_ACInfo_f (void)
 			SV_ClientPrintf (sv_client, PRINT_HIGH, "Player is not active.\n");
 			return;
 		}
+	}
+
+	if (!cl->anticheat_valid)
+	{
+		SV_ClientPrintf (sv_client, PRINT_HIGH, "%s is not using anticheat.\n", cl->name);
+		return;
 	}
 
 	bad = &cl->anticheat_bad_files;
@@ -2385,6 +2399,8 @@ USER CMD EXECUTION
 */
 static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 {
+	qboolean	interpolate;
+
 	cl->commandMsec -= cmd->msec;
 
 	cl->totalMsecUsed += cmd->msec;
@@ -2392,7 +2408,52 @@ static void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 	if (cl->commandMsec < 0 && sv_enforcetime->intvalue)
 		return;
 
+	interpolate = false;
+
+	//r1: interpolate the move over the msec to smooth out
+	//laggy players. if ClientThink messes with origin in non-obvious
+	//way (eg teleport (which it shouldn't(?))) then this may break
+	if (sv_interpolated_pmove->intvalue)
+	{
+		//old move didn't complete in time, finish it immediately
+		if (cl->current_move.elapsed < cl->current_move.msec)
+		{
+			FastVectorCopy (cl->current_move.origin_end, cl->edict->s.origin);
+			SV_LinkEdict (cl->edict);
+		}
+
+		if (cmd->msec >= sv_interpolated_pmove->intvalue)
+		{
+			cl->current_move.msec = cmd->msec;
+			cl->current_move.elapsed = 0;
+			FastVectorCopy (cl->edict->s.origin, cl->current_move.origin_start);
+			interpolate = true;
+		}
+		else
+			cl->current_move.elapsed = cl->current_move.msec = cmd->msec;
+	}
+
 	ge->ClientThink (cl->edict, cmd);
+
+	if (interpolate)
+	{
+		float	length;
+		vec3_t	move;
+
+		VectorSubtract (cl->edict->s.origin, cl->current_move.origin_start, move);
+
+		length = VectorLength (move);
+
+		//try to avoid if a teleport or such happened
+		if (cl->edict->s.event || length > 600)
+			cl->current_move.elapsed = cmd->msec;
+		else
+		{
+			FastVectorCopy (cl->edict->s.origin, cl->current_move.origin_end);
+			FastVectorCopy (cl->current_move.origin_start, cl->edict->s.origin);
+			SV_LinkEdict (cl->edict);
+		}
+	}
 }
 
 static void SV_SetClientSetting (client_t *cl)
@@ -2406,6 +2467,20 @@ static void SV_SetClientSetting (client_t *cl)
 	//unknown settings are ignored
 	if (setting >= CLSET_MAX)
 		return;
+
+	switch (setting)
+	{
+		case CLSET_PLAYERUPDATE_REQUESTS:
+			if (value > sv_max_player_updates->intvalue)
+				value = sv_max_player_updates->intvalue;
+
+			//confirm to client
+			MSG_BeginWriting (svc_setting);
+			MSG_WriteLong (SVSET_PLAYERUPDATES);
+			MSG_WriteLong (value);
+			SV_AddMessage (cl, true);
+			break;
+	}
 
 	cl->settings[setting] = value;
 }
@@ -2442,7 +2517,7 @@ void SV_RunMultiMoves (client_t *cl)
 	{
 		if (cl->lastframe == -1)
 		{
-			SV_KickClient (cl, NULL, "Invalid delta offset with lastframe -1\n");
+			SV_KickClient (cl, NULL, "invalid delta offset with lastframe -1\n");
 			return;
 		}
 	}
@@ -2541,6 +2616,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 	int			userinfoCount;
 	qboolean	move_issued;
 	int			lastframe;
+	vec3_t		oldorigin;
 
 	sv_client = cl;
 	sv_player = sv_client->edict;
@@ -2756,9 +2832,30 @@ void SV_ExecuteClientMessage (client_t *cl)
 			if (move_issued)
 				Com_Printf ("WARNING: Out-of-order stringcmd '%.32s...' from %s\n", LOG_SERVER|LOG_WARNING, s, cl->name);
 
+			if (sv_interpolated_pmove->intvalue)
+			{
+				FastVectorCopy (cl->edict->s.origin, oldorigin);
+				FastVectorCopy (cl->current_move.origin_end, cl->edict->s.origin);
+			}
+
 			// malicious users may try using too many string commands
 			if (++stringCmdCount < MAX_STRINGCMDS)
 				SV_ExecuteUserCommand (s);
+
+			//a stringcmd messed with the origin, cancel the interpolation and let
+			//it continue as normal for this move
+			if (sv_interpolated_pmove->intvalue)
+			{
+				if (Vec_RoughCompare (cl->edict->s.origin, cl->current_move.origin_end))
+				{
+					FastVectorCopy (oldorigin, cl->edict->s.origin);
+				}
+				else
+				{
+					cl->current_move.elapsed = cl->current_move.msec;
+				}
+			}
+
 
 			if (cl->state == cs_zombie)
 				return;	// disconnect command

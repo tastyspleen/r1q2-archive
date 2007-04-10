@@ -139,6 +139,14 @@ typedef struct
 
 //#define MAX_DELTA_SAMPLES 30
 
+typedef struct
+{
+	int		msec;
+	int		elapsed;
+	vec3_t	origin_start;
+	vec3_t	origin_end;
+} pmovestatus_t;
+
 typedef struct client_s
 {
 	serverclient_state_t	state;
@@ -247,6 +255,10 @@ typedef struct client_s
 	unsigned					pl_last_packet_frame;
 
 	unsigned					min_ping, avg_ping_count, avg_ping_time, max_ping;
+	unsigned					last_incoming_sequence;
+	unsigned					player_updates_sent;
+
+	pmovestatus_t				current_move;
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -283,6 +295,8 @@ typedef struct
 	uint32 		num_client_entities;		// maxclients->value*UPDATE_BACKUP*MAX_PACKET_ENTITIES
 	uint32 		next_client_entities;		// next client_entity to use
 	entity_state_t	*client_entities;		// [num_client_entities]
+
+	unsigned	last_playerupdate;
 
 	int			last_heartbeat;
 
@@ -382,6 +396,12 @@ extern	cvar_t		*sv_format_string_hack;
 extern	cvar_t		*sv_lag_stats;
 extern	cvar_t		*sv_func_plat_hack;
 extern	cvar_t		*sv_max_packetdup;
+
+extern	cvar_t		*sv_max_player_updates;
+
+extern	cvar_t		*sv_disconnect_hack;
+
+extern	cvar_t		*sv_interpolated_pmove;
 
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;
@@ -729,3 +749,4 @@ extern const char *anticheat_client_names[];
 #endif
 
 void SV_ClientBegin (client_t *cl);
+void SV_SendPlayerUpdates (int msec_to_next_frame);

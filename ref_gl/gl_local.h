@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.37"
+#define	REF_VERSION	"R1GL 0.1.5.38"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -132,15 +132,11 @@ extern	qboolean load_jpg_wals;
 
 //===================================================================
 
-typedef enum
-{
-	rserr_ok,
-
-	rserr_invalid_fullscreen,
-	rserr_invalid_mode,
-
-	rserr_unknown
-} rserr_t;
+#define	VID_ERR_NONE				0
+#define	VID_ERR_FAIL				1
+#define	VID_ERR_RETRY_QGL			2
+#define VID_ERR_FULLSCREEN_FAILED	4
+#define VID_ERR_INVALID_MODE		8
 
 #include "gl_model.h"
 
@@ -567,7 +563,7 @@ void		GLimp_BeginFrame( void );
 void	EXPORT	GLimp_EndFrame( void );
 int 		GLimp_Init( void *hinstance, void *hWnd );
 void		GLimp_Shutdown( void );
-rserr_t    	GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen );
+int    	GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen );
 void	EXPORT	GLimp_AppActivate( qboolean active );
 void		GLimp_EnableLogging( qboolean enable );
 void		GLimp_LogNewFrame( void );

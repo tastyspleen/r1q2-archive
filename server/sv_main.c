@@ -171,7 +171,13 @@ cvar_t	*sv_lag_stats;
 cvar_t	*sv_func_plat_hack;
 cvar_t	*sv_max_packetdup;
 cvar_t	*sv_redirect_address;
+cvar_t	*sv_fps;
 
+cvar_t	*sv_max_player_updates;
+cvar_t	*sv_minpps;
+cvar_t	*sv_disconnect_hack;
+
+cvar_t	*sv_interpolated_pmove;
 
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
@@ -1469,7 +1475,7 @@ gotnewcl:
 
 	//r1: netchan init was here
 #ifdef ANTICHEAT
-	if (sv_require_anticheat->intvalue && reconnected)
+	if (sv_require_anticheat->intvalue && reconnected && SV_AntiCheat_IsConnected())
 	{
 		uint32		network_ip;
 		netblock_t	*n;
@@ -2299,7 +2305,7 @@ static void SV_ReadPackets (void)
 		
 		
 		/* r1: a little pointless?
-		if (i != maxclients->value)
+		if (i != game.maxclients)
 			continue;
 		*/
 	}
@@ -2366,6 +2372,8 @@ static void SV_CheckTimeouts (void)
 					//r1ch: fps spam protection
 					if (sv_fpsflood->intvalue && cl->fps > sv_fpsflood->intvalue)
 						SV_KickClient (cl, va("too many packets/sec (%d)", cl->fps), "You were kicked from the game.\n(Tip: try lowering your cl_maxfps to avoid flooding the server)\n");
+					else if (sv_minpps->intvalue && cl->lastmessage  > (svs.realtime - 500) && cl->fps < sv_minpps->intvalue)
+						SV_KickClient (cl, va ("not enough packets/sec (%d)", cl->fps), "You were kicked from the game for not sending sufficient player updates per second.\nTry increasing your cl_maxfps value.\n");
 				}
 				cl->packetCount = 0;
 			}
@@ -2445,7 +2453,7 @@ static void SV_RunGameFrame (void)
 	// compression can get confused when a client
 	// has the "current" frame
 	sv.framenum++;
-	sv.time = sv.framenum*100;
+	sv.time = sv.framenum * 100;
 
 	sv_tracecount = 0;
 
@@ -2521,6 +2529,48 @@ static void Master_Heartbeat (void)
 	}
 }
 
+static void SV_RunPmoves (int msec)
+{
+	client_t	*cl;
+
+	if (!msec)
+		return;
+	
+	for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+	{
+		if (cl->state < cs_spawned || !cl->moved)
+			continue;
+
+		if (msec == -1 && cl->current_move.elapsed < cl->current_move.msec)
+		{
+			cl->current_move.elapsed = cl->current_move.msec;
+			FastVectorCopy (cl->current_move.origin_end, cl->edict->s.origin);
+			SV_LinkEdict (cl->edict);
+			continue;
+		}
+
+		if (cl->current_move.elapsed < cl->current_move.msec)
+		{
+			float	scale;
+			vec3_t	move;
+
+			cl->current_move.elapsed += msec;
+
+			if (cl->current_move.elapsed > cl->current_move.msec)
+				cl->current_move.elapsed = cl->current_move.msec;
+
+			scale = (float)cl->current_move.elapsed / (float)cl->current_move.msec;
+
+			VectorSubtract (cl->current_move.origin_end, cl->current_move.origin_start, move);
+
+			VectorScale (move, scale, move);
+
+			VectorAdd (cl->current_move.origin_start, move, cl->edict->s.origin);
+			SV_LinkEdict (cl->edict);
+		}
+	}
+}
+
 /*
 ==================
 SV_Frame
@@ -2547,6 +2597,9 @@ void SV_Frame (int msec)
 	// keep the random time dependent
 	//rand ();
 
+	if (sv_interpolated_pmove->intvalue)
+		SV_RunPmoves (msec);
+
 	// get packets from clients
 	SV_ReadPackets ();
 
@@ -2561,6 +2614,9 @@ void SV_Frame (int msec)
 			svs.realtime = sv.time - 100;
 		}
 
+		//r1: send extra packets now for player position updates
+		SV_SendPlayerUpdates (sv.time - svs.realtime);
+
 		//r1: execute commands now
 		if (dedicated->intvalue)
 		{
@@ -2569,9 +2625,16 @@ void SV_Frame (int msec)
 				return;
 		}
 
+		//r1: although it doesn't look like we should be sleeping for so long if we
+		//want to send player updates, keep in mind if no packets are received then
+		//there is nothing to update anyway.
 		NET_Sleep (sv.time - svs.realtime);
 		return;
 	}
+
+	//force all moves to be current so that clients don't interpolate behind time
+	if (sv_interpolated_pmove->intvalue)
+		SV_RunPmoves (-1);
 
 	//Com_Printf ("** game tick (%d drift)**\n", LOG_GENERAL, sv.time - svs.realtime);
 
@@ -2831,21 +2894,6 @@ static void _rcon_buffsize_changed (cvar_t *var, char *oldvalue, char *newvalue)
 	}
 }
 
-#ifdef ANTICHEAT
-static void _anticheat_changed (cvar_t *var, char *o, char *n)
-{
-	switch (var->intvalue)
-	{
-		case 1:
-		case 2:
-			Cvar_FullSet ("anticheat", var->string, CVAR_SERVERINFO|CVAR_NOSET);
-			break;
-		default:
-			Cvar_FullSet ("anticheat", "", CVAR_NOSET);
-	}
-}
-#endif
-
 static void _expand_cvar_newlines (cvar_t *var, char *o, char *n)
 {
 	ExpandNewLines (n);
@@ -3044,7 +3092,7 @@ void SV_Init (void)
 	sv_uptime->help = "Display the server uptime statistics in the info response shown to server browsers. Default 0.\n";
 
 	//r1: allow strafe jumping at high fps values (Requires hacked client (!!!))
-	sv_strafejump_hack = Cvar_Get ("sv_strafejump_hack", "0", CVAR_LATCH);
+	sv_strafejump_hack = Cvar_Get ("sv_strafejump_hack", "1", CVAR_LATCH);
 	sv_strafejump_hack->help = "Allow strafe jumping at any FPS value. Default 0.\n0: Standard Q2 strafe jumping allowed\n1: Allow compatible clients to strafe jump at any FPS\n2: Allow all clients to strafe jump at any FPS (causes prediction errors on non-compatible clients)\n";
 
 	//r1: reserved slots (set 'rp' userinfo)
@@ -3173,9 +3221,23 @@ void SV_Init (void)
 	sv_redirect_address = Cvar_Get ("sv_redirect_address", "", 0);
 	sv_redirect_address->help = "Address to redirect clients to if the server is full. Can be a hostname or IP. Default empty.\n";
 
+	//sv_fps = Cvar_Get ("sv_fps", "10", 0);
+	//sv_fps->help = "FPS to run server at. Do not touch unless you know what you're doing. Default 10.\n";
+
+	sv_max_player_updates = Cvar_Get ("sv_max_player_updates", "2", 0);
+	sv_max_player_updates->help = "Maximum number of extra player updates to send in between game frames. Default 2.\n";
+
+	sv_minpps = Cvar_Get ("sv_minpps", "0", 0);
+	sv_minpps->help = "Minimum number of packets/sec a client is required to send before they are kicked. Default 0.\n";
+
+	sv_disconnect_hack = Cvar_Get ("sv_disconnect_hack", "1", 0);
+	sv_disconnect_hack->help = "Turn svc_disconnect and stuffcmd disconnect into a proper disconnect for buggy mods. Default 1.\n";
+
+	sv_interpolated_pmove = Cvar_Get ("sv_interpolated_pmove", "0", 0);
+	sv_interpolated_pmove->help = "Interpolate player movements server-side that have a duration of this value or higher to help compensate for low packet rates. Be sure you fully understand how it works before enabling; see the R1Q2 readme. Default 0.\n";
+
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
-	sv_require_anticheat->changed = _anticheat_changed;
 	sv_require_anticheat->help = "Require use of the r1ch.net anticheat module by players. Default 0.\n0: Don't require any anticheat module.\n1: Optionally use the anticheat module.\n2: Require the anticheat module.\n";
 
 	sv_anticheat_server_address = Cvar_Get ("sv_anticheat_server_address", "anticheat.r1ch.net", CVAR_LATCH);
@@ -3328,8 +3390,11 @@ void SV_Shutdown (char *finalmsg, qboolean reconnect, qboolean crashing)
 	if (svs.demofile)
 		fclose (svs.demofile);
 
-	Cvar_ForceSet ("$mapname", "");
-	Cvar_ForceSet ("$game", "");
+	if (q2_initialized)
+	{
+		Cvar_ForceSet ("$mapname", "");
+		Cvar_ForceSet ("$game", "");
+	}
 
 	memset (&svs, 0, sizeof(svs));
 

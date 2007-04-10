@@ -210,8 +210,27 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 		}
 	}
 	else
-	{	// shuffle the last state to previous
+	{
+		vec3_t	origin;
+
+		if (cl_test2->intvalue && cl.player_update_time && state->number <= cl.maxclients)
+		{
+			float	playerlerp;
+			int		i;
+
+			playerlerp = 1.0f - ((cl.player_update_time - cl.time) * 0.01f) * (cl.settings[SVSET_PLAYERUPDATES]+1);
+			//if (playerlerp > 1.0f)
+			//	playerlerp = 1.0f;
+
+			for (i = 0; i < 3; i++)
+				origin[i] = ent->prev.origin[i] + playerlerp * (ent->current.origin[i] - ent->prev.origin[i]);
+		}
+
+		// shuffle the last state to previous
 		ent->prev = ent->current;
+
+		if (cl_test2->intvalue && cl.player_update_time && state->number <= cl.maxclients)
+			FastVectorCopy (origin, ent->prev.origin);
 	}
 
 	ent->serverframe = cl.frame.serverframe;
@@ -239,7 +258,16 @@ static void CL_DeltaEntity (frame_t *frame, int newnum, const entity_state_t *ol
 	frame->num_entities++;
 
 	CL_ParseDelta (old, state, newnum, bits);
+
+	if (newnum == cl_test->intvalue)
+		Com_DPrintf ("DELTA new origin (%g,%g,%g)\n", state->origin[0], state->origin[1], state->origin[2]);
+
 	CL_SetEntState (ent, state);
+
+	if (newnum == cl_test->intvalue)
+		Com_DPrintf ("FRAME old origin (%g,%g,%g) new origin (%g,%g,%g)\n", ent->prev.origin[0],
+			ent->prev.origin[1], ent->prev.origin[2], ent->current.origin[0], ent->current.origin[1],
+			ent->current.origin[2]);
 }
 
 static void ShowBits (uint32 bits)
@@ -1172,6 +1200,68 @@ static void CL_FireEntityEvents (const frame_t *frame)
 	}
 }
 
+void CL_ParsePlayerUpdate (void)
+{
+	int				pnum;
+	entity_state_t	*s1;
+	centity_t		*cent;
+	frame_t			*frame;
+	int				i;
+	float			playerlerp;
+
+	//cl.player_updates_received++;
+
+	frame = &cl.frame;
+
+	if (!frame->valid)
+	{
+		Com_Error (ERR_DROP, "CL_ParsePlayerUpdate from invalid frame!\n");
+		return;
+	}
+
+	playerlerp = 1.0f - ((cl.player_update_time - cl.time) * 0.01f) * (cl.settings[SVSET_PLAYERUPDATES]+1);
+	//if (playerlerp > 1.0f)
+	//	playerlerp = 1.0f;
+
+	Com_DPrintf  ("Got update for frame %d @ lerp %g (%g)\n", frame->serverframe, cl.playerlerp, playerlerp);
+
+	for (pnum = 0; pnum < frame->num_entities; pnum++)
+	{
+		s1 = &cl_parse_entities[(frame->parse_entities+pnum)&(MAX_PARSE_ENTITIES-1)];
+
+		if (s1->number <= cl.maxclients)
+		{
+			cent = &cl_entities[s1->number];
+			if (s1->number != cl.playernum + 1)
+			{
+				//FastVectorCopy (cent->current.origin, cent->prev.origin);
+				for (i = 0; i < 3; i++)
+				{
+					cent->prev.origin[i] += playerlerp * (cent->current.origin[i] - cent->prev.origin[i]);
+					//s1->old_origin[i] = cent->prev.origin[i];
+				}
+				//FastVectorCopy (s1->origin, s1->old_origin);
+				MSG_ReadPos (&net_message, cent->current.origin);
+				FastVectorCopy (cent->current.origin, s1->origin);
+				if (s1->number == cl_test->intvalue)
+					Com_DPrintf ("old origin (%g,%g,%g) new origin (%g,%g,%g)\n", cent->prev.origin[0],
+						cent->prev.origin[1], cent->prev.origin[2], cent->current.origin[0], cent->current.origin[1],
+						cent->current.origin[2]);
+			}
+		}
+	}
+
+	//stale packet perhaps after we turned it off.
+	if (cl_player_updates->intvalue)
+		cl.player_update_time = cl.time + (100 / (cl.settings[SVSET_PLAYERUPDATES] + 1));
+	else
+		cl.player_update_time = 0;
+
+	//(cl.lerpfrac * (cl.settings[SVSET_PLAYERUPDATES] + 1)) - cl.player_updates_received;
+
+	//Com_Printf (".", LOG_GENERAL);
+}
+
 /*
 ================
 CL_ParseFrame
@@ -1184,6 +1274,10 @@ void CL_ParseFrame (int extrabits)
 	int			extraflags;
 	uint32		serverframe;
 	frame_t		*old;
+
+	//cl.player_updates_received = 0;
+	//cl.playerlerp = 0;
+	Com_DPrintf ("FRAME @ playerlerp %g\n", cl.playerlerp);
 
 	//HACK: we steal last bits of this int for the offset
 	//if serverframe gets that high then the server has been on the same map
@@ -1296,8 +1390,8 @@ void CL_ParseFrame (int extrabits)
 	CL_ParsePlayerstate (old, &cl.frame, extraflags);
 
 	//r1: allow fov override during demo playback
-	if (cl.attractloop)
-		cl.frame.playerstate.fov = fov->value;
+	//if (cl.attractloop)
+	//	cl.frame.playerstate.fov = fov->value;
 
 	// read packet entities
 	if (cls.serverProtocol != PROTOCOL_R1Q2)
@@ -1381,6 +1475,11 @@ void CL_ParseFrame (int extrabits)
 		if (!(!cl_predict->intvalue || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION)))
 			CL_CheckPredictionError ();
 	}
+
+	if (cl.settings[SVSET_PLAYERUPDATES])
+		cl.player_update_time = cl.time + (100 / (cl.settings[SVSET_PLAYERUPDATES] + 1));
+	else
+		cl.player_update_time = 0;
 }
 
 /*
@@ -1448,7 +1547,7 @@ CL_AddPacketEntities
 */
 static void CL_AddPacketEntities (const frame_t *frame)
 {
-	entity_t				ent = {0};
+	entity_t				ent;
 	const entity_state_t	*s1;
 	float					autorotate;
 	int						i;
@@ -1458,6 +1557,7 @@ static void CL_AddPacketEntities (const frame_t *frame)
 	const clientinfo_t		*ci;
 	uint32					effects, renderfx;
 	float					time;
+	float					entity_lerp;
 	
 	time = (float)cl.time;
 
@@ -1467,7 +1567,7 @@ static void CL_AddPacketEntities (const frame_t *frame)
 	// brush models can auto animate their frames
 	autoanim = 2*cl.time/1000;
 
-	//memset (&ent, 0, sizeof(ent));
+	memset (&ent, 0, sizeof(ent));
 
 	for (pnum = 0 ; pnum<frame->num_entities ; pnum++)
 	{
@@ -1521,6 +1621,14 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		}
 // pmm
 //======
+		
+
+		//hopefully the world never moves :)
+		if (s1->number <= cl.maxclients)
+			entity_lerp = cl.playerlerp;
+		else
+			entity_lerp = cl.lerpfrac;
+
 		ent.oldframe = cent->prev.frame;
 		ent.backlerp = 1.0f - cl.lerpfrac;
 
@@ -1577,21 +1685,43 @@ static void CL_AddPacketEntities (const frame_t *frame)
 			}
 		}
 		else
-		{	
+		{
 #ifdef _DEBUG
 			for (i=0 ; i<3 ; i++)
 			{
 				//cent->prev.origin[i] = cent->current.origin[i];
 			
-				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + cl.lerpfrac * 
+				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + entity_lerp * 
 					(cent->current.origin[i] - cent->prev.origin[i]);
 			}
+
+			if (s1->number == cl_test->intvalue)
+			{
+				static vec3_t last;
+				vec3_t	diff;
+
+				Com_DPrintf ("lerp %g lerp origin (%g,%g,%g)\n", entity_lerp, ent.origin[0],
+					ent.origin[1], ent.origin[2]);
+				/*Com_DPrintf ("lerp %g curr origin (%g,%g,%g)\n", entity_lerp, cent->current.origin[0],
+					cent->current.origin[1], cent->current.origin[2]);
+				Com_DPrintf ("lerp %g prev origin (%g,%g,%g)\n", entity_lerp, cent->prev.origin[0],
+					cent->prev.origin[1], cent->prev.origin[2]);*/
+				VectorSubtract (ent.origin, last, diff);
+				//if (VectorLength (diff) > 8)
+				//	Com_DPrintf ("***************** diff %g *****************\n", VectorLength(diff));
+
+				FastVectorCopy (ent.origin, last);
+
+				ent.frame = ent.oldframe =  0;
+				//for (i = 0; i < 3; i++)
+				//	ent.origin[i] = ent.oldorigin[i] = cent->current.origin[i];
+			}
+
 			//VectorCopy (cent->current.origin, cent->prev.origin);
 #else
-
 			for (i=0 ; i<3 ; i++)
 			{
-				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + cl.lerpfrac * 
+				ent.origin[i] = ent.oldorigin[i] = cent->prev.origin[i] + entity_lerp * 
 					(cent->current.origin[i] - cent->prev.origin[i]);
 			}
 #endif
@@ -2193,7 +2323,8 @@ void CL_AddEntities (void)
 		if (cl_showclamp->intvalue)
 			Com_Printf ("high clamp %i\n", LOG_CLIENT, cl.time - cl.frame.servertime);
 		cl.time = cl.frame.servertime;
-		cl.lerpfrac = 1.0;
+		cl.lerpfrac = 1.0f;
+		cl.playerlerp = 1.0f;
 	}
 	else if (cl.time < cl.frame.servertime - 100)
 	{
@@ -2201,12 +2332,25 @@ void CL_AddEntities (void)
 			Com_Printf ("low clamp %i\n", LOG_CLIENT, cl.frame.servertime-100 - cl.time);
 		cl.time = cl.frame.servertime - 100;
 		cl.lerpfrac = 0;
+		cl.playerlerp = 0;
 	}
 	else
+	{
 		cl.lerpfrac = 1.0f - (cl.frame.servertime - cl.time) * 0.01f;
 
-	if (cl_timedemo->intvalue)
-		cl.lerpfrac = 1.0;
+		if (cl.player_update_time)
+			cl.playerlerp = 1.0f - ((cl.player_update_time - cl.time) * 0.01f) * (cl.settings[SVSET_PLAYERUPDATES]+1);
+		else
+			cl.playerlerp = cl.lerpfrac;
+
+		//Com_DPrintf ("playerlerp = %g\n", cl.playerlerp);
+	}
+
+	if (cl_timedemo->intvalue || cl_nolerp->intvalue)
+	{
+		cl.playerlerp = 1.0f;
+		cl.lerpfrac = 1.0f;
+	}
 
 //	CL_AddPacketEntities (&cl.frame);
 //	CL_AddTEnts ();
@@ -2259,14 +2403,14 @@ void CL_GetEntityOrigin (int ent, vec3_t origin)
 	if (ent < 0 || ent >= MAX_EDICTS)
 		Com_Error(ERR_DROP, "CL_GetEntityOrigin: ent = %i", ent);
 
+	cent = &cl_entities[ent];
+
 	// Player entity
-	if (ent == cl.playernum + 1)
+	if (ent == cl.playernum + 1 && !cent->current.event)
 	{
-		FastVectorCopy (cl.refdef.vieworg, *origin);
+		FastVectorCopy (cl.predicted_origin, *origin);
 		return;
 	}
-
-	cent = &cl_entities[ent];
 
 	if (cent->current.renderfx & (RF_FRAMELERP|RF_BEAM))
 	{
