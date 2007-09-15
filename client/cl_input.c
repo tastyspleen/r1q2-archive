@@ -609,6 +609,25 @@ void CL_FinishMove (usercmd_t *cmd)
 	cmd->impulse = in_impulse;
 	in_impulse = 0;
 
+	//r1ch: cap forwardmove/etc to reasonable levels, sure it may be a short
+	//but pmove ob client/server caps at 300 total velocity so there is little
+	//value in having these higher, all it does it make for less efficient
+	//deltas.
+	if (cmd->forwardmove > 300)
+		cmd->forwardmove = 300;
+	else if (cmd->forwardmove < -300)
+		cmd->forwardmove = -300;
+
+	if (cmd->sidemove > 300)
+		cmd->sidemove = 300;
+	else if (cmd->sidemove < -300)
+		cmd->sidemove = -300;
+
+	if (cmd->upmove > 300)
+		cmd->upmove = 300;
+	else if (cmd->upmove < -300)
+		cmd->upmove = -300;
+
 // send the ambient light level at the player's current position
 	cmd->lightlevel = (byte)cl_lightlevel->value;
 }

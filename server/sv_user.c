@@ -879,7 +879,7 @@ void SV_ClientBegin (client_t *cl)
 					{
 						Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], using protocol 34.\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 
-						SV_ClientPrintf (cl, PRINT_HIGH, "You must use protocol 35 on this server. You are being reconnected with protocol 35 enabled.\n");
+						SV_ClientPrintf (cl, PRINT_CHAT, "You must use protocol 35 on this server. You are being reconnected with protocol 35 enabled.\n");
 
 						MSG_WriteByte (svc_stufftext);
 						MSG_WriteString ("set cl_protocol \"35\"\nreconnect\n");
