@@ -646,7 +646,7 @@ void CL_SendCmd_Synchronous (void)
 	byte		data[128];
 	int			i;
 	usercmd_t	*cmd, *oldcmd;
-	int			checksumIndex;
+	int			checksumIndex = 0;
 
 	// build a command even if not connected
 
@@ -733,17 +733,17 @@ void CL_SendCmd_Synchronous (void)
 	i = (cls.netchan.outgoing_sequence-2) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
 
-	MSG_WriteDeltaUsercmd (&null_usercmd, cmd);
+	MSG_WriteDeltaUsercmd (&null_usercmd, cmd, cls.protocolVersion);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence-1) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (oldcmd, cmd);
+	MSG_WriteDeltaUsercmd (oldcmd, cmd, cls.protocolVersion);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (oldcmd, cmd);
+	MSG_WriteDeltaUsercmd (oldcmd, cmd, cls.protocolVersion);
 
 	MSG_EndWriting (&buf);
 
@@ -772,7 +772,7 @@ void CL_SendCmd (void)
 	byte		data[128];
 	int			i;
 	usercmd_t	*cmd, *oldcmd;
-	int			checksumIndex;
+	int			checksumIndex = 0;
 
 	if (cls.state <= ca_connecting)
 		return;
@@ -840,17 +840,17 @@ void CL_SendCmd (void)
 	i = (cls.netchan.outgoing_sequence-2) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
 	//memset (&nullcmd, 0, sizeof(nullcmd));
-	MSG_WriteDeltaUsercmd (&null_usercmd, cmd);
+	MSG_WriteDeltaUsercmd (&null_usercmd, cmd, cls.protocolVersion);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence-1) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (oldcmd, cmd);
+	MSG_WriteDeltaUsercmd (oldcmd, cmd, cls.protocolVersion);
 	oldcmd = cmd;
 
 	i = (cls.netchan.outgoing_sequence) & (CMD_BACKUP-1);
 	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (oldcmd, cmd);
+	MSG_WriteDeltaUsercmd (oldcmd, cmd, cls.protocolVersion);
 	MSG_EndWriting (&buf);
 
 	// calculate a checksum over the move commands

@@ -273,7 +273,7 @@ void M_WorldEffects (edict_t *ent)
 	{
 		if (ent->damage_debounce_time < level.time)
 		{
-			ent->damage_debounce_time = level.time + 0.2;
+			ent->damage_debounce_time = level.time + 0.2f;
 			T_Damage (ent, world, world, vec3_origin, ent->s.origin, vec3_origin, 10*ent->waterlevel, 0, 0, MOD_LAVA);
 		}
 	}

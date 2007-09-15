@@ -47,7 +47,7 @@ float SV_CalcRoll (vec3_t angles, vec3_t velocity)
 	
 	side = DotProduct (velocity, right);
 	sign = side < 0 ? -1 : 1;
-	side = fabs(side);
+	side = (float)fabs(side);
 	
 	value = sv_rollangle->value;
 
@@ -150,7 +150,7 @@ void P_DamageFeedback (edict_t *player)
 		client->damage_alpha = 0;
 	client->damage_alpha += count*0.01;
 	if (client->damage_alpha < 0.2)
-		client->damage_alpha = 0.2;
+		client->damage_alpha = 0.2f;
 	if (client->damage_alpha > 0.6)
 		client->damage_alpha = 0.6;		// don't go too saturated
 
@@ -175,7 +175,7 @@ void P_DamageFeedback (edict_t *player)
 		kick = kick * 100 / player->health;
 
 		if (kick < count*0.5)
-			kick = count*0.5;
+			kick = count*0.5f;
 		if (kick > 50)
 			kick = 50;
 
@@ -433,11 +433,11 @@ void SV_CalcBlend (edict_t *ent)
 		ent->client->ps.rdflags &= ~RDF_UNDERWATER;
 
 	if (contents & (CONTENTS_SOLID|CONTENTS_LAVA))
-		SV_AddBlend (1.0, 0.3, 0.0, 0.6, ent->client->ps.blend);
+		SV_AddBlend (1.0f, 0.3, 0.0, 0.6, ent->client->ps.blend);
 	else if (contents & CONTENTS_SLIME)
-		SV_AddBlend (0.0, 0.1, 0.05, 0.6, ent->client->ps.blend);
+		SV_AddBlend (0.0, 0.1f, 0.05, 0.6, ent->client->ps.blend);
 	else if (contents & CONTENTS_WATER)
-		SV_AddBlend (0.5, 0.3, 0.2, 0.4, ent->client->ps.blend);
+		SV_AddBlend (0.5f, 0.3, 0.2, 0.4, ent->client->ps.blend);
 
 	// add for powerups
 	if (ent->client->quad_framenum > level.framenum)
@@ -487,7 +487,7 @@ void SV_CalcBlend (edict_t *ent)
 		ent->client->damage_alpha = 0;
 
 	// drop the bonus value
-	ent->client->bonus_alpha -= 0.1;
+	ent->client->bonus_alpha -= 0.1f;
 	if (ent->client->bonus_alpha < 0)
 		ent->client->bonus_alpha = 0;
 }
@@ -528,7 +528,7 @@ void P_FallingDamage (edict_t *ent)
 	if (ent->waterlevel == 2)
 		delta *= 0.25;
 	if (ent->waterlevel == 1)
-		delta *= 0.5;
+		delta *= 0.5f;
 
 	if (delta < 1)
 		return;
@@ -539,7 +539,7 @@ void P_FallingDamage (edict_t *ent)
 		return;
 	}
 
-	ent->client->fall_value = delta*0.5;
+	ent->client->fall_value = delta*0.5f;
 	if (ent->client->fall_value > 40)
 		ent->client->fall_value = 40;
 	ent->client->fall_time = level.time + FALL_TIME;
@@ -1034,7 +1034,7 @@ void ClientEndServerFrame (edict_t *ent)
 		bobtime *= 4;
 
 	bobcycle = (int)bobtime;
-	bobfracsin = fabs(sin(bobtime*M_PI));
+	bobfracsin = (float)fabs(sin(bobtime*M_PI));
 
 	// detect hitting the floor
 	P_FallingDamage (ent);

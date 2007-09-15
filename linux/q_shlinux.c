@@ -1,3 +1,7 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <sys/types.h>
 #include <errno.h>
 #include <stdio.h>
@@ -24,7 +28,7 @@ int curhunksize;
 #define MMAP_ANON MAP_ANONYMOUS
 #endif
 
-void *Hunk_Begin (int maxsize)
+void *Hunk_Begin (int maxsize, int precommit)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
 	maxhunksize = maxsize + sizeof(int);

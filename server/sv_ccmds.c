@@ -2116,8 +2116,8 @@ static void SV_Status_f (void)
 
 	if (statusMethod == 1)
 	{
-		Com_Printf (" # name            version string\n", LOG_GENERAL);
-		Com_Printf ("-- --------------- -----------------------------------------------------\n", LOG_GENERAL);
+		Com_Printf (" # name            version string                                  p35ver\n", LOG_GENERAL);
+		Com_Printf ("-- --------------- ----------------------------------------------- ------\n", LOG_GENERAL);
 	}
 	else if (statusMethod == 2)
 	{
@@ -2149,7 +2149,7 @@ static void SV_Status_f (void)
 		switch (statusMethod)
 		{
 			case 1:
-				Com_Printf ("%2i %-15s %-54s\n", LOG_GENERAL, i, cl->name, cl->versionString);
+				Com_Printf ("%2i %-15s %-47s %-6d\n", LOG_GENERAL, i, cl->name, cl->versionString, cl->protocol_version);
 				continue;
 			case 2:
 				if (cl->download)
@@ -2210,12 +2210,13 @@ static void SV_Status_f (void)
 
 		Com_Printf ("Protocol 35 netcode has saved %lu bytes.\n", LOG_GENERAL, svs.proto35BytesSaved);
 		Com_Printf ("Protocol 35 compression has saved %lu bytes.\n", LOG_GENERAL, svs.proto35CompressionBytes);
+		Com_Printf ("Protocol 35 usercommand scaling has saved %lu bytes.\n", LOG_GENERAL, r1q2UserCmdOptimizedBytes);
 		Com_Printf ("R1Q2 playerstate quantization optimization has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2OptimizedBytes);
 		Com_Printf ("R1Q2 entity quantization optimization has saved %lu bytes.\n", LOG_GENERAL, r1q2DeltaOptimizedBytes);
 		Com_Printf ("R1Q2 custom delta management has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2CustomBytes);
 		Com_Printf ("R1Q2 sv_func_entities_hack has saved %lu bytes.\n", LOG_GENERAL, svs.r1q2AttnBytes);
 
-		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes + r1q2DeltaOptimizedBytes + svs.r1q2AttnBytes;
+		total = svs.proto35BytesSaved + svs.proto35CompressionBytes + svs.r1q2OptimizedBytes + svs.r1q2CustomBytes + r1q2DeltaOptimizedBytes + svs.r1q2AttnBytes + r1q2UserCmdOptimizedBytes;
 
 		Com_Printf ("Total byte savings: %lu (%.2f MB)\n", LOG_GENERAL, total, (float)total / 1024.0 / 1024.0);
 	}

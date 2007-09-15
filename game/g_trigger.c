@@ -125,7 +125,7 @@ void SP_trigger_multiple (edict_t *ent)
 		ent->noise_index = gi.soundindex ("misc/trigger1.wav");
 	
 	if (!ent->wait)
-		ent->wait = 0.2;
+		ent->wait = 0.2f;
 	ent->touch = Touch_Multi;
 	ent->movetype = MOVETYPE_NONE;
 	ent->svflags |= SVF_NOCLIENT;
@@ -173,7 +173,7 @@ void SP_trigger_once(edict_t *ent)
 	{
 		vec3_t	v;
 
-		VectorMA (ent->mins, 0.5, ent->size, v);
+		VectorMA (ent->mins, 0.5f, ent->size, v);
 		ent->spawnflags &= ~1;
 		ent->spawnflags |= 4;
 		gi.dprintf("fixed TRIGGERED flag on %s at %s\n", ent->classname, vtos(v));
@@ -374,7 +374,7 @@ void SP_trigger_always (edict_t *ent)
 {
 	// we must have some delay to make sure our use targets are present
 	if (ent->delay < 0.2)
-		ent->delay = 0.2;
+		ent->delay = 0.2f;
 	G_UseTargets(ent, ent);
 }
 

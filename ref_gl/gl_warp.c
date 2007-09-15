@@ -650,7 +650,7 @@ void EXPORT R_SetSky (char *name, float rotate, vec3_t axis)
 	skyrotate = rotate;
 	FastVectorCopy (*axis, skyaxis);
 
-	strlwr (skyname);
+	Q_strlwr (skyname);
 
 	for (i=0 ; i<6 ; i++)
 	{

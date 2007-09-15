@@ -402,7 +402,7 @@ void G_InitEdict (edict_t *e)
 {
 	e->inuse = true;
 	e->classname = "noclass";
-	e->gravity = 1.0;
+	e->gravity = 1.0f;
 	e->s.number = e - g_edicts;
 }
 

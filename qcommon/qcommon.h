@@ -220,7 +220,7 @@ void SZ_WriteShort (sizebuf_t *buf, int c);
 void SZ_WriteLong (sizebuf_t *buf, int c);
 
 
-void MSG_WriteDeltaUsercmd (const struct usercmd_s *from, const struct usercmd_s /*@out@*/*cmd);
+void MSG_WriteDeltaUsercmd (const struct usercmd_s *from, const struct usercmd_s /*@out@*/*cmd, int protocol);
 void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol);
 void MSG_WriteDir (vec3_t vector);
 
@@ -242,7 +242,7 @@ void	MSG_ReadDir (sizebuf_t *sb, vec3_t vector);
 
 void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 
-void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s /*@out@*/ *cmd);
+void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s /*@out@*/ *cmd, int protocol);
 
 void Q_NullFunc(void);
 
@@ -301,7 +301,10 @@ PROTOCOL
 #define	PROTOCOL_ORIGINAL	34
 #define	PROTOCOL_R1Q2		35
 
-#define	MINOR_VERSION_R1Q2	1903
+#define	MINOR_VERSION_R1Q2				1904
+
+//minimum versions for some features
+#define MINOR_VERSION_R1Q2_UCMD_UPDATES	1904
 
 //=========================================
 
@@ -521,6 +524,7 @@ The game starts with a Cbuf_AddText ("exec quake.rc\n"); Cbuf_Execute ();
 */
 
 extern unsigned long r1q2DeltaOptimizedBytes;
+extern unsigned long r1q2UserCmdOptimizedBytes;
 
 #define	EXEC_NOW	0		// don't return until completed
 #define	EXEC_INSERT	1		// insert at current position, but don't run yet
@@ -971,7 +975,7 @@ void	EXPORT FS_FreeFile (void *buffer);
 void	FS_CreatePath (char *path);
 
 int		Sys_FileLength (const char *path);
-
+qboolean Sys_CheckFPUStatus (void);
 /*
 ==============================================================
 
@@ -982,7 +986,7 @@ MISC
 
 
 //r1: use variadic macros where possible to avoid overhead of evaluations and va
-#if __STDC_VERSION__ == 199901L || _MSC_VER >= 1400
+#if __STDC_VERSION__ == 199901L || _MSC_VER >= 1400 && !defined _M_AMD64
 #define		Com_DPrintf(...)	\
 do { \
 	if (developer->intvalue) \
@@ -1110,15 +1114,16 @@ int __cdecl fast_tolower(int c);
 char *StripQuotes (char *string);
 
 #ifdef _WIN32
-#ifdef _DEBUG
+//#ifdef _DEBUG
+extern double totalPerformanceTime;
 void _STOP_PERFORMANCE_TIMER (void);
 void _START_PERFORMANCE_TIMER (void);
 #define START_PERFORMANCE_TIMER _START_PERFORMANCE_TIMER()
 #define STOP_PERFORMANCE_TIMER _STOP_PERFORMANCE_TIMER()
-#else
-#define START_PERFORMANCE_TIMER
-#define STOP_PERFORMANCE_TIMER
-#endif
+//#else
+//#define START_PERFORMANCE_TIMER
+//#define STOP_PERFORMANCE_TIMER
+//#endif
 #endif
 
 #define NUMVERTEXNORMALS	162

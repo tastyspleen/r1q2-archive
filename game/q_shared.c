@@ -96,7 +96,9 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 void _Q_assert (char *expression, char *function, uint32 line)
 {
 	Com_Printf ("Q_assert: Assertion '%s' failed on %s:%u\n", LOG_GENERAL, expression, function, line);
+#ifndef GAME_DLL
 	Sys_DebugBreak ();
+#endif
 }
 
 void AngleVectors (vec3_t angles, vec3_t /*@out@*//*@null@*/ forward, vec3_t /*@out@*//*@null@*/right, vec3_t /*@out@*//*@null@*/up)
@@ -177,10 +179,10 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 	*/
 	for ( pos = 0, i = 0; i < 3; i++ )
 	{
-		if ( fabs( src[i] ) < minelem )
+		if ( (float)fabs( src[i] ) < minelem )
 		{
 			pos = i;
-			minelem = (float)fabs( src[i] );
+			minelem = (float)(float)fabs( src[i] );
 		}
 	}
 	tempvec[pos] = 1.0F;
@@ -276,11 +278,14 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 
 __declspec( naked ) int EXPORT Q_ftol( float f )
 {
-	static int tmp;
-	__asm fld dword ptr [esp+4]
-	__asm fistp tmp
-	__asm mov eax, tmp
-	__asm ret
+	__asm
+	{
+		fld dword ptr [esp+4]
+		push eax
+		fistp dword ptr [esp]
+		pop eax
+		ret
+	}
 }
 
 /*__declspec( naked ) void __cdecl Q_ftolsse( float f, int *out )
@@ -337,6 +342,18 @@ nonsse:*/
 }
 
 #else
+
+int EXPORT Q_ftol( float f )
+{
+	return (int)f;
+}
+
+void EXPORT Q_fastfloats (float *f, int *outptr)
+{
+	outptr[0] = (int)f[0];
+	outptr[1] = (int)f[1];
+	outptr[2] = (int)f[2];
+}
 
 /*void Q_ftol2 (float f, int *out)
 {
@@ -1025,7 +1042,7 @@ int16 ShortSwap (int16 l)
 	return (b1<<8) + b2;
 }
 
-int32    LongSwap (int32 l)
+int32 LongSwap (int32 l)
 {
 	byte    b1,b2,b3,b4;
 

@@ -545,12 +545,15 @@ qboolean CL_ParseServerData (void)
 			}
 			else
 			{
-				Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", LOG_CLIENT, newVersion, MINOR_VERSION_R1Q2);
-				CL_Disconnect(false);
-				cls.serverProtocol = PROTOCOL_ORIGINAL;
-				CL_Reconnect_f ();
-				return false;
+				if (newVersion > MINOR_VERSION_R1Q2)
+					Com_Printf ("Server reports a higher R1Q2 protocol number than your client supports. Some features will be unavailable until you update your R1Q2 client.\n", LOG_CLIENT);
+				else
+					Com_Printf ("Server reports a lower R1Q2 protocol number. The server admin needs to update their server!\n", LOG_CLIENT);
 			}
+
+			//cap if server is above us just to be safe
+			if (newVersion > MINOR_VERSION_R1Q2)
+				newVersion = MINOR_VERSION_R1Q2;
 		}
 
 		if (newVersion >= 1903)
@@ -562,11 +565,14 @@ qboolean CL_ParseServerData (void)
 		{
 			cl.strafeHack = false;
 		}
+		
+		cls.protocolVersion = newVersion;
 	}
 	else
 	{
 		cl.enhancedServer = false;
 		cl.strafeHack = false;
+		cls.protocolVersion = 0;
 	}
 
 	Com_DPrintf ("Serverdata packet received. protocol=%d, servercount=%d, attractloop=%d, clnum=%d, game=%s, map=%s, enhanced=%d\n", cls.serverProtocol, cl.servercount, cl.attractloop, cl.playernum, cl.gamedir, str, cl.enhancedServer);
@@ -909,7 +915,7 @@ void CL_ParseConfigString (void)
 		else
 		{
 			if (length >= MAX_QPATH)
-				Com_Printf ("WARNING: Configstring %d of length %d exceeds MAX_QPATH.\n", LOG_CLIENT|LOG_WARNING, i, length);
+				Com_Printf ("WARNING: Configstring %d of length %d exceeds MAX_QPATH.\n", LOG_CLIENT|LOG_WARNING, i, (int)length);
 			Q_strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i])-1);
 		}
 	}

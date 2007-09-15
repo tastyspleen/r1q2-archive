@@ -134,6 +134,7 @@ cvar_t	*gl_r1gl_test;
 cvar_t	*gl_doublelight_entities;
 cvar_t	*gl_noscrap;
 cvar_t	*gl_overbrights;
+cvar_t	*gl_linear_mipmaps;
 
 cvar_t	*vid_gamma_pics;
 
@@ -190,6 +191,8 @@ cvar_t	*gl_pic_formats;
 cvar_t	*gl_dlight_falloff;
 cvar_t	*gl_alphaskins;
 cvar_t	*gl_defertext;
+
+cvar_t	*gl_pic_scale;
 
 //cvar_t	*con_alpha;
 
@@ -1117,10 +1120,10 @@ void R_RenderView (refdef_t *fd)
 
 	if (FLOAT_NE_ZERO(gl_hudscale->value))
 	{
-		r_newrefdef.width *= gl_hudscale->value;
-		r_newrefdef.height *= gl_hudscale->value;
-		r_newrefdef.x *= gl_hudscale->value;
-		r_newrefdef.y *= gl_hudscale->value;
+		r_newrefdef.width = (int)(r_newrefdef.width * gl_hudscale->value);
+		r_newrefdef.height = (int)(r_newrefdef.height * gl_hudscale->value);
+		r_newrefdef.x = (int)(r_newrefdef.x * gl_hudscale->value);
+		r_newrefdef.y = (int)(r_newrefdef.y * gl_hudscale->value);
 	}
 
 	if (!r_worldmodel && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
@@ -1372,6 +1375,7 @@ void R_Register( void )
 	gl_doublelight_entities = ri.Cvar_Get ("gl_doublelight_entities", "1", 0);
 	gl_noscrap = ri.Cvar_Get ("gl_noscrap", "0", 0);
 	gl_overbrights = ri.Cvar_Get ("gl_overbrights", "0", 0);
+	gl_linear_mipmaps = ri.Cvar_Get ("gl_linear_mipmaps", "0", 0);
 
 	vid_forcedrefresh = ri.Cvar_Get ("vid_forcedrefresh", "0", 0);
 	vid_optimalrefresh = ri.Cvar_Get ("vid_optimalrefresh", "0", 0);
@@ -1383,6 +1387,8 @@ void R_Register( void )
 	gl_forceheight = ri.Cvar_Get ("vid_forceheight", "0", 0);
 
 	vid_topmost = ri.Cvar_Get ("vid_topmost", "0", 0);
+
+	gl_pic_scale = ri.Cvar_Get ("gl_pic_scale", "1", 0);
 	//r1ch end my shit
 
 	gl_drawbuffer = ri.Cvar_Get( "gl_drawbuffer", "GL_BACK", 0 );
@@ -1569,20 +1575,20 @@ retryQGL:
 	/*
 	** get our various GL strings
 	*/
-	gl_config.vendor_string = qglGetString (GL_VENDOR);
+	gl_config.vendor_string = (const char *) qglGetString (GL_VENDOR);
 	ri.Con_Printf (PRINT_ALL, "GL_VENDOR: %s\n", gl_config.vendor_string );
-	gl_config.renderer_string = qglGetString (GL_RENDERER);
+	gl_config.renderer_string = (const char *) qglGetString (GL_RENDERER);
 	ri.Con_Printf (PRINT_ALL, "GL_RENDERER: %s\n", gl_config.renderer_string );
-	gl_config.version_string = qglGetString (GL_VERSION);
+	gl_config.version_string = (const char *) qglGetString (GL_VERSION);
 	ri.Con_Printf (PRINT_ALL, "GL_VERSION: %s\n", gl_config.version_string );
-	gl_config.extensions_string = qglGetString (GL_EXTENSIONS);
+	gl_config.extensions_string = (const char *) qglGetString (GL_EXTENSIONS);
 	//ri.Con_Printf (PRINT_ALL, "GL_EXTENSIONS: %s\n", gl_config.extensions_string );
 
 	Q_strncpy( renderer_buffer, gl_config.renderer_string, sizeof(renderer_buffer)-1);
-	strlwr( renderer_buffer );
+	Q_strlwr( renderer_buffer );
 
 	Q_strncpy( vendor_buffer, gl_config.vendor_string, sizeof(vendor_buffer)-1);
-	strlwr( vendor_buffer );
+	Q_strlwr( vendor_buffer );
 
 	if ( strstr( renderer_buffer, "voodoo" ) )
 	{
@@ -1810,6 +1816,7 @@ retryQGL:
 	} else {
 		ri.Con_Printf( PRINT_ALL, "...GL_EXT_texture_filter_anisotropic not found\n" );
 	}
+	gl_ext_texture_filter_anisotropic->modified = false;
 
 	gl_config.r1gl_GL_ARB_texture_non_power_of_two = false;
 	if ( strstr( gl_config.extensions_string, "GL_ARB_texture_non_power_of_two" ) ) {
@@ -1926,20 +1933,20 @@ void EXPORT R_Shutdown (void)
 	QGL_Shutdown();
 }
 
-void GL_UpdateAnisotropy(void)
+void GL_UpdateAnisotropy (void)
 {
 	int		i;
 	image_t	*glt;
 	float	value;
 
 	if (!gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
-		value = 0;
+		value = 1;
 	else
 		value = gl_ext_max_anisotropy->value;
 
 	for (i=0, glt=gltextures ; i<numgltextures ; i++, glt++)
 	{
-		if (glt->type != it_pic && glt->type != it_sky )
+		if (glt->type != it_pic && glt->type != it_sky)
 		{
 			GL_Bind (glt->texnum);
 			qglTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, value);
@@ -2077,16 +2084,23 @@ void EXPORT R_BeginFrame( float camera_separation )
 		gl_config.r1gl_GL_EXT_texture_filter_anisotropic = false;
 		if ( strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic" ) )
 		{
-			if ( gl_ext_texture_filter_anisotropic->value ) {
+			if ( gl_ext_texture_filter_anisotropic->value )
+			{
 				ri.Con_Printf( PRINT_ALL, "...using GL_EXT_texture_filter_anisotropic\n" );
 				gl_config.r1gl_GL_EXT_texture_filter_anisotropic = true;
-			} else {
-				ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_texture_filter_anisotropic\n" );		
+				GL_UpdateAnisotropy ();
 			}
-		} else {
+			else
+			{
+				ri.Con_Printf( PRINT_ALL, "...ignoring GL_EXT_texture_filter_anisotropic\n" );
+				GL_UpdateAnisotropy ();
+			}
+		}
+		else
+		{
 			ri.Con_Printf( PRINT_ALL, "...GL_EXT_texture_filter_anisotropic not found\n" );
 		}
-		GL_UpdateAnisotropy ();
+		
 		gl_ext_texture_filter_anisotropic->modified = false;
 	}
 

@@ -774,6 +774,7 @@ void CL_HTTP_Cleanup (qboolean fullShutdown)
 		httpDown = true;
 	}
 }
+
 /*
 ===============
 CL_FinishHTTPDownload

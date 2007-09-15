@@ -99,7 +99,8 @@ void Netchan_Init (void)
 	showpackets = Cvar_Get ("showpackets", "0", 0);
 	showdrop = Cvar_Get ("showdrop", "0", 0);
 
-	qport = Cvar_Get ("qport", va("%i", port), 0);
+	//-1 = random, 0 = none, other = user set
+	qport = Cvar_Get ("qport", "-1", 0);
 
 	net_maxmsglen = Cvar_Get ("net_maxmsglen", "1390", 0);
 }

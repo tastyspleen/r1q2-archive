@@ -207,7 +207,7 @@ static void SV_AddMessageSingle (client_t *cl, qboolean reliable)
 	}
 
 	//an overflown client
-	if (!cl->messageListData)
+	if (!cl->messageListData || ((cl->notes & NOTE_OVERFLOWED) && !(cl->notes & NOTE_OVERFLOW_DONE)))
 		return;
 
 	//doesn't want unreliables (irc bots/etc)
@@ -287,10 +287,13 @@ static void SV_CheckForOverflowSingle (client_t *cl)
 		}
 		else
 		{
-			Com_Printf ("%s overflowed message list size!\n", LOG_SERVER|LOG_WARNING, cl->name);
+			//let them know what happened
+			SV_ClientPrintf (cl, PRINT_HIGH, "%s overflowed\n", cl->name);
+			Com_Printf ("%s overflowed while connecting!\n", LOG_SERVER|LOG_WARNING, cl->name);
 		}
 	}
 
+	Com_Printf ("Dropping %s, overflowed.\n", LOG_SERVER, cl->name);
 	SV_DropClient (cl, true);
 }
 
@@ -315,7 +318,7 @@ void SV_AddMessage (client_t *cl, qboolean reliable)
 {
 	SV_AddMessageSingle (cl, reliable);
 	MSG_FreeData ();
-	SV_CheckForOverflowSingle (cl);
+	//SV_CheckForOverflowSingle (cl);
 }
 
 /*void SV_AddMessageAll (qboolean reliable)
@@ -388,7 +391,7 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 	{
 		if (!origin)
 		{
-			Com_Printf ("GAME ERROR: SV_Multicast called with NULL origin but not with MULTICAST_ALL, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+			Com_Printf ("GAME ERROR: SV_Multicast called with NULL origin but not with MULTICAST_ALL, ignored.\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG);
 			if (sv_gamedebug->intvalue >= 2)
 				Sys_DebugBreak ();
 			return;
@@ -445,7 +448,7 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 
 	default:
 		mask = NULL;
-		Com_Printf ("GAME ERROR: SV_Multicast called with bad multicast_t to, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG);
+		Com_Printf ("GAME ERROR: SV_Multicast called with bad multicast_t to, ignored.\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG);
 		if (sv_gamedebug->intvalue >= 2)
 			Sys_DebugBreak ();
 		return;
@@ -489,7 +492,7 @@ void EXPORT SV_Multicast (vec3_t /*@null@*/ origin, multicast_t to)
 	}
 
 	MSG_FreeData();
-	SV_CheckForOverflow();
+	//SV_CheckForOverflow();
 }
 
 
@@ -1175,6 +1178,8 @@ void SV_SendClientMessages (void)
 	size_t		r;
 
 	msglen = 0;
+
+	SV_CheckForOverflow ();
 
 	// read the next demo message if needed
 	if (sv.demofile && sv.state == ss_demo)

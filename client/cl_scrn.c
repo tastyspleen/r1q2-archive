@@ -505,7 +505,9 @@ void SCR_DrawChatHud (void)
 
 void SCR_AddChatMessage (const char *chat)
 {
-	unsigned	i, j, length, index;
+	unsigned	i, index;
+	size_t		j;
+	size_t		length;
 	char		*p;
 	char		tempchat[512];
 
@@ -526,10 +528,12 @@ void SCR_AddChatMessage (const char *chat)
 	if (scr_chathud_highlight->intvalue)
 	{
 		char	player_name[MAX_QPATH];
-		int		bestlen, best, bestoffset;
+		int			best;
+		size_t		bestlen;
+		ptrdiff_t	bestoffset = 0;
 
 		best = -1;
-		bestlen = -1;
+		bestlen = 0;
 
 		for (i = 0; i < cl.maxclients; i++)
 		{
@@ -546,7 +550,7 @@ void SCR_AddChatMessage (const char *chat)
 				foundname = strstr (tempchat, player_name);
 				if (foundname != NULL)
 				{
-					int	len;
+					size_t	len;
 
 					len = strlen (player_name);
 
@@ -562,7 +566,7 @@ void SCR_AddChatMessage (const char *chat)
 
 		if (best != -1)
 		{
-			unsigned start;
+			ptrdiff_t start;
 
 			length = bestlen;
 
@@ -1297,7 +1301,7 @@ void SCR_ExecuteLayoutString (char *s)
 
 						index = atoi(token);
 
-						if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+						if (index < 0 || index >= MAX_STATS)
 							Com_Error (ERR_DROP, "Bad stats index %d in block 'pic' whilst parsing layout string", index);
 
 						value = cl.frame.playerstate.stats[index];
@@ -1324,7 +1328,7 @@ void SCR_ExecuteLayoutString (char *s)
 
 					index = atoi(token);
 
-					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+					if (index < 0 || index >= MAX_STATS)
 						Com_Error (ERR_DROP, "Bad stats index %d in block 'num' whilst parsing layout string", index);
 
 					value = cl.frame.playerstate.stats[index];
@@ -1390,7 +1394,7 @@ void SCR_ExecuteLayoutString (char *s)
 					token = COM_Parse (&s);
 					index = atoi(token);
 
-					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+					if (index < 0 || index >= MAX_STATS)
 						Com_Error (ERR_DROP, "Bad stats index %d in block 'stat_string' whilst parsing layout string", index);
 
 					index = cl.frame.playerstate.stats[index];
@@ -1437,7 +1441,7 @@ void SCR_ExecuteLayoutString (char *s)
 					token = COM_Parse (&s);
 					index = atoi(token);
 
-					if (index < 0 || index >= sizeof(cl.frame.playerstate.stats))
+					if (index < 0 || index >= MAX_STATS)
 						Com_Error (ERR_DROP, "Bad stats index %d in block 'if' whilst parsing layout string", index);
 
 					value = cl.frame.playerstate.stats[index];
@@ -1487,8 +1491,7 @@ void SCR_ExecuteLayoutString (char *s)
 					DrawString (x+32, y+8,  "Score: ");
 					DrawAltString (x+32+7*8, y+8,  va("%i", score));
 
-					//r1: ping is typically an icmp message, change wording to more appropriate.
-					DrawString (x+32, y+16, va("RTT:   %ims", ping));
+					DrawString (x+32, y+16, va("Ping:  %ims", ping));
 					DrawString (x+32, y+24, va("Time:  %i", time));
 
 					if (!ci->icon)

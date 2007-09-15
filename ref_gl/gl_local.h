@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.38"
+#define	REF_VERSION	"R1GL 0.1.5.40"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -102,7 +102,7 @@ typedef struct image_s
 	int		upload_width, upload_height;	// after power of two and picmip
 	int		registration_sequence;		// 0 = free
 	struct msurface_s	*texturechain;	// for sort-by-texture world drawing
-	unsigned int		texnum;						// gl texture binding
+	unsigned long		texnum;						// gl texture binding
 	//int		detailtexnum;
 	float	sl, tl, sh, th;				// 0,0 - 1,1 unless part of the scrap
 	//qboolean	scrap;
@@ -237,6 +237,7 @@ extern cvar_t	*gl_doublelight_entities;
 extern cvar_t	*gl_noscrap;
 extern cvar_t	*gl_zfar;
 extern cvar_t	*gl_overbrights;
+extern cvar_t	*gl_linear_mipmaps;
 extern cvar_t	*gl_hudscale;
 
 extern cvar_t	*vid_gamma_pics;
@@ -299,15 +300,16 @@ extern	cvar_t	*gl_dlight_falloff;
 extern	cvar_t	*gl_alphaskins;
 extern	cvar_t	*gl_defertext;
 
+extern	cvar_t	*gl_pic_scale;
+
 extern	cvar_t	*vid_restore_on_switch;
 
 extern int		usingmodifiedlightmaps;
 
 extern	int		defer_drawing;
 
-extern	int		gl_lightmap_format;
-extern	int		gl_solid_format;
-extern	int		gl_alpha_format;
+extern	const int		gl_solid_format;
+extern	const int		gl_alpha_format;
 extern	int		gl_tex_solid_format;
 extern	int		gl_tex_alpha_format;
 
@@ -503,7 +505,7 @@ typedef struct
 
 	int			bitDepth;
 	int			r1gl_QueryBits;
-	int			r1gl_Queries[MAX_ENTITIES];
+	unsigned int r1gl_Queries[MAX_ENTITIES];
 } glconfig_t;
 
 typedef struct

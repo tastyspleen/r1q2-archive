@@ -660,6 +660,10 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 	}
 #endif
 
+	//check the server is running proper Q2 physics model
+	if (!Sys_CheckFPUStatus ())
+		Com_Error (ERR_FATAL, "FPU control word is not set as expected, Quake II physics model will break.");
+
 	SV_BroadcastCommand ("reconnect\n");
 	Z_Verify("SV_Map:END");
 }

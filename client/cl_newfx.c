@@ -158,6 +158,7 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = (float)cl.time;
 		VectorClear (p->accel);
 		VectorClear (p->vel);
@@ -216,6 +217,7 @@ void CL_SmokeTrail (vec3_t start, vec3_t end, int colorStart, int colorRun, int 
 		active_particles = p;
 		VectorClear (p->accel);
 		
+		p->type = PT_NONE;
 		p->time = time;
 
 		p->alpha = 1.0;
@@ -223,7 +225,7 @@ void CL_SmokeTrail (vec3_t start, vec3_t end, int colorStart, int colorRun, int 
 		p->color = colorStart + (randomMT() % colorRun);
 		if (p->color > 255)
 		{
-			Com_Printf ("Warning, capped particle color %d in CL_SmokeTrail\n", p->color);
+			Com_Printf ("Warning, capped particle color %d in CL_SmokeTrail\n", LOG_CLIENT, p->color);
 			p->color = 255;
 		}
 		for (j=0 ; j<3 ; j++)
@@ -272,6 +274,7 @@ void CL_ForceWall (vec3_t start, vec3_t end, int color)
 			active_particles = p;
 			VectorClear (p->accel);
 			
+			p->type = PT_NONE;
 			p->time = time;
 
 			p->alpha = 1.0;
@@ -317,6 +320,7 @@ void CL_GenericParticleEffect (vec3_t org, vec3_t dir, int color, int count, int
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		if (numcolors > 1)
 			p->color = color + (randomMT() & numcolors);
@@ -374,6 +378,7 @@ void CL_BubbleTrail2 (vec3_t start, vec3_t end, int dist)
 
 		VectorClear (p->accel);
 		p->time = time;
+		p->type = PT_NONE;
 
 		p->alpha = 1.0;
 		p->alphavel = -1.0f / (1+frand()*0.1f);
@@ -547,6 +552,7 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 			p->next = active_particles;
 			active_particles = p;
 			
+			p->type = PT_NONE;
 			p->time = time;
 			VectorClear (p->accel);
 //			rot+= fmod(ltime, 12.0)*M_PI;
@@ -623,6 +629,7 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 		p->next = active_particles;
 		active_particles = p;
 		
+		p->type = PT_NONE;
 		p->time = cl.time;
 		VectorClear (p->accel);
 		
@@ -738,6 +745,7 @@ void CL_ParticleSteamEffect (vec3_t org, vec3_t dir, int color, int count, int m
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		p->color = color + (randomMT()&7);
 
@@ -787,6 +795,7 @@ void CL_ParticleSteamEffect2 (cl_sustain_t *self)
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		p->color = self->color + (randomMT()&7);
 		if (p->color > 255 || p->color < 0)
@@ -858,6 +867,7 @@ void CL_TrackerTrail (vec3_t start, vec3_t end, int particleColor)
 		active_particles = p;
 		VectorClear (p->accel);
 		
+		p->type = PT_NONE;
 		p->time = time;
 
 		p->alpha = 1.0;
@@ -1047,6 +1057,7 @@ void CL_WidowSplash (vec3_t org)
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		p->color = colortable[randomMT()&3];
 
@@ -1084,6 +1095,7 @@ void CL_Tracker_Explode(vec3_t	origin)
 		active_particles = p;
 		VectorClear (p->accel);
 		
+		p->type = PT_NONE;
 		p->time = time;
 
 		p->alpha = 1.0;
@@ -1142,6 +1154,7 @@ void CL_TagTrail (vec3_t start, vec3_t end, int color)
 		active_particles = p;
 		VectorClear (p->accel);
 		
+		p->type = PT_NONE;
 		p->time = time;
 
 		p->alpha = 1.0;
@@ -1183,6 +1196,7 @@ void CL_ColorExplosionParticles (vec3_t org, int color, int run)
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		p->color = color + (randomMT() % run);
 
@@ -1229,6 +1243,7 @@ void CL_ParticleSmokeEffect (vec3_t org, vec3_t dir, int color, int count, int m
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		p->color = color + (randomMT()&7);
 
@@ -1280,6 +1295,7 @@ void CL_BlasterParticles2 (vec3_t org, vec3_t dir, uint32 color)
 		p->next = active_particles;
 		active_particles = p;
 
+		p->type = PT_NONE;
 		p->time = time;
 		p->color = color + (randomMT()&7);
 
@@ -1337,6 +1353,7 @@ void CL_BlasterTrail2 (vec3_t start, vec3_t end)
 		active_particles = p;
 		VectorClear (p->accel);
 		
+		p->type = PT_NONE;
 		p->time = time;
 
 		p->alpha = 1.0;

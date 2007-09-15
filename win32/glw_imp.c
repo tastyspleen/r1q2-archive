@@ -223,7 +223,7 @@ int VID_CreateWindow( int width, int height, qboolean fullscreen )
 	// let the sound and input subsystems know about the new window
 	ri.Vid_NewWindow (width, height);
 
-	return true;
+	return VID_ERR_NONE;
 }
 
 
@@ -433,7 +433,7 @@ int GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboole
 		*pwidth = width;
 		*pheight = height;
 		gl_state.fullscreen = false;
-		error = VID_CreateWindow (width, height, true);
+		error = VID_CreateWindow (width, height, false);
 		if (error != VID_ERR_NONE)
 			return error;
 	}
@@ -526,7 +526,9 @@ qboolean GLimp_Init( void *hinstance, void *wndproc )
 	if (!OPENGL_CLASS[0])
 		Com_sprintf (OPENGL_CLASS, sizeof(OPENGL_CLASS), "R1GLOpenGLPFD-%u", GetTickCount());
 
-	_controlfp( _PC_24, _MCW_PC );
+#ifndef _M_AMD64
+	//_controlfp( _PC_24, _MCW_PC );
+#endif
 
 	vinfo.dwOSVersionInfoSize = sizeof(vinfo);
 

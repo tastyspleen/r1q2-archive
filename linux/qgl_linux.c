@@ -1446,17 +1446,6 @@ static void APIENTRY logGetTexImage(GLenum target, GLint level, GLenum format, G
 	SIG( "glGetTexImage" );
 	dllGetTexImage( target, level, format, type, pixels );
 }
-static void APIENTRY logGetTexLevelParameterfv(GLenum target, GLint level, GLenum pname, GLfloat *params )
-{
-	SIG( "glGetTexLevelParameterfv" );
-	dllGetTexLevelParameterfv( target, level, pname, params );
-}
-
-static void APIENTRY logGetTexLevelParameteriv(GLenum target, GLint level, GLenum pname, GLint *params)
-{
-	SIG( "glGetTexLevelParameteriv" );
-	dllGetTexLevelParameteriv( target, level, pname, params );
-}
 
 static void APIENTRY logGetTexParameterfv(GLenum target, GLenum pname, GLfloat *params)
 {

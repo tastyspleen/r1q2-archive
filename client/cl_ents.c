@@ -377,7 +377,7 @@ static void CL_ParsePacketEntities (const frame_t *oldframe, frame_t *newframe)
 {
 	int				newnum;
 	uint32			bits;
-	entity_state_t	*oldstate;
+	entity_state_t	*oldstate = NULL;
 	int				oldindex, oldnum;
 
 	newframe->parse_entities = cl.parse_entities;
@@ -814,7 +814,7 @@ static void CL_DemoDeltaPlayerstate (const frame_t *from, frame_t *to)
 	int				pflags;
 	player_state_new	*ps;
 	const player_state_new *ops;
-	static player_state_new	dummy = {0};
+	static player_state_new	dummy = {{0}};
 	int				statbits;
 
 	ps = &to->playerstate;
@@ -1277,7 +1277,7 @@ void CL_ParseFrame (int extrabits)
 
 	//cl.player_updates_received = 0;
 	//cl.playerlerp = 0;
-	Com_DPrintf ("FRAME @ playerlerp %g\n", cl.playerlerp);
+	//Com_DPrintf ("FRAME @ playerlerp %g\n", cl.playerlerp);
 
 	//HACK: we steal last bits of this int for the offset
 	//if serverframe gets that high then the server has been on the same map

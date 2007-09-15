@@ -231,7 +231,7 @@ typedef struct
 	cvar_t	*(IMPORT *Cvar_Set)( const char *name, const char *value );
 	void	 (IMPORT *Cvar_SetValue)( const char *name, float value );
 
-	qboolean	(IMPORT *Vid_GetModeInfo)( int *width, int *height, int mode );
+	qboolean	(IMPORT *Vid_GetModeInfo)(unsigned int *width, unsigned int *height, int mode);
 	void		(IMPORT *Vid_MenuInit)( void );
 	void		(IMPORT *Vid_NewWindow)( int width, int height );
 } refimport_t;

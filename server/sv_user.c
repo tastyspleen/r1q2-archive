@@ -311,6 +311,10 @@ static void SV_New_f (void)
 		return;
 	}
 
+	//warn if client is newer than server
+	if (sv_client->protocol_version > MINOR_VERSION_R1Q2)
+		Com_Printf ("NOTICE: Client %s[%s] uses R1Q2 protocol version %d, server is using %d. Check you have the latest R1Q2 installed.\n", LOG_NOTICE|LOG_SERVER, sv_client->name, NET_AdrToString(&sv_client->netchan.remote_address), sv_client->protocol_version, MINOR_VERSION_R1Q2);
+
 	//r1: new client state now to prevent multiple new from causing high cpu / overflows.
 	sv_client->state = cs_spawning;
 
@@ -851,6 +855,38 @@ void SV_ClientBegin (client_t *cl)
 					SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_message->string);
 					SV_DropClient (cl, true);
 					return;
+				}
+			}
+			else
+			{
+				//client IS valid
+				int	match;
+
+				//check banned ac clients
+				match = (int)pow(2, cl->anticheat_client_type-1);
+				if (sv_anticheat_client_restrictions->intvalue & match)
+				{
+					Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], using restricted client\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+					SV_ClientPrintf (cl, PRINT_HIGH, "Your Quake II client is not permitted on this server.\n");
+					SV_DropClient (cl, true);
+					return;
+				}
+
+				//check protocol version
+				if (sv_anticheat_force_protocol35->intvalue)
+				{
+					if (cl->protocol != PROTOCOL_R1Q2)
+					{
+						Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], using protocol 34.\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+
+						SV_ClientPrintf (cl, PRINT_HIGH, "You must use protocol 35 on this server. You are being reconnected with protocol 35 enabled.\n");
+
+						MSG_WriteByte (svc_stufftext);
+						MSG_WriteString ("set cl_protocol \"35\"\nreconnect\n");
+						SV_AddMessage (cl, true);
+						SV_DropClient (cl, true);
+						return;
+					}
 				}
 			}
 		}
@@ -1540,7 +1576,7 @@ static void SV_ACList_f (void)
 
 static void SV_ACInfo_f (void)
 {
-	int					clientID;
+	ptrdiff_t			clientID;
 	const char			*substring;
 	const char			*filesubstring;
 	client_t			*cl;
@@ -1940,7 +1976,7 @@ static void SV_Nextserver_f (void)
 
 static void SV_Lag_f (void)
 {
-	int			clientID;
+	ptrdiff_t	clientID;
 	client_t	*cl;
 	const char	*substring, *s2c;
 	char		buff[32];
@@ -2565,7 +2601,7 @@ void SV_RunMultiMoves (client_t *cl)
 	//r1: check there are actually enough usercmds in the message!
 	for (i = 0; i < nummoves; i++)
 	{
-		MSG_ReadDeltaUsercmd (&net_message, &last, &move);
+		MSG_ReadDeltaUsercmd (&net_message, &last, &move, cl->protocol == PROTOCOL_R1Q2 ? MINOR_VERSION_R1Q2 : 0);
 
 		if (net_message.readcount > net_message.cursize)
 		{
@@ -2699,21 +2735,21 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//memset (&nullcmd, 0, sizeof(nullcmd));
 
 			//r1: check there are actually enough usercmds in the message!
-			MSG_ReadDeltaUsercmd (&net_message, &null_usercmd, &oldest);
+			MSG_ReadDeltaUsercmd (&net_message, &null_usercmd, &oldest, cl->protocol_version);
 			if (net_message.readcount > net_message.cursize)
 			{
 				SV_KickClient (cl, "bad clc_move usercmd read (oldest)", NULL);
 				return;
 			}
 
-			MSG_ReadDeltaUsercmd (&net_message, &oldest, &oldcmd);
+			MSG_ReadDeltaUsercmd (&net_message, &oldest, &oldcmd, cl->protocol_version);
 			if (net_message.readcount > net_message.cursize)
 			{
 				SV_KickClient (cl, "bad clc_move usercmd read (oldcmd)", NULL);
 				return;
 			}
 
-			MSG_ReadDeltaUsercmd (&net_message, &oldcmd, &newcmd);
+			MSG_ReadDeltaUsercmd (&net_message, &oldcmd, &newcmd, cl->protocol_version);
 			if (net_message.readcount > net_message.cursize)
 			{
 				SV_KickClient (cl, "bad clc_move usercmd read (newcmd)", NULL);

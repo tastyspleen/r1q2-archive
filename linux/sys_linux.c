@@ -327,6 +327,9 @@ void Sys_Init(void)
 	
 	signal (SIGTERM, Sys_KillServer);
 	signal (SIGINT, Sys_KillServer);
+
+	//initialize timer base
+	Sys_Milliseconds ();
 }
 
 void Sys_Error (const char *error, ...)
@@ -645,4 +648,8 @@ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
 
 #endif
 
-
+//FIXME
+qboolean Sys_CheckFPUStatus (void)
+{
+	return true;
+}

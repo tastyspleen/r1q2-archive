@@ -616,7 +616,6 @@ void Con_DrawNotify (void)
 	int		i;
 	int		time;
 	char	*s;
-	int		skip;
 
 	v = 0;
 	for (i= con.current-NUM_CON_TIMES+1 ; i<=con.current ; i++)
@@ -642,6 +641,7 @@ void Con_DrawNotify (void)
 	{
 		int		cursorpos;
 		int		maxwidth;
+		int		skip = 0;
 
 		switch (chat_mode)
 		{

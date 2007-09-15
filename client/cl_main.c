@@ -133,7 +133,7 @@ cvar_t	*gender_auto;
 cvar_t	*cl_vwep;
 
 //r1ch
-cvar_t	*cl_defertimer;
+//cvar_t	*cl_defertimer;
 cvar_t	*cl_protocol;
 
 cvar_t	*dbg_framesleep;
@@ -738,7 +738,10 @@ void CL_SendConnectPacket (int useProtocol)
 	if (adr.port == 0)
 		adr.port = ShortSwap (PORT_SERVER);
 
-	port = qport->intvalue;
+	if (qport->intvalue == -1)
+		port = (int)(random() * 0xFFFF);
+	else
+		port = qport->intvalue;
 
 	userinfo_modified = false;
 
@@ -774,7 +777,7 @@ void CL_SendConnectPacket (int useProtocol)
 
 
 	if (cls.serverProtocol == PROTOCOL_R1Q2)
-		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\" %u\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), msglen);
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\" %u %u\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo(), msglen, MINOR_VERSION_R1Q2);
 	else
 		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n", cls.serverProtocol, port, cls.challenge, Cvar_Userinfo());
 }
@@ -1331,10 +1334,31 @@ void CL_Changing_f (void)
 	cmd = Cmd_MacroExpandString("$cl_endmapcmd");
 	if (cmd)
 	{
-		//note, can't use Cmd_ExecuteString as it doesn't handle ;
-		Cbuf_AddText (cmd);
-		Cbuf_AddText ("\n");
-		Cbuf_Execute ();
+		if (cmd[0])
+		{
+			char	*p;
+			//note, can't use Cmd_ExecuteString as it doesn't handle ;
+			//but we must otherwise we don't run immediately!
+			p = cmd;
+
+			for (;;)
+			{
+				p = strchr (p, ';');
+				if (p)
+				{
+					p[0] = 0;
+					Cmd_ExecuteString (cmd);
+					p = cmd = p + 1;
+					if (!cmd[0])
+						break;
+				}
+				else
+				{
+					Cmd_ExecuteString (cmd);
+					break;
+				}
+			}
+		}
 	}
 	else
 		Com_Printf ("WARNING: Error expanding $cl_endmapcmd, ignored.\n", LOG_CLIENT|LOG_WARNING);
@@ -2265,7 +2289,7 @@ const char *CL_Loc_Get (vec3_t org)
 {
 	vec3_t			distance;
 	uint32			length, bestlength = 0xFFFFFFFF;
-	cl_location_t	*loc = &cl_locations, *best;
+	cl_location_t	*loc = &cl_locations, *best = &cl_locations;
 
 	Q_assert (cl_locations.next);
 
@@ -2485,7 +2509,7 @@ void CL_RequestNextDownload (void)
 
 	for (i = CS_SOUNDS; i < CS_SOUNDS + MAX_SOUNDS; i++)
 	{
-		if (cl.configstrings[i][0] == '*')
+		if (cl.configstrings[i][0] == '*')// && !strstr (cl.configstrings[i], ".."))
 			sexedSounds[PLAYER_MULT++] = cl.configstrings[i] + 1;
 	}
 
@@ -2686,17 +2710,27 @@ redoSkins:;
 		precache_check = CS_SOUNDS;
 	}
 
-	if (precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS+MAX_SOUNDS) { 
-		if (allow_download_sounds->intvalue) {
+	if (precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS+MAX_SOUNDS)
+	{ 
+		if (allow_download_sounds->intvalue)
+		{
 			if (precache_check == CS_SOUNDS)
 				precache_check++; // zero is blank
+
 			while (precache_check < CS_SOUNDS+MAX_SOUNDS &&
-				cl.configstrings[precache_check][0]) {
-				if (cl.configstrings[precache_check][0] == '*') {
+				cl.configstrings[precache_check][0])
+			{
+				if (cl.configstrings[precache_check][0] == '*')
+				{
 					precache_check++;
 					continue;
 				}
-				Com_sprintf(fn, sizeof(fn), "sound/%s", cl.configstrings[precache_check++]);
+
+				if (cl.configstrings[precache_check][0] == '#')
+					Com_sprintf(fn, sizeof(fn), "%s", cl.configstrings[precache_check++] + 1);
+				else
+					Com_sprintf(fn, sizeof(fn), "sound/%s", cl.configstrings[precache_check++]);
+
 				if (!CL_CheckOrDownloadFile(fn))
 					return; // started a download
 			}
@@ -3427,7 +3461,7 @@ void CL_InitLocal (void)
 
 	cl_protocol->changed = _protocol_changed;
 
-	cl_defertimer = Cvar_Get ("cl_defertimer", "1", 0);
+	//cl_defertimer = Cvar_Get ("cl_defertimer", "1", 0);
 	cl_smoothsteps = Cvar_Get ("cl_smoothsteps", "3", 0);
 	cl_instantpacket = Cvar_Get ("cl_instantpacket", "1", 0);
 	cl_nolerp = Cvar_Get ("cl_nolerp", "0", 0);

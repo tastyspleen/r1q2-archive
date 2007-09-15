@@ -34,7 +34,7 @@ woven in by Terry Thorsen 1/2003.
   version without encryption capabilities).
  */
 
-
+#ifndef NO_ZLIB
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -420,6 +420,9 @@ extern unzFile ZEXPORT unzOpen2 (path, pzlib_filefunc_def)
 
     if (unz_copyright[0]!=' ')
         return NULL;
+
+	//i don't like the uninit memory floating around :)
+	memset (&us, 0, sizeof(us));
 
     if (pzlib_filefunc_def==NULL)
         fill_fopen_filefunc(&us.z_filefunc);
@@ -1606,3 +1609,4 @@ extern int ZEXPORT unzSetOffset (file, pos)
     s->current_file_ok = (err == UNZ_OK);
     return err;
 }
+#endif

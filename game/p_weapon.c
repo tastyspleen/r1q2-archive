@@ -568,7 +568,7 @@ void weapon_grenade_fire (edict_t *ent, qboolean held)
 	if (! ( (int)dmflags->value & DF_INFINITE_AMMO ) )
 		ent->client->pers.inventory[ent->client->ammo_index]--;
 
-	ent->client->grenade_time = level.time + 1.0;
+	ent->client->grenade_time = level.time + 1.0f;
 
 	if(ent->deadflag || ent->s.modelindex != 255) // VWep animations screw up corpses
 	{
@@ -650,7 +650,7 @@ void Weapon_Grenade (edict_t *ent)
 		{
 			if (!ent->client->grenade_time)
 			{
-				ent->client->grenade_time = level.time + GRENADE_TIMER + 0.2;
+				ent->client->grenade_time = level.time + GRENADE_TIMER + 0.2f;
 				ent->client->weapon_sound = gi.soundindex("weapons/hgrenc1b.wav");
 			}
 

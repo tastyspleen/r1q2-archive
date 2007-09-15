@@ -234,10 +234,10 @@ Cbuf_Execute
 void Cbuf_Execute (void)
 {
 	//qboolean	escape = false;
-	int		i;
-	char	*text;
-	char	line[1024];
-	int		quotes;
+	int				i;
+	char			*text;
+	char			line[1024];
+	int				quotes;
 
 	alias_count = 0;		// don't allow infinite alias loops
 

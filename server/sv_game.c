@@ -55,7 +55,7 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 	//r1: trap bad writes from game dll
 	if (client->state <= cs_spawning)
 	{
-		Com_Printf ("GAME ERROR: Attempted to write %d byte %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, MSG_GetLength(), svc_strings[MSG_GetType()], p-1);
+		Com_Printf ("GAME ERROR: Attempted to write %d byte %s to disconnected client %d, ignored.\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG, MSG_GetLength(), svc_strings[MSG_GetType()], p-1);
 		
 		if (sv_gamedebug->intvalue >= 2)
 			Sys_DebugBreak ();
@@ -68,11 +68,13 @@ void EXPORT PF_Unicast (edict_t *ent, qboolean reliable)
 	if (sv_disconnect_hack->intvalue)
 	{
 		if ((MSG_GetLength () == 1 && MSG_GetData()[0] == svc_disconnect) ||
-			(MSG_GetLength () > 11 && MSG_GetData()[0] == svc_stufftext && !strncmp (MSG_GetData()+1, "disconnect\n", 11)))
+			(MSG_GetLength () > 11 && MSG_GetData()[0] == svc_stufftext && !strncmp ((char *)MSG_GetData()+1, "disconnect\n", 11)))
 		{
 			MSG_FreeData ();
 			Com_Printf ("Dropping %s, sv_disconnect_hack\n", LOG_SERVER, client->name);
-			SV_DropClient (client, true);
+			//don't drop now as game dll could reference this client later
+			//SV_DropClient (client, true);
+			client->notes |= NOTE_DROPME;
 			return;
 		}
 	}
@@ -158,7 +160,7 @@ void EXPORT PF_cprintf (edict_t *ent, int level, const char *fmt, ...)
 
 		if (client->state != cs_spawned)
 		{
-			Com_Printf ("GAME ERROR: cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+			Com_Printf ("GAME ERROR: cprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG, n-1);
 
 			if (sv_gamedebug->intvalue >= 2)
 				Sys_DebugBreak ();
@@ -217,7 +219,7 @@ void EXPORT PF_centerprintf (edict_t *ent, const char *fmt, ...)
 	client = svs.clients + (n-1);
 	if (client->state != cs_spawned)
 	{
-		Com_Printf ("GAME ERROR: centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, n-1);
+		Com_Printf ("GAME ERROR: centerprintf to disconnected client %d, ignored\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG, n-1);
 
 		if (sv_gamedebug->intvalue >= 2)
 			Sys_DebugBreak ();
@@ -423,7 +425,9 @@ fixed:
 		//this results in overwrite of CS_PLAYERSKINS subscripts.
 		if (length > sizeof(sv.configstrings[index])-1)
 		{
-			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
+			Com_Printf ("GAME ERROR: configstring %d ('%.32s...') exceeds maximum allowed length, truncated.\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
+			if (sv_gamedebug->intvalue > 1)
+				Sys_DebugBreak ();
 			Q_strncpy (safestring, val, sizeof(safestring)-1);
 			val = safestring;
 		}
@@ -506,7 +510,9 @@ fixed:
 		vec3_t	axis;
 		if (sscanf (val, "%f %f %f", &axis[0], &axis[1], &axis[2]) != 3)
 		{
-			Com_Printf ("GAME ERROR: Invalid CS_SKYAXIS configstring '%s'!\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, val);
+			Com_Printf ("GAME ERROR: Invalid CS_SKYAXIS configstring '%s'!\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG, val);
+			if (sv_gamedebug->intvalue > 1)
+				Sys_DebugBreak ();
 			VectorClear (axis);
 		}
 		val = safestring;

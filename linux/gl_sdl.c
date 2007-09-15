@@ -1,4 +1,4 @@
-/* $Id: gl_sdl.c,v 1.1 2006/10/30 20:17:16 r1ch Exp $
+/* $Id: gl_sdl.c,v 1.3 2007/05/12 20:09:36 r1ch Exp $
  *
  * all os-specific SDL refresher code
  *
@@ -63,7 +63,6 @@
 static qboolean                 X11_active = false;
 
 static SDL_Surface *surface;
-static unsigned int sdl_palettemode;
 
 struct
 {
@@ -812,24 +811,24 @@ void GLimp_EndFrame (void)
 /*
 ** GLimp_SetMode
 */
-rserr_t GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen )
+int GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboolean fullscreen )
 {
 	ri.Con_Printf (PRINT_ALL, "setting mode %d:", mode );
 
 	if ( !ri.Vid_GetModeInfo( pwidth, pheight, mode ) )
 	{
 		ri.Con_Printf( PRINT_ALL, " invalid mode\n" );
-		return rserr_invalid_mode;
+		return VID_ERR_INVALID_MODE;
 	}
 
 	ri.Con_Printf( PRINT_ALL, " %d %d\n", *pwidth, *pheight);
 
 	if ( !GLimp_InitGraphics( fullscreen ) ) {
 		// failed to set a valid mode in windowed mode
-		return rserr_invalid_mode;
+		return VID_ERR_INVALID_MODE;
 	}
 
-	return rserr_ok;
+	return VID_ERR_NONE;
 }
 
 

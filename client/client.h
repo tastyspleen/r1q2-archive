@@ -353,6 +353,8 @@ typedef struct client_static_s
 	qboolean	passivemode;
 	FILE		*demofile;
 
+	int			protocolVersion;	// R1Q2 protocol version
+
 #ifdef USE_CURL
 	dlqueue_t		downloadQueue;			//queue of paths we need
 	
@@ -429,7 +431,7 @@ extern	cvar_t	*cl_timedemo;
 
 extern	cvar_t	*cl_vwep;
 
-extern	cvar_t	*cl_defertimer;
+//extern	cvar_t	*cl_defertimer;
 
 extern	cvar_t	*scr_sizegraph;
 extern	cvar_t	*fs_gamedirvar;

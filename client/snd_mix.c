@@ -381,7 +381,7 @@ void EXPORT S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int o
 	//as it would always be zero.
 	lscale = snd_scaletable[ ch->leftvol >> 3];
 	rscale = snd_scaletable[ ch->rightvol >> 3];
-	sfx = (signed char *)sc->data + ch->pos;
+	sfx = sc->data + ch->pos;
 
 	samp = &paintbuffer[offset];
 

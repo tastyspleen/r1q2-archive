@@ -452,9 +452,9 @@ void CL_PrepRefresh (void)
 	S_StopAllSounds ();
 
 	//can't use cls.realtime - could be out of date :)
-	if (!cl_timedemo->intvalue)
-		cl.defer_rendering = (int)(Sys_Milliseconds() + (cl_defertimer->value * 1000));
-	else
+	//if (!cl_timedemo->intvalue)
+		//cl.defer_rendering = (int)(Sys_Milliseconds() + (cl_defertimer->value * 1000));
+	//else
 		cl.defer_rendering = 0;
 
 	// start the cd track
@@ -657,7 +657,7 @@ void V_RenderView(void)
 		}
 
 		if (cl.defer_rendering > cls.realtime)
-			r_numentities = r_numparticles = r_numdlights = 0;
+			r_numentities = 0;
 
 		cl.refdef.num_entities = r_numentities;
 		cl.refdef.entities = r_entities;
@@ -803,19 +803,6 @@ extern cparticle_t	*particles;
 void CL_ClearParticles (int num);
 void _particlecount_changed (cvar_t *self, char *old, char *newValue)
 {
-	//don't allow disabling from here
-	if (self->intvalue < 1024)
-	{
-		Cvar_Set (self->name, "1024");
-		return;
-	}
-	else if (self->intvalue > 1048576)
-	{
-		//prevent forced crashes etc by setting this insane
-		Cvar_Set (self->name, "1048576");
-		return;
-	}
-
 	if (particles)
 	{
 		CL_ClearParticles (atoi(old));
@@ -833,6 +820,19 @@ void _particlecount_changed (cvar_t *self, char *old, char *newValue)
 
 	//allocated uninit
 	CL_ClearParticles (cl_particlecount->intvalue);
+
+	//don't allow disabling from here
+	if (self->intvalue < 1024)
+	{
+		Cvar_Set (self->name, "1024");
+		return;
+	}
+	else if (self->intvalue > 1048576)
+	{
+		//prevent forced crashes etc by setting this insane
+		Cvar_Set (self->name, "1048576");
+		return;
+	}
 }
 
 /*

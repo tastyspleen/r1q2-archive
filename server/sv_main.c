@@ -197,6 +197,7 @@ cvar_t	*sv_anticheat_client_disconnect_action;
 
 cvar_t	*sv_anticheat_disable_play;
 cvar_t	*sv_anticheat_client_restrictions;
+cvar_t	*sv_anticheat_force_protocol35;
 
 netblock_t	anticheat_exceptions;
 netblock_t	anticheat_requirements;
@@ -1002,6 +1003,7 @@ static void SVC_DirectConnect (void)
 	int			i;
 	unsigned	edictnum;
 	unsigned	protocol;
+	unsigned	version;
 	int			challenge;
 	int			previousclients;
 
@@ -1036,25 +1038,30 @@ static void SVC_DirectConnect (void)
 
 	qport = atoi(Cmd_Argv(2));
 
-	//work around older protocol 35 clients
 	if (protocol == PROTOCOL_R1Q2)
 	{
+		//work around older protocol 35 clients
 		if (qport > 0xFF)
 			qport = 0;
 
+		//max message length
 		if (Cmd_Argv(5)[0])
 		{
-			msglen = atoi (Cmd_Argv(5));
+			msglen = strtoul (Cmd_Argv(5), NULL, 10);
 
-			if (msglen > MAX_USABLEMSG)
+			//512 is arbitrary, any messages larger will overflow the client anyway
+			//so choosing low values is fairly silly anyway. this simply prevents someone
+			//using msglength 30 and spamming the messagelist queue.
+
+			if (msglen == 0)
+			{
+				msglen = MAX_USABLEMSG;
+			}
+			else if (msglen > MAX_USABLEMSG || msglen < 512)
 			{
 				Netchan_OutOfBandPrint (NS_SERVER, adr, "print\nInvalid maximum message length.\n");
 				Com_DPrintf ("    rejected msglen %u\n", msglen);
 				return;
-			}
-			else if (msglen == 0)
-			{
-				msglen = MAX_USABLEMSG;
 			}
 
 			i = Cvar_IntValue ("net_maxmsglen");
@@ -1066,10 +1073,22 @@ static void SVC_DirectConnect (void)
 		{
 			msglen = 1390;
 		}
+
+		//protocol 5 subversion
+		if (Cmd_Argv(6)[0])
+		{
+			version = strtoul (Cmd_Argv(6), NULL, 10);
+		}
+		else
+		{
+			//1903 is assumed by older clients that don't transmit.
+			version = 1903;
+		}
 	}
 	else
 	{
 		msglen = 0;
+		version = 0;
 	}
 
 	challenge = atoi(Cmd_Argv(3));
@@ -1456,11 +1475,13 @@ gotnewcl:
 		//did the game ruin our userinfo string?
 		if (!userinfo[0])
 		{
-			Com_Printf ("GAME ERROR: Userinfo string corrupted after ClientConnect\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG); 
+			Com_Printf ("GAME ERROR: Userinfo string corrupted after ClientConnect\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG); 
 			if (sv_gamedebug->intvalue > 1)
 				Sys_DebugBreak ();
 		}
 	}
+
+	newcl->protocol_version = version;
 
 	newcl->min_ping = 9999;
 
@@ -1808,12 +1829,12 @@ static void SVC_RemoteCommand (void)
 		{
 			Cmd_ExecuteString (remaining);
 			Com_EndRedirect (true);
-			Com_Printf ("Rcon from %s[%s]:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
+			Com_Printf ("Rcon from %s[%s]: %s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
 		}
 		else
 		{
 			Com_EndRedirect (true);
-			Com_Printf ("Bad limited rcon from %s[%s]:\n%s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
+			Com_Printf ("Bad limited rcon from %s[%s]: %s\n", LOG_SERVER, NET_AdrToString (&net_from), FindPlayer(&net_from), remaining);
 		}
 	}
 
@@ -2272,15 +2293,34 @@ static void SV_ReadPackets (void)
 			else
 			{
 				//compare byte in newer r1q2, older r1q2 clients get qport zeroed on svc_directconnect
-				if (cl->netchan.qport && cl->netchan.qport != (qport & 0xFF))
+				if (cl->netchan.qport)
+				{
+					if (cl->netchan.qport != (qport & 0xFF))
+						continue;
+				}
+				else if (cl->netchan.remote_address.port != net_from.port)
 					continue;
 			}
 
 			if (cl->netchan.remote_address.port != net_from.port)
 			{
-				Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
-				cl->netchan.remote_address.port = net_from.port;
+				if (cl->state == cs_zombie)
+				{
+					Com_Printf ("SV_ReadPackets: Got a translated port for client %d (zombie) [%d->%d], freeing client (broken NAT router reconnect?)\n", LOG_SERVER|LOG_NOTICE, i, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
+					SV_CleanClient (cl);
+					continue;
+				}
+				else
+				{
+					Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
+					cl->netchan.remote_address.port = net_from.port;
+				}
 			}
+
+			//they overflowed, but maybe not disconnected yet. ignore
+			//any further commands.
+			if (cl->notes & NOTE_OVERFLOWED)
+				continue;
 
 			if (Netchan_Process(&cl->netchan, &net_message))
 			{	// this is a valid, sequenced packet, so process it
@@ -2378,6 +2418,12 @@ static void SV_CheckTimeouts (void)
 				cl->packetCount = 0;
 			}
 
+			if (cl->notes & NOTE_DROPME)
+			{
+				SV_DropClient (cl, true);
+				return;
+			}
+
 			if (cl->state == cs_spawned)
 			{
 				cl->idletime++;
@@ -2407,9 +2453,11 @@ static void SV_CheckTimeouts (void)
 				if (cl->state == cs_spawned && cl->name[0])
 					SV_BroadcastPrintf (PRINT_HIGH, "%s timed out\n", cl->name);
 				Com_Printf ("Dropping %s, timed out.\n", LOG_SERVER|LOG_DROP, cl->name);
-				SV_DropClient (cl, false); 
-				SV_CleanClient (cl);
-				cl->state = cs_free;	// don't bother with zombie state
+				SV_DropClient (cl, true);
+				//r1: do use zombie state. it's possible client is broken on send
+				//but can receive, send a disconnect so they know they disconnected.
+				//SV_CleanClient (cl);
+				//cl->state = cs_free;	// don't bother with zombie state
 			}
 		}
 	}
@@ -2464,7 +2512,7 @@ static void SV_RunGameFrame (void)
 
 		if (MSG_GetLength())
 		{
-			Com_Printf ("GAME ERROR: The Game DLL wrote data to the message buffer, but did not call gi.unicast or gi.multicast before finishing this frame.\nData: %s\n", LOG_WARNING|LOG_GAMEDEBUG|LOG_SERVER, MakePrintable (MSG_GetData(), MSG_GetLength()));
+			Com_Printf ("GAME ERROR: The Game DLL wrote data to the message buffer, but did not call gi.unicast or gi.multicast before finishing this frame.\nData: %s\n", LOG_ERROR|LOG_GAMEDEBUG|LOG_SERVER, MakePrintable (MSG_GetData(), MSG_GetLength()));
 			if (sv_gamedebug->intvalue > 1)
 				Sys_DebugBreak ();
 			MSG_Clear ();
@@ -2671,6 +2719,14 @@ void SV_Frame (int msec)
 
 #ifdef ANTICHEAT
 	SV_AntiCheat_Run ();
+#endif
+
+	//have to check this here for possible listen servers loading DLLs and stuff
+	//during server execution
+#ifndef DEDICATED_ONLY
+	//check the server is running proper Q2 physics model
+	if (!Sys_CheckFPUStatus ())
+		Com_Error (ERR_FATAL, "FPU control word is not set as expected, Quake II physics model will break.");
 #endif
 }
 
@@ -2894,10 +2950,14 @@ static void _rcon_buffsize_changed (cvar_t *var, char *oldvalue, char *newvalue)
 	}
 }
 
+#ifdef ANTICHEAT
+
 static void _expand_cvar_newlines (cvar_t *var, char *o, char *n)
 {
 	ExpandNewLines (n);
 }
+
+#endif
 
 /*
 ===============
@@ -3285,6 +3345,9 @@ void SV_Init (void)
 
 	sv_anticheat_client_restrictions = Cvar_Get ("sv_anticheat_client_restrictions", "0", 0);
 	sv_anticheat_client_restrictions->help = "Restrict the use of certain clients, even if they are anticheat valid. See the anticheat admin forum for further information. Default 0.\n";
+
+	sv_anticheat_force_protocol35 = Cvar_Get ("sv_anticheat_force_protocol35", "0", 0);
+	sv_anticheat_force_protocol35->help = "Force anticheat clients to connect using protocol 35. This may help prevent old hacks from working. Default 0.\n";
 #endif
 
 	//r1: init pyroadmin

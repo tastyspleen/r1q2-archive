@@ -150,6 +150,14 @@ SV_UnlinkEdict
 */
 void EXPORT SV_UnlinkEdict (edict_t *ent)
 {
+	if (!ent)
+	{
+		Com_Printf ("GAME ERROR: SV_UnlinkEdict: NULL pointer\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG);
+		if (sv_gamedebug->intvalue > 1)
+			Sys_DebugBreak ();
+		return;
+	}
+
 	if (!ent->area.prev)
 	{
 		if (ent->s.solid != SOLID_NOT)
@@ -186,6 +194,14 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	int			i, j, k;
 	int			area;
 	int			topnode;
+
+	if (!ent)
+	{
+		Com_Printf ("GAME ERROR: SV_LinkEdict: NULL pointer\n", LOG_SERVER|LOG_ERROR|LOG_GAMEDEBUG);
+		if (sv_gamedebug->intvalue > 1)
+			Sys_DebugBreak ();
+		return;
+	}
 
 	if (ent->area.prev)
 		SV_UnlinkEdict (ent);	// unlink from old position
@@ -670,7 +686,7 @@ trace_t EXPORT SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edi
 	memset ( &clip, 0, sizeof ( moveclip_t ) );
 
 	//r1: server-side hax for bad looping traces
-	if (0 && ++sv_tracecount >= sv_max_traces_per_frame->intvalue)
+	if (++sv_tracecount >= sv_max_traces_per_frame->intvalue)
 	{
 		Com_Printf ("GAME ERROR: Bad SV_Trace: %u calls in a single frame, aborting!\n", LOG_SERVER|LOG_GAMEDEBUG|LOG_ERROR, sv_tracecount);
 		if (sv_gamedebug->intvalue >= 2)

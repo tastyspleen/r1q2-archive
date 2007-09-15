@@ -630,7 +630,7 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 				*file = fopen (cache->filepath, "rb");
 				if (!*file)
 				{
-					Com_Printf ("WARNING: Cached file '%s' failed to open! Did you delete it?", LOG_WARNING|LOG_GENERAL, cache->filepath);
+					Com_Printf ("WARNING: Cached file '%s' failed to open! Did you delete it?\n", LOG_WARNING|LOG_GENERAL, cache->filepath);
 					rbdelete (filename, rb);
 					return -1;
 				}
@@ -1065,6 +1065,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 
 		Com_Printf ("Added packfile %s (%i files)\n", LOG_GENERAL,  packfile, numpackfiles);
 	}
+#ifndef NO_ZLIB
 	else if (!strcmp (ext, "pkz"))
 	{
 		unzFile			f;
@@ -1109,6 +1110,7 @@ static pack_t /*@null@*/ *FS_LoadPackFile (const char *packfile, const char *ext
 		pack->h.zhandle = f;
 		Com_Printf ("Added zpackfile %s (%i files)\n", LOG_GENERAL,  packfile, i);
 	}
+#endif
 	else
 	{
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: Unknown type %s", ext);

@@ -70,7 +70,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define FL_RESPAWN				0x80000000	// used for item respawning
 
 
-#define	FRAMETIME		0.1
+#define	FRAMETIME		0.1f
 
 // memory tags to allow dynamic memory to be cleaned up
 #define	TAG_GAME	765		// clear when unloading the dll
@@ -515,7 +515,7 @@ extern	edict_t			*g_edicts;
 #endif
 
 #define random()	((rand () & 0x7fff) / ((float)0x7fff))
-#define crandom()	(2.0 * (random() - 0.5))
+#define crandom()	(2.0f * (random() - 0.5f))
 
 extern	cvar_t	*maxentities;
 extern	cvar_t	*deathmatch;
@@ -614,7 +614,7 @@ void InitItems (void);
 void SetItemNames (void);
 gitem_t	*FindItem (char *pickup_name);
 gitem_t	*FindItemByClassname (char *classname);
-#define	ITEM_INDEX(x) ((x)-itemlist)
+#define	ITEM_INDEX(x) ((int)((x)-itemlist))
 edict_t *Drop_Item (edict_t *ent, gitem_t *item);
 void SetRespawn (edict_t *ent, float delay);
 void ChangeWeapon (edict_t *ent);

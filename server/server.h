@@ -194,6 +194,7 @@ typedef struct client_s
 	
 	//r1: client protocol
 	uint32	 		protocol;
+	uint32			protocol_version;
 
 	//r1: number of times they've commandMsec underflowed (if this gets excessive then
 	//they can be dropped)
@@ -423,7 +424,7 @@ extern	cvar_t	*allow_download_others;
 #define NOTE_CLIENT_NOCHEAT 0x1
 #define	NOTE_OVERFLOWED		0x2
 #define	NOTE_OVERFLOW_DONE	0x4
-
+#define	NOTE_DROPME			0x8
 
 //
 // sv_main.c
@@ -717,6 +718,8 @@ extern cvar_t	*sv_anticheat_show_violation_reason;
 extern cvar_t	*sv_anticheat_client_disconnect_action;
 
 extern cvar_t	*sv_anticheat_disable_play;
+extern cvar_t	*sv_anticheat_client_restrictions;
+extern cvar_t	*sv_anticheat_force_protocol35;
 
 extern	int		antiCheatNumFileHashes;
 
@@ -738,6 +741,12 @@ enum
 	ANTICHEAT_QUERY_SENT,
 	ANTICHEAT_QUERY_DONE
 };
+
+#define ACCLIENT_R1Q2	0x01
+#define ACCLIENT_EGL	0x02
+#define	ACCLIENT_APRGL	0x04
+#define	ACCLIENT_APRSW	0x08
+#define	ACCLIENT_Q2PRO	0x10
 
 extern netblock_t	anticheat_exceptions;
 extern netblock_t	anticheat_requirements;

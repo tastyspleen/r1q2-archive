@@ -194,7 +194,16 @@ void Mod_Init (void)
 }
 
 #define MODEL_HASH_SIZE	32
-static model_t	*models_hash[MODEL_HASH_SIZE];
+
+typedef struct mscache_s
+{
+	char				name[MAX_QPATH];
+	struct mscache_s	*hash_next;
+	int					size;
+} mscache_t;
+
+static model_t		*models_hash[MODEL_HASH_SIZE];
+static mscache_t	*model_size_cache[MODEL_HASH_SIZE];
 
 /*
 ==================
@@ -207,6 +216,7 @@ model_t *Mod_ForName (char *name, qboolean crash)
 {
 	model_t		*mod;
 	model_t		*modelhash;
+	mscache_t	*model_size;
 	byte		*buf;
 	int			i;
 	unsigned	hash;
@@ -229,12 +239,18 @@ model_t *Mod_ForName (char *name, qboolean crash)
 
 	hash = hashify (name) % MODEL_HASH_SIZE;
 
-	for(modelhash = models_hash[hash]; modelhash; modelhash = modelhash->hash_next)
+	for (modelhash = models_hash[hash]; modelhash; modelhash = modelhash->hash_next)
 	{
 		if (!strcmp (modelhash->name, name))
 		{
 			return modelhash;
 		}
+	}
+
+	for (model_size = model_size_cache[hash]; model_size; model_size = model_size->hash_next)
+	{
+		if (!strcmp (model_size->name, name))
+			break;
 	}
 
 	//
@@ -289,27 +305,50 @@ model_t *Mod_ForName (char *name, qboolean crash)
 	
 	switch (LittleLong(*(unsigned *)buf))
 	{
-	case IDALIASHEADER:
-		loadmodel->extradata = Hunk_Begin (0x200000);
-		Mod_LoadAliasModel (mod, buf);
-		break;
+		case IDALIASHEADER:
+			if (model_size)
+				loadmodel->extradata = Hunk_Begin (model_size->size, model_size->size);
+			else
+				loadmodel->extradata = Hunk_Begin (0x200000, 0);
+			Mod_LoadAliasModel (mod, buf);
+			break;
+			
+		case IDSPRITEHEADER:
+			if (model_size)
+				loadmodel->extradata = Hunk_Begin (model_size->size, model_size->size);
+			else
+				loadmodel->extradata = Hunk_Begin (0x4000, 0);
+			Mod_LoadSpriteModel (mod, buf);
+			break;
 		
-	case IDSPRITEHEADER:
-		loadmodel->extradata = Hunk_Begin (0x4000);
-		Mod_LoadSpriteModel (mod, buf);
-		break;
-	
-	case IDBSPHEADER:
-		loadmodel->extradata = Hunk_Begin (0x1000000);
-		Mod_LoadBrushModel (mod, buf);
-		break;
+		case IDBSPHEADER:
+			if (model_size)
+				loadmodel->extradata = Hunk_Begin (model_size->size, model_size->size);
+			else
+				loadmodel->extradata = Hunk_Begin (0x1000000, 0);
+			Mod_LoadBrushModel (mod, buf);
+			break;
 
-	default:
-		ri.Sys_Error (ERR_DROP,"Mod_NumForName: unknown 0x%.8x fileid for %s", LittleLong(*(unsigned *)buf), mod->name);
-		break;
+		default:
+			ri.Sys_Error (ERR_DROP,"Mod_NumForName: unknown 0x%.8x fileid for %s", LittleLong(*(unsigned *)buf), mod->name);
+			break;
 	}
 
-	loadmodel->extradatasize = Hunk_End ();
+	if (model_size)
+	{
+		loadmodel->extradatasize = model_size->size;
+	}
+	else
+	{
+		loadmodel->extradatasize = Hunk_End ();
+
+		model_size = malloc (sizeof(*model_size));
+		strcpy (model_size->name, mod->name);
+		model_size->size = loadmodel->extradatasize;
+		model_size->hash_next = model_size_cache[hash];
+
+		model_size_cache[hash] = model_size;
+	}
 
 	mod->hash_next = models_hash[hash];
 	models_hash[hash] = mod;
@@ -561,7 +600,7 @@ void Mod_LoadTexinfo (lump_t *l)
 	int 	i, count;
 	char	name[MAX_QPATH];
 	int		next;
-	int		length;
+	size_t	length;
 
 	in = (void *)(mod_base + l->fileofs);
 	
@@ -1517,6 +1556,8 @@ struct model_s * EXPORT R_RegisterModel (char *name)
 				mod->numframes = pheader->num_frames;
 			}
 			break;
+		default:
+            break;
 		}
 	}
 

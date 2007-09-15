@@ -86,7 +86,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #pragma intrinsic(memcmp)
 //#pragma intrinsic(memset)
 
-#if _MSC_VER > 14000
+#if _MSC_VER >= 1400
 	#define NORETURN __declspec(noreturn)
 	#define RESTRICT __declspec(restrict)
 	#define NOALIAS __declspec(noalias)
@@ -94,6 +94,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	#define RESTRICT
 	#define NORETURN
 	#define NOALIAS
+	#define sqrtf (float)sqrt
+	#define ceilf (float)ceil
 #endif
 
 #define alloca _alloca
@@ -272,7 +274,8 @@ MULTICAST_PHS_R,
 MULTICAST_PVS_R
 } multicast_t;
 
-int16   ShortSwap (int16 l);
+int16 ShortSwap (int16 l);
+int32 LongSwap (int32 l);
 
 #if !Q_BIGENDIAN
 #define LittleShort(l) (l)
@@ -323,12 +326,8 @@ extern void __cdecl Q_fastfloats (float *f, int *out);
 //extern void __cdecl Q_ftolsse( float f, int *out );
 //the overhead of using function pointer offsets any savings of using sse2 :/
 #else
-#define Q_ftol( f ) ( uint32 ) (f)
-static inline void Q_fastfloats(float *f, int *out) {
-	out[0] = Q_ftol(f[0]);
-	out[1] = Q_ftol(f[1]);
-	out[2] = Q_ftol(f[2]);
-}
+int Q_ftol( float f);
+void Q_fastfloats(float *f, int *out);
 void Q_ftol2( float f, int *out );
 #endif
 
@@ -513,7 +512,7 @@ void	Sys_Mkdir (char *path);
 void	Sys_DebugBreak (void);
 
 // large block stack allocation routines
-void	*Hunk_Begin (int maxsize);
+void	*Hunk_Begin (int maxsize, int precommit);
 void	*Hunk_Alloc (int size);
 void	Hunk_Free (void *buf);
 int		Hunk_End (void);
@@ -799,6 +798,15 @@ typedef struct
 //
 #define	BUTTON_ATTACK		1
 #define	BUTTON_USE			2
+
+//stolen for r1q2 in the name of bandwidth
+#define	BUTTON_UCMD_DBLFORWARD	4
+#define BUTTON_UCMD_DBLSIDE		8
+#define	BUTTON_UCMD_DBLUP		16
+
+#define BUTTON_UCMD_DBL_ANGLE1	32
+#define BUTTON_UCMD_DBL_ANGLE2	64
+
 #define	BUTTON_ANY			128			// any key whatsoever
 
 

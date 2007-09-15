@@ -32,7 +32,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //static int		tinyHunkCount;
 
 static int		hunkmaxsize;
-static int		cursize;
+static int		bytes_used;
+static int		pagesize = 0;
+static int		bytes_allocated;
+
+//#define VIRTUAL_ALLOC_PROFILE 1
+
+#ifdef VIRTUAL_ALLOC_PROFILE
+static int		total_allocated;
+static int		small_hits;
+#endif
 
 #define	VIRTUAL_ALLOC 1
 //#define CREATE_HEAP 1
@@ -47,15 +56,43 @@ static byte	*membase;
 //static BYTE *tempBuff;
 //static int tempBuffSize;;
 
-void *Hunk_Begin (int maxsize)
+void *Hunk_Begin (int maxsize, int precommit)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
-	cursize = 0;
+	bytes_used = 0;
+	bytes_allocated = 0;
+
+#ifdef VIRTUAL_ALLOC_PROFILE
+	small_hits = 0;
+#endif
+
+	if (!pagesize)
+	{
+		SYSTEM_INFO sSysInfo;         // useful information about the system
+		GetSystemInfo (&sSysInfo);     // initialize the structure
+		pagesize = sSysInfo.dwPageSize;
+	}
+
 //	tempBuff = NULL;
 //	tempBuffSize = TBUFFERLEN;
 	hunkmaxsize = maxsize;
 #if VIRTUAL_ALLOC
-	membase = VirtualAlloc (NULL, maxsize, MEM_RESERVE, PAGE_NOACCESS);
+	if (precommit == maxsize)
+	{
+		membase = VirtualAlloc (NULL, precommit, MEM_COMMIT, PAGE_READWRITE);
+		bytes_allocated = precommit;
+	}
+	else
+	{
+		membase = VirtualAlloc (NULL, maxsize, MEM_RESERVE, PAGE_NOACCESS);
+
+		if (precommit)
+		{
+			VirtualAlloc (membase, precommit, MEM_COMMIT, PAGE_READWRITE);
+			bytes_allocated = precommit;
+		}
+	}
+
 #elif CREATE_HEAP
 	{
 		ULONG lfh = 2;
@@ -70,15 +107,17 @@ void *Hunk_Begin (int maxsize)
 	return (void *)membase;
 }
 
-void *Hunk_Alloc (int realsize)
+void *Hunk_Alloc (int requested)
 {
 	int size;
+	int	pages;
+
 #if VIRTUAL_ALLOC || CREATE_HEAP
 	void	*buf;
 #endif
 
 	// round to cacheline
-	size = (realsize+31)&~31;
+	//size = (realsize+31)&~31;
 
 #if CREATE_HEAP
 	buf = HeapAlloc (membase, HEAP_NO_SERIALIZE, size);
@@ -94,40 +133,48 @@ void *Hunk_Alloc (int realsize)
 #else
 
 #if VIRTUAL_ALLOC
-	// commit pages as needed
-	//buf = VirtualAlloc (membase+cursize, size, MEM_COMMIT, PAGE_READWRITE);
+
+	//align everything to 32 bits
+	requested = (requested + 3)&~3;
+
+	if (requested <= bytes_allocated - bytes_used)
 	{
-		/*if (realsize < 256)
-		{
-			if (tempBuffSize + realsize > TBUFFERLEN)
-			{
-				tempBuff = VirtualAllocEx (GetCurrentProcess(), membase, cursize+TBUFFERLEN, MEM_COMMIT, PAGE_READWRITE);		
-				tempBuff += cursize;
-				tempBuffSize = 0;
-				//tinyHunkCount ++;
-				cursize += TBUFFERLEN;
-				if (cursize > hunkmaxsize)
-					Sys_Error ("Hunk_Alloc overflow");
-				//Com_Printf ("-- new TinyHunk --\n", PRINT_HIGH);
-			}
-			//Com_Printf ("TinyHunk (%d - %d - %d)\n", PRINT_HIGH, realsize, tinyCount, tinyHunkCount);
-			//tinyCount += size;
-			tempBuffSize += realsize;
-			return (void *)(tempBuff + tempBuffSize - realsize);
-		}*/
-		buf = VirtualAlloc (membase, cursize+size, MEM_COMMIT, PAGE_READWRITE);
-		if (!buf)
-		{
-			FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
-			Sys_Error ("VirtualAlloc commit failed.\n%s", buf);
-		}
-	}
+#ifdef VIRTUAL_ALLOC_PROFILE
+		small_hits++;
 #endif
-	cursize += size;
-	if (cursize > hunkmaxsize)
+		bytes_used += requested;
+		return membase + bytes_used - requested;
+	}
+
+	if (requested % pagesize == 0)
+		pages = requested / pagesize;
+	else
+		pages = 1 + requested / pagesize;
+
+	size = pagesize * pages;
+
+	//needs a new page
+	buf = VirtualAlloc (membase, bytes_allocated+size, MEM_COMMIT, PAGE_READWRITE);
+
+	//force the allocation on the new page boundary so as not to straddle pages
+	bytes_used = bytes_allocated;
+
+	bytes_allocated += size;
+
+	if (!buf)
+	{
+		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
+		Sys_Error ("VirtualAlloc commit failed.\n%s", buf);
+	}
+
+	bytes_used += requested;
+
+	if (bytes_used > hunkmaxsize)
 		Sys_Error ("Hunk_Alloc overflow");
 
-	return (void *)(membase+cursize-size);
+	return (void *)(membase + bytes_used - requested);
+
+#endif
 #endif
 }
 
@@ -140,9 +187,13 @@ int Hunk_End (void)
 	void	*buf;
 
 	// write protect it
-	buf = VirtualAlloc (membase, cursize, MEM_COMMIT, PAGE_READONLY);
+	buf = VirtualAlloc (membase, bytes_allocated, MEM_COMMIT, PAGE_READONLY);
 	if (!buf)
 		Sys_Error ("VirtualAlloc commit failed");
+#endif
+#ifdef VIRTUAL_ALLOC_PROFILE
+	total_allocated += bytes_allocated;
+	Com_Printf ("Allocated %d pages (%d bytes) for hunk 0x%p, %d hits, total = %.2f MiB\n", LOG_GENERAL, bytes_allocated / pagesize, bytes_allocated, membase, small_hits, (float)total_allocated / 1024.0f / 1024.0f);
 #endif
 #else
 	/**base = realloc (membase, cursize);
@@ -152,7 +203,7 @@ int Hunk_End (void)
 
 	//hunkcount++;
 //Com_Printf ("hunkcount: %i\n", hunkcount);
-	return cursize;
+	return bytes_used;
 }
 
 void Hunk_Free (void *base)
@@ -290,10 +341,10 @@ void Sys_FindClose (void)
 }
 
 #ifdef _WIN32
-#ifdef _DEBUG
+//#ifdef _DEBUG
 #include <windows.h>
 LARGE_INTEGER start;
-double totalTime = 0;
+double totalPerformanceTime = 0;
 void _START_PERFORMANCE_TIMER (void)
 {
 	QueryPerformanceCounter (&start);
@@ -308,10 +359,10 @@ void _STOP_PERFORMANCE_TIMER (void)
 	QueryPerformanceFrequency (&freq);
 	diff = stop.QuadPart - start.QuadPart;
 	res = ((double)((double)diff / (double)freq.QuadPart));
-	Com_Printf ("Function executed in %.5f secs.\n", LOG_GENERAL, res);
-	totalTime += res;
+	totalPerformanceTime += res;
+	Com_Printf ("Function executed in %.5f secs, total = %.5f.\n", LOG_GENERAL, res, totalPerformanceTime);
 }
-#endif
+//#endif
 #endif
 
 void Sys_DebugBreak (void)

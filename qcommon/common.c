@@ -27,9 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <openssl/md4.h>
 #endif
 
-#ifndef _M_AMD64
 #include <setjmp.h>
-#endif
 
 #define	MAXPRINTMSG	4096
 
@@ -51,9 +49,7 @@ static char	*com_argv[MAX_NUM_ARGVS+1];
 char	*binary_name;
 
 //int		realtime;
-#ifndef _M_AMD64
 jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
-#endif
 
 //static FILE	*log_stats_file;
 
@@ -381,7 +377,7 @@ A Com_Printf that only shows up if the "developer" cvar is set
 */
 void _Com_DPrintf (char const *fmt, ...)
 {
-#if !(__STDC_VERSION__ == 199901L || _MSC_VER >= 1400)
+#if !(__STDC_VERSION__ == 199901L || _MSC_VER >= 1400 && !defined _M_AMD64)
 	if (!developer->intvalue)
 	{
 		return;
@@ -438,11 +434,8 @@ void Com_Error (int code, const char *fmt, ...)
 		CL_Drop (false, true);
 #endif
 		recursive = false;
-#ifdef _M_AMD64
-		Sys_Error ("AMD64 does not support longjmp, try not to cause any errors");
-#else
+
 		longjmp (abortframe, -1);
-#endif
 	}
 	else if (code == ERR_DROP || code == ERR_GAME || code == ERR_NET || code == ERR_HARD)
 	{
@@ -466,11 +459,8 @@ void Com_Error (int code, const char *fmt, ...)
 			if (resmap[0])
 				Cmd_ExecuteString (va ("map %s", resmap));
 		}
-#ifdef _M_AMD64
-		Sys_Error ("AMD64 does not support longjmp, try not to cause any errors");
-#else
+
 		longjmp (abortframe, -1);
-#endif
 	}
 	else
 	{
@@ -843,51 +833,115 @@ void MSG_WriteAngle16 (float f)
 }
 
 
-void MSG_WriteDeltaUsercmd (const usercmd_t *from, const usercmd_t *cmd)
+void MSG_WriteDeltaUsercmd (const usercmd_t *from, const usercmd_t *cmd, int protocol)
 {
 	int		bits;
+	int		buttons;
 
 //
 // send the movement message
 //
 	bits = 0;
+	buttons = 0;
+
 	if (cmd->angles[0] != from->angles[0])
 		bits |= CM_ANGLE1;
 	if (cmd->angles[1] != from->angles[1])
 		bits |= CM_ANGLE2;
+
+	//FIXME: it's impossible for cl.viewangles roll to change,
+	//is this ever legitimately set?
 	if (cmd->angles[2] != from->angles[2])
 		bits |= CM_ANGLE3;
+
 	if (cmd->forwardmove != from->forwardmove)
 		bits |= CM_FORWARD;
 	if (cmd->sidemove != from->sidemove)
 		bits |= CM_SIDE;
 	if (cmd->upmove != from->upmove)
 		bits |= CM_UP;
+
 	if (cmd->buttons != from->buttons)
+	{
+		buttons = cmd->buttons;
 		bits |= CM_BUTTONS;
+	}
+
 	if (cmd->impulse != from->impulse)
 		bits |= CM_IMPULSE;
 
     MSG_WriteByte (bits);
 
+	//waste not what precious bytes we have...
+	if (protocol >= MINOR_VERSION_R1Q2_UCMD_UPDATES)
+	{
+		if (bits & CM_BUTTONS)
+		{
+			if ((bits & CM_FORWARD) && !(cmd->forwardmove % 5))
+				buttons |= BUTTON_UCMD_DBLFORWARD;
+			if ((bits && CM_SIDE) && !(cmd->sidemove % 5))
+				buttons |= BUTTON_UCMD_DBLSIDE;
+			if ((bits && CM_UP) && !(cmd->upmove % 5))
+				buttons |= BUTTON_UCMD_DBLUP;
+
+			if ((bits & CM_ANGLE1) && !(cmd->angles[0] % 64) && (abs(cmd->angles[0] / 64)) < 128)
+				buttons |= BUTTON_UCMD_DBL_ANGLE1;
+			if ((bits & CM_ANGLE2) && !(cmd->angles[1] % 256))
+				buttons |= BUTTON_UCMD_DBL_ANGLE2;
+
+			MSG_WriteByte (buttons);
+		}
+	}
+
 	if (bits & CM_ANGLE1)
-		MSG_WriteShort (cmd->angles[0]);
+	{
+		if (buttons & BUTTON_UCMD_DBL_ANGLE1)
+			MSG_WriteChar (cmd->angles[0] / 64);
+		else
+			MSG_WriteShort (cmd->angles[0]);
+	}
 
 	if (bits & CM_ANGLE2)
-		MSG_WriteShort (cmd->angles[1]);
+	{
+		if (buttons & BUTTON_UCMD_DBL_ANGLE2)
+			MSG_WriteChar (cmd->angles[1] / 256);
+		else
+			MSG_WriteShort (cmd->angles[1]);
+	}
 
 	if (bits & CM_ANGLE3)
 		MSG_WriteShort (cmd->angles[2]);
 	
 	if (bits & CM_FORWARD)
-		MSG_WriteShort (cmd->forwardmove);
-	if (bits & CM_SIDE)
-	  	MSG_WriteShort (cmd->sidemove);
-	if (bits & CM_UP)
-		MSG_WriteShort (cmd->upmove);
+	{
+		if (buttons & BUTTON_UCMD_DBLFORWARD)
+			MSG_WriteChar (cmd->forwardmove / 5);
+		else
+			MSG_WriteShort (cmd->forwardmove);
+	}
 
- 	if (bits & CM_BUTTONS)
-	  	MSG_WriteByte (cmd->buttons);
+	if (bits & CM_SIDE)
+	{
+		if (buttons & BUTTON_UCMD_DBLSIDE)
+			MSG_WriteChar (cmd->sidemove / 5);
+		else
+			MSG_WriteShort (cmd->sidemove);
+	}
+
+	if (bits & CM_UP)
+	{
+		if (buttons & BUTTON_UCMD_DBLUP)
+			MSG_WriteChar (cmd->upmove / 5);
+		else
+			MSG_WriteShort (cmd->upmove);
+	}
+
+	if (protocol < MINOR_VERSION_R1Q2_UCMD_UPDATES)
+	{
+ 		if (bits & CM_BUTTONS)
+	  		MSG_WriteByte (buttons);
+	}
+
  	if (bits & CM_IMPULSE)
 	    MSG_WriteByte (cmd->impulse);
 
@@ -1412,34 +1466,108 @@ float MSG_ReadAngle16 (sizebuf_t *msg_read)
 	return SHORT2ANGLE(MSG_ReadShort(msg_read));
 }
 
-void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t /*@out@*/*move)
+#ifndef NPROFILE
+unsigned long r1q2UserCmdOptimizedBytes = 0;
+#endif
+
+void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, usercmd_t *from, usercmd_t /*@out@*/*move, int protocol)
 {
+	int			buttons;
 	int			bits;
 	unsigned	msec;
 
 	memcpy (move, from, sizeof(*move));
 
 	bits = MSG_ReadByte (msg_read);
+	buttons = 0;
 		
+	if (protocol >= MINOR_VERSION_R1Q2_UCMD_UPDATES)
+	{
+		if (bits & CM_BUTTONS)
+		{
+			buttons = MSG_ReadByte (msg_read);
+
+			//only save real buttons, strip off the extra stolen bits
+			move->buttons = buttons & (BUTTON_ATTACK|BUTTON_USE|BUTTON_ANY);
+		}
+	}
+
 // read current angles
 	if (bits & CM_ANGLE1)
-		move->angles[0] = MSG_ReadShort (msg_read);
+	{
+		if (buttons & BUTTON_UCMD_DBL_ANGLE1)
+		{
+			#ifndef NPROFILE
+			r1q2UserCmdOptimizedBytes++;
+			#endif
+			move->angles[0] = MSG_ReadChar (msg_read) * 64;
+		}
+		else
+			move->angles[0] = MSG_ReadShort (msg_read);
+	}
+
 	if (bits & CM_ANGLE2)
-		move->angles[1] = MSG_ReadShort (msg_read);
+	{
+		if (buttons & BUTTON_UCMD_DBL_ANGLE2)
+		{
+			#ifndef NPROFILE
+			r1q2UserCmdOptimizedBytes++;
+			#endif
+			move->angles[1] = MSG_ReadChar (msg_read) * 256;
+		}
+		else
+			move->angles[1] = MSG_ReadShort (msg_read);
+	}
+
 	if (bits & CM_ANGLE3)
 		move->angles[2] = MSG_ReadShort (msg_read);
 		
 // read movement
 	if (bits & CM_FORWARD)
-		move->forwardmove = MSG_ReadShort (msg_read);
+	{
+		if (buttons & BUTTON_UCMD_DBLFORWARD)
+		{
+			#ifndef NPROFILE
+			r1q2UserCmdOptimizedBytes++;
+			#endif
+			move->forwardmove = MSG_ReadChar (msg_read) * 5;
+		}
+		else
+			move->forwardmove = MSG_ReadShort (msg_read);
+	}
+
 	if (bits & CM_SIDE)
-		move->sidemove = MSG_ReadShort (msg_read);
+	{
+		if (buttons & BUTTON_UCMD_DBLSIDE)
+		{
+			#ifndef NPROFILE
+			r1q2UserCmdOptimizedBytes++;
+			#endif
+			move->sidemove = MSG_ReadChar (msg_read) * 5;
+		}
+		else
+			move->sidemove = MSG_ReadShort (msg_read);
+	}
+
 	if (bits & CM_UP)
-		move->upmove = MSG_ReadShort (msg_read);
+	{
+		if (buttons & BUTTON_UCMD_DBLUP)
+		{
+			#ifndef NPROFILE
+			r1q2UserCmdOptimizedBytes++;
+			#endif
+			move->upmove = MSG_ReadChar (msg_read) * 5;
+		}
+		else
+			move->upmove = MSG_ReadShort (msg_read);
+	}
 	
 // read buttons
-	if (bits & CM_BUTTONS)
-		move->buttons = MSG_ReadByte (msg_read);
+	if (protocol < MINOR_VERSION_R1Q2_UCMD_UPDATES)
+	{
+		if (bits & CM_BUTTONS)
+			move->buttons = MSG_ReadByte (msg_read);
+	}
 
 	if (bits & CM_IMPULSE)
 		move->impulse = MSG_ReadByte (msg_read);
@@ -2430,12 +2558,8 @@ void _logfile_changed (cvar_t *cvar, char *o, char *n)
 
 void Qcommon_Init (int argc, char **argv)
 {
-//	char	*s;
-
-#ifndef _M_AMD64
 	if (setjmp (abortframe) )
 		Sys_Error ("Error during initialization");
-#endif
 
 	seedMT((uint32)time(0));
 
@@ -2604,13 +2728,11 @@ void Qcommon_Frame (int msec)
 #endif
 
 #ifndef DEDICATED_ONLY
-	int		time_before, time_between, time_after;
+	int		time_before = 0, time_between = 0, time_after;
 #endif
 
-#ifndef _M_AMD64
 	if (setjmp (abortframe) )
 		return;			// an ERR_DROP was thrown
-#endif
 
 	//Com_Printf ("frame time: %d ms\n", LOG_GENERAL, msec);
 

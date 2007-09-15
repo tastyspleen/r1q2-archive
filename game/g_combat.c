@@ -38,7 +38,7 @@ qboolean CanDamage (edict_t *targ, edict_t *inflictor)
 	if (targ->movetype == MOVETYPE_PUSH)
 	{
 		VectorAdd (targ->absmin, targ->absmax, dest);
-		VectorScale (dest, 0.5, dest);
+		VectorScale (dest, 0.5f, dest);
 		trace = gi.trace (inflictor->s.origin, vec3_origin, vec3_origin, dest, inflictor, MASK_SOLID);
 		if (trace.fraction == 1.0)
 			return true;
@@ -244,7 +244,7 @@ static int CheckPowerArmor (edict_t *ent, vec3_t point, vec3_t normal, int damag
 		save = damage;
 
 	SpawnDamage (pa_te_type, point, normal, save);
-	ent->powerarmor_time = level.time + 0.2;
+	ent->powerarmor_time = level.time + 0.2f;
 
 	power_used = save / damagePerCell;
 
@@ -280,9 +280,9 @@ static int CheckArmor (edict_t *ent, vec3_t point, vec3_t normal, int damage, in
 	armor = GetItemByIndex (index);
 
 	if (dflags & DAMAGE_ENERGY)
-		save = ceil(((gitem_armor_t *)armor->info)->energy_protection*damage);
+		save = (float)ceil(((gitem_armor_t *)armor->info)->energy_protection*damage);
 	else
-		save = ceil(((gitem_armor_t *)armor->info)->normal_protection*damage);
+		save = (float)ceil(((gitem_armor_t *)armor->info)->normal_protection*damage);
 	if (save >= client->pers.inventory[index])
 		save = client->pers.inventory[index];
 
@@ -407,7 +407,7 @@ void T_Damage (edict_t *targ, edict_t *inflictor, edict_t *attacker, vec3_t dir,
 	// easy mode takes half damage
 	if (skill->value == 0 && deathmatch->value == 0 && targ->client)
 	{
-		damage *= 0.5;
+		damage *= 0.5f;
 		if (!damage)
 			damage = 1;
 	}
@@ -442,9 +442,9 @@ void T_Damage (edict_t *targ, edict_t *inflictor, edict_t *attacker, vec3_t dir,
 				mass = targ->mass;
 
 			if (targ->client  && attacker == targ)
-				VectorScale (dir, 1600.0 * (float)knockback / mass, kvel);	// the rocket jump hack...
+				VectorScale (dir, 1600.0f * (float)knockback / mass, kvel);	// the rocket jump hack...
 			else
-				VectorScale (dir, 500.0 * (float)knockback / mass, kvel);
+				VectorScale (dir, 500.0f * (float)knockback / mass, kvel);
 
 			VectorAdd (targ->velocity, kvel, targ->velocity);
 		}
@@ -562,11 +562,11 @@ void T_RadiusDamage (edict_t *inflictor, edict_t *attacker, float damage, edict_
 			continue;
 
 		VectorAdd (ent->mins, ent->maxs, v);
-		VectorMA (ent->s.origin, 0.5, v, v);
+		VectorMA (ent->s.origin, 0.5f, v, v);
 		VectorSubtract (inflictor->s.origin, v, v);
-		points = damage - 0.5 * VectorLength (v);
+		points = damage - 0.5f * VectorLength (v);
 		if (ent == attacker)
-			points = points * 0.5;
+			points = points * 0.5f;
 		if (points > 0)
 		{
 			if (CanDamage (ent, inflictor))

@@ -47,28 +47,28 @@ static int	sound_idle;
 
 mframe_t infantry_frames_stand [] =
 {
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL}
 };
 mmove_t infantry_move_stand = {FRAME_stand50, FRAME_stand71, infantry_frames_stand, NULL};
 
@@ -80,55 +80,55 @@ void infantry_stand (edict_t *self)
 
 mframe_t infantry_frames_fidget [] =
 {
-	ai_stand, 1,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 3,  NULL,
-	ai_stand, 6,  NULL,
-	ai_stand, 3,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, -1, NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, -2, NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, -1, NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, -1, NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, -1, NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 1,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, -1, NULL,
-	ai_stand, -1, NULL,
-	ai_stand, 0,  NULL,
-	ai_stand, -3, NULL,
-	ai_stand, -2, NULL,
-	ai_stand, -3, NULL,
-	ai_stand, -3, NULL,
-	ai_stand, -2, NULL
+	{ai_stand, 1,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 3,  NULL},
+	{ai_stand, 6,  NULL},
+	{ai_stand, 3,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, -1, NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, -2, NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, -1, NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, -1, NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, -1, NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 1,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, -1, NULL},
+	{ai_stand, -1, NULL},
+	{ai_stand, 0,  NULL},
+	{ai_stand, -3, NULL},
+	{ai_stand, -2, NULL},
+	{ai_stand, -3, NULL},
+	{ai_stand, -3, NULL},
+	{ai_stand, -2, NULL}
 };
 mmove_t infantry_move_fidget = {FRAME_stand01, FRAME_stand49, infantry_frames_fidget, infantry_stand};
 
@@ -140,18 +140,18 @@ void infantry_fidget (edict_t *self)
 
 mframe_t infantry_frames_walk [] =
 {
-	ai_walk, 5,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 5,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 5,  NULL,
-	ai_walk, 6,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 4,  NULL,
-	ai_walk, 5,  NULL
+	{ai_walk, 5,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 5,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 5,  NULL},
+	{ai_walk, 6,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 4,  NULL},
+	{ai_walk, 5,  NULL}
 };
 mmove_t infantry_move_walk = {FRAME_walk03, FRAME_walk14, infantry_frames_walk, NULL};
 
@@ -162,14 +162,14 @@ void infantry_walk (edict_t *self)
 
 mframe_t infantry_frames_run [] =
 {
-	ai_run, 10, NULL,
-	ai_run, 20, NULL,
-	ai_run, 5,  NULL,
-	ai_run, 7,  NULL,
-	ai_run, 30, NULL,
-	ai_run, 35, NULL,
-	ai_run, 2,  NULL,
-	ai_run, 6,  NULL
+	{ai_run, 10, NULL},
+	{ai_run, 20, NULL},
+	{ai_run, 5,  NULL},
+	{ai_run, 7,  NULL},
+	{ai_run, 30, NULL},
+	{ai_run, 35, NULL},
+	{ai_run, 2,  NULL},
+	{ai_run, 6,  NULL}
 };
 mmove_t infantry_move_run = {FRAME_run01, FRAME_run08, infantry_frames_run, NULL};
 
@@ -184,31 +184,31 @@ void infantry_run (edict_t *self)
 
 mframe_t infantry_frames_pain1 [] =
 {
-	ai_move, -3, NULL,
-	ai_move, -2, NULL,
-	ai_move, -1, NULL,
-	ai_move, -2, NULL,
-	ai_move, -1, NULL,
-	ai_move, 1,  NULL,
-	ai_move, -1, NULL,
-	ai_move, 1,  NULL,
-	ai_move, 6,  NULL,
-	ai_move, 2,  NULL
+	{ai_move, -3, NULL},
+	{ai_move, -2, NULL},
+	{ai_move, -1, NULL},
+	{ai_move, -2, NULL},
+	{ai_move, -1, NULL},
+	{ai_move, 1,  NULL},
+	{ai_move, -1, NULL},
+	{ai_move, 1,  NULL},
+	{ai_move, 6,  NULL},
+	{ai_move, 2,  NULL}
 };
 mmove_t infantry_move_pain1 = {FRAME_pain101, FRAME_pain110, infantry_frames_pain1, infantry_run};
 
 mframe_t infantry_frames_pain2 [] =
 {
-	ai_move, -3, NULL,
-	ai_move, -3, NULL,
-	ai_move, 0,  NULL,
-	ai_move, -1, NULL,
-	ai_move, -2, NULL,
-	ai_move, 0,  NULL,
-	ai_move, 0,  NULL,
-	ai_move, 2,  NULL,
-	ai_move, 5,  NULL,
-	ai_move, 2,  NULL
+	{ai_move, -3, NULL},
+	{ai_move, -3, NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, -1, NULL},
+	{ai_move, -2, NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, 2,  NULL},
+	{ai_move, 5,  NULL},
+	{ai_move, 2,  NULL}
 };
 mmove_t infantry_move_pain2 = {FRAME_pain201, FRAME_pain210, infantry_frames_pain2, infantry_run};
 
@@ -314,71 +314,71 @@ void infantry_dead (edict_t *self)
 
 mframe_t infantry_frames_death1 [] =
 {
-	ai_move, -4, NULL,
-	ai_move, 0,  NULL,
-	ai_move, 0,  NULL,
-	ai_move, -1, NULL,
-	ai_move, -4, NULL,
-	ai_move, 0,  NULL,
-	ai_move, 0,  NULL,
-	ai_move, 0,  NULL,
-	ai_move, -1, NULL,
-	ai_move, 3,  NULL,
-	ai_move, 1,  NULL,
-	ai_move, 1,  NULL,
-	ai_move, -2, NULL,
-	ai_move, 2,  NULL,
-	ai_move, 2,  NULL,
-	ai_move, 9,  NULL,
-	ai_move, 9,  NULL,
-	ai_move, 5,  NULL,
-	ai_move, -3, NULL,
-	ai_move, -3, NULL
+	{ai_move, -4, NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, -1, NULL},
+	{ai_move, -4, NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, 0,  NULL},
+	{ai_move, -1, NULL},
+	{ai_move, 3,  NULL},
+	{ai_move, 1,  NULL},
+	{ai_move, 1,  NULL},
+	{ai_move, -2, NULL},
+	{ai_move, 2,  NULL},
+	{ai_move, 2,  NULL},
+	{ai_move, 9,  NULL},
+	{ai_move, 9,  NULL},
+	{ai_move, 5,  NULL},
+	{ai_move, -3, NULL},
+	{ai_move, -3, NULL}
 };
 mmove_t infantry_move_death1 = {FRAME_death101, FRAME_death120, infantry_frames_death1, infantry_dead};
 
 // Off with his head
 mframe_t infantry_frames_death2 [] =
 {
-	ai_move, 0,   NULL,
-	ai_move, 1,   NULL,
-	ai_move, 5,   NULL,
-	ai_move, -1,  NULL,
-	ai_move, 0,   NULL,
-	ai_move, 1,   NULL,
-	ai_move, 1,   NULL,
-	ai_move, 4,   NULL,
-	ai_move, 3,   NULL,
-	ai_move, 0,   NULL,
-	ai_move, -2,  InfantryMachineGun,
-	ai_move, -2,  InfantryMachineGun,
-	ai_move, -3,  InfantryMachineGun,
-	ai_move, -1,  InfantryMachineGun,
-	ai_move, -2,  InfantryMachineGun,
-	ai_move, 0,   InfantryMachineGun,
-	ai_move, 2,   InfantryMachineGun,
-	ai_move, 2,   InfantryMachineGun,
-	ai_move, 3,   InfantryMachineGun,
-	ai_move, -10, InfantryMachineGun,
-	ai_move, -7,  InfantryMachineGun,
-	ai_move, -8,  InfantryMachineGun,
-	ai_move, -6,  NULL,
-	ai_move, 4,   NULL,
-	ai_move, 0,   NULL
+	{ai_move, 0,   NULL},
+	{ai_move, 1,   NULL},
+	{ai_move, 5,   NULL},
+	{ai_move, -1,  NULL},
+	{ai_move, 0,   NULL},
+	{ai_move, 1,   NULL},
+	{ai_move, 1,   NULL},
+	{ai_move, 4,   NULL},
+	{ai_move, 3,   NULL},
+	{ai_move, 0,   NULL},
+	{ai_move, -2,  InfantryMachineGun},
+	{ai_move, -2,  InfantryMachineGun},
+	{ai_move, -3,  InfantryMachineGun},
+	{ai_move, -1,  InfantryMachineGun},
+	{ai_move, -2,  InfantryMachineGun},
+	{ai_move, 0,   InfantryMachineGun},
+	{ai_move, 2,   InfantryMachineGun},
+	{ai_move, 2,   InfantryMachineGun},
+	{ai_move, 3,   InfantryMachineGun},
+	{ai_move, -10, InfantryMachineGun},
+	{ai_move, -7,  InfantryMachineGun},
+	{ai_move, -8,  InfantryMachineGun},
+	{ai_move, -6,  NULL},
+	{ai_move, 4,   NULL},
+	{ai_move, 0,   NULL}
 };
 mmove_t infantry_move_death2 = {FRAME_death201, FRAME_death225, infantry_frames_death2, infantry_dead};
 
 mframe_t infantry_frames_death3 [] =
 {
-	ai_move, 0,   NULL,
-	ai_move, 0,   NULL,
-	ai_move, 0,   NULL,
-	ai_move, -6,  NULL,
-	ai_move, -11, NULL,
-	ai_move, -3,  NULL,
-	ai_move, -11, NULL,
-	ai_move, 0,   NULL,
-	ai_move, 0,   NULL
+	{ai_move, 0,   NULL},
+	{ai_move, 0,   NULL},
+	{ai_move, 0,   NULL},
+	{ai_move, -6,  NULL},
+	{ai_move, -11, NULL},
+	{ai_move, -3,  NULL},
+	{ai_move, -11, NULL},
+	{ai_move, 0,   NULL},
+	{ai_move, 0,   NULL}
 };
 mmove_t infantry_move_death3 = {FRAME_death301, FRAME_death309, infantry_frames_death3, infantry_dead};
 
@@ -455,11 +455,11 @@ void infantry_duck_up (edict_t *self)
 
 mframe_t infantry_frames_duck [] =
 {
-	ai_move, -2, infantry_duck_down,
-	ai_move, -5, infantry_duck_hold,
-	ai_move, 3,  NULL,
-	ai_move, 4,  infantry_duck_up,
-	ai_move, 0,  NULL
+	{ai_move, -2, infantry_duck_down},
+	{ai_move, -5, infantry_duck_hold},
+	{ai_move, 3,  NULL},
+	{ai_move, 4,  infantry_duck_up},
+	{ai_move, 0,  NULL}
 };
 mmove_t infantry_move_duck = {FRAME_duck01, FRAME_duck05, infantry_frames_duck, infantry_run};
 
@@ -496,21 +496,21 @@ void infantry_fire (edict_t *self)
 
 mframe_t infantry_frames_attack1 [] =
 {
-	ai_charge, 4,  NULL,
-	ai_charge, -1, NULL,
-	ai_charge, -1, NULL,
-	ai_charge, 0,  infantry_cock_gun,
-	ai_charge, -1, NULL,
-	ai_charge, 1,  NULL,
-	ai_charge, 1,  NULL,
-	ai_charge, 2,  NULL,
-	ai_charge, -2, NULL,
-	ai_charge, -3, NULL,
-	ai_charge, 1,  infantry_fire,
-	ai_charge, 5,  NULL,
-	ai_charge, -1, NULL,
-	ai_charge, -2, NULL,
-	ai_charge, -3, NULL
+	{ai_charge, 4,  NULL},
+	{ai_charge, -1, NULL},
+	{ai_charge, -1, NULL},
+	{ai_charge, 0,  infantry_cock_gun},
+	{ai_charge, -1, NULL},
+	{ai_charge, 1,  NULL},
+	{ai_charge, 1,  NULL},
+	{ai_charge, 2,  NULL},
+	{ai_charge, -2, NULL},
+	{ai_charge, -3, NULL},
+	{ai_charge, 1,  infantry_fire},
+	{ai_charge, 5,  NULL},
+	{ai_charge, -1, NULL},
+	{ai_charge, -2, NULL},
+	{ai_charge, -3, NULL}
 };
 mmove_t infantry_move_attack1 = {FRAME_attak101, FRAME_attak115, infantry_frames_attack1, infantry_run};
 
@@ -531,14 +531,14 @@ void infantry_smack (edict_t *self)
 
 mframe_t infantry_frames_attack2 [] =
 {
-	ai_charge, 3, NULL,
-	ai_charge, 6, NULL,
-	ai_charge, 0, infantry_swing,
-	ai_charge, 8, NULL,
-	ai_charge, 5, NULL,
-	ai_charge, 8, infantry_smack,
-	ai_charge, 6, NULL,
-	ai_charge, 3, NULL,
+	{ai_charge, 3, NULL},
+	{ai_charge, 6, NULL},
+	{ai_charge, 0, infantry_swing},
+	{ai_charge, 8, NULL},
+	{ai_charge, 5, NULL},
+	{ai_charge, 8, infantry_smack},
+	{ai_charge, 6, NULL},
+	{ai_charge, 3, NULL},
 };
 mmove_t infantry_move_attack2 = {FRAME_attak201, FRAME_attak208, infantry_frames_attack2, infantry_run};
 

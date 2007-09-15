@@ -62,7 +62,8 @@ time_t	retryTime;
 int		expectedLength;
 qboolean	connect_pending;
 qboolean	anticheat_ready;
-int		acSendBufferLen;
+
+size_t	acSendBufferLen;
 byte	acSendBuffer[AC_BUFFSIZE];
 
 int		antiCheatNumFileHashes;
@@ -1259,7 +1260,7 @@ static int SV_AntiCheat_SendFileAndCvarChecks (void)
 		}
 		else
 		{
-			int	length;
+			size_t	length;
 			length = strlen(f->quakePath);
 			acSendBuffer[acSendBufferLen++] = (byte)length;
 			memcpy (acSendBuffer + acSendBufferLen, f->quakePath, length);
@@ -1271,7 +1272,8 @@ static int SV_AntiCheat_SendFileAndCvarChecks (void)
 	c = &cvarChecks;
 	while (c->next)
 	{
-		int		length, i;
+		int		i;
+		size_t	length;
 		byte	b;
 
 		c = c->next;
@@ -1319,7 +1321,7 @@ static void SV_AntiCheat_Hello (void)
 	unsigned short	len, hostlen, verlen;
 	const char		*host;
 	const char		*ver;
-	int				index;
+	size_t			index;
 
 	acSendBufferLen = 1;
 	acSendBuffer[0] = '\x02';
@@ -1327,8 +1329,8 @@ static void SV_AntiCheat_Hello (void)
 	host = hostname->string;
 	ver = R1Q2_VERSION_STRING;
 
-	hostlen = strlen(host);
-	verlen = strlen(ver);
+	hostlen = (unsigned short)strlen(host);
+	verlen = (unsigned short)strlen(ver);
 
 	len = 22 + hostlen + verlen;
 	index = acSendBufferLen;
@@ -1552,7 +1554,7 @@ void SVCmd_SVACList_f (void)
 //FIXME duplicated code
 void SVCmd_SVACInfo_f (void)
 {
-	int					clientID;
+	ptrdiff_t			clientID;
 	const char			*substring;
 	const char			*filesubstring;
 	client_t			*cl;
@@ -1652,7 +1654,7 @@ void SV_AntiCheat_Run (void)
 		FD_ZERO (&eset);
 		FD_SET (acSocket, &wset);
 		FD_SET (acSocket, &eset);
-		ret = select (acSocket + 1, NULL, &wset, &eset, &tv);
+		ret = select ((int)acSocket + 1, NULL, &wset, &eset, &tv);
 		if (ret == 1)
 		{
 			int		exception_occured = 0;
@@ -1709,7 +1711,7 @@ void SV_AntiCheat_Run (void)
 		FD_ZERO (&set);
 		FD_SET (acSocket, &set);
 		tv.tv_sec = tv.tv_usec = 0;
-		ret = select (acSocket + 1, &set, NULL, NULL, &tv);
+		ret = select ((int)acSocket + 1, &set, NULL, NULL, &tv);
 		if (ret < 0)
 		{
 			SV_AntiCheat_Unexpected_Disconnect ();
@@ -1771,7 +1773,7 @@ void SV_AntiCheat_Run (void)
 			FD_SET (acSocket, &set);
 			tv.tv_sec = tv.tv_usec = 0;
 
-			ret = select (acSocket + 1, NULL, &set, NULL, &tv);
+			ret = select ((int)acSocket + 1, NULL, &set, NULL, &tv);
 			if (ret < 0)
 			{
 				SV_AntiCheat_Unexpected_Disconnect ();
@@ -1779,7 +1781,7 @@ void SV_AntiCheat_Run (void)
 			}
 			else if (ret == 1)
 			{
-				ret = send (acSocket, acSendBuffer, acSendBufferLen, 0);
+				ret = send ((int)acSocket, acSendBuffer, (int)acSendBufferLen, 0);
 				if (ret <= 0)
 				{
 					SV_AntiCheat_Unexpected_Disconnect ();
@@ -1839,7 +1841,7 @@ qboolean SV_AntiCheat_Disconnect_Client (client_t *cl)
 
 	acSendBuffer[acSendBufferLen++] = Q2S_CLIENTDISCONNECT;
 
-	num = cl - svs.clients;
+	num = (int)(cl - svs.clients);
 
 	memcpy (acSendBuffer + acSendBufferLen, &num, sizeof(num));
 	acSendBufferLen += sizeof(num);
@@ -1874,7 +1876,7 @@ qboolean SV_AntiCheat_Challenge (netadr_t *from, client_t *cl)
 	memcpy (acSendBuffer + acSendBufferLen, &from->port, sizeof(from->port));
 	acSendBufferLen += sizeof(from->port);
 
-	num = cl - svs.clients;
+	num = (int)(cl - svs.clients);
 
 	memcpy (acSendBuffer + acSendBufferLen, &num, sizeof(num));
 	acSendBufferLen += sizeof(num);
@@ -1908,7 +1910,7 @@ qboolean SV_AntiCheat_QueryClient (client_t *cl)
 
 	acSendBuffer[acSendBufferLen++] = Q2S_QUERYCLIENT;
 
-	num = cl - svs.clients;
+	num = (int)(cl - svs.clients);
 
 	memcpy (acSendBuffer + acSendBufferLen, &num, sizeof(num));
 	acSendBufferLen += sizeof(num);
@@ -1945,6 +1947,7 @@ void SV_AntiCheat_Disconnect (void)
 	acSocket = 0;
 	retryTime = 0;
 	anticheat_ready = false;
+	ping_pending = false;
 
 	Cvar_FullSet ("anticheat", "0", CVAR_NOSET);
 }

@@ -121,24 +121,8 @@ int Sys_FileLength (const char *path)
 {
 	WIN32_FILE_ATTRIBUTE_DATA	fileData;
 
-	/*HANDLE	hFile;
-	DWORD	length;
-
-	hFile = CreateFile (path, FILE_READ_ATTRIBUTES, GENERIC_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile == INVALID_HANDLE_VALUE)
-		return -1;
-
-	if (GetFileSize (hFile, &length) == INVALID_FILE_SIZE)
-	{
-		CloseHandle (hFile);
-		return -1;
-	}
-
-	CloseHandle (hFile);
-	return length;*/
-
 	if (GetFileAttributesEx (path, GetFileExInfoStandard, &fileData))
-		return fileData.nFileSizeLow;
+		return (int)fileData.nFileSizeLow;
 	else
 		return -1;
 }
@@ -1227,6 +1211,8 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 						Com_DPrintf ("LoadLibrary (%s)\n",name);
 						break;
 					}
+					else
+						Com_DPrintf ("LoadLibrary (%s) = %d\n", name, GetLastError());
 				}
 			}
 		}
@@ -1234,6 +1220,9 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 
 	if (!game_library)
 		return NULL;
+
+	if (!Sys_CheckFPUStatus())
+		Com_Printf ("\2WARNING: The FPU control word has changed after loading %s, prediction errors or physics bugs may result!\n", LOG_GENERAL, name);
 
 	GetGameAPI = (void *(IMPORT *)(void *))GetProcAddress (game_library, "GetGameAPI");
 	if (!GetGameAPI)
@@ -1346,7 +1335,7 @@ skipPathCheck:
 
 #ifdef ANTICHEAT
 #ifndef DEDICATED_ONLY
-
+/*
 typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
  
 BOOL IsWow64()
@@ -1359,7 +1348,7 @@ BOOL IsWow64()
         fnIsWow64Process(GetCurrentProcess(), &bIsWow64);
     }
     return bIsWow64;
-}
+}*/
 
 typedef struct
 {
@@ -1383,11 +1372,11 @@ int Sys_GetAntiCheatAPI (void)
 		return 0;
 	}
 
-	if (IsWow64())
+	/*if (IsWow64())
 	{
 		Com_Printf ("ERROR: Anticheat is currently incompatible with 64 bit Windows.\n", LOG_GENERAL);
 		return 0;
-	}
+	}*/
 
 	//already loaded, just reinit
 	if (anticheat)
@@ -1429,6 +1418,9 @@ reInit:
 
 	if (!anticheat)
 		return 0;
+
+	if (!Sys_CheckFPUStatus ())
+		Com_Printf ("\2WARNING: The FPU control word has changed after loading anticheat, prediction errors or physics bugs may result!\n", LOG_GENERAL);
 
 	return 1;
 }
@@ -1529,7 +1521,11 @@ BOOL CALLBACK EnumerateLoadedModulesProcDump (PSTR ModuleName, DWORD64 ModuleBas
 		strcpy (verString, "unknown");
 	}	
 
-	fprintf (fhReport, "[0x%I64p - 0x%I64p] %s (%lu bytes, version %s)\r\n", ModuleBase, ModuleBase + (DWORD64)ModuleSize, ModuleName, ModuleSize, verString);
+#ifdef _M_AMD64
+	fprintf (fhReport, "[0x%16I64X - 0x%16I64X] %s (%lu bytes, version %s)\r\n", ModuleBase, ModuleBase + (DWORD64)ModuleSize, ModuleName, ModuleSize, verString);
+#else
+	fprintf (fhReport, "[0x%08I64X - 0x%08I64X] %s (%lu bytes, version %s)\r\n", ModuleBase, ModuleBase + (DWORD64)ModuleSize, ModuleName, ModuleSize, verString);
+#endif
 	return TRUE;
 }
 
@@ -1583,7 +1579,7 @@ CHAR	szModuleName[MAX_PATH];
 
 BOOL CALLBACK EnumerateLoadedModulesProcInfo (PSTR ModuleName, DWORD64 ModuleBase, ULONG ModuleSize, PVOID UserContext)
 {
-	DWORD	addr = (DWORD)UserContext;
+	DWORD64	addr = (DWORD64)UserContext;
 	if (addr > ModuleBase && addr < ModuleBase + ModuleSize)
 	{
 		strncpy (szModuleName, ModuleName, sizeof(szModuleName)-1);
@@ -1989,7 +1985,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	while (fnStackWalk64 (IMAGE_FILE_MACHINE_I386, hProcess, GetCurrentThread(), &frame, &context, NULL, (PFUNCTION_TABLE_ACCESS_ROUTINE64)fnSymFunctionTableAccess64, (PGET_MODULE_BASE_ROUTINE64)fnSymGetModuleBase64, NULL))
 	{
 		strcpy (szModuleName, "<unknown>");
-		fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)(DWORD)frame.AddrPC.Offset);
+		fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)frame.AddrPC.Offset);
 
 		p = strrchr (szModuleName, '\\');
 		if (p)
@@ -2001,14 +1997,25 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 			p = szModuleName;
 		}
 
+#ifdef _M_AMD64
 		if (fnSymFromAddr (hProcess, frame.AddrPC.Offset, &fnOffset, symInfo) && !(symInfo->Flags & SYMFLAG_EXPORT))
 		{
-			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!%s+0x%I64x\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, symInfo->Name, fnOffset, symInfo->Tag);
+			fprintf (fhReport, "%16I64X %16I64X %16I64X %16I64X %16I64X %16I64X %s!%s+0x%I64x\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, frame.Params[0], frame.Params[1], frame.Params[2], frame.Params[3], p, symInfo->Name, fnOffset);
 		}
 		else
 		{
-			fprintf (fhReport, "%I64p %I64p %p %p %p %p %s!0x%I64p\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, frame.AddrPC.Offset);
+			fprintf (fhReport, "%16I64X %16I64X %16I64X %16I64X %16I64X %16I64X %s!0x%I64x\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, frame.Params[0], frame.Params[1], frame.Params[2], frame.Params[3], p, frame.AddrPC.Offset);
 		}
+#else
+		if (fnSymFromAddr (hProcess, frame.AddrPC.Offset, &fnOffset, symInfo) && !(symInfo->Flags & SYMFLAG_EXPORT))
+		{
+			fprintf (fhReport, "%08.8I64X %08.8I64X %08.8X %08.8X %08.8X %08.8X %s!%s+0x%I64x\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, symInfo->Name, fnOffset);
+		}
+		else
+		{
+			fprintf (fhReport, "%08.8I64X %08.8I64X %08.8X %08.8X %08.8X %08.8X %s!0x%I64x\r\n", frame.AddrStack.Offset, frame.AddrPC.Offset, (DWORD)frame.Params[0], (DWORD)frame.Params[1], (DWORD)frame.Params[2], (DWORD)frame.Params[3], p, frame.AddrPC.Offset);
+		}
+#endif
 	}
 
 	if (fnMiniDumpWriteDump)
@@ -2188,6 +2195,43 @@ void Sys_Spinstats_f (void)
 	Com_Printf ("%u fast spins, %u slow spins, %.2f%% slow.\n", LOG_GENERAL, goodspins, badspins, ((float)badspins / (float)(goodspins+badspins)) * 100.0f);
 }
 
+__declspec(naked) int Sys_GetFPUStatus (void)
+{
+	__asm
+	{
+		push eax
+		mov eax, esp
+		fclex
+		fstcw dword ptr [eax]
+		pop eax
+		ret
+	}
+}
+
+qboolean Sys_CheckFPUStatus (void)
+{
+	static unsigned	last_word = 0;
+	unsigned		fpu_control_word;
+
+	fpu_control_word = Sys_GetFPUStatus ();
+
+	Com_DPrintf ("Sys_CheckFPUStatus: rounding %d, precision %d\n", (fpu_control_word >> 10) & 3, (fpu_control_word >> 8) & 3);
+
+	//check rounding (10) and precision (8) are set properly
+	if (((fpu_control_word >> 10) & 3) != 0 ||
+		((fpu_control_word >> 8) & 3) != 2)
+	{
+		if (fpu_control_word != last_word)
+		{
+			last_word = fpu_control_word;
+			return false;
+		}
+	}
+
+	last_word = fpu_control_word;
+	return true;
+}
+
 /*
 ==================
 WinMain
@@ -2237,11 +2281,16 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	}
 #endif
 
+
 	__try
 	{
 		Qcommon_Init (argc, argv);
 
-		_controlfp( _PC_24, _MCW_PC );
+		Sys_CheckFPUStatus ();
+
+#ifndef _M_AMD64
+		//_controlfp( _PC_24, _MCW_PC );
+#endif
 
 		oldtime = Sys_Milliseconds ();
 		/* main window message loop */

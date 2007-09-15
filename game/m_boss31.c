@@ -82,57 +82,57 @@ void jorg_death_hit(edict_t *self);
 
 mframe_t jorg_frames_stand []=
 {
-	ai_stand, 0, jorg_idle,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,		// 10
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,		// 20
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,		// 30
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 19, NULL,
-	ai_stand, 11, jorg_step_left,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 6, NULL,
-	ai_stand, 9, jorg_step_right,
-	ai_stand, 0, NULL,		// 40
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, 0, NULL,
-	ai_stand, -2, NULL,
-	ai_stand, -17, jorg_step_left,
-	ai_stand, 0, NULL,
-	ai_stand, -12, NULL,		// 50
-	ai_stand, -14, jorg_step_right	// 51
+	{ai_stand, 0, jorg_idle},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},		// 10
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},		// 20
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},		// 30
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 19, NULL},
+	{ai_stand, 11, jorg_step_left},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 6, NULL},
+	{ai_stand, 9, jorg_step_right},
+	{ai_stand, 0, NULL},		// 40
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, 0, NULL},
+	{ai_stand, -2, NULL},
+	{ai_stand, -17, jorg_step_left},
+	{ai_stand, 0, NULL},
+	{ai_stand, -12, NULL},		// 50
+	{ai_stand, -14, jorg_step_right}	// 51
 };
 mmove_t	jorg_move_stand = {FRAME_stand01, FRAME_stand51, jorg_frames_stand, NULL};
 
@@ -165,20 +165,20 @@ void jorg_stand (edict_t *self)
 
 mframe_t jorg_frames_run [] =
 {
-	ai_run, 17,	jorg_step_left,
-	ai_run, 0,	NULL,
-	ai_run, 0,	NULL,
-	ai_run, 0,	NULL,
-	ai_run, 12,	NULL,
-	ai_run, 8,	NULL,
-	ai_run, 10,	NULL,
-	ai_run, 33,	jorg_step_right,
-	ai_run, 0,	NULL,
-	ai_run, 0,	NULL,
-	ai_run, 0,	NULL,
-	ai_run, 9,	NULL,
-	ai_run, 9,	NULL,
-	ai_run, 9,	NULL
+	{ai_run, 17,	jorg_step_left},
+	{ai_run, 0,	NULL},
+	{ai_run, 0,	NULL},
+	{ai_run, 0,	NULL},
+	{ai_run, 12,	NULL},
+	{ai_run, 8,	NULL},
+	{ai_run, 10,	NULL},
+	{ai_run, 33,	jorg_step_right},
+	{ai_run, 0,	NULL},
+	{ai_run, 0,	NULL},
+	{ai_run, 0,	NULL},
+	{ai_run, 9,	NULL},
+	{ai_run, 9,	NULL},
+	{ai_run, 9,	NULL}
 };
 mmove_t	jorg_move_run = {FRAME_walk06, FRAME_walk19, jorg_frames_run, NULL};
 
@@ -188,41 +188,41 @@ mmove_t	jorg_move_run = {FRAME_walk06, FRAME_walk19, jorg_frames_run, NULL};
 
 mframe_t jorg_frames_start_walk [] =
 {
-	ai_walk,	5,	NULL,
-	ai_walk,	6,	NULL,
-	ai_walk,	7,	NULL,
-	ai_walk,	9,	NULL,
-	ai_walk,	15,	NULL
+	{ai_walk,	5,	NULL},
+	{ai_walk,	6,	NULL},
+	{ai_walk,	7,	NULL},
+	{ai_walk,	9,	NULL},
+	{ai_walk,	15,	NULL}
 };
 mmove_t jorg_move_start_walk = {FRAME_walk01, FRAME_walk05, jorg_frames_start_walk, NULL};
 
 mframe_t jorg_frames_walk [] =
 {
-	ai_walk, 17,	NULL,
-	ai_walk, 0,	NULL,
-	ai_walk, 0,	NULL,
-	ai_walk, 0,	NULL,
-	ai_walk, 12,	NULL,
-	ai_walk, 8,	NULL,
-	ai_walk, 10,	NULL,
-	ai_walk, 33,	NULL,
-	ai_walk, 0,	NULL,
-	ai_walk, 0,	NULL,
-	ai_walk, 0,	NULL,
-	ai_walk, 9,	NULL,
-	ai_walk, 9,	NULL,
-	ai_walk, 9,	NULL
+	{ai_walk, 17,	NULL},
+	{ai_walk, 0,	NULL},
+	{ai_walk, 0,	NULL},
+	{ai_walk, 0,	NULL},
+	{ai_walk, 12,	NULL},
+	{ai_walk, 8,	NULL},
+	{ai_walk, 10,	NULL},
+	{ai_walk, 33,	NULL},
+	{ai_walk, 0,	NULL},
+	{ai_walk, 0,	NULL},
+	{ai_walk, 0,	NULL},
+	{ai_walk, 9,	NULL},
+	{ai_walk, 9,	NULL},
+	{ai_walk, 9,	NULL}
 };
 mmove_t	jorg_move_walk = {FRAME_walk06, FRAME_walk19, jorg_frames_walk, NULL};
 
 mframe_t jorg_frames_end_walk [] =
 {
-	ai_walk,	11,	NULL,
-	ai_walk,	0,	NULL,
-	ai_walk,	0,	NULL,
-	ai_walk,	0,	NULL,
-	ai_walk,	8,	NULL,
-	ai_walk,	-8,	NULL
+	{ai_walk,	11,	NULL},
+	{ai_walk,	0,	NULL},
+	{ai_walk,	0,	NULL},
+	{ai_walk,	0,	NULL},
+	{ai_walk,	8,	NULL},
+	{ai_walk,	-8,	NULL}
 };
 mmove_t jorg_move_end_walk = {FRAME_walk20, FRAME_walk25, jorg_frames_end_walk, NULL};
 
@@ -241,153 +241,153 @@ void jorg_run (edict_t *self)
 
 mframe_t jorg_frames_pain3 [] =
 {
-	ai_move,	-28,	NULL,
-	ai_move,	-6,	NULL,
-	ai_move,	-3,	jorg_step_left,
-	ai_move,	-9,	NULL,
-	ai_move,	0,	jorg_step_right,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	-7,	NULL,
-	ai_move,	1,	NULL,
-	ai_move,	-11,	NULL,
-	ai_move,	-4,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	10,	NULL,
-	ai_move,	11,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	10,	NULL,
-	ai_move,	3,	NULL,
-	ai_move,	10,	NULL,
-	ai_move,	7,	jorg_step_left,
-	ai_move,	17,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	jorg_step_right
+	{ai_move,	-28,	NULL},
+	{ai_move,	-6,	NULL},
+	{ai_move,	-3,	jorg_step_left},
+	{ai_move,	-9,	NULL},
+	{ai_move,	0,	jorg_step_right},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	-7,	NULL},
+	{ai_move,	1,	NULL},
+	{ai_move,	-11,	NULL},
+	{ai_move,	-4,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	10,	NULL},
+	{ai_move,	11,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	10,	NULL},
+	{ai_move,	3,	NULL},
+	{ai_move,	10,	NULL},
+	{ai_move,	7,	jorg_step_left},
+	{ai_move,	17,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	jorg_step_right}
 };
 mmove_t jorg_move_pain3 = {FRAME_pain301, FRAME_pain325, jorg_frames_pain3, jorg_run};
 
 mframe_t jorg_frames_pain2 [] =
 {
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL}
 };
 mmove_t jorg_move_pain2 = {FRAME_pain201, FRAME_pain203, jorg_frames_pain2, jorg_run};
 
 mframe_t jorg_frames_pain1 [] =
 {
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL}
 };
 mmove_t jorg_move_pain1 = {FRAME_pain101, FRAME_pain103, jorg_frames_pain1, jorg_run};
 
 mframe_t jorg_frames_death1 [] =
 {
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,		// 10
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,		// 20
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,			
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,			
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,		// 30
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,		// 40
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,			
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,			
-	ai_move,	0,	NULL,
-	ai_move,	0,	MakronToss,
-	ai_move,	0,	BossExplode		// 50
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},		// 10
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},		// 20
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},			
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},			
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},		// 30
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},		// 40
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},			
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},			
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	MakronToss},
+	{ai_move,	0,	BossExplode}		// 50
 };
 mmove_t jorg_move_death = {FRAME_death01, FRAME_death50, jorg_frames_death1, jorg_dead};
 
 mframe_t jorg_frames_attack2 []=
 {
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	jorgBFG,		
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	jorgBFG},		
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL}
 };
 mmove_t jorg_move_attack2 = {FRAME_attak201, FRAME_attak213, jorg_frames_attack2, jorg_run};
 
 mframe_t jorg_frames_start_attack1 [] =
 {
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL,
-	ai_charge,	0,	NULL
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL},
+	{ai_charge,	0,	NULL}
 };
 mmove_t jorg_move_start_attack1 = {FRAME_attak101, FRAME_attak108, jorg_frames_start_attack1, jorg_attack1};
 
 mframe_t jorg_frames_attack1[]=
 {
-	ai_charge,	0,	jorg_firebullet,
-	ai_charge,	0,	jorg_firebullet,
-	ai_charge,	0,	jorg_firebullet,
-	ai_charge,	0,	jorg_firebullet,
-	ai_charge,	0,	jorg_firebullet,
-	ai_charge,	0,	jorg_firebullet
+	{ai_charge,	0,	jorg_firebullet},
+	{ai_charge,	0,	jorg_firebullet},
+	{ai_charge,	0,	jorg_firebullet},
+	{ai_charge,	0,	jorg_firebullet},
+	{ai_charge,	0,	jorg_firebullet},
+	{ai_charge,	0,	jorg_firebullet}
 };
 mmove_t jorg_move_attack1 = {FRAME_attak109, FRAME_attak114, jorg_frames_attack1, jorg_reattack1};
 
 mframe_t jorg_frames_end_attack1[]=
 {
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL,
-	ai_move,	0,	NULL
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL},
+	{ai_move,	0,	NULL}
 };
 mmove_t jorg_move_end_attack1 = {FRAME_attak115, FRAME_attak118, jorg_frames_end_attack1, jorg_run};
 
@@ -663,7 +663,7 @@ qboolean Jorg_CheckAttack (edict_t *self)
 	}
 	else if (enemy_range == RANGE_MID)
 	{
-		chance = 0.2;
+		chance = 0.2f;
 	}
 	else
 	{

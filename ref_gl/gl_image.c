@@ -39,8 +39,8 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 
 const char	*current_texture_filename;
 
-int		gl_solid_format = 3;
-int		gl_alpha_format = 4;
+const int		gl_solid_format = 3;
+const int		gl_alpha_format = 4;
 
 int		gl_tex_solid_format = 3;
 int		gl_tex_alpha_format = 4;
@@ -50,7 +50,8 @@ int		gl_tex_alpha_format = 4;
 int		gl_filter_min = GL_LINEAR_MIPMAP_LINEAR;
 int		gl_filter_max = GL_LINEAR;
 
-static void	*scaled_buffer = NULL;
+static void		*scaled_buffer = NULL;
+static unsigned *mipmap_buffer = NULL;
 
 #ifdef RB_IMAGE_CACHE
 
@@ -136,35 +137,31 @@ void GL_EnableMultitexture( qboolean enable )
 
 void GL_SelectTexture( GLenum texture )
 {
-	if (texture == gl_state.currenttarget) {
+	unsigned tmu;
+
+	if (!qglSelectTextureSGIS && !qglActiveTextureARB)
 		return;
-	} else {
-		unsigned tmu;
 
-		if ( !qglSelectTextureSGIS && !qglActiveTextureARB )
-			return;
+	if ( texture == GL_TEXTURE0 )
+	{
+		tmu = 0;
+	}
+	else
+	{
+		tmu = 1;
+	}
 
-		if ( texture == GL_TEXTURE0 )
-		{
-			tmu = 0;
-		}
-		else
-		{
-			tmu = 1;
-		}
+	gl_state.currenttmu = tmu;
+	gl_state.currenttarget = texture;
 
-		gl_state.currenttmu = tmu;
-		gl_state.currenttarget = texture;
-
-		if ( qglSelectTextureSGIS )
-		{
-			qglSelectTextureSGIS( texture );
-		}
-		else if ( qglActiveTextureARB )
-		{
-			qglActiveTextureARB( texture );
-			qglClientActiveTextureARB( texture );
-		}
+	if ( qglSelectTextureSGIS )
+	{
+		qglSelectTextureSGIS( texture );
+	}
+	else if ( qglActiveTextureARB )
+	{
+		qglActiveTextureARB( texture );
+		qglClientActiveTextureARB( texture );
 	}
 }
 
@@ -203,8 +200,10 @@ void GL_Bind (unsigned int texnum)
 
 void GL_MBind( GLenum target, unsigned int texnum )
 {
-	GL_SelectTexture( target );
-	if ( target == GL_TEXTURE0 )
+	if (target != gl_state.currenttarget)
+		GL_SelectTexture( target );
+
+	if (target == GL_TEXTURE0)
 	{
 		if ( gl_state.currenttextures[0] == texnum )
 			return;
@@ -214,6 +213,7 @@ void GL_MBind( GLenum target, unsigned int texnum )
 		if ( gl_state.currenttextures[1] == texnum )
 			return;
 	}
+
 	GL_Bind( texnum );
 }
 
@@ -720,6 +720,12 @@ TARGA LOADING
 =========================================================
 */
 
+//now using TGA code from Quake 3, it does away with shitty
+//colormap support and stuff as well as providing a nice
+//speed increase (~20%)
+
+#ifdef SHITTY_OLD_TGA_CODE
+
 typedef struct _TargaHeader {
 	unsigned char id_length, colormap_type, image_type;
 	unsigned short colormap_index, colormap_length;
@@ -756,20 +762,24 @@ NiceAss: LoadTGA() from Q2Ice, it supports more formats
 */
 void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 {
-	int			w, h, x, y, i, temp1, temp2;
+	int			w, h, x, y, i, temp1, temp2, length;
 	int			realrow, truerow, baserow, size, interleave, origin;
 	int			pixel_size, map_idx, mapped, rlencoded, RLE_count, RLE_flag;
 	TargaHeader	header;
-	byte		tmp[2], r, g, b, a, j, k, l;
+	byte		tmp[2], j, k, l;
+	byte		rgba[4];
 	byte		*dst, *ColorMap, *data, *pdata;
 
 	*pic = NULL;
 
 	// load file
-	ri.FS_LoadFile( filename, (void *)&data );
+	length = ri.FS_LoadFile( filename, (void *)&data );
 
 	if( !data )
 		return;
+
+	if (length < sizeof(TargaHeader))
+		ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Not enough header bytes - invalid TGA file", filename);
 
 	pdata = data;
 
@@ -800,8 +810,12 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 	if( header.id_length )
 		pdata += header.id_length;
 
+	if (pdata - data >= length)
+		ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - invalid TGA file", filename);
+
 	// validate TGA type
-	switch( header.image_type ) {
+	switch( header.image_type )
+	{
 		case TGA_Map:
 		case TGA_RGB:
 		case TGA_Mono:
@@ -810,7 +824,7 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 		case TGA_RLEMono:
 			break;
 		default:
-			ri.Sys_Error ( ERR_DROP, "LoadTGA: (%s): Only type 1 (map), 2 (RGB), 3 (mono), 9 (RLEmap), 10 (RLERGB), 11 (RLEmono) TGA images supported\n", filename);
+			ri.Sys_Error ( ERR_DROP, "LoadTGA: (%s): Only type 1 (map), 2 (RGB), 3 (mono), 9 (RLEmap), 10 (RLERGB), 11 (RLEmono) TGA images supported", filename);
 			return;
 	}
 
@@ -823,16 +837,15 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 		case 32:
 			break;
 		default:
-			ri.Sys_Error ( ERR_DROP, "LoadTGA: (%s): Only 8, 15, 16, 24 and 32 bit images (with colormaps) supported\n", filename);
+			ri.Sys_Error ( ERR_DROP, "LoadTGA: (%s): Only 8, 15, 16, 24 and 32 bit images (with colormaps) supported", filename);
 			return;
 	}
-
-	r = g = b = a = l = 0;
 
 	// if required, read the color map information
 	ColorMap = NULL;
 	mapped = ( header.image_type == TGA_Map || header.image_type == TGA_RLEMap || header.image_type == TGA_CompMap || header.image_type == TGA_CompMap4 ) && header.colormap_type == 1;
-	if( mapped ) {
+	if( mapped ) 
+	{
 		// validate colormap size
 		switch( header.colormap_size ) {
 			case 8:
@@ -841,7 +854,7 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 			case 24:
 				break;
 			default:
-				ri.Sys_Error ( ERR_DROP, "LoadTGA: (%s): Only 8, 16, 24 and 32 bit colormaps supported\n", filename);
+				ri.Sys_Error ( ERR_DROP, "LoadTGA: (%s): Only 8, 16, 24 and 32 bit colormaps supported", filename);
 				return;
 		}
 
@@ -853,50 +866,54 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 		}
 		ColorMap = (byte *)malloc( MAXCOLORS * 4 );
 		map_idx = 0;
-		for( i = temp1; i < temp1 + temp2; ++i, map_idx += 4 ) {
+
+		for( i = temp1; i < temp1 + temp2; ++i, map_idx += 4 )
+		{
 			// read appropriate number of bytes, break into rgb & put in map
 			switch( header.colormap_size ) {
 				case 8:
-					r = g = b = *pdata++;
-					a = 255;
+					rgba[0] = rgba[1] = rgba[2] = *pdata++;
+					rgba[3] = 255;
 					break;
 				case 15:
 					j = *pdata++;
 					k = *pdata++;
 					l = ((unsigned int) k << 8) + j;
-					r = (byte) ( ((k & 0x7C) >> 2) << 3 );
-					g = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
-					b = (byte) ( (j & 0x1F) << 3 );
-					a = 255;
+					rgba[2] = (byte) ( ((k & 0x7C) >> 2) << 3 );
+					rgba[1] = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
+					rgba[0] = (byte) ( (j & 0x1F) << 3 );
+					rgba[3] = 255;
 					break;
 				case 16:
 					j = *pdata++;
 					k = *pdata++;
 					l = ((unsigned int) k << 8) + j;
-					r = (byte) ( ((k & 0x7C) >> 2) << 3 );
-					g = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
-					b = (byte) ( (j & 0x1F) << 3 );
-					a = (k & 0x80) ? 255 : 0;
+					rgba[2] = (byte) ( ((k & 0x7C) >> 2) << 3 );
+					rgba[1] = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
+					rgba[0] = (byte) ( (j & 0x1F) << 3 );
+					rgba[3] = (k & 0x80) ? 255 : 0;
 					break;
 				case 24:
-					b = *pdata++;
-					g = *pdata++;
-					r = *pdata++;
-					a = 255;
+					rgba[0] = *pdata++;
+					rgba[1] = *pdata++;
+					rgba[2] = *pdata++;
+					rgba[3] = 255;
 					l = 0;
 					break;
 				case 32:
-					b = *pdata++;
-					g = *pdata++;
-					r = *pdata++;
-					a = *pdata++;
+					rgba[0] = *pdata++;
+					rgba[1] = *pdata++;
+					rgba[2] = *pdata++;
+					rgba[3] = *pdata++;
 					l = 0;
 					break;
 			}
-			ColorMap[map_idx + 0] = r;
+
+			/*ColorMap[map_idx + 0] = r;
 			ColorMap[map_idx + 1] = g;
 			ColorMap[map_idx + 2] = b;
-			ColorMap[map_idx + 3] = a;
+			ColorMap[map_idx + 3] = a;*/
+			*(int *)(ColorMap + map_idx) = *(int *)&rgba;
 		}
 	}
 
@@ -916,7 +933,8 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 	size = w * h * 4;
 	*pic = (byte *)malloc( size );
 
-	memset( *pic, 0, size );
+	//?
+	//memset( *pic, 0, size );
 
 	// read the Targa file body and convert to portable format
 	pixel_size = header.pixel_size;
@@ -924,75 +942,116 @@ void LoadTGA (const char *filename, byte **pic, int *width, int *height)
 	interleave = (header.attributes & 0xC0) >> 6;
 	truerow = 0;
 	baserow = 0;
-	for( y = 0; y < h; y++ ) {
+
+	if (!rlencoded)
+	{
+		switch (pixel_size)
+		{
+			case 8:
+				if (pdata - data + (1 * w * h) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", filename);
+				break;
+			case 15:
+			case 16:
+				if (pdata - data + (2 * w * h) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", filename);
+				break;
+			case 24:
+				if (pdata - data + (3 * w * h) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", filename);
+				break;
+			case 32:
+				if (pdata - data + (4 * w * h) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", filename);
+				break;
+		}
+	}
+
+	_START_PERFORMANCE_TIMER ();
+
+	for( y = 0; y < h; y++ )
+	{
 		realrow = truerow;
 		if( origin == TGA_O_UPPER )
 			realrow = h - realrow - 1;
 
 		dst = *pic + realrow * w * 4;
 
-		for( x = 0; x < w; x++ ) {
+		for( x = 0; x < w; x++ )
+		{
 			// check if run length encoded
-			if( rlencoded ) {
-				if( !RLE_count ) {
+			if (rlencoded)
+			{
+				if (!RLE_count)
+				{
 					// have to restart run
 					i = *pdata++;
+
+					if (pdata - data > length)
+						ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - invalid TGA file", filename);
+
 					RLE_flag = (i & 0x80);
-					if( !RLE_flag ) {
+					if (!RLE_flag)
+					{
 						// stream of unencoded pixels
 						RLE_count = i + 1;
-					} else {
+					}
+					else
+					{
 						// single pixel replicated
 						RLE_count = i - 127;
 					}
 					// decrement count & get pixel
 					--RLE_count;
-				} else {
+				}
+				else
+				{
 					// have already read count & (at least) first pixel
 					--RLE_count;
-					if( RLE_flag )
+					if (RLE_flag)
 						// replicated pixels
 						goto PixEncode;
 				}
 			}
 
 			// read appropriate number of bytes, break into RGB
-			switch( pixel_size ) {
+			switch( pixel_size )
+			{
+				case 24:
+					rgba[3] = 255;
+					rgba[2] = *pdata++;
+					rgba[1] = *pdata++;
+					rgba[0] = *pdata++;
+					l = 0;
+					break;
+				case 32:
+					rgba[2] = *pdata++;
+					rgba[1] = *pdata++;
+					rgba[0] = *pdata++;
+					rgba[3] = *pdata++;
+					l = 0;
+					break;
 				case 8:
-					r = g = b = l = *pdata++;
-					a = 255;
+					rgba[0] = rgba[1] = rgba[2] = l = *pdata++;
+					rgba[3] = 255;
 					break;
 				case 15:
 					j = *pdata++;
 					k = *pdata++;
 					l = ((unsigned int) k << 8) + j;
-					r = (byte) ( ((k & 0x7C) >> 2) << 3 );
-					g = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
-					b = (byte) ( (j & 0x1F) << 3 );
-					a = 255;
+					rgba[0] = (byte) ( ((k & 0x7C) >> 2) << 3 );
+					rgba[1] = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
+					rgba[2] = (byte) ( (j & 0x1F) << 3 );
+					rgba[3] = 255;
 					break;
 				case 16:
 					j = *pdata++;
 					k = *pdata++;
 					l = ((unsigned int) k << 8) + j;
-					r = (byte) ( ((k & 0x7C) >> 2) << 3 );
-					g = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
-					b = (byte) ( (j & 0x1F) << 3 );
-					a = 255;
-					break;
-				case 24:
-					b = *pdata++;
-					g = *pdata++;
-					r = *pdata++;
-					a = 255;
-					l = 0;
-					break;
-				case 32:
-					b = *pdata++;
-					g = *pdata++;
-					r = *pdata++;
-					a = *pdata++;
-					l = 0;
+					rgba[0] = (byte) ( ((k & 0x7C) >> 2) << 3 );
+					rgba[1] = (byte) ( (((k & 0x03) << 3) + ((j & 0xE0) >> 5)) << 3 );
+					rgba[2] = (byte) ( (j & 0x1F) << 3 );
+					rgba[3] = 255;
 					break;
 				default:
 					ri.Sys_Error( ERR_DROP, "LoadTGA: (%s): Illegal pixel_size '%d'", filename, pixel_size );
@@ -1003,17 +1062,21 @@ PixEncode:
 			if ( mapped )
 			{
 				map_idx = l * 4;
-				*dst++ = ColorMap[map_idx + 0];
+				/**dst++ = ColorMap[map_idx + 0];
 				*dst++ = ColorMap[map_idx + 1];
 				*dst++ = ColorMap[map_idx + 2];
-				*dst++ = ColorMap[map_idx + 3];
+				*dst++ = ColorMap[map_idx + 3];*/
+				*(int *)dst = *(int *)(ColorMap + map_idx);
+				dst += 4;
 			}
 			else
 			{
-				*dst++ = r;
+				/**dst++ = r;
 				*dst++ = g;
 				*dst++ = b;
-				*dst++ = a;
+				*dst++ = a;*/
+				*(int *)dst = *(int *)&rgba;
+				dst += 4;
 			}
 		}
 
@@ -1028,12 +1091,330 @@ PixEncode:
 			truerow = ++baserow;
 	}
 
+	_STOP_PERFORMANCE_TIMER ();
+
+	if (length > 262144 && pixel_size == 24)
+	{
+		MessageBox (NULL, va("%.10f %d", totalPerformanceTime, pixel_size), "Time", MB_OK);
+		ExitProcess (0);
+	}
+
 	if (mapped)
 		free( ColorMap );
 	
 	ri.FS_FreeFile( data );
 }
+#else
 
+typedef struct _TargaHeader {
+	unsigned char 	id_length, colormap_type, image_type;
+	unsigned short	colormap_index, colormap_length;
+	unsigned char	colormap_size;
+	unsigned short	x_origin, y_origin, width, height;
+	unsigned char	pixel_size, attributes;
+} TargaHeader;
+
+void LoadTGA (const char *name, byte **pic, int *width, int *height)
+{
+	unsigned	rows, numPixels;
+	byte		*pixbuf;
+	int			row, column, columns;
+	byte		*buf_p;
+	byte		*buffer;
+	TargaHeader	targa_header;
+	byte		*targa_rgba;
+	int			length;
+	int			pixel_size;
+
+	*pic = NULL;
+
+	//
+	// load the file
+	//
+	length = ri.FS_LoadFile (name, (void **)&buffer);
+	if (!buffer)
+		return;
+
+	if (length < 18)
+		ri.Sys_Error (ERR_DROP, "LoadTGA: %s has an invalid file size", name);
+
+	buf_p = buffer;
+
+	targa_header.id_length = buf_p[0];
+	targa_header.colormap_type = buf_p[1];
+	targa_header.image_type = buf_p[2];
+
+	memcpy(&targa_header.colormap_index, &buf_p[3], 2);
+	memcpy(&targa_header.colormap_length, &buf_p[5], 2);
+	targa_header.colormap_size = buf_p[7];
+	memcpy(&targa_header.x_origin, &buf_p[8], 2);
+	memcpy(&targa_header.y_origin, &buf_p[10], 2);
+	memcpy(&targa_header.width, &buf_p[12], 2);
+	memcpy(&targa_header.height, &buf_p[14], 2);
+	targa_header.pixel_size = buf_p[16];
+	targa_header.attributes = buf_p[17];
+
+	targa_header.colormap_index = LittleShort(targa_header.colormap_index);
+	targa_header.colormap_length = LittleShort(targa_header.colormap_length);
+	targa_header.x_origin = LittleShort(targa_header.x_origin);
+	targa_header.y_origin = LittleShort(targa_header.y_origin);
+	targa_header.width = LittleShort(targa_header.width);
+	targa_header.height = LittleShort(targa_header.height);
+
+	buf_p += 18;
+
+	if (targa_header.image_type!=2 
+		&& targa_header.image_type!=10
+		&& targa_header.image_type != 3 ) 
+	{
+		ri.Sys_Error (ERR_DROP, "LoadTGA (%s): Only type 2 (RGB), 3 (gray), and 10 (RGB) TGA images supported", name);
+	}
+
+	if ( targa_header.colormap_type != 0 )
+	{
+		ri.Sys_Error (ERR_DROP, "LoadTGA (%s): colormaps not supported", name);
+	}
+
+	if ( ( targa_header.pixel_size != 32 && targa_header.pixel_size != 24 ) && targa_header.image_type != 3 )
+	{
+		ri.Sys_Error (ERR_DROP, "LoadTGA (%s): Only 32 or 24 bit images supported (no colormaps)", name);
+	}
+
+	columns = targa_header.width;
+	rows = targa_header.height;
+	numPixels = columns * rows * 4;
+
+	if (width)
+		*width = columns;
+
+	if (height)
+		*height = rows;
+
+	if (!columns || !rows || numPixels > 0x7FFFFFFF || numPixels / columns / 4 != rows)
+	{
+		ri.Sys_Error (ERR_DROP, "LoadTGA (%s): Invalid image size", name);
+	}
+
+	targa_rgba = malloc (numPixels);
+	*pic = targa_rgba;
+
+	if (targa_header.id_length != 0)
+		buf_p += targa_header.id_length;  // skip TARGA image comment
+
+	pixel_size = targa_header.pixel_size;
+
+	if ( targa_header.image_type==2 || targa_header.image_type == 3 )
+	{ 
+		// Uncompressed RGB or gray scale image
+
+		switch (pixel_size) 
+		{
+			case 24:
+				if (buf_p - buffer + (3 * columns * rows) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+
+				for(row=rows-1; row>=0; row--) 
+				{
+					pixbuf = targa_rgba + row*columns*4;
+					for(column=0; column<columns; column++) 
+					{
+						unsigned char red,green,blue;
+
+						blue = *buf_p++;
+						green = *buf_p++;
+						red = *buf_p++;
+						*pixbuf++ = red;
+						*pixbuf++ = green;
+						*pixbuf++ = blue;
+						*pixbuf++ = 255;
+					}
+				}
+				break;
+
+			case 32:
+				if (buf_p - buffer + (4 * columns * rows) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+
+				for(row=rows-1; row>=0; row--) 
+				{
+					pixbuf = targa_rgba + row*columns*4;
+					for(column=0; column<columns; column++) 
+					{
+						unsigned char red,green,blue,alphabyte;
+
+						blue = *buf_p++;
+						green = *buf_p++;
+						red = *buf_p++;
+						alphabyte = *buf_p++;
+						*pixbuf++ = red;
+						*pixbuf++ = green;
+						*pixbuf++ = blue;
+						*pixbuf++ = alphabyte;
+					}
+				}
+				break;
+
+			case 8:
+				if (buf_p - buffer + (1 * columns * rows) > length)
+					ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+
+				for(row=rows-1; row>=0; row--) 
+				{
+					pixbuf = targa_rgba + row*columns*4;
+					for(column=0; column<columns; column++) 
+					{
+						unsigned char red,green,blue;
+
+						blue = *buf_p++;
+						green = blue;
+						red = blue;
+						*pixbuf++ = red;
+						*pixbuf++ = green;
+						*pixbuf++ = blue;
+						*pixbuf++ = 255;
+					}
+				}
+				break;
+		}
+	}
+	else if (targa_header.image_type==10)
+	{
+		// Runlength encoded RGB images
+		byte		red, green, blue, alphabyte, packetHeader;
+		unsigned	packetSize,j;
+
+		red = 0;
+		green = 0;
+		blue = 0;
+		alphabyte = 0xff;
+
+		for (row = rows - 1; row >= 0; row--)
+		{
+			pixbuf = targa_rgba + row*columns*4;
+			for (column = 0; column < columns;)
+			{
+				packetHeader = *buf_p++;
+				packetSize = 1 + (packetHeader & 0x7f);
+				if (packetHeader & 0x80)
+				{
+					// run-length packet
+					switch (pixel_size)
+					{
+						case 24:
+							if (buf_p - buffer + (3) > length)
+								ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+							blue = *buf_p++;
+							green = *buf_p++;
+							red = *buf_p++;
+							alphabyte = 255;
+							break;
+						case 32:
+							if (buf_p - buffer + (4) > length)
+								ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+							blue = *buf_p++;
+							green = *buf_p++;
+							red = *buf_p++;
+							alphabyte = *buf_p++;
+							break;
+						default:
+							break;
+					}
+
+					for(j = 0; j < packetSize; j++)
+					{
+						*pixbuf++ = red;
+						*pixbuf++ = green;
+						*pixbuf++ = blue;
+						*pixbuf++ = alphabyte;
+						column++;
+
+						if (column == columns)
+						{ 
+							// run spans across rows
+							column=0;
+							if (row>0)
+								row--;
+							else
+								goto breakOut;
+
+							pixbuf = targa_rgba + row*columns*4;
+						}
+					}
+				}
+				else
+				{                            
+					// non run-length packet
+					switch (pixel_size)
+					{
+						case 24:
+							if (buf_p - buffer + (3 * packetSize) > length)
+								ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+
+							for(j = 0; j < packetSize; j++)
+							{
+								blue = *buf_p++;
+								green = *buf_p++;
+								red = *buf_p++;
+								*pixbuf++ = red;
+								*pixbuf++ = green;
+								*pixbuf++ = blue;
+								*pixbuf++ = 255;
+
+								column++;
+								if (column == columns)
+								{
+									// pixel packet run spans across rows
+									column=0;
+									if (row>0)
+										row--;
+									else
+										goto breakOut;
+									pixbuf = targa_rgba + row*columns*4;
+								}						
+							}
+							break;
+
+						case 32:
+							if (buf_p - buffer + (4 * packetSize) > length)
+								ri.Sys_Error (ERR_DROP, "LoadTGA: (%s): Pointer passed end of file - corrupt TGA file", name);
+
+							for(j = 0; j < packetSize; j++)
+							{	
+								blue = *buf_p++;
+								green = *buf_p++;
+								red = *buf_p++;
+								alphabyte = *buf_p++;
+								*pixbuf++ = red;
+								*pixbuf++ = green;
+								*pixbuf++ = blue;
+								*pixbuf++ = alphabyte;
+
+								column++;
+								if (column == columns)
+								{
+									// pixel packet run spans across rows
+									column=0;
+									if (row>0)
+										row--;
+									else
+										goto breakOut;
+									pixbuf = targa_rgba + row*columns*4;
+								}
+							}						
+							break;
+
+						default:
+							break;
+					}
+				}
+			}
+breakOut:;
+		}
+	}
+
+	ri.FS_FreeFile (buffer);
+}
+#endif
 /*
 =================================================================
 
@@ -1047,7 +1428,7 @@ void EXPORT jpg_null(j_decompress_ptr cinfo)
 {
 }
 
-unsigned char EXPORT jpg_fill_input_buffer(j_decompress_ptr cinfo)
+boolean EXPORT jpg_fill_input_buffer(j_decompress_ptr cinfo)
 {
     ri.Con_Printf(PRINT_ALL, "Premature end of JPEG data\n");
     return 1;
@@ -1786,6 +2167,7 @@ void GL_LightScaleTexture (unsigned *in, int inwidth, int inheight, qboolean onl
 		p = (byte *)in;
 
 		c = inwidth*inheight;
+
 		for (i=0 ; i<c ; i++, p+=4)
 		{
 			p[0] = gammaintensitytable[p[0]];
@@ -1831,6 +2213,80 @@ void GL_LightScaleTexture24 (unsigned *in, int inwidth, int inheight, qboolean o
 
 /*
 ================
+R_MipMap2
+
+Operates in place, quartering the size of the texture
+Proper linear filter
+================
+*/
+static void GL_MipMapLinear (unsigned *in, int inWidth, int inHeight)
+{
+	int			i, j, k;
+	byte		*outpix;
+	int			inWidthMask, inHeightMask;
+	int			total;
+	int			outWidth, outHeight;
+	unsigned	*temp;
+
+	outWidth = inWidth >> 1;
+	outHeight = inHeight >> 1;
+
+	if (r_registering)
+	{
+		if (!mipmap_buffer)
+			mipmap_buffer = malloc (MAX_TEXTURE_DIMENSIONS * MAX_TEXTURE_DIMENSIONS * sizeof(int));
+
+		if (!mipmap_buffer)
+			ri.Sys_Error (ERR_DROP, "GL_MipMapLinear: Out of memory");
+
+		temp = mipmap_buffer;
+	}
+	else
+		temp = malloc (outWidth * outHeight * sizeof(int));
+
+	inWidthMask = inWidth - 1;
+	inHeightMask = inHeight - 1;
+
+	for ( i = 0 ; i < outHeight ; i++ )
+	{
+		for ( j = 0 ; j < outWidth ; j++ )
+		{
+			outpix = (byte *) ( temp + i * outWidth + j );
+			for ( k = 0 ; k < 4 ; k++ )
+			{
+				total = 
+					1 * ((byte *)&in[ ((i*2-1)&inHeightMask)*inWidth + ((j*2-1)&inWidthMask) ])[k] +
+					2 * ((byte *)&in[ ((i*2-1)&inHeightMask)*inWidth + ((j*2)&inWidthMask) ])[k] +
+					2 * ((byte *)&in[ ((i*2-1)&inHeightMask)*inWidth + ((j*2+1)&inWidthMask) ])[k] +
+					1 * ((byte *)&in[ ((i*2-1)&inHeightMask)*inWidth + ((j*2+2)&inWidthMask) ])[k] +
+
+					2 * ((byte *)&in[ ((i*2)&inHeightMask)*inWidth + ((j*2-1)&inWidthMask) ])[k] +
+					4 * ((byte *)&in[ ((i*2)&inHeightMask)*inWidth + ((j*2)&inWidthMask) ])[k] +
+					4 * ((byte *)&in[ ((i*2)&inHeightMask)*inWidth + ((j*2+1)&inWidthMask) ])[k] +
+					2 * ((byte *)&in[ ((i*2)&inHeightMask)*inWidth + ((j*2+2)&inWidthMask) ])[k] +
+
+					2 * ((byte *)&in[ ((i*2+1)&inHeightMask)*inWidth + ((j*2-1)&inWidthMask) ])[k] +
+					4 * ((byte *)&in[ ((i*2+1)&inHeightMask)*inWidth + ((j*2)&inWidthMask) ])[k] +
+					4 * ((byte *)&in[ ((i*2+1)&inHeightMask)*inWidth + ((j*2+1)&inWidthMask) ])[k] +
+					2 * ((byte *)&in[ ((i*2+1)&inHeightMask)*inWidth + ((j*2+2)&inWidthMask) ])[k] +
+
+					1 * ((byte *)&in[ ((i*2+2)&inHeightMask)*inWidth + ((j*2-1)&inWidthMask) ])[k] +
+					2 * ((byte *)&in[ ((i*2+2)&inHeightMask)*inWidth + ((j*2)&inWidthMask) ])[k] +
+					2 * ((byte *)&in[ ((i*2+2)&inHeightMask)*inWidth + ((j*2+1)&inWidthMask) ])[k] +
+					1 * ((byte *)&in[ ((i*2+2)&inHeightMask)*inWidth + ((j*2+2)&inWidthMask) ])[k];
+				outpix[k] = total / 36;
+			}
+		}
+	}
+
+	memcpy (in, temp, outWidth * outHeight * 4);
+
+	if (temp != mipmap_buffer)
+		free (temp);
+}
+
+/*
+================
 GL_MipMap
 
 Operates in place, quartering the size of the texture
@@ -1840,6 +2296,12 @@ void GL_MipMap (byte *in, int width, int height)
 {
 	int		i, j;
 	byte	*out;
+
+	if (FLOAT_NE_ZERO(gl_linear_mipmaps->value))
+	{
+		GL_MipMapLinear ((unsigned int *)in, width, height);
+		return;
+	}
 
 	width <<=2;
 	height >>= 1;
@@ -1854,8 +2316,6 @@ void GL_MipMap (byte *in, int width, int height)
 			out[3] = (in[3] + in[7] + in[width+3] + in[width+7])>>2;
 		}
 	}
-
-	//gluScaleImage (GL_RGBA, width, height, GL_UNSIGNED_BYTE, in, width/4, height/4, GL_UNSIGNED_BYTE, in);
 }
 
 int		upload_width, upload_height;
@@ -1999,11 +2459,6 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 		if ((err = qglGetError()) != GL_NO_ERROR) ri.Sys_Error (ERR_FATAL, "glGetError: 0x%x", err);
 	}*/
 
-	if (gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
-	{
-		qglTexParameterf (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, gl_ext_max_anisotropy->value);
-	}
-
 	qglTexImage2D (GL_TEXTURE_2D, 0, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);
 
 	//if (mipmap && !(gl_config.r1gl_GL_SGIS_generate_mipmap))
@@ -2038,13 +2493,20 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 done: ;
 
 
-	if (mipmap) {
+	if (mipmap)
+	{
+		if (gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
+			qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (int)gl_ext_max_anisotropy->value);
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
-	} else {
-		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_max);
+		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
 	}
-
-	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+	else
+	{
+		if (gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
+			qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
+		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	}
 
 	if (!r_registering)
 	{
@@ -2149,7 +2611,7 @@ image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagety
 			{
 				for (i=0, image=gltextures ; i<numgltextures ; i++,image++)
 				{
-					fprintf (dump, "%i: %s[%s], %dx%d, texnum %u, type %d, sequence %d\n", i, image->basename, image->name, image->width, image->height, image->texnum, image->type, image->registration_sequence);
+					fprintf (dump, "%i: %s[%s], %dx%d, texnum %lu, type %d, sequence %d\n", i, image->basename, image->name, image->width, image->height, image->texnum, image->type, image->registration_sequence);
 				}
 				fclose (dump);
 			}
@@ -2393,7 +2855,7 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 
 		memcpy (png_name, name, len+1);
 
-		if (type == it_pic)
+		if (type == it_pic && FLOAT_NE_ZERO(gl_pic_scale->value))
 		{
 			if (!GetPCXInfo (name, &global_hax_texture_x, &global_hax_texture_y))
 			{
@@ -2602,6 +3064,12 @@ void GL_FreeUnusedImages (void)
 	{
 		free (scaled_buffer);
 		scaled_buffer = NULL;
+	}
+
+	if (mipmap_buffer)
+	{
+		free (mipmap_buffer);
+		mipmap_buffer = NULL;
 	}
 
 	// never free r_notexture or particle texture

@@ -1,9 +1,10 @@
 VPATH=../../game
 
+
 # this nice line comes from the linux kernel makefile
 ARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/ -e s/alpha/axp/)
 
-CFLAGS+=-fPIC
+CFLAGS+=-fPIC -DGAME_DLL
 
 game_SRC:=g_ai.c g_chase.c g_cmds.c g_combat.c g_func.c g_items.c g_main.c\
 	  g_misc.c g_monster.c g_phys.c g_save.c g_spawn.c g_svcmds.c\
@@ -23,16 +24,8 @@ default: game$(ARCH).so
 
 TARGETS:=game$(ARCH).so game$(ARCH)-combine.so
 
-include ../make.inc
-
-LDFLAGS+=-lm
-
 game$(ARCH).so: $(game_OBJ)
 	$(CC) -shared -g -o $@ $^ $(LDFLAGS)
 
-# only works with gcc >4.1
-combine: game$(ARCH)-combine.so
-game$(ARCH)-combine.so: $(game_SRC)
-	$(CC) -shared -O2 -ffloat-store -DNDEBUG -DLINUX -fPIC -fwhole-program --combine -g -o $@ $^ $(LDFLAGS)
+include ../make.inc
 
--include .depends/*.d

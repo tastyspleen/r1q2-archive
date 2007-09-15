@@ -114,7 +114,7 @@ qboolean fire_hit (edict_t *self, vec3_t aim, int damage, int kick)
 		return false;
 
 	// do our special form of knockback here
-	VectorMA (self->enemy->absmin, 0.5, self->enemy->size, v);
+	VectorMA (self->enemy->absmin, 0.5f, self->enemy->size, v);
 	VectorSubtract (v, point, v);
 	VectorNormalize (v);
 	VectorMA (self->enemy->velocity, kick, v, self->enemy->velocity);
@@ -255,7 +255,7 @@ static void fire_lead (edict_t *self, vec3_t start, vec3_t aimdir, int damage, i
 			tr = gi.trace (pos, NULL, NULL, water_start, tr.ent, MASK_WATER);
 
 		VectorAdd (water_start, tr.endpos, pos);
-		VectorScale (pos, 0.5, pos);
+		VectorScale (pos, 0.5f, pos);
 
 		gi.WriteByte (svc_temp_entity);
 		gi.WriteByte (TE_BUBBLETRAIL);
@@ -411,9 +411,9 @@ static void Grenade_Explode (edict_t *ent)
 		vec3_t	dir;
 
 		VectorAdd (ent->enemy->mins, ent->enemy->maxs, v);
-		VectorMA (ent->enemy->s.origin, 0.5, v, v);
+		VectorMA (ent->enemy->s.origin, 0.5f, v, v);
 		VectorSubtract (ent->s.origin, v, v);
-		points = ent->dmg - 0.5 * VectorLength (v);
+		points = ent->dmg - 0.5f * VectorLength (v);
 		VectorSubtract (ent->enemy->s.origin, ent->s.origin, dir);
 		if (ent->spawnflags & 1)
 			mod = MOD_HANDGRENADE;
@@ -741,12 +741,12 @@ void bfg_explode (edict_t *self)
 				continue;
 
 			VectorAdd (ent->mins, ent->maxs, v);
-			VectorMA (ent->s.origin, 0.5, v, v);
+			VectorMA (ent->s.origin, 0.5f, v, v);
 			VectorSubtract (self->s.origin, v, v);
 			dist = VectorLength(v);
-			points = self->radius_dmg * (1.0 - sqrt(dist/self->dmg_radius));
+			points = self->radius_dmg * (1.0f - sqrt(dist/self->dmg_radius));
 			if (ent == self->owner)
-				points = points * 0.5;
+				points = points * 0.5f;
 
 			gi.WriteByte (svc_temp_entity);
 			gi.WriteByte (TE_BFG_EXPLOSION);
@@ -832,7 +832,7 @@ void bfg_think (edict_t *self)
 		if (!(ent->svflags & SVF_MONSTER) && (!ent->client) && (strcmp(ent->classname, "misc_explobox") != 0))
 			continue;
 
-		VectorMA (ent->absmin, 0.5, ent->size, point);
+		VectorMA (ent->absmin, 0.5f, ent->size, point);
 
 		VectorSubtract (point, self->s.origin, dir);
 		VectorNormalize (dir);

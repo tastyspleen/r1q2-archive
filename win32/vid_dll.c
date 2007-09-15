@@ -662,7 +662,7 @@ vidmode_t vid_modes[] =
 	{2560,	1920},	
 };
 
-qboolean EXPORT VID_GetModeInfo( int *width, int *height, int mode )
+qboolean EXPORT VID_GetModeInfo( unsigned int *width, unsigned int *height, int mode )
 {
 	if ( mode < 0 || mode >= VID_NUM_MODES )
 		return false;
@@ -914,6 +914,9 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 	Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	reflib_active = true;
 
+	if (!Sys_CheckFPUStatus())
+		Com_Printf ("\2WARNING: The FPU control word has changed after loading %s, prediction errors or physics bugs may result!\n", LOG_GENERAL, name);
+
 //======
 //PGM
 	vidref_val = VIDREF_OTHER;
@@ -1151,7 +1154,7 @@ void VID_Init (void)
 	win_noalttab->changed = VID_AltTab_Modified;
 	win_noalttab->changed (win_noalttab, win_noalttab->string, win_noalttab->string);
 
-	vid_noexceptionhandler = Cvar_Get ("vid_noexceptionhandler", "0", 0);
+	vid_noexceptionhandler = Cvar_Get ("vid_noexceptionhandler", "1", 0);
 
 	/*
 	** this is a gross hack but necessary to clamp the mode for 3Dfx

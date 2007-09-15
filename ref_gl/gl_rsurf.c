@@ -1059,7 +1059,9 @@ e->angles[2] = -e->angles[2];	// stupid quake bug
 R_RecursiveWorldNode
 ================
 */
-void R_RecursiveWorldNode (mnode_t *node)
+#define NEW_CULLING_STYLE
+
+static void R_RecursiveWorldNode (mnode_t *node, int planebits)
 {
 	int			c, side, sidebit;
 	cplane_t	*plane;
@@ -1074,9 +1076,51 @@ void R_RecursiveWorldNode (mnode_t *node)
 	if (node->visframe != r_visframecount)
 		return;
 
+#ifndef NEW_CULLING_STYLE
 	if (R_CullBox (node->minmaxs, node->minmaxs+3))
 		return;
-	
+#else
+	if (FLOAT_EQ_ZERO(r_nocull->value))
+	{
+		int	ret;
+
+		if (planebits & 1)
+		{
+			ret = BOX_ON_PLANE_SIDE (node->minmaxs, node->minmaxs+3, &frustum[0]);
+			if (ret == 2)
+				return;
+			else if (ret == 1)
+				planebits &= ~1;
+		}
+
+		if (planebits & 2)
+		{
+			ret = BOX_ON_PLANE_SIDE (node->minmaxs, node->minmaxs+3, &frustum[1]);
+			if (ret == 2)
+				return;
+			else if (ret == 1)
+				planebits &= ~2;
+		}
+
+		if (planebits & 4)
+		{
+			ret = BOX_ON_PLANE_SIDE (node->minmaxs, node->minmaxs+3, &frustum[2]);
+			if (ret == 2)
+				return;
+			planebits &= ~4;
+		}
+
+		if (planebits & 8)
+		{
+			ret = BOX_ON_PLANE_SIDE (node->minmaxs, node->minmaxs+3, &frustum[3]);
+			if (ret == 2)
+				return;
+			else if (ret == 1)
+				planebits &= ~8;
+		}
+	}
+#endif
+
 // if a leaf node, draw stuff
 	if (node->contents != -1)
 	{
@@ -1137,7 +1181,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 	}
 
 // recurse down the children, front side first
-	R_RecursiveWorldNode (node->children[side]);
+	R_RecursiveWorldNode (node->children[side], planebits);
 
 	// draw stuff
 	for ( c = node->numsurfaces, surf = r_worldmodel->surfaces + node->firstsurface; c ; c--, surf++)
@@ -1176,7 +1220,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 	}
 
 	// recurse down the back side
-	R_RecursiveWorldNode (node->children[!side]);
+	R_RecursiveWorldNode (node->children[!side], planebits);
 /*
 	for ( ; c ; c--, surf++)
 	{
@@ -1267,13 +1311,13 @@ void R_DrawWorld (void)
 			GL_TexEnv (GL_COMBINE_ARB);
 		}
 
-		R_RecursiveWorldNode (r_worldmodel->nodes);
+		R_RecursiveWorldNode (r_worldmodel->nodes, 15);
 
 		GL_EnableMultitexture( false );
 	}
 	else
 	{
-		R_RecursiveWorldNode (r_worldmodel->nodes);
+		R_RecursiveWorldNode (r_worldmodel->nodes, 15);
 	}
 
 	/*

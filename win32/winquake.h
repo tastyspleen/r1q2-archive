@@ -58,3 +58,4 @@ extern RECT		window_rect;
 
 extern	HINSTANCE	global_hInstance;
 
+

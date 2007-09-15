@@ -522,7 +522,7 @@ void player_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damag
 
 	if (!self->deadflag)
 	{
-		self->client->respawn_time = level.time + 1.0;
+		self->client->respawn_time = level.time + 1.0f;
 		LookAtKiller (self, inflictor, attacker);
 		self->client->ps.pmove.pm_type = PM_DEAD;
 		ClientObituary (self, inflictor, attacker);
@@ -1581,7 +1581,7 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 	{
 		client->ps.pmove.pm_type = PM_FREEZE;
 		// can exit intermission after five seconds
-		if (level.time > level.intermissiontime + 5.0 
+		if (level.time > level.intermissiontime + 5.0f 
 			&& (ucmd->buttons & BUTTON_ANY) )
 			level.exitintermission = true;
 		return;
