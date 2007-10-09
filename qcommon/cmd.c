@@ -650,6 +650,12 @@ void Cmd_Alias_f (void)
 	}*/
 
 	Q_strncpy (cmd, Cmd_Args2(2), sizeof(cmd)-2);
+	/*s = strchr (Cmd_Args(), ' ');
+	if (s)
+		s++;
+	else
+		s = Cmd_Args ();
+	Q_strncpy (cmd, s, sizeof(cmd)-2);*/
 	strcat (cmd, "\n");
 	
 	a->value = CopyString (cmd, TAGMALLOC_ALIAS);
@@ -1100,6 +1106,104 @@ const char *Cmd_CompleteCommand (const char *partial)
 	return best;
 }
 
+/*
+============
+Cmd_Expand_Args
+ 
+Replaces $0 to $9 with the corresponding cmd_argv[n] and $* with cmd_args
+ 
+Limitations: $10 onwards arent taken in consideration yet
+             dstavail must be at least 1
+Bugs: Doesnt check delimitiers after the first digit, "$1name" or "$10" will expand to "valuename" and "value0"
+      When expanding inside a word and arguments contains spaces, doesnt add quotes to that word, thus inserting new arguments
+ 
+tachikoma, Mon Oct  8 20:57:24 CEST 2007
+============
+*/
+static void Cmd_Expand_Args (char *src, char *dst, int dstavail)
+{
+	char *base = src;
+
+	*dst = 0;
+	while (*src)
+	{
+		char	*next;
+		int		count;
+
+		next = strchr (src, '$');
+
+		count = next - src;
+
+		if (!next)
+		{
+			if (strlen(src) >= dstavail)
+			{
+				Com_Printf ("Error expanding alias: Result too long\n", LOG_GENERAL);
+				return;
+			}
+			strcat (dst, src);
+			return;
+		}
+
+		//Insert what found before the $
+		if (count >= dstavail + 1)
+		{
+			//include space for $ if not to be replaced here
+			Com_Printf ("Error expanding alias: Result too long\n", LOG_GENERAL);
+			return;
+		}
+
+		strncat (dst, src, count);
+		dstavail -= count;
+		dst += count;
+		src += count + 1; //Also skip the $
+
+		if ((*src >= '0' && *src <= '9') || *src == '*')
+		{
+			//Arg expansion var
+			char	*arg;
+			int		quot;
+			
+			if (*src != '*')
+				arg = Cmd_Argv (*src - '0');
+			else
+				arg = cmd_args;
+
+			//Add quotes if not inside a word
+			quot = (strchr(arg, ' ') && ((src - 2 < base) || src[-2] == ' ') && (src[1] == ' ' || !src[1])) ? 2 : 0;
+			quot = 0;
+
+			src++;
+			count = strlen(arg);
+			if (count + quot >= dstavail)
+			{
+				Com_Printf ("Error expanding alias: Result too long\n", LOG_GENERAL);
+				return;
+			}
+
+			if (quot)
+				strcat (dst, "\"");
+
+			strcat(dst, arg);
+			dst += count;
+
+			if (quot)
+			{
+				strcat (dst, "\"");
+				dst += 2;
+			}
+
+			dstavail -= count + quot;
+		}
+		else
+		{
+			//Some other cvar, put the $ again
+			*dst++ = '$';
+			*dst = 0;
+			dstavail--;
+		}
+	}
+}
 
 /*
 ============
@@ -1151,13 +1255,17 @@ void	Cmd_ExecuteString (char *text)
 	data = rbfind (cmd_argv[0], aliastree);
 	if (data)
 	{
+		char expanded[MAX_STRING_CHARS];
+
 		a = *(cmdalias_t **)data;
 		if (++alias_count == ALIAS_LOOP_COUNT)
 		{
 			Com_Printf ("ALIAS_LOOP_COUNT\n", LOG_GENERAL);
 			return;
 		}
-		Cbuf_InsertText (a->value);
+
+		Cmd_Expand_Args (a->value, expanded, sizeof(expanded));
+		Cbuf_InsertText (expanded);
 		return;
 	}
 

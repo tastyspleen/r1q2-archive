@@ -1208,10 +1208,18 @@ void CL_ParsePlayerUpdate (void)
 	frame_t			*frame;
 	int				i;
 	float			playerlerp;
+	int				framenum;
 
 	//cl.player_updates_received++;
 
+	framenum = MSG_ReadLong (&net_message);
+
 	frame = &cl.frame;
+	if (frame->serverframe != framenum)
+	{
+		Com_DPrintf ("Out of date playerupdate (client frame %u != packet frame %u)", frame->serverframe, framenum);
+		return;
+	}
 
 	if (!frame->valid)
 	{

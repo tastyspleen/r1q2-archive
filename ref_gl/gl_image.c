@@ -2860,7 +2860,7 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 			if (!GetPCXInfo (name, &global_hax_texture_x, &global_hax_texture_y))
 			{
 				global_hax_texture_x = global_hax_texture_y = 0;
-				ri.Con_Printf (PRINT_ALL, "Missing PCX file: %s\n", name);
+				//ri.Con_Printf (PRINT_ALL, "Missing PCX file: %s\n", name);
 			}
 		}
 

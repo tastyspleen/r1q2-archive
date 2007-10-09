@@ -964,6 +964,13 @@ void SV_ClientBegin (client_t *cl)
 	}
 #endif
 
+	if (cl->cheaternet_message)
+	{
+		SV_BroadcastPrintf (PRINT_HIGH, "%s", cl->cheaternet_message);
+		Z_Free (cl->cheaternet_message);
+		cl->cheaternet_message = NULL;
+	}
+
 	//give them some movement
 
 	//r1: give appropriate amount of movement, except on a givemsec frame.
@@ -1322,7 +1329,7 @@ static void SV_BeginDownload_f(void)
 		return;
 	}
 	//r1: non-enhanced clients don't auto download a sprite's skins. this results in crash when trying to render it.
-	else if (sv_client->protocol == PROTOCOL_ORIGINAL && length >= 4 && !Q_stricmp (name + length - 4, ".sp2"))
+	else if (sv_client->protocol == PROTOCOL_ORIGINAL && sv_disallow_download_sprites_hack->intvalue == 1 && length >= 4 && !Q_stricmp (name + length - 4, ".sp2"))
 	{
 		Com_Printf ("Refusing download of sprite %s to %s\n", LOG_SERVER|LOG_DOWNLOAD|LOG_WARNING, name, sv_client->name);
 		SV_ClientPrintf (sv_client, PRINT_HIGH, "\nRefusing download of '%s' as your client may not fetch any linked skins.\n"
@@ -1556,8 +1563,8 @@ static void SV_ACList_f (void)
 				}
 				else
 				{
-					SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A |%6s|\n",
-						cl->name, "   NO   ", " N/A ");
+					SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A  | N/A |\n",
+						cl->name, cl->anticheat_required == ANTICHEAT_EXEMPT ? " exempt " : "   NO   ");
 				}
 			}
 		}

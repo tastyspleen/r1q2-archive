@@ -739,6 +739,7 @@ void SV_SendPlayerUpdates (int msec_to_next_frame)
 						if (!wrote)
 						{
 							MSG_BeginWriting (svc_playerupdate);
+							MSG_WriteLong (framenum);
 							wrote = true;
 						}
 						MSG_WritePos (target->edict->s.origin);

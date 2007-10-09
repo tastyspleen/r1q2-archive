@@ -281,6 +281,7 @@ void EXPORT Draw_Pic (int x, int y, char *pic)
 		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
 		gl = r_notexture;
 	}
+
 	if (scrap_dirty)
 		Scrap_Upload ();
 

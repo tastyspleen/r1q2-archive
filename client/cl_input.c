@@ -257,9 +257,9 @@ void CL_BaseMove (usercmd_t *cmd)
 	
 	//adjust for turning speed
 	if (in_speed.state & 1)
-		tspeed = cls.frametime * cl_anglespeedkey->value;
+		tspeed = (frame_msec / 1000.0f) * cl_anglespeedkey->value;
 	else
-		tspeed = cls.frametime;
+		tspeed = frame_msec / 1000.0f;
 	
 	//adjust for running speed
 	if ( (in_speed.state & 1) ^ cl_run->intvalue)
@@ -449,7 +449,7 @@ void CL_FinalizeCmd (void)
 	//Com_Printf ("up:%d, side:%d f:%d\n", LOG_CLIENT, cmd->upmove, cmd->sidemove, cmd->forwardmove);
 
 	//r1ch: cap forwardmove/etc to reasonable levels, sure it may be a short
-	//but pmove ob client/server caps at 300 total velocity so there is little
+	//but pmove on client/server caps at 300 total velocity so there is little
 	//value in having these higher, all it does it make for less efficient
 	//deltas.
 	if (cmd->forwardmove > 300)

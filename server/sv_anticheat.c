@@ -1744,7 +1744,7 @@ void SV_AntiCheat_Run (void)
 			}
 			else
 			{
-				ret = recv (acSocket, packetBuffer, expectedLength - packetLen, 0);
+				ret = recv (acSocket, packetBuffer + packetLen, expectedLength - packetLen, 0);
 				if (ret <= 0)
 				{
 					SV_AntiCheat_Unexpected_Disconnect ();
@@ -1981,6 +1981,13 @@ qboolean SV_AntiCheat_Connect (void)
 
 	if (acSocket == SOCKET_ERROR)
 		Com_Error (ERR_DROP, "SV_AntiCheat_Connect: socket");
+
+	if (!dedicated->intvalue)
+	{
+		Com_Printf ("ANTICHEAT: Anticheat is only supported on dedicated servers, disabling.\n", LOG_SERVER|LOG_ANTICHEAT);
+		SV_AntiCheat_Disconnect ();
+		return false;
+	}
 
 	if (ioctlsocket (acSocket, FIONBIO, (u_long *)&_true) == -1)
 		Com_Error (ERR_DROP, "SV_AntiCheat_Connect: ioctl");

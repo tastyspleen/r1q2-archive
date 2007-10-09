@@ -3673,6 +3673,8 @@ cheatvar_t	cheatvars[] = {
 	{"sw_draworder", 0, 0, NULL},
 	{"gl_lightmap", 0, 0, NULL},
 	{"gl_saturatelighting", 0, 0, NULL},
+	{"gl_lockpvs", 0, 0, NULL},
+	{"sw_lockpvs", 0, 0, NULL},
 	{NULL, 0, 0, NULL}
 };
 

@@ -506,38 +506,35 @@ dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
 
 __declspec( naked ) int __cdecl BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
-	static int bops_initialized;
+	//static int bops_initialized;
 	static int Ljmptab[8];
 
-	__asm {
-
+	__asm
+	{
+		push esi
 		push ebx
-			
-		cmp bops_initialized, 1
-		je  initialized
-		mov bops_initialized, 1
 		
-		mov Ljmptab[0*4], offset Lcase0
-		mov Ljmptab[1*4], offset Lcase1
-		mov Ljmptab[2*4], offset Lcase2
-		mov Ljmptab[3*4], offset Lcase3
-		mov Ljmptab[4*4], offset Lcase4
-		mov Ljmptab[5*4], offset Lcase5
-		mov Ljmptab[6*4], offset Lcase6
-		mov Ljmptab[7*4], offset Lcase7
+		lea eax, Ljmptab
+
+		cmp dword ptr [eax], 0
+		je short notinitialized
+		//mov bops_initialized, 1
 			
 initialized:
 
-		mov edx,ds:dword ptr[4+12+esp]
-		mov ecx,ds:dword ptr[4+4+esp]
-		xor eax,eax
-		mov ebx,ds:dword ptr[4+8+esp]
-		mov al,ds:byte ptr[17+edx]
-		cmp al,8
-		jge Lerror
+		mov ecx,ds:dword ptr[8+4+esp]
+		mov ebx,ds:dword ptr[8+8+esp]
+		mov edx,ds:dword ptr[8+12+esp]
+		;xor eax,eax
+		;mov al,ds:byte ptr[17+edx]
+		movzx esi, ds:byte ptr[17+edx]
+		;r1 - removed, Lerror will crash and so will illegal access, this should
+		;never happen anyway and just causes a branch
+		;cmp al,8
+		;jge Lerror
 		fld ds:dword ptr[0+edx]
 		fld st(0)
-		jmp dword ptr[Ljmptab+eax*4]
+		jmp dword ptr[eax+esi*4]
 Lcase0:
 		fmul ds:dword ptr[ebx]
 		fld ds:dword ptr[0+4+edx]
@@ -559,7 +556,7 @@ Lcase0:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase1:
 		fmul ds:dword ptr[ecx]
 		fld ds:dword ptr[0+4+edx]
@@ -581,7 +578,7 @@ Lcase1:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase2:
 		fmul ds:dword ptr[ebx]
 		fld ds:dword ptr[0+4+edx]
@@ -603,7 +600,7 @@ Lcase2:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase3:
 		fmul ds:dword ptr[ecx]
 		fld ds:dword ptr[0+4+edx]
@@ -625,7 +622,7 @@ Lcase3:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase4:
 		fmul ds:dword ptr[ebx]
 		fld ds:dword ptr[0+4+edx]
@@ -647,7 +644,7 @@ Lcase4:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase5:
 		fmul ds:dword ptr[ecx]
 		fld ds:dword ptr[0+4+edx]
@@ -669,7 +666,7 @@ Lcase5:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase6:
 		fmul ds:dword ptr[ebx]
 		fld ds:dword ptr[0+4+edx]
@@ -691,7 +688,7 @@ Lcase6:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
-		jmp LSetSides
+		jmp short LSetSides
 Lcase7:
 		fmul ds:dword ptr[ecx]
 		fld ds:dword ptr[0+4+edx]
@@ -713,6 +710,10 @@ Lcase7:
 		faddp st(3),st(0)
 		fxch st(3)
 		faddp st(2),st(0)
+
+		;padding for LSetsides
+		lea esp, [esp]
+		lea esp, [esp]
 LSetSides:
 		faddp st(2),st(0)
 		fcomp ds:dword ptr[12+edx]
@@ -727,10 +728,21 @@ LSetSides:
 		add ah,ah
 		add cl,ah
 		pop ebx
+		pop esi
 		mov eax,ecx
 		ret
-Lerror:
-		int 3
+//Lerror:
+//		int 3
+notinitialized:
+		mov dword ptr [eax], offset Lcase0
+		mov dword ptr [eax+4], offset Lcase1
+		mov dword ptr [eax+8], offset Lcase2
+		mov dword ptr [eax+12], offset Lcase3
+		mov dword ptr [eax+16], offset Lcase4
+		mov dword ptr [eax+20], offset Lcase5
+		mov dword ptr [eax+24], offset Lcase6
+		mov dword ptr [eax+28], offset Lcase7
+		jmp initialized
 	}
 }
 //#pragma warning( default: 4035 )

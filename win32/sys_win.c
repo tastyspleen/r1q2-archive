@@ -1612,7 +1612,9 @@ static int EXPORT R1Q2UploadProgress (void *clientp, double dltotal, double dlno
 	return 0;
 }
 
+#ifndef DEDICATED_ONLY
 extern cvar_t	*cl_http_proxy;
+#endif
 VOID R1Q2UploadCrashDump (LPCSTR crashDump, LPCSTR crashText)
 {
 	struct curl_httppost* post = NULL;
@@ -1653,8 +1655,10 @@ VOID R1Q2UploadCrashDump (LPCSTR crashDump, LPCSTR crashText)
 		/* Set the form info */
 		curl_easy_setopt (curl, CURLOPT_HTTPPOST, post);
 
+#ifndef DEDICATED_ONLY
 		if (cl_http_proxy)
 			curl_easy_setopt (curl, CURLOPT_PROXY, cl_http_proxy->string);
+#endif
 
 		//curl_easy_setopt (curl, CURLOPT_UPLOAD, 1);
 		if (console)

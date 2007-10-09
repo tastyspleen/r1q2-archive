@@ -179,6 +179,12 @@ cvar_t	*sv_disconnect_hack;
 
 cvar_t	*sv_interpolated_pmove;
 
+cvar_t	*sv_global_master;
+cvar_t	*sv_cheaternet;
+cvar_t	*sv_cheaternet_action;
+
+cvar_t	*sv_disallow_download_sprites_hack;
+
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
 cvar_t	*sv_anticheat_error_action;
@@ -218,6 +224,9 @@ linkedvaluelist_t	serveraliases;
 
 //i hate you snake
 netblock_t			blackhole_exceptions;
+
+unsigned			cheaternet_token;
+netadr_t			cheaternet_adr;
 
 int		pyroadminid;
 
@@ -373,6 +382,13 @@ void SV_CleanClient (client_t *drop)
 	{
 		Z_Free (drop->lastlines);
 		drop->lastlines = NULL;
+	}
+
+	//r1: disconnected before cheatnet message could show?
+	if (drop->cheaternet_message)
+	{
+		Z_Free (drop->cheaternet_message);
+		drop->cheaternet_message = NULL;
 	}
 
 #ifdef ANTICHEAT
@@ -730,6 +746,132 @@ static void SVC_Ack (void)
 		{
 			Com_Printf ("Ping acknowledge from %s\n", LOG_SERVER|LOG_NOTICE, NET_AdrToString(&net_from));
 			break;
+		}
+	}
+}
+
+static void SVC_CheaterNet_Reply (void)
+{
+	const char *info;
+	char		name[16];
+	unsigned	int_id, int_when, int_token, int_challenge;
+
+	client_t	*cl;
+
+	//only allow response from cnet ip
+	if (!NET_CompareAdr (&net_from, &cheaternet_adr))
+	{
+		Com_DPrintf ("Rejected cheaternet response from non-cheaternet host %s.\n", NET_AdrToString (&net_from));
+		return;
+	}
+
+	//server shut down
+	if (sv.state != ss_game)
+		return;
+
+	info = Cmd_Argv (1);
+	if (!info[0])
+		return;
+
+	int_id = atoi(Info_ValueForKey (info, "i"));
+	int_token = strtoul(Info_ValueForKey (info, "t"), NULL, 10);
+	int_challenge = strtoul(Info_ValueForKey (info, "c"), NULL, 10);
+	Q_strncpy (name, Info_ValueForKey (info, "n"), sizeof(name)-1);
+
+	if (!int_token || !int_challenge)
+		return;
+
+	//invalid token
+	if (int_token != cheaternet_token)
+		return;
+
+	if (int_id >= maxclients->intvalue)
+		return;
+
+	cl = &svs.clients[int_id];
+
+	//gone
+	if (cl->state <= cs_zombie)
+		return;
+
+	//stale reply
+	if (cl->challenge != int_challenge)
+		return;
+
+	//if name is present, assume positive response
+	if (name[0])
+	{
+		char		*server, *reason, *when;
+		char		*message;
+		unsigned	secs;
+
+		int days = 0;
+		int hours = 0;
+		int mins = 0;
+
+		char time_string[64];
+
+		when = Info_ValueForKey (info, "w");
+		int_when = strtoul (when, NULL, 10);
+
+		server = Info_ValueForKey (info, "s");
+		reason = Info_ValueForKey (info, "r");
+
+		time_string[0] = 0;
+
+		secs = (unsigned)(time(NULL) - int_when);
+
+		//old data?
+		if (sv_cheaternet->intvalue > 0 && secs / 60 > sv_cheaternet->intvalue)
+			return;
+
+		while (secs/60/60/24 >= 1)
+		{
+			days++;
+			secs -= 60*60*24;
+		}
+
+		while (secs/60/60 >= 1)
+		{
+			hours++;
+			secs -= 60*60;
+		}
+
+		while (secs/60 >= 1)
+		{
+			mins++;
+			secs -= 60;
+		}
+
+		if (days)
+		{
+			if (days == 1)
+				strcpy (time_string, "yesterday");
+			else
+				sprintf (time_string, "%d days ago", days);
+		}
+		else if (hours)
+			sprintf (time_string, "%d hour%s ago", hours, hours == 1 ? "" : "s");
+		else if (mins)
+			sprintf (time_string, "%d minute%s ago", mins, mins == 1 ? "" : "s");
+		else
+			sprintf (time_string, "%d second%s ago", secs, secs == 1 ? "" : "s");
+
+		//log for console
+		Com_Printf ("CHEATERNET: %s[%s] was caught cheating %s on %s as '%s' with '%s'.\n", LOG_SERVER, cl->name, NET_AdrToString(&cl->netchan.remote_address), time_string, server, name, reason);
+
+		if (sv_cheaternet_action->intvalue > 0)
+		{
+			message = va ("CHEATERNET: %s was caught cheating %s on %s as '%s' with '%s'.\n", cl->name, time_string, server, name, reason);
+
+			//broadcast
+			if (cl->state == cs_spawned)
+				SV_BroadcastPrintf (PRINT_HIGH, "%s", message);
+			else
+				cl->cheaternet_message = CopyString (message, TAGMALLOC_ANTICHEAT);
+
+			if (sv_cheaternet_action->intvalue == 2)
+				SV_KickClient (cl, "cheaternet", "You were kicked because your IP address was recently caught cheating at another server.\n");
 		}
 	}
 }
@@ -1430,6 +1572,7 @@ gotnewcl:
 	if (newcl->messageListData || newcl->versionString || newcl->downloadFileName || newcl->download || newcl->lastlines)
 	{
 		Com_Printf ("WARNING: Client %d never got cleaned up, possible memory leak.\n", LOG_SERVER|LOG_WARNING, (int)(newcl - svs.clients));
+		SV_CleanClient (newcl);
 	}
 
 	memset (newcl, 0, sizeof(*newcl));
@@ -1559,9 +1702,16 @@ gotnewcl:
 		sv_connectmessage->modified = false;
 	}
 
-	//only show message on reconnect
-	if (reconnected && sv_connectmessage->string[0])
-		Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s\n", sv_connectmessage->string);
+	//send cheaternet query if enabled
+	if (reconnected)
+	{
+		if (sv_cheaternet->intvalue && !NET_IsLANAddress (adr) && cheaternet_adr.port)
+			Netchan_OutOfBandPrint (NS_SERVER, &cheaternet_adr, "query\n%u\n%d\n%u\n%s\n%s\n", cheaternet_token, newcl - svs.clients, newcl->challenge, Info_ValueForKey (userinfo, "name"), NET_AdrToString (adr));
+
+		//only show message on reconnect
+		if (sv_connectmessage->string[0])
+			Netchan_OutOfBandPrint (NS_SERVER, adr, "print\n%s\n", sv_connectmessage->string);
+	}
 
 	newcl->protocol = protocol;
 	newcl->state = cs_connected;
@@ -1968,6 +2118,8 @@ static void SV_ConnectionlessPacket (void)
 		SVC_RemoteCommand ();
 	else if (!strcmp(c, "ack"))
 		SVC_Ack ();
+	else if (!strcmp(c, "cheaternetreply"))
+		SVC_CheaterNet_Reply ();
 #ifdef USE_PYROADMIN
 	else if (!strcmp (c, "cmd"))
 		SVC_PyroAdminCommand (s);
@@ -3027,7 +3179,7 @@ void SV_Init (void)
 
 	sv_airaccelerate = Cvar_Get("sv_airaccelerate", "0", CVAR_LATCH);
 
-	public_server = Cvar_Get ("public", "0", 0);
+	public_server = Cvar_Get ("public", "1", 0);
 	public_server->help = "If set, sends information about this server to master servers which will cause the server to be shown in server browsers. See also 'setmaster' command. Default 0.\n";
 
 	//r1: not needed
@@ -3296,6 +3448,18 @@ void SV_Init (void)
 	sv_interpolated_pmove = Cvar_Get ("sv_interpolated_pmove", "0", 0);
 	sv_interpolated_pmove->help = "Interpolate player movements server-side that have a duration of this value or higher to help compensate for low packet rates. Be sure you fully understand how it works before enabling; see the R1Q2 readme. Default 0.\n";
 
+	sv_global_master = Cvar_Get ("sv_global_master", "1", 0);
+	sv_global_master->help = "Report to the global Q2 master at q2servers.com. Default 1.\n";
+
+	sv_cheaternet = Cvar_Get ("sv_cheaternet", "60", 0);
+	sv_cheaternet->help = "Lookup connecting players in the CheaterNet database and if an infraction was round less than <value> minutes ago, perform sv_cheaternet_action. See the server admin guide for more details. Default 60.\n";
+
+	sv_cheaternet_action = Cvar_Get ("sv_cheaternet_action", "1", 0);
+	sv_cheaternet_action->help = "Action to perform on a positive CheaterNet match. Default 1.\n0: Show details in server console only\n1: Show details to players.\n2: Refuse connection.\n";
+
+	sv_disallow_download_sprites_hack = Cvar_Get ("sv_disallow_download_sprites_hack", "1", 0);
+	sv_disallow_download_sprites_hack->help = "Disallow downloads of sprites (.sp2) to protocol 34 clients. 3.20 and other clients do not fetch linked skins on sprites, which may cause a crash when trying to render them with missing skins. Default 1.\n";
+
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
 	sv_require_anticheat->help = "Require use of the r1ch.net anticheat module by players. Default 0.\n0: Don't require any anticheat module.\n1: Optionally use the anticheat module.\n2: Require the anticheat module.\n";
@@ -3349,6 +3513,9 @@ void SV_Init (void)
 	sv_anticheat_force_protocol35 = Cvar_Get ("sv_anticheat_force_protocol35", "0", 0);
 	sv_anticheat_force_protocol35->help = "Force anticheat clients to connect using protocol 35. This may help prevent old hacks from working. Default 0.\n";
 #endif
+
+	//server-private token to prevent spoofed cheaternet responses
+	cheaternet_token = randomMT();
 
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN

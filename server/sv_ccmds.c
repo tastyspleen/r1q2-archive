@@ -51,11 +51,22 @@ static void SV_SetMaster_f (void)
 
 	memset (&master_adr, 0, sizeof(master_adr));
 
-	slot = 0;		// slot 0 will not always contain the id master
+	if (sv_global_master->intvalue)
+	{
+		NET_StringToAdr ("master.q2servers.com:27900", &master_adr[0]);
+		slot = 1;
+	}
+	else
+		slot = 0;
+
 	for (i=1 ; i<Cmd_Argc() ; i++)
 	{
 		if (slot == MAX_MASTERS)
 			break;
+
+		// don't allow specifying global master twice.
+		if (sv_global_master->intvalue && !Q_stricmp (Cmd_Argv(i), "master.q2servers.com"))
+			continue;
 
 		if (!NET_StringToAdr (Cmd_Argv(i), &master_adr[slot]))
 		{

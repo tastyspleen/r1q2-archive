@@ -258,7 +258,7 @@ static void Con_MessageMode_f (void)
 	if (!chat_bufferlen && Cmd_Argc() > 1)
 	{
 		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer[chat_curbuffer])-2);
-		if (chat_buffer[0])
+		if (chat_buffer[chat_curbuffer][0])
 		{
 			strcat (chat_buffer[chat_curbuffer], " ");
 			chat_bufferlen = (int)strlen(chat_buffer[chat_curbuffer]);
@@ -284,7 +284,7 @@ static void Con_MessageMode2_f (void)
 	if (!chat_bufferlen && Cmd_Argc() > 1)
 	{
 		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args(), sizeof(chat_buffer[chat_curbuffer])-2);
-		if (chat_buffer[0])
+		if (chat_buffer[chat_curbuffer][0])
 		{
 			strcat (chat_buffer[chat_curbuffer], " ");
 			chat_bufferlen = (int)strlen(chat_buffer[chat_curbuffer]);
@@ -315,7 +315,7 @@ static void Con_MessageModex_f (void)
 	if (!chat_bufferlen && Cmd_Argc() > 2)
 	{
 		Q_strncpy (chat_buffer[chat_curbuffer], Cmd_Args2(2), sizeof(chat_buffer[chat_curbuffer])-2);
-		if (chat_buffer[0])
+		if (chat_buffer[chat_curbuffer][0])
 		{
 			strcat (chat_buffer[chat_curbuffer], " ");
 			chat_bufferlen = (int)strlen(chat_buffer[chat_curbuffer]);

@@ -772,15 +772,34 @@ the multiplier for clients running in the new protocol for fast spectator moveme
 void EXPORT SV_Pmove (pmove_t *pm)
 {
 	pmove_new_t epm;
+	client_t	*cl;
 
 	//transfer old pmove to new struct
 	memcpy (&epm, pm, sizeof(pmove_t));
+
+	//temporarily snap all other players to their final move positions so player clipping doesn't get screwed up
+	if (sv_interpolated_pmove->intvalue && epm.s.pm_type != PM_SPECTATOR)
+	{
+		for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+		{
+			if (cl->state < cs_spawned || cl == sv_client)
+				continue;
+
+			if (cl->current_move.elapsed < cl->current_move.msec)
+			{
+				FastVectorCopy (cl->edict->s.origin, cl->current_move.origin_saved);
+				FastVectorCopy (cl->current_move.origin_end, cl->edict->s.origin);
+				SV_LinkEdict (cl->edict);
+			}
+		}
+	}
 
 	//r1ch: allow non-client calls of this function
 	if (sv_client && sv_client->protocol == PROTOCOL_R1Q2)
 	{
 		if (pm->s.pm_type == PM_SPECTATOR)
-		epm.multiplier = 2;
+			epm.multiplier = 2;
+
 		if (sv_strafejump_hack->intvalue)
 			epm.strafehack = true;
 		else
@@ -803,9 +822,25 @@ void EXPORT SV_Pmove (pmove_t *pm)
 
 	//pmove
 	Pmove (&epm);
-	
+
 	//copy results back out
 	memcpy (pm, &epm, sizeof(pmove_t));
+
+	//restore old partial moves
+	if (sv_interpolated_pmove->intvalue && epm.s.pm_type != PM_SPECTATOR)
+	{
+		for (cl = svs.clients; cl < svs.clients + maxclients->intvalue; cl++)
+		{
+			if (cl->state < cs_spawned || cl == sv_client)
+				continue;
+
+			if (cl->current_move.elapsed < cl->current_move.msec)
+			{
+				FastVectorCopy (cl->current_move.origin_saved, cl->edict->s.origin);
+				SV_LinkEdict (cl->edict);
+			}
+		}
+	}
 }
 
 /*

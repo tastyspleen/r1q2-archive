@@ -197,9 +197,13 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 	char		*cmd;
 
 	//r1: get latched vars
-	if (Cvar_GetNumLatchedVars())
+	if (Cvar_GetNumLatchedVars() || sv_recycle->intvalue)
 	{
+		Com_Printf ("SV_SpawnServer: Reloading Game DLL.\n", LOG_SERVER);
 		SV_InitGame();
+
+		if (sv_recycle->intvalue != 2)
+			Cvar_ForceSet ("sv_recycle", "0");
 	}
 
 	Cvar_ForceSet ("$mapname", server);
@@ -226,14 +230,6 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 	if (attractloop)
 		Cvar_Set ("paused", "0");
 
-	if (sv_recycle->intvalue)
-	{
-		Com_Printf ("SV_SpawnServer: Reloading Game DLL.\n", LOG_SERVER);
-		SV_InitGameProgs();
-		if (sv_recycle->intvalue != 2)
-			Cvar_ForceSet ("sv_recycle", "0");
-	}
-
 	Com_Printf ("------- Server Initialization -------\n", LOG_SERVER);
 
 	Com_DPrintf ("SpawnServer: %s\n", server);
@@ -242,6 +238,17 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 
 	svs.spawncount++;		// any partially connected client will be
 							// restarted
+
+	//lookup any possible new IP
+	if ((svs.spawncount % 10) == 0)
+	{
+		if (sv_global_master->intvalue)
+			NET_StringToAdr ("master.q2servers.com:27900", &master_adr[0]);
+
+		if (sv_cheaternet->intvalue)
+			NET_StringToAdr ("query.anticheat.r1ch.net:27930", &cheaternet_adr);
+	}
+
 	sv.state = ss_dead;
 	Com_SetServerState (sv.state);
 
@@ -481,10 +488,14 @@ void SV_InitGame (void)
 	// heartbeats will always be sent to the id master
 	svs.last_heartbeat = -295000;		// send immediately (r1: give few secs for configs to run)
 
-	//NET_StringToAdr ("192.246.40.37:27900", &master_adr[0]);
+	if (sv_cheaternet->intvalue)
+		NET_StringToAdr ("query.anticheat.r1ch.net:27930", &cheaternet_adr);
+
+	if (sv_global_master->intvalue)
+		NET_StringToAdr ("master.q2servers.com:27900", &master_adr[0]);
 
 	//r1: ping masters now that the network is up
-	if (Cvar_IntValue ("public"))
+	if (Cvar_IntValue ("public") && dedicated->intvalue)
 	{
 		for (i=0 ; i<MAX_MASTERS ; i++)
 		{

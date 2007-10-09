@@ -145,6 +145,7 @@ typedef struct
 	int		elapsed;
 	vec3_t	origin_start;
 	vec3_t	origin_end;
+	vec3_t	origin_saved;
 } pmovestatus_t;
 
 typedef struct client_s
@@ -260,6 +261,8 @@ typedef struct client_s
 	unsigned					player_updates_sent;
 
 	pmovestatus_t				current_move;
+
+	char *						cheaternet_message;
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -328,6 +331,8 @@ extern	cvar_t	*sv_ratelimit_status;
 
 extern	netadr_t	net_from;
 extern	sizebuf_t	net_message;
+
+extern	netadr_t	cheaternet_adr;
 
 extern	netadr_t	master_adr[MAX_MASTERS];	// address of the master server
 
@@ -404,6 +409,8 @@ extern	cvar_t		*sv_disconnect_hack;
 
 extern	cvar_t		*sv_interpolated_pmove;
 
+extern	cvar_t		*sv_global_master;
+
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;
 #endif
@@ -460,6 +467,9 @@ extern cvar_t	*sv_gamedebug;
 extern cvar_t	*sv_packetentities_hack;
 
 extern cvar_t	*sv_optimize_deltas;
+
+extern cvar_t	*sv_cheaternet;
+extern cvar_t	*sv_disallow_download_sprites_hack;
 
 //void Master_Heartbeat (void);
 //void Master_Packet (void);
