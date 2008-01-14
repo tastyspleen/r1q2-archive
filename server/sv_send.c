@@ -1164,6 +1164,23 @@ static qboolean SV_RateDrop (client_t *c)
 	return false;
 }
 
+static void SV_SetClientEntityEvents (client_t *cl)
+{
+	edict_t	*e;
+	int		i;
+
+	for (i = 0; i < ge->num_edicts; i++)
+	{
+		e = EDICT_NUM(i);
+
+		if (!e->inuse)
+			continue;
+
+		if (e->s.event)
+			cl->entity_events[i] = e->s.event;
+	}
+}
+
 /*
 =======================
 SV_SendClientMessages
@@ -1215,6 +1232,13 @@ void SV_SendClientMessages (void)
 	{
 		if (c->state == cs_free)
 			continue;
+
+		// client requested / needs lower frame rate, skip this frame
+		if (c->state == cs_spawned && sv.time % (1000 / c->settings[CLSET_FPS]) != 0)
+		{
+			SV_SetClientEntityEvents (c);
+			continue;
+		}
 
 		c->last_incoming_sequence = c->netchan.incoming_sequence;
 		c->player_updates_sent = 0;

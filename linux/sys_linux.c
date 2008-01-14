@@ -32,7 +32,7 @@
 #define REG_EIP EIP
 #endif
 
-
+//#include <fenv.h>
 #include <dlfcn.h>
 
 #include "../qcommon/qcommon.h"
@@ -300,6 +300,27 @@ void Sys_Spinstats_f (void)
 	Com_Printf ("%u fast spins, %u slow spins, %.2f%% slow.\n", LOG_GENERAL, goodspins, badspins, ((float)badspins / (float)(goodspins+badspins)) * 100.0f);
 }
 
+unsigned short Sys_GetFPUStatus (void)
+{
+	unsigned short fpuword;
+	__asm__ __volatile__ ("fnstcw %0" : "=m" (fpuword));
+	return fpuword;
+}
+
+/*
+ * Round to zero, 24 bit precision
+ */
+void Sys_SetFPU (void)
+{
+	unsigned short fpuword;
+	fpuword = Sys_GetFPUStatus ();
+	fpuword &= ~(3 << 8);
+	fpuword |= (0 << 8);
+	fpuword &= ~(3 << 10);
+	fpuword |= (0 << 10);
+	__asm__ __volatile__ ("fldcw %0" : : "m" (fpuword));
+}
+
 void Sys_Init(void)
 {
 #if id386
@@ -315,6 +336,11 @@ void Sys_Init(void)
 		Sys_Error ("uint64 != 64 bits");
 	else if (sizeof(uint16) != 2)
 		Sys_Error ("uint16 != 16 bits");
+
+//	fesetround (FE_TOWARDZERO);
+
+	Sys_SetFPU ();
+	Sys_CheckFPUStatus ();
 
 	sa.sa_sigaction = (void *)Sys_Backtrace;
 	sigemptyset (&sa.sa_mask);
@@ -648,8 +674,27 @@ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
 
 #endif
 
-//FIXME
 qboolean Sys_CheckFPUStatus (void)
 {
+	static unsigned short	last_word = 0;
+	unsigned short	fpu_control_word;
+
+	fpu_control_word = Sys_GetFPUStatus ();
+
+	Com_DPrintf ("Sys_CheckFPUStatus: rounding %d, precision %d\n", (fpu_control_word >> 10) & 3, (fpu_control_word >> 8) & 3);
+
+	//check rounding (10) and precision (8) are set properly
+	if (((fpu_control_word >> 10) & 3) != 0 ||
+		((fpu_control_word >> 8) & 3) != 0)
+	{
+		if (fpu_control_word != last_word)
+		{
+			last_word = fpu_control_word;
+			return false;
+		}
+	}
+
+	last_word = fpu_control_word;
 	return true;
 }
+

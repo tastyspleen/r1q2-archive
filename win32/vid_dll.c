@@ -915,7 +915,7 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 	reflib_active = true;
 
 	if (!Sys_CheckFPUStatus())
-		Com_Printf ("\2WARNING: The FPU control word has changed after loading %s, prediction errors or physics bugs may result!\n", LOG_GENERAL, name);
+		Com_Printf ("\2WARNING: The FPU control word has changed after loading %s!\n", LOG_GENERAL, name);
 
 //======
 //PGM

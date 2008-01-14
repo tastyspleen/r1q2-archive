@@ -147,10 +147,12 @@ cvar_t	*cl_autorecord;
 cvar_t	*cl_railtrail;
 cvar_t	*cl_test = &uninitialized_cvar;
 cvar_t	*cl_test2;
+cvar_t	*cl_test3;
 
 cvar_t	*cl_original_dlights;
 cvar_t	*cl_default_location = &uninitialized_cvar;
 cvar_t	*cl_player_updates;
+cvar_t	*cl_updaterate;
 
 #ifdef NO_SERVER
 cvar_t	*allow_download;
@@ -1110,6 +1112,7 @@ void CL_ClearState (void)
 	SZ_Init (&cl.demoBuff, cl.demoFrame, sizeof(cl.demoFrame));
 	cl.demoBuff.allowoverflow = true;
 
+	cl.settings[SVSET_FPS] = 10;
 }
 
 /*
@@ -3053,6 +3056,11 @@ skipplayer:;
 		MSG_WriteShort (CLSET_PLAYERUPDATE_REQUESTS);
 		MSG_WriteShort (cl_player_updates->intvalue);
 		MSG_EndWriting (&cls.netchan.message);
+
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_FPS);
+		MSG_WriteShort (cl_updaterate->intvalue);
+		MSG_EndWriting (&cls.netchan.message);
 	}
 
 	MSG_WriteByte (clc_stringcmd);
@@ -3347,6 +3355,20 @@ void _player_updates_changed (cvar_t *c, char *old, char *new)
 		cl.player_update_time = 0;
 }
 
+void _updaterate_changed (cvar_t *c, char *old, char *new)
+{
+	if (c->intvalue < 0)
+		Cvar_Set (c->name, "0");
+
+	if (cls.state >= ca_connected && cls.serverProtocol == PROTOCOL_R1Q2)
+	{	
+		MSG_BeginWriting (clc_setting);
+		MSG_WriteShort (CLSET_FPS);
+		MSG_WriteShort (cl_updaterate->intvalue);
+		MSG_EndWriting (&cls.netchan.message);
+	}
+}
+
 /*
 =================
 CL_InitLocal
@@ -3396,7 +3418,7 @@ void CL_InitLocal (void)
 	r_maxfps = Cvar_Get ("r_maxfps", "1000", 0);
 	r_maxfps->changed = _maxfps_changed;
 
-	cl_maxfps = Cvar_Get ("cl_maxfps", "33", CVAR_ARCHIVE);
+	cl_maxfps = Cvar_Get ("cl_maxfps", "60", CVAR_ARCHIVE);
 	cl_maxfps->changed = _maxfps_changed;
 
 	cl_async = Cvar_Get ("cl_async", "1", 0);
@@ -3474,6 +3496,7 @@ void CL_InitLocal (void)
 	//misc for testing
 	cl_test = Cvar_Get ("cl_test", "0", 0);
 	cl_test2 = Cvar_Get ("cl_test2", "0", 0);
+	cl_test3 = Cvar_Get ("cl_test3", "0", 0);
 
 	cl_original_dlights = Cvar_Get ("cl_original_dlights", "1", 0);
 
@@ -3486,6 +3509,9 @@ void CL_InitLocal (void)
 #endif
 
 	cl_player_updates->changed = _player_updates_changed;
+
+	cl_updaterate = Cvar_Get ("cl_updaterate", "0", 0);
+	cl_updaterate->changed = _updaterate_changed;
 
 #ifdef NO_SERVER
 	allow_download = Cvar_Get ("allow_download", "1", CVAR_ARCHIVE);
@@ -3694,7 +3720,7 @@ void _cheatcvar_changed (cvar_t *cvar, char *oldValue, char *newValue)
 
 	for (i=0, var = cheatvars ; i<numcheatvars ; i++, var++)
 	{
-		if (var->var == cvar && var->value != cvar->value)
+		if (var->var == cvar && var->value != cvar->intvalue)
 		{
 			Com_Printf ("%s is cheat protected.\n", LOG_GENERAL, var->name);
 			Cvar_SetValue (var->name, var->setval);

@@ -1037,7 +1037,7 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 	client_t		*cl;
 	unsigned short	clientID;
 	uint32			challenge;
-	int				client_type;
+	int				client_type, valid;
 
 	if (bufflen < 7)
 		return;
@@ -1050,6 +1050,10 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 	challenge = *(uint32 *)buff;
 	buff += 4;
 	bufflen -= 4;
+
+	valid = (int) (*buff);
+	buff++;
+	bufflen--;
 
 	client_type = (int) (*buff);
 
@@ -1074,7 +1078,7 @@ static void SV_AntiCheat_ParseQueryReply (byte *buff, int bufflen)
 
 	cl->anticheat_query_sent = ANTICHEAT_QUERY_DONE;
 
-	if (buff[3] == 1)
+	if (valid == 1)
 	{
 		cl->anticheat_client_type = client_type;
 		cl->anticheat_valid = true;

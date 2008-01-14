@@ -376,12 +376,14 @@ typedef enum
 	CLSET_NOBLEND,
 	CLSET_RECORDING,
 	CLSET_PLAYERUPDATE_REQUESTS,
+	CLSET_FPS,
 	CLSET_MAX
 } clientsetting_t;
 
 typedef enum
 {
 	SVSET_PLAYERUPDATES,
+	SVSET_FPS,
 	SVSET_MAX
 } serversetting_t;
 

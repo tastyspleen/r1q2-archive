@@ -298,6 +298,13 @@ static void SV_New_f (void)
 		}
 		else
 		{
+#ifdef _DEBUG
+			if (sv_client->ratbot_hack_pending)
+			{
+				sv_client->ratbot_hack_pending = false;
+				return;
+			}
+#endif
 			//shouldn't be here!
 			Com_DPrintf ("WARNING: Illegal 'new' from %s, client state %d. This shouldn't happen...\n", sv_client->name, sv_client->state);
 		}
@@ -491,6 +498,19 @@ static void SV_New_f (void)
 	}
 
 	SV_AddMessage (sv_client, true);
+
+	if (sv_fps->intvalue != 10)
+	{
+		if (sv_client->protocol == PROTOCOL_R1Q2)
+		{
+			/*MSG_WriteByte (svc_setting);
+			MSG_WriteLong (SVSET_FPS);
+			MSG_WriteLong (sv_fps->intvalue);
+			SV_AddMessage (sv_client, true);*/
+		}
+		else
+			SV_ClientPrintf (sv_client, PRINT_CHAT, "NOTE: This is a %d FPS server. You will experience reduced latency and smoother gameplay if you use a compatible client such as R1Q2, AprQ2 or EGL.\n", sv_fps->intvalue);
+	}
 
 	//r1: we have to send another \n in case serverdata caused game switch -> autoexec without \n
 	//this will still cause failure if the last line of autoexec exec's another config for example.
@@ -820,7 +840,6 @@ void SV_ClientBegin (client_t *cl)
 	}
 
 #ifdef ANTICHEAT
-	//FIXME: make this into one big confusing statement
 	if (cl->anticheat_required != ANTICHEAT_EXEMPT)
 	{
 		///client is NOT EXEMPT
@@ -918,6 +937,10 @@ void SV_ClientBegin (client_t *cl)
 		return;
 	}
 
+	//start everyone out at 10 fps if they didn't specify otherwise
+	if (!cl->settings[CLSET_FPS])
+		cl->settings[CLSET_FPS] = 10;
+
 	cl->downloadsize = 0;
 
 	cl->state = cs_spawned;
@@ -1011,6 +1034,16 @@ static void SV_Begin_f (void)
 		SV_New_f ();
 		return;
 	}
+
+#ifdef _DEBUG
+	if (sv_ratbot_hack->intvalue)
+	{
+		MSG_BeginWriting (svc_stufftext);
+		MSG_WriteString ("cmd new\n");
+		SV_AddMessage (sv_client, true);
+		sv_client->ratbot_hack_pending = true;
+	}
+#endif
 
 	sv_client->beginspawncount = atoi(Cmd_Argv(1));
 
@@ -1563,7 +1596,7 @@ static void SV_ACList_f (void)
 				}
 				else
 				{
-					SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A  | N/A |\n",
+					SV_ClientPrintf (sv_client, PRINT_HIGH, "|%-16s|%s| N/A | N/A  |\n",
 						cl->name, cl->anticheat_required == ANTICHEAT_EXEMPT ? " exempt " : "   NO   ");
 				}
 			}
@@ -1740,11 +1773,15 @@ static void SV_ClientServerinfo_f (void)
 	SV_ClientPrintf (sv_client, PRINT_HIGH, 
 		"Server Protocol Settings\n"
 		"------------------------\n"
+		"Server FPS     : %d (%d ms)\n"
+		"Your FPS       : %lu (%lu ms)\n"
 		"Your protocol  : %d\n"
 		"Your max packet: %d (server max allowed: %d)\n"
 		"Strafejump hack: %s\n"
 		"Optimize deltas: %s\n"
 		"Packetents hack: %s\n",
+		sv_fps->intvalue, 1000 / sv_fps->intvalue,
+		sv_client->settings[CLSET_FPS], 1000 / sv_client->settings[CLSET_FPS],
 		sv_client->protocol,
 		sv_client->netchan.message.buffsize, maxLen,
 		strafejump_msg,
@@ -2523,6 +2560,21 @@ static void SV_SetClientSetting (client_t *cl)
 			MSG_WriteLong (value);
 			SV_AddMessage (cl, true);
 			break;
+
+		case CLSET_FPS:
+			if (value > sv_fps->intvalue)
+				value = sv_fps->intvalue;
+
+			if (value == 0)
+				value = sv_fps->intvalue;
+
+			//confirm to client
+			MSG_BeginWriting (svc_setting);
+			MSG_WriteLong (SVSET_FPS);
+			MSG_WriteLong (value);
+			SV_AddMessage (cl, true);
+			break;
+
 	}
 
 	cl->settings[setting] = value;

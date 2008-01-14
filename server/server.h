@@ -247,7 +247,7 @@ typedef struct client_s
 	linkednamelist_t			anticheat_bad_files;
 	unsigned					anticheat_query_time;
 	unsigned					anticheat_nag_time;
-	const char *				anticheat_token;
+	const char					*anticheat_token;
 	int							anticheat_client_type;
 #endif
 	int							beginspawncount;
@@ -262,7 +262,14 @@ typedef struct client_s
 
 	pmovestatus_t				current_move;
 
-	char *						cheaternet_message;
+	char						*cheaternet_message;
+
+	//ugly hack for variable FPS support dropping s.event
+	int							entity_events[MAX_EDICTS];
+
+#ifdef _DEBUG
+	qboolean					ratbot_hack_pending;
+#endif
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -411,6 +418,10 @@ extern	cvar_t		*sv_interpolated_pmove;
 
 extern	cvar_t		*sv_global_master;
 
+#ifdef _DEBUG
+extern	cvar_t		*sv_ratbot_hack;
+#endif
+
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;
 #endif
@@ -470,6 +481,8 @@ extern cvar_t	*sv_optimize_deltas;
 
 extern cvar_t	*sv_cheaternet;
 extern cvar_t	*sv_disallow_download_sprites_hack;
+
+extern cvar_t	*sv_fps;
 
 //void Master_Heartbeat (void);
 //void Master_Packet (void);

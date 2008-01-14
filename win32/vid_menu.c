@@ -258,14 +258,19 @@ void EXPORT VID_MenuInit( void )
 
 	if ( !gl_driver )
 		gl_driver = Cvar_Get( "gl_driver", "opengl32", 0 );
+
 	if ( !gl_picmip )
 		gl_picmip = Cvar_Get( "gl_picmip", "0", 0 );
+
 	if ( !gl_mode )
 		gl_mode = Cvar_Get( "gl_mode", "3", 0 );
+
 	if ( !sw_mode )
 		sw_mode = Cvar_Get( "sw_mode", "0", 0 );
+
 	if ( !gl_ext_palettedtexture )
-		gl_ext_palettedtexture = Cvar_Get( "gl_ext_palettedtexture", "1", CVAR_ARCHIVE );
+		gl_ext_palettedtexture = Cvar_Get( "gl_ext_palettedtexture", "0", CVAR_ARCHIVE );
+
 	if ( !gl_finish )
 		gl_finish = Cvar_Get( "gl_finish", "0", CVAR_ARCHIVE );
 
@@ -273,7 +278,16 @@ void EXPORT VID_MenuInit( void )
 		sw_stipplealpha = Cvar_Get( "sw_stipplealpha", "0", CVAR_ARCHIVE );
 
 	s_mode_list[SOFTWARE_MENU].curvalue = sw_mode->intvalue;
+	if (s_mode_list[SOFTWARE_MENU].curvalue > 14)
+		s_mode_list[SOFTWARE_MENU].curvalue = 14;
+	else if (s_mode_list[SOFTWARE_MENU].curvalue < 0)
+		s_mode_list[SOFTWARE_MENU].curvalue = 0;
+
 	s_mode_list[OPENGL_MENU].curvalue = gl_mode->intvalue;
+	if (s_mode_list[OPENGL_MENU].curvalue > 14)
+		s_mode_list[OPENGL_MENU].curvalue = 14;
+	else if (s_mode_list[OPENGL_MENU].curvalue < 0)
+		s_mode_list[OPENGL_MENU].curvalue = 0;
 
 	if ( !scr_viewsize )
 		scr_viewsize = Cvar_Get ("viewsize", "100", CVAR_ARCHIVE);
@@ -286,7 +300,7 @@ void EXPORT VID_MenuInit( void )
 		s_current_menu_index = SOFTWARE_MENU;
 		s_ref_list[0].curvalue = s_ref_list[1].curvalue = REF_SOFT;
 	}
-	else if (strstr( vid_ref->string, "gl" ))
+	else
 	{
 		s_current_menu_index = OPENGL_MENU;
 		if ( strcmp( gl_driver->string, "3dfxgl" ) == 0 )
@@ -350,7 +364,7 @@ void EXPORT VID_MenuInit( void )
 		s_fs_box[i].generic.y	= 40;
 		s_fs_box[i].generic.name	= "fullscreen";
 		s_fs_box[i].itemnames = yesno_names;
-		s_fs_box[i].curvalue = vid_fullscreen->intvalue;
+		s_fs_box[i].curvalue = vid_fullscreen->intvalue ? 1 : 0;
 
 		s_defaults_action[i].generic.type = MTYPE_ACTION;
 		s_defaults_action[i].generic.name = "reset to defaults";
@@ -369,7 +383,7 @@ void EXPORT VID_MenuInit( void )
 	s_stipple_box.generic.x	= 0;
 	s_stipple_box.generic.y	= 60;
 	s_stipple_box.generic.name	= "stipple alpha";
-	s_stipple_box.curvalue = sw_stipplealpha->intvalue;
+	s_stipple_box.curvalue = sw_stipplealpha->intvalue ? 1 : 0;
 	s_stipple_box.itemnames = yesno_names;
 
 	s_tq_slider.generic.type	= MTYPE_SLIDER;
@@ -379,19 +393,21 @@ void EXPORT VID_MenuInit( void )
 	s_tq_slider.minvalue = 0;
 	s_tq_slider.maxvalue = 3;
 	s_tq_slider.curvalue = 3-gl_picmip->value;
+	if (s_tq_slider.curvalue < 0)
+		s_tq_slider.curvalue = 0;
 
 	s_paletted_texture_box.generic.type = MTYPE_SPINCONTROL;
 	s_paletted_texture_box.generic.x	= 0;
 	s_paletted_texture_box.generic.y	= 70;
 	s_paletted_texture_box.generic.name	= "8-bit textures";
 	s_paletted_texture_box.itemnames = yesno_names;
-	s_paletted_texture_box.curvalue = gl_ext_palettedtexture->intvalue;
+	s_paletted_texture_box.curvalue = gl_ext_palettedtexture->intvalue ? 1 : 0;
 
 	s_finish_box.generic.type = MTYPE_SPINCONTROL;
 	s_finish_box.generic.x	= 0;
 	s_finish_box.generic.y	= 80;
 	s_finish_box.generic.name	= "sync every frame";
-	s_finish_box.curvalue = gl_finish->intvalue;
+	s_finish_box.curvalue = gl_finish->intvalue ? 1 : 0;
 	s_finish_box.itemnames = yesno_names;
 
 	Menu_AddItem( &s_software_menu, ( void * ) &s_ref_list[SOFTWARE_MENU] );

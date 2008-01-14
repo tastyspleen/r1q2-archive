@@ -225,7 +225,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	VectorSubtract (ent->maxs, ent->mins, ent->size);
 	
 	// encode the size into the entity_state for client prediction
-	if (ent->solid == SOLID_BBOX && !(ent->svflags & SVF_DEADMONSTER) && !(sv_new_entflags->intvalue && (ent->svflags & SVF_NOPREDICTION)))
+	if (ent->solid == SOLID_BBOX && !((ent->svflags & SVF_DEADMONSTER) || (sv_new_entflags->intvalue && (ent->svflags & SVF_NOPREDICTION))))
 	{	// assume that x/y are equal and symetric
 		i = (int)(ent->maxs[0]/8);
 		if (i<1)

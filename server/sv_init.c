@@ -240,7 +240,7 @@ static void SV_SpawnServer (const char *server, const char *spawnpoint, server_s
 							// restarted
 
 	//lookup any possible new IP
-	if ((svs.spawncount % 10) == 0)
+	if (dedicated->intvalue && (svs.spawncount % 10) == 0)
 	{
 		if (sv_global_master->intvalue)
 			NET_StringToAdr ("master.q2servers.com:27900", &master_adr[0]);
@@ -488,11 +488,14 @@ void SV_InitGame (void)
 	// heartbeats will always be sent to the id master
 	svs.last_heartbeat = -295000;		// send immediately (r1: give few secs for configs to run)
 
-	if (sv_cheaternet->intvalue)
-		NET_StringToAdr ("query.anticheat.r1ch.net:27930", &cheaternet_adr);
+	if (dedicated->intvalue)
+	{
+		if (sv_cheaternet->intvalue)
+			NET_StringToAdr ("query.anticheat.r1ch.net:27930", &cheaternet_adr);
 
-	if (sv_global_master->intvalue)
-		NET_StringToAdr ("master.q2servers.com:27900", &master_adr[0]);
+		if (sv_global_master->intvalue)
+			NET_StringToAdr ("master.q2servers.com:27900", &master_adr[0]);
+	}
 
 	//r1: ping masters now that the network is up
 	if (Cvar_IntValue ("public") && dedicated->intvalue)

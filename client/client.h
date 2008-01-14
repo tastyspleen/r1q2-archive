@@ -76,6 +76,10 @@ typedef struct
 	vec3_t		lerp_origin;		// for trails (variable hz)
 
 	int			fly_stoptime;
+
+	int			frame_lerp_from;
+	int			frame_lerp_to;
+	int			lerp_time;
 } centity_t;
 
 #define MAX_CLIENTWEAPONMODELS		20		// PGM -- upped from 16 to fit the chainfist vwep
@@ -276,6 +280,13 @@ typedef struct client_state_s
 	unsigned		settings[SVSET_MAX];
 	int				player_update_time;
 	float			playerlerp;
+	float			modelfrac;
+	
+	//variable FPS support variables
+	int				gunlerp_start, gunlerp_end, gunlerp_frame_from, gunlerp_frame_to;
+
+	int				kicklerp_end;
+	vec3_t			kicklerp_from, kicklerp_to;
 } client_state_t;
 
 extern	client_state_t	cl;
@@ -445,6 +456,7 @@ extern	cvar_t	*cl_async;
 extern	cvar_t	*cl_protocol;
 extern	cvar_t	*cl_test;
 extern	cvar_t	*cl_test2;
+extern	cvar_t	*cl_test3;
 
 #ifdef USE_CURL
 extern	cvar_t	*cl_http_downloads;

@@ -777,7 +777,12 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	int					lastframe, framenum;
 	int					extraDataIndex, extraflags, serverByteIndex;
 
-	framenum = sv.framenum + sv.randomframe;
+	framenum = sv.randomframe;
+
+	if (client->state < cs_spawned)
+		framenum += sv.framenum;
+	else
+		framenum += sv.time / (1000 / client->settings[CLSET_FPS]);
 
 //Com_Printf ("%i -> %i\n", client->lastframe, sv.framenum);
 	// this is the frame we are creating
@@ -1013,7 +1018,7 @@ void SV_BuildClientFrame (client_t *client)
 
 	int						l;
 	int						clientarea, clientcluster;
-	int						leafnum;
+	int						leafnum, framenum;
 	int						c_fullsend;
 	const byte				*clientphs;
 	const byte				*bitvector;
@@ -1031,7 +1036,15 @@ void SV_BuildClientFrame (client_t *client)
 		return;		// not in game yet
 
 	// this is the frame we are creating
-	frame = &client->frames[(sv.framenum + sv.randomframe) & UPDATE_MASK];
+
+	framenum = sv.randomframe;
+
+	if (client->state < cs_spawned)
+		framenum += sv.framenum;
+	else
+		framenum += sv.time / (1000 / client->settings[CLSET_FPS]);
+
+	frame = &client->frames[framenum & UPDATE_MASK];
 
 	frame->senttime = svs.realtime; // save it for ping calc later
 
@@ -1084,7 +1097,7 @@ void SV_BuildClientFrame (client_t *client)
 
 		// ignore ents without visible models unless they have an effect
 		if (!ent->s.modelindex && !ent->s.effects && !ent->s.sound
-			&& !ent->s.event)
+			&& !ent->s.event && !client->entity_events[e])
 			continue;
 
 		if (!ent->inuse)
@@ -1214,7 +1227,7 @@ void SV_BuildClientFrame (client_t *client)
 			// Don't send player at all IF there are no events/sounds/etc (like footsteps!) even
 			// if the visibilitycheck is "1" and not "2". Hopefully harder on wallhackers.
 			if (!visible && sv_nc_visibilitycheck->intvalue == 1 &&
-				!ent->s.effects && !ent->s.sound && !ent->s.event)
+				!ent->s.effects && !ent->s.sound && !ent->s.event && !client->entity_events[e])
 				continue;
 		} else {
 			visible = true;
@@ -1233,7 +1246,15 @@ void SV_BuildClientFrame (client_t *client)
 
 			ent->s.number = e;
 		}
+
 		*state = ent->s;
+
+		//hack for variable FPS and events
+		if (!ent->s.event && client->entity_events[e])
+		{
+			state->event = client->entity_events[e];
+			client->entity_events[e] = 0;
+		}
 
 		// *********** NiceAss Start ************
 		// Send the entity, but don't associate a model with it. Less secure than sv_nc_visibilitycheck 2

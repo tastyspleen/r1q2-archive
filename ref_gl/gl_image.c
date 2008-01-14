@@ -3145,7 +3145,7 @@ int Draw_GetPalette (void)
 
 	LoadPCX ("pics/colormap.pcx", &pic, &pal, &width, &height);
 	if (!pal)
-		ri.Sys_Error (ERR_FATAL, "Couldn't load pics/colormap.pcx");
+		ri.Sys_Error (ERR_FATAL, "R1GL was unable to load the colormap (pics/colormap.pcx).\n\nThis file is required for Quake II to function properly. Please make sure that all files are in the correct directories and that baseq2/pak0.pak is installed and readable (not hidden or system).");
 
 	for (i=0 ; i<256 ; i++)
 	{

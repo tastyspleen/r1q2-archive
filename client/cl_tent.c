@@ -1868,7 +1868,7 @@ void CL_AddExplosions (void)
 	entity_t	*ent;
 	int			i, f;
 	explosion_t	*ex;
-	float		frac;
+	float		frac, frac2;
 
 	memset (&ent, 0, sizeof(ent));
 
@@ -1878,7 +1878,8 @@ void CL_AddExplosions (void)
 			continue;
 
 		frac = (cl.time - ex->start)/100.0f;
-		f = (int)floor(frac);
+		frac2 = (float)floor(frac);
+		f = (int)frac2;
 
 		ent = &ex->ent;
 
@@ -1958,7 +1959,9 @@ void CL_AddExplosions (void)
 
 		ent->frame = ex->baseframe + f + 1;
 		ent->oldframe = ex->baseframe + f;
-		ent->backlerp = 1.0f - cl.lerpfrac;
+
+		ent->backlerp = 1.0f - (frac - frac2);
+		//ent->backlerp = 1.0f - cl.lerpfrac;
 
 		V_AddEntity (ent);
 	}

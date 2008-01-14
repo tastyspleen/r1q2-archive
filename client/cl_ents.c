@@ -191,6 +191,9 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 		)
 	{
 		ent->serverframe = -99;
+
+		//disable frame lerping
+		ent->lerp_time = 0;
 	}
 
 	if (ent->serverframe != cl.frame.serverframe - 1)
@@ -198,6 +201,7 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 		ent->trailcount = 1024;		// for diminishing rocket / grenade trails
 		// duplicate the current state so lerping doesn't hurt anything
 		ent->prev = *state;
+		ent->lerp_time = 0;
 		if (state->event == EV_OTHER_TELEPORT)
 		{
 			FastVectorCopy (state->origin, ent->prev.origin);
@@ -211,26 +215,8 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 	}
 	else
 	{
-		vec3_t	origin;
-
-		if (cl_test2->intvalue && cl.player_update_time && state->number <= cl.maxclients)
-		{
-			float	playerlerp;
-			int		i;
-
-			playerlerp = 1.0f - ((cl.player_update_time - cl.time) * 0.01f) * (cl.settings[SVSET_PLAYERUPDATES]+1);
-			//if (playerlerp > 1.0f)
-			//	playerlerp = 1.0f;
-
-			for (i = 0; i < 3; i++)
-				origin[i] = ent->prev.origin[i] + playerlerp * (ent->current.origin[i] - ent->prev.origin[i]);
-		}
-
 		// shuffle the last state to previous
 		ent->prev = ent->current;
-
-		if (cl_test2->intvalue && cl.player_update_time && state->number <= cl.maxclients)
-			FastVectorCopy (origin, ent->prev.origin);
 	}
 
 	ent->serverframe = cl.frame.serverframe;
@@ -1318,7 +1304,10 @@ void CL_ParseFrame (int extrabits)
 	if (cls.state != ca_active)
 		cl.frame.servertime = 0;
 	else
-		cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) *100; //r1: fix for precision loss with high serverframes
+	{
+		//r1: initial_server_frame is for fixing precision loss with high serverframes
+		cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) * (1000 / cl.settings[SVSET_FPS]);
+	}
 
 	//HACK UGLY SHIT
 	//moving the extrabits from cmd over so that the 4 that come from extraflags (surpressCount) don't conflict
@@ -1379,8 +1368,8 @@ void CL_ParseFrame (int extrabits)
 	// clamp time 
 	if (cl.time > cl.frame.servertime)
 		cl.time = cl.frame.servertime;
-	else if (cl.time < cl.frame.servertime - 100)
-		cl.time = cl.frame.servertime - 100;
+	else if (cl.time < cl.frame.servertime - (1000 / cl.settings[SVSET_FPS]))
+		cl.time = cl.frame.servertime - (1000 / cl.settings[SVSET_FPS]);
 
 	// read areabits
 	len = MSG_ReadByte (&net_message);
@@ -1462,7 +1451,7 @@ void CL_ParseFrame (int extrabits)
 
 			//r1: fix for precision loss with high serverframes (when map runs for over several hours)
 			cl.initial_server_frame = cl.frame.serverframe;
-			cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) * 100;
+			cl.frame.servertime = (cl.frame.serverframe - cl.initial_server_frame) * (1000 / cl.settings[SVSET_FPS]);
 
 			cl.force_refdef = true;
 			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125f;
@@ -1565,15 +1554,16 @@ static void CL_AddPacketEntities (const frame_t *frame)
 	const clientinfo_t		*ci;
 	uint32					effects, renderfx;
 	float					time;
-	float					entity_lerp;
+	float					entity_lerp, frame_lerp;
+	qboolean				regular;
 	
 	time = (float)cl.time;
 
 	// bonus items rotate at a fixed rate
-	autorotate = anglemod(time*0.1f);
+	autorotate = anglemod (time * 0.1f);
 
 	// brush models can auto animate their frames
-	autoanim = 2*cl.time/1000;
+	autoanim = 2 * cl.time / 1000;
 
 	memset (&ent, 0, sizeof(ent));
 
@@ -1586,6 +1576,8 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		effects = s1->effects;
 		renderfx = s1->renderfx;
 
+		regular = false;
+
 		// set frame
 		if (effects & EF_ANIM01)
 			ent.frame = autoanim & 1;
@@ -1594,9 +1586,12 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		else if (effects & EF_ANIM_ALL)
 			ent.frame = autoanim;
 		else if (effects & EF_ANIM_ALLFAST)
-			ent.frame = cl.time / 100;
+			ent.frame = cl.time / (1000 / cl.settings[SVSET_FPS]);
 		else
+		{
+			regular = true;
 			ent.frame = s1->frame;
+		}
 
 		// quad and pent can do different things on client
 		if (effects & EF_PENT)
@@ -1632,13 +1627,96 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		
 
 		//hopefully the world never moves :)
-		if (s1->number <= cl.maxclients)
-			entity_lerp = cl.playerlerp;
-		else
+		//if (s1->number <= cl.maxclients)
+		//	entity_lerp = cl.playerlerp;
+		//else
 			entity_lerp = cl.lerpfrac;
 
-		ent.oldframe = cent->prev.frame;
-		ent.backlerp = 1.0f - cl.lerpfrac;
+/*frame_lerp_from;
+  frame_lerp_to;
+lerp_time;*/
+
+		if (regular)
+		{
+			if (cent->current.frame != cent->prev.frame)
+			{
+				//frame was changed on last packetentities
+
+				if (cl.frame.servertime > cent->lerp_time)
+				{
+					//we're not in the middle of a lerp, start a new one
+
+					if (cl_test3->intvalue == s1->number)
+						Com_Printf ("[%d] starting new frame, %d at server time %d\n", LOG_GENERAL, cent->current.number, cent->current.frame, cl.frame.servertime);
+					
+					cent->lerp_time = cl.frame.servertime + 100 - (1000 / cl.settings[SVSET_FPS]);
+
+					cent->frame_lerp_to = ent.frame;
+					cent->frame_lerp_from = cent->prev.frame;
+
+					ent.frame = cent->frame_lerp_to;
+					ent.oldframe = cent->frame_lerp_from;
+				}
+				else
+				{
+					if (cent->current.frame != cent->frame_lerp_to || cent->prev.frame != cent->frame_lerp_from)
+					{
+						if (cl_test3->intvalue == s1->number)
+							Com_Printf ("[%d] frames changed, was lerping to %d but got new frame, %d\n", LOG_GENERAL, cent->current.number, cent->frame_lerp_to, cent->current.frame);
+						
+						cent->lerp_time = cl.frame.servertime + 100 - (1000 / cl.settings[SVSET_FPS]);
+
+						cent->frame_lerp_to = ent.frame;
+						cent->frame_lerp_from = cent->prev.frame;
+					}
+
+					ent.frame = cent->frame_lerp_to;
+					ent.oldframe = cent->frame_lerp_from;
+				}
+			}
+			else
+			{
+				//frame was NOT changed on last update
+				if (cl.frame.servertime > cent->lerp_time)
+				{
+					//and weren't NOT in the middle of a lerp, but we still need run the frame for 100ms, TEST ME
+					if (cl_test3->intvalue == s1->number)
+						Com_Printf ("[%d] starting frame, %d at server time %d\n", LOG_GENERAL, cent->current.number, cent->current.frame, cl.frame.servertime);
+					
+					cent->lerp_time = cl.frame.servertime + 100 - (1000 / cl.settings[SVSET_FPS]);
+
+					cent->frame_lerp_to = ent.frame;
+					cent->frame_lerp_from = cent->prev.frame;
+
+					ent.frame = cent->frame_lerp_to;
+					ent.oldframe = cent->frame_lerp_from;
+
+					//ent.frame = cent->current.frame;
+					//ent.oldframe = cent->prev.frame;
+				}
+				else
+				{
+					//frame was NOT changed and we're in the middle of a lerp
+					ent.frame = cent->frame_lerp_to;
+					ent.oldframe = cent->frame_lerp_from;
+				}
+			}
+
+			if (cl.frame.servertime <= cent->lerp_time)
+				frame_lerp = ((float)cent->lerp_time - (float)cl.time) / 100;
+			else
+				frame_lerp = 1.0f - cl.lerpfrac;
+
+			ent.backlerp = frame_lerp;
+
+			if (cl_test3->intvalue == s1->number)
+				Com_Printf ("[%d] entity lerp: %.2f (%.2f), lerpfrac %.2f, servertime: %d, cltime %d, lerping until %d, from frame %d to %d\n", LOG_GENERAL, cent->current.number, ent.backlerp, frame_lerp, cl.lerpfrac, cl.frame.servertime, cl.time, cent->lerp_time, ent.oldframe, ent.frame);
+		}
+		else
+		{
+			ent.oldframe = cent->prev.frame;
+			ent.backlerp = 1.0f - cl.lerpfrac;
+		}
 
 #if 0
 		if (effects & EF_ANIM_ALL) {
@@ -1694,7 +1772,7 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		}
 		else
 		{
-#ifdef _DEBUG
+#ifdef CRAP
 			for (i=0 ; i<3 ; i++)
 			{
 				//cent->prev.origin[i] = cent->current.origin[i];
@@ -1750,7 +1828,8 @@ static void CL_AddPacketEntities (const frame_t *frame)
 		{
 			// set skin
 			if (s1->modelindex == 255)
-			{	// use custom player skin
+			{	
+				// use custom player skin
 				ent.skinnum = 0;
 				ci = &cl.clientinfo[s1->skinnum & 0xff];
 				ent.skin = ci->skin;
@@ -2131,8 +2210,9 @@ CL_AddViewWeapon
 */
 static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new *ops)
 {
-	entity_t	gun = {0};		// view model
-	int			i;
+	entity_t		gun;		// view model
+	int				i;
+	float			gunlerp;
 
 	// allow the gun to be completely removed
 	if (!cl_gun->intvalue)
@@ -2142,7 +2222,7 @@ static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new
 	//if (ps->fov > 90)
 	//	return;
 
-	//memset (&gun, 0, sizeof(gun));
+	memset (&gun, 0, sizeof(gun));
 
 	if (gun_model)
 		gun.model = gun_model;	// development tool
@@ -2151,6 +2231,77 @@ static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new
 
 	if (!gun.model)
 		return;
+
+	if (gun_frame)
+	{
+		gun.frame = gun_frame;	// development tool
+		gun.oldframe = gun_frame;	// development tool
+	}
+	else
+	{
+		/*gun.frame = ps->gunframe;
+		if (gun.frame == 0)
+			gun.oldframe = 0;	// just changed weapons, don't lerp from old
+		else
+			gun.oldframe = ops->gunframe;*/
+	}
+
+	if (ps->gunframe != ops->gunframe)
+	{
+		//frame changed
+		if (cl.frame.servertime > cl.gunlerp_end)
+		{
+			//starting a new lerp
+			if (cl_test2->intvalue)
+				Com_Printf ("GUN: starting new frame, %d\n", LOG_GENERAL, ps->gunframe);
+			
+			cl.gunlerp_end = cl.frame.servertime + 100 - (1000 / cl.settings[SVSET_FPS]);
+			cl.gunlerp_frame_to = ps->gunframe;
+			
+			if (cl.gunlerp_frame_to == 0)
+			{
+				gun.oldframe = 0;
+				gun.frame = 0;
+				cl.gunlerp_frame_from = 0;
+			}
+			else
+			{
+				cl.gunlerp_frame_from = ops->gunframe;
+				gun.frame = cl.gunlerp_frame_to;
+				gun.oldframe = ops->gunframe;
+			}
+		}
+		else
+		{
+			//continue a lerp
+			if (cl.gunlerp_frame_to != 0 && (ps->gunframe != cl.gunlerp_frame_to || ops->gunframe != cl.gunlerp_frame_from))
+			{
+				//Com_Printf ("gun: changed frames in the middle of a lerp, from %d -> %d to %d -> %d\n", LOG_GENERAL, cl.gunlerp_frame_from, cl.gunlerp_frame_to, ops->gunframe, ps->gunframe);
+			}
+			gun.frame = cl.gunlerp_frame_to;
+			gun.oldframe = cl.gunlerp_frame_from;
+		}
+	}
+	else
+	{
+		if (cl.frame.servertime > cl.gunlerp_end)
+		{
+			gun.frame = ps->gunframe;
+			gun.oldframe = ops->gunframe;
+		}
+		else
+		{
+			gun.frame = cl.gunlerp_frame_to;
+			gun.oldframe = cl.gunlerp_frame_from;
+		}
+	}
+
+	if (cl.frame.servertime <= cl.gunlerp_end)
+		gunlerp = ((float)cl.gunlerp_end - (float)cl.time) / 100;
+	else
+		gunlerp = 1.0f - cl.lerpfrac;
+
+	gun.backlerp = gunlerp;
 
 	// set up gun position
 	for (i=0 ; i<3 ; i++)
@@ -2161,23 +2312,13 @@ static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new
 			ps->gunangles[i], cl.lerpfrac);
 	}
 
-	if (gun_frame)
-	{
-		gun.frame = gun_frame;	// development tool
-		gun.oldframe = gun_frame;	// development tool
-	}
-	else
-	{
-		gun.frame = ps->gunframe;
-		if (gun.frame == 0)
-			gun.oldframe = 0;	// just changed weapons, don't lerp from old
-		else
-			gun.oldframe = ops->gunframe;
-	}
-
 	gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
-	gun.backlerp = 1.0f - cl.lerpfrac;
+	
 	FastVectorCopy (gun.origin, gun.oldorigin);	// don't lerp at all
+
+	if (cl_test2->intvalue > 1)
+		Com_Printf ("Gun lerp: %.2f (%.2f), lerpfrac %.2f, servertime: %d, cltime %d, lerping until %d, from frame %d to %d (%.1f, %.1f, %.1f), %d\n", LOG_GENERAL, gun.backlerp, gunlerp, cl.lerpfrac, cl.frame.servertime, cl.time, cl.gunlerp_end, gun.oldframe, gun.frame, gun.origin[0], gun.origin[1], gun.origin[2], ps->gunindex);
+
 	V_AddEntity (&gun);
 }
 
@@ -2193,7 +2334,8 @@ Sets cl.refdef view values
 static void CL_CalcViewValues (void)
 {
 	int			i;
-	float		lerp, backlerp;
+	float		lerp, backlerp, kicklerp;
+	vec3_t		kicklerp_from, kicklerp_to;
 //	centity_t	*ent;
 	const frame_t		*oldframe;
 	const player_state_new	*ps, *ops;
@@ -2268,11 +2410,13 @@ static void CL_CalcViewValues (void)
 		}
 	}
 	else if ( cl.frame.playerstate.pmove.pm_type < PM_DEAD)
-	{	// use predicted values
+	{	
+		// use predicted values
 		FastVectorCopy (cl.predicted_angles, cl.refdef.viewangles);
 	}
 	else
-	{	// just use interpolated values
+	{	
+		// just use interpolated values
 		if (cl.frame.playerstate.pmove.pm_type >= PM_DEAD && ops->pmove.pm_type < PM_DEAD)
 		{
 			//r1: fix for server no longer sending viewangles every frame.
@@ -2288,9 +2432,48 @@ static void CL_CalcViewValues (void)
 		}
 	}
 
-	cl.refdef.viewangles[0] += LerpAngle (ops->kick_angles[0], ps->kick_angles[0], lerp);
-	cl.refdef.viewangles[1] += LerpAngle (ops->kick_angles[1], ps->kick_angles[1], lerp);
-	cl.refdef.viewangles[2] += LerpAngle (ops->kick_angles[2], ps->kick_angles[2], lerp);
+	//yet another hack for variable fps - we don't know on the server if the client will be continuing to
+	//fire their weapon (which runs at 10hz), so we have to also send kick info at 10hz to avoid the client
+	//jerking back and forth between lerps. eg kick -2 (none) -2 (none) -2 (none) and so on
+	if (!VectorCompare (ops->kick_angles, ps->kick_angles))
+	{
+		if (cl.frame.servertime > cl.kicklerp_end)
+		{
+			if (cl_test3->intvalue)
+				Com_Printf ("starting new kick, %.1f %.1f %.1f\n", LOG_GENERAL, ps->kick_angles[0], ps->kick_angles[1], ps->kick_angles[2]);
+			
+			cl.kicklerp_end = cl.frame.servertime + 100 - (1000 / cl.settings[SVSET_FPS]);
+			VectorCopy (ps->kick_angles, cl.kicklerp_to);
+			VectorCopy (ops->kick_angles, cl.kicklerp_from);
+		}
+		VectorCopy (cl.kicklerp_to, kicklerp_to);
+		VectorCopy (cl.kicklerp_from, kicklerp_from);
+	}
+	else
+	{
+		if (cl.frame.servertime > cl.kicklerp_end)
+		{
+			VectorCopy (ps->kick_angles, kicklerp_to);
+			VectorCopy (ops->kick_angles, kicklerp_from);
+		}
+		else
+		{
+			VectorCopy (cl.kicklerp_to, kicklerp_to);
+			VectorCopy (cl.kicklerp_from, kicklerp_from);
+		}
+	}
+
+	if (cl.frame.servertime <= cl.kicklerp_end)
+		kicklerp = 1.0f - ((float)cl.kicklerp_end - (float)cl.time) / 100;
+	else
+		kicklerp = 1.0f - cl.lerpfrac;
+
+	//if (cl_test3->intvalue)
+	//	Com_Printf ("Kick lerp: %.2f, lerpfrac %.2f, servertime: %d, cltime %d, lerping until %d (%.1f, %.1f, %.1f) -> (%.1f, %.1f, %.1f)\n", LOG_GENERAL, kicklerp, cl.lerpfrac, cl.frame.servertime, cl.time, cl.kicklerp_end, kicklerp_from[0], kicklerp_from[1], kicklerp_from[2], kicklerp_to[0], kicklerp_to[1], kicklerp_to[2]);
+
+	cl.refdef.viewangles[0] += LerpAngle (kicklerp_from[0], kicklerp_to[0], kicklerp);
+	cl.refdef.viewangles[1] += LerpAngle (kicklerp_from[1], kicklerp_to[1], kicklerp);
+	cl.refdef.viewangles[2] += LerpAngle (kicklerp_from[2], kicklerp_to[2], kicklerp);
 
 	AngleVectors (cl.refdef.viewangles, cl.v_forward, cl.v_right, cl.v_up);
 
@@ -2333,18 +2516,22 @@ void CL_AddEntities (void)
 		cl.time = cl.frame.servertime;
 		cl.lerpfrac = 1.0f;
 		cl.playerlerp = 1.0f;
+		cl.modelfrac = 1.0f;
 	}
-	else if (cl.time < cl.frame.servertime - 100)
+	else if (cl.time < cl.frame.servertime - (1000 / cl.settings[SVSET_FPS]))
 	{
 		if (cl_showclamp->intvalue)
-			Com_Printf ("low clamp %i\n", LOG_CLIENT, cl.frame.servertime-100 - cl.time);
-		cl.time = cl.frame.servertime - 100;
+			Com_Printf ("low clamp %i\n", LOG_CLIENT, cl.frame.servertime - (1000 / cl.settings[SVSET_FPS]) - cl.time);
+		cl.time = cl.frame.servertime - (1000 / cl.settings[SVSET_FPS]);
 		cl.lerpfrac = 0;
 		cl.playerlerp = 0;
+		cl.modelfrac = 0;
 	}
 	else
 	{
-		cl.lerpfrac = 1.0f - (cl.frame.servertime - cl.time) * 0.01f;
+		cl.modelfrac = 0.5f - ((int)(cl.frame.servertime / 100) * 100 - cl.time) * (float)(10.0f/1000.0f);
+		cl.lerpfrac = 1.0f - (cl.frame.servertime - cl.time) * (float)(cl.settings[SVSET_FPS]/1000.0f);
+		//Com_Printf ("Lerpfrac %.2f, modelfrac: %.2f (stime: %d, faketime %d, ctime: %d)\n", LOG_GENERAL, cl.lerpfrac, cl.modelfrac, cl.frame.servertime, (int)(cl.frame.servertime / 100) * 100, cl.time);
 
 		if (cl.player_update_time)
 			cl.playerlerp = 1.0f - ((cl.player_update_time - cl.time) * 0.01f) * (cl.settings[SVSET_PLAYERUPDATES]+1);

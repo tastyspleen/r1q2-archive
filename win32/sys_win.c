@@ -87,6 +87,7 @@ extern		cvar_t	*pyroadminport;
 
 cvar_t		*win_disableexceptionhandler = &uninitialized_cvar;
 cvar_t		*win_silentexceptionhandler = &uninitialized_cvar;
+cvar_t		*sys_fpu_bits = &uninitialized_cvar;
 
 //static HANDLE		qwclsemaphore;
 
@@ -749,6 +750,12 @@ void Sys_Init (void)
 
 	Sys_InitConsoleMutex ();
 
+#ifdef _DEBUG
+	sys_fpu_bits = Cvar_Get ("sys_fpu_bits", "0", CVAR_NOSET);
+#else
+	sys_fpu_bits = Cvar_Get ("sys_fpu_bits", "0", 0);
+#endif
+
 	//Cmd_AddCommand ("win_priority", Sys_SetQ2Priority);
 	win_priority = Cvar_Get ("win_priority", "0", 0);
 	win_priority->changed = _priority_changed;
@@ -1222,7 +1229,7 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 		return NULL;
 
 	if (!Sys_CheckFPUStatus())
-		Com_Printf ("\2WARNING: The FPU control word has changed after loading %s, prediction errors or physics bugs may result!\n", LOG_GENERAL, name);
+		Com_Printf ("\2WARNING: The FPU control word was changed after loading %s!\n", LOG_GENERAL, name);
 
 	GetGameAPI = (void *(IMPORT *)(void *))GetProcAddress (game_library, "GetGameAPI");
 	if (!GetGameAPI)
@@ -1323,6 +1330,9 @@ void FixWorkingDirectory (void)
 	{
 		if (!strcmp (argv[i], "-nopathcheck"))
 			goto skipPathCheck;
+
+		if (!strcmp (argv[i], "-nocwdcheck"))
+			return;
 	}
 
 	if (strlen(curDir) > (MAX_OSPATH - MAX_QPATH))
@@ -1420,7 +1430,7 @@ reInit:
 		return 0;
 
 	if (!Sys_CheckFPUStatus ())
-		Com_Printf ("\2WARNING: The FPU control word has changed after loading anticheat, prediction errors or physics bugs may result!\n", LOG_GENERAL);
+		Com_Printf ("\2WARNING: The FPU control word has changed after loading anticheat!\n", LOG_GENERAL);
 
 	return 1;
 }
@@ -2199,38 +2209,61 @@ void Sys_Spinstats_f (void)
 	Com_Printf ("%u fast spins, %u slow spins, %.2f%% slow.\n", LOG_GENERAL, goodspins, badspins, ((float)badspins / (float)(goodspins+badspins)) * 100.0f);
 }
 
-__declspec(naked) int Sys_GetFPUStatus (void)
+__declspec(naked) unsigned short Sys_GetFPUStatus (void)
 {
 	__asm
 	{
+		xor eax, eax
 		push eax
 		mov eax, esp
-		fclex
-		fstcw dword ptr [eax]
+		fnstcw dword ptr [eax]
 		pop eax
 		ret
 	}
 }
 
+void Sys_SetFPU (byte bits)
+{
+	__asm
+	{
+		xor eax, eax
+		push eax
+		mov eax, esp
+		mov ecx, eax
+		fnstcw word ptr [eax]
+		mov eax, [eax]
+		and ah, 0f0h
+		or  ah, bits          ; RTZ/truncate/chop mode, 24 bit precision
+		mov [ecx], eax
+		fldcw word ptr [ecx]
+		pop eax
+	}
+}
+
+//FPU should be round to nearest, 24 bit precision.
+//3.20 = 0x007f
 qboolean Sys_CheckFPUStatus (void)
 {
-	static unsigned	last_word = 0;
-	unsigned		fpu_control_word;
+	static unsigned short	last_word = 0;
+	unsigned short	fpu_control_word;
 
 	fpu_control_word = Sys_GetFPUStatus ();
 
 	Com_DPrintf ("Sys_CheckFPUStatus: rounding %d, precision %d\n", (fpu_control_word >> 10) & 3, (fpu_control_word >> 8) & 3);
 
 	//check rounding (10) and precision (8) are set properly
-	if (((fpu_control_word >> 10) & 3) != 0 ||
-		((fpu_control_word >> 8) & 3) != 2)
+	/*if (((fpu_control_word >> 10) & 3) != 3 ||
+		((fpu_control_word >> 8) & 3) != 0)
 	{
 		if (fpu_control_word != last_word)
 		{
+			Com_Printf ("\2WARNING: The FPU control word was modified by some external force to rounding %d, precision %d. Resetting.\n", LOG_GENERAL, (fpu_control_word >> 10) & 3, (fpu_control_word >> 8) & 3);
+			Sys_SetFPU (sys_fpu_bits->intvalue);
+			fpu_control_word = Sys_GetFPUStatus ();
 			last_word = fpu_control_word;
 			return false;
 		}
-	}
+	}*/
 
 	last_word = fpu_control_word;
 	return true;
@@ -2288,9 +2321,10 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	__try
 	{
-		Qcommon_Init (argc, argv);
-
+		Sys_SetFPU (sys_fpu_bits->intvalue);
 		Sys_CheckFPUStatus ();
+
+		Qcommon_Init (argc, argv);
 
 #ifndef _M_AMD64
 		//_controlfp( _PC_24, _MCW_PC );
@@ -2381,6 +2415,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			else
 				goodspins++;
 
+			Sys_SetFPU (sys_fpu_bits->intvalue);
+			Sys_CheckFPUStatus ();
 			Qcommon_Frame (time);
 
 			oldtime = newtime;

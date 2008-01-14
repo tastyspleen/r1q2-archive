@@ -1086,6 +1086,20 @@ void CL_ParseStartSoundPacket(void)
 	S_StartSound (pos, ent, channel, cl.sound_precache[sound_num], volume, attenuation, ofs);
 }       
 
+static void CL_ServerFPSChanged (void)
+{
+	centity_t	*cent;
+	int			i;
+
+	cl.gunlerp_start = cl.gunlerp_end = 0;
+
+	for (i = 0; i < MAX_ENTITIES; i++)
+	{
+		cent = &cl_entities[i];
+		cent->lerp_time = 0;
+	}
+}
+
 static void CL_ParseSetting (void)
 {
 	uint32	setting, value;
@@ -1097,6 +1111,10 @@ static void CL_ParseSetting (void)
 		return;
 
 	cl.settings[setting] = value;
+
+	//if FPS changed, reset some internal lerp variables
+	if (setting == SVSET_FPS)
+		CL_ServerFPSChanged ();
 }
 
 void SHOWNET(const char *s)

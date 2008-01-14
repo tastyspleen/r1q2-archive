@@ -185,6 +185,10 @@ cvar_t	*sv_cheaternet_action;
 
 cvar_t	*sv_disallow_download_sprites_hack;
 
+#ifdef _DEBUG
+cvar_t	*sv_ratbot_hack;
+#endif
+
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
 cvar_t	*sv_anticheat_error_action;
@@ -752,7 +756,7 @@ static void SVC_Ack (void)
 
 static void SVC_CheaterNet_Reply (void)
 {
-	const char *info;
+	char		*info;
 	char		name[16];
 	unsigned	int_id, int_when, int_token, int_challenge;
 
@@ -769,7 +773,11 @@ static void SVC_CheaterNet_Reply (void)
 	if (sv.state != ss_game)
 		return;
 
-	info = Cmd_Argv (1);
+	info = Cmd_Args ();
+	if (!info[0])
+		return;
+
+	info = StripQuotes (info);
 	if (!info[0])
 		return;
 
@@ -868,7 +876,7 @@ static void SVC_CheaterNet_Reply (void)
 			if (cl->state == cs_spawned)
 				SV_BroadcastPrintf (PRINT_HIGH, "%s", message);
 			else
-				cl->cheaternet_message = CopyString (message, TAGMALLOC_ANTICHEAT);
+				cl->cheaternet_message = CopyString (message, TAGMALLOC_NOT_TAGGED);
 
 			if (sv_cheaternet_action->intvalue == 2)
 				SV_KickClient (cl, "cheaternet", "You were kicked because your IP address was recently caught cheating at another server.\n");
@@ -2631,6 +2639,7 @@ static void SV_PrepWorldFrame (void)
 	for (i=0 ; i<ge->num_edicts ; i++)
 	{
 		ent = EDICT_NUM(i);
+
 		// events only last for a single message
 		ent->s.event = 0;
 	}
@@ -2653,7 +2662,7 @@ static void SV_RunGameFrame (void)
 	// compression can get confused when a client
 	// has the "current" frame
 	sv.framenum++;
-	sv.time = sv.framenum * 100;
+	sv.time = sv.framenum * (1000 / sv_fps->intvalue);
 
 	sv_tracecount = 0;
 
@@ -2807,11 +2816,11 @@ void SV_Frame (int msec)
 	if (!sv_timedemo->intvalue && svs.realtime < sv.time)
 	{
 		// never let the time get too far off
-		if (sv.time - svs.realtime > 100)
+		if (sv.time - svs.realtime > (1000 / sv_fps->intvalue))
 		{
 			if (sv_showclamp->intvalue)
 				Com_Printf ("sv lowclamp: %u - %d = %d\n", LOG_SERVER, sv.time, svs.realtime, sv.time - svs.realtime);
-			svs.realtime = sv.time - 100;
+			svs.realtime = sv.time - (1000 / sv_fps->intvalue);
 		}
 
 		//r1: send extra packets now for player position updates
@@ -3433,8 +3442,8 @@ void SV_Init (void)
 	sv_redirect_address = Cvar_Get ("sv_redirect_address", "", 0);
 	sv_redirect_address->help = "Address to redirect clients to if the server is full. Can be a hostname or IP. Default empty.\n";
 
-	//sv_fps = Cvar_Get ("sv_fps", "10", 0);
-	//sv_fps->help = "FPS to run server at. Do not touch unless you know what you're doing. Default 10.\n";
+	sv_fps = Cvar_Get ("sv_fps", "10", CVAR_LATCH);
+	sv_fps->help = "FPS to run server at. Do not touch unless you know what you're doing. Default 10.\n";
 
 	sv_max_player_updates = Cvar_Get ("sv_max_player_updates", "2", 0);
 	sv_max_player_updates->help = "Maximum number of extra player updates to send in between game frames. Default 2.\n";
@@ -3459,6 +3468,11 @@ void SV_Init (void)
 
 	sv_disallow_download_sprites_hack = Cvar_Get ("sv_disallow_download_sprites_hack", "1", 0);
 	sv_disallow_download_sprites_hack->help = "Disallow downloads of sprites (.sp2) to protocol 34 clients. 3.20 and other clients do not fetch linked skins on sprites, which may cause a crash when trying to render them with missing skins. Default 1.\n";
+
+#ifdef _DEBUG
+	sv_ratbot_hack = Cvar_Get ("sv_ratbot_hack", "0", 0);
+	sv_ratbot_hack->help = "Use a technique designed to thwart attempts at using a ratbot on the server. Default 0.\n";
+#endif
 
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
@@ -3515,7 +3529,7 @@ void SV_Init (void)
 #endif
 
 	//server-private token to prevent spoofed cheaternet responses
-	cheaternet_token = randomMT();
+	do cheaternet_token = randomMT(); while (!cheaternet_token);
 
 	//r1: init pyroadmin
 #ifdef USE_PYROADMIN

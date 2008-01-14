@@ -488,6 +488,7 @@ Cvar_FullSet
 */
 cvar_t *Cvar_FullSet (const char *var_name, const char *value, int flags)
 {
+	char	*old_string;
 	cvar_t	*var;
 	
 	var = Cvar_FindVar (var_name);
@@ -500,12 +501,18 @@ cvar_t *Cvar_FullSet (const char *var_name, const char *value, int flags)
 
 	if (var->flags & CVAR_USERINFO)
 		userinfo_modified = true;	// transmit at next oportunity
+
+	old_string = var->string;
 	
-	Z_Free (var->string);	// free the old value string
-	
+
 	var->string = CopyString(value, TAGMALLOC_CVAR);
 	var->value = (float)atof (var->string);
 	var->intvalue = (int)var->value;
+
+	if (var->changed)
+		var->changed (var, old_string, var->string);
+
+	Z_Free (old_string);
 
 	//r1: fix 0 case
 	if (!var->intvalue && FLOAT_NE_ZERO(var->value))

@@ -77,7 +77,7 @@ typedef struct entity_s
 	struct image_s	*skin;			// NULL for inline skin
 	int		flags;
 
-	//vec3_t	velocity;
+	//WARNING: This struct size cannot be changed.
 } entity_t;
 
 #define ENTITY_FLAGS  68

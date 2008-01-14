@@ -655,6 +655,10 @@ void SpinControl_Draw( menulist_s *s )
 							s->generic.y + s->generic.parent->y, 
 							s->generic.name );
 	}
+
+	if (!s->itemnames[s->curvalue])
+		Com_Error (ERR_DROP, "SpinControl_Draw: %s: NULL current value %d", s->generic.name, s->curvalue);
+
 	if ( !strchr( s->itemnames[s->curvalue], '\n' ) )
 	{
 		Menu_DrawString( RCOLUMN_OFFSET + s->generic.x + s->generic.parent->x, s->generic.y + s->generic.parent->y, s->itemnames[s->curvalue] );
