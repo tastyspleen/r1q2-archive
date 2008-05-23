@@ -452,20 +452,23 @@ void CL_FinalizeCmd (void)
 	//but pmove on client/server caps at 300 total velocity so there is little
 	//value in having these higher, all it does it make for less efficient
 	//deltas.
-	if (cmd->forwardmove > 300)
-		cmd->forwardmove = 300;
-	else if (cmd->forwardmove < -300)
-		cmd->forwardmove = -300;
 
-	if (cmd->sidemove > 300)
-		cmd->sidemove = 300;
-	else if (cmd->sidemove < -300)
-		cmd->sidemove = -300;
+	//update (7588+), we use 400 since water move physics is "buggy" in that it uses uncapped usercmd
+	//values, but it's been gameplay since q2 began, so keep with it to be compatible.
+	if (cmd->forwardmove > 400)
+		cmd->forwardmove = 400;
+	else if (cmd->forwardmove < -400)
+		cmd->forwardmove = -400;
 
-	if (cmd->upmove > 300)
-		cmd->upmove = 300;
-	else if (cmd->upmove < -300)
-		cmd->upmove = -300;
+	if (cmd->sidemove > 400)
+		cmd->sidemove = 400;
+	else if (cmd->sidemove < -400)
+		cmd->sidemove = -400;
+
+	if (cmd->upmove > 400)
+		cmd->upmove = 400;
+	else if (cmd->upmove < -400)
+		cmd->upmove = -400;
 
 	// set the ambient light level at the player's current position
 	cmd->lightlevel = (byte)cl_lightlevel->value;
@@ -628,24 +631,22 @@ void CL_FinishMove (usercmd_t *cmd)
 	cmd->impulse = in_impulse;
 	in_impulse = 0;
 
-	//r1ch: cap forwardmove/etc to reasonable levels, sure it may be a short
-	//but pmove ob client/server caps at 300 total velocity so there is little
-	//value in having these higher, all it does it make for less efficient
-	//deltas.
-	if (cmd->forwardmove > 300)
-		cmd->forwardmove = 300;
-	else if (cmd->forwardmove < -300)
-		cmd->forwardmove = -300;
+	//update (7588+), we use 400 since water move physics is "buggy" in that it uses uncapped usercmd
+	//values, but it's been gameplay since q2 began, so keep with it to be compatible.
+	if (cmd->forwardmove > 400)
+		cmd->forwardmove = 400;
+	else if (cmd->forwardmove < -400)
+		cmd->forwardmove = -400;
 
-	if (cmd->sidemove > 300)
-		cmd->sidemove = 300;
-	else if (cmd->sidemove < -300)
-		cmd->sidemove = -300;
+	if (cmd->sidemove > 400)
+		cmd->sidemove = 400;
+	else if (cmd->sidemove < -400)
+		cmd->sidemove = -400;
 
-	if (cmd->upmove > 300)
-		cmd->upmove = 300;
-	else if (cmd->upmove < -300)
-		cmd->upmove = -300;
+	if (cmd->upmove > 400)
+		cmd->upmove = 400;
+	else if (cmd->upmove < -400)
+		cmd->upmove = -400;
 
 // send the ambient light level at the player's current position
 	cmd->lightlevel = (byte)cl_lightlevel->value;

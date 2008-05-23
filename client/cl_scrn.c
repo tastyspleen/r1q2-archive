@@ -168,7 +168,7 @@ typedef struct
 #define	DEBUGGRAPH_SAMPLES	2048
 #define	DEBUGGRAPH_MASK		2047
 
-static	int			current;
+static	int			current_graph_value;
 static	graphsamp_t	values[DEBUGGRAPH_SAMPLES];
 
 /*
@@ -178,9 +178,9 @@ SCR_DebugGraph
 */
 void EXPORT SCR_DebugGraph (float value, int color)
 {
-	values[current&DEBUGGRAPH_MASK].value = value;
-	values[current&DEBUGGRAPH_MASK].color = color;
-	current++;
+	values[current_graph_value&DEBUGGRAPH_MASK].value = value;
+	values[current_graph_value&DEBUGGRAPH_MASK].color = color;
+	current_graph_value++;
 }
 
 /*
@@ -205,7 +205,7 @@ void SCR_DrawDebugGraph (void)
 
 	for (a=0 ; a<w ; a++)
 	{
-		i = (current-1-a+DEBUGGRAPH_SAMPLES) & DEBUGGRAPH_MASK;
+		i = (current_graph_value-1-a+DEBUGGRAPH_SAMPLES) & DEBUGGRAPH_MASK;
 		v = values[i].value;
 		color = values[i].color;
 		v = v*scr_graphscale->value + scr_graphshift->value;
@@ -1319,9 +1319,8 @@ void SCR_ExecuteLayoutString (char *s)
 					continue;
 				}
 				else if (token[0] == 'n' && token[1] == 'u' && token[2] == 'm')
-				{	// draw a number
-					int index;
-
+				{	
+					// draw a number
 					token = COM_Parse (&s);
 					width = atoi(token);
 					token = COM_Parse (&s);

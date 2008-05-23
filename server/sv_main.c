@@ -185,9 +185,11 @@ cvar_t	*sv_cheaternet_action;
 
 cvar_t	*sv_disallow_download_sprites_hack;
 
-#ifdef _DEBUG
-cvar_t	*sv_ratbot_hack;
-#endif
+cvar_t	*sv_timescale_check;
+cvar_t	*sv_timescale_kick;
+
+cvar_t	*sv_timescale_skew_check;
+cvar_t	*sv_timescale_skew_kick;
 
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
@@ -2275,7 +2277,7 @@ static void SV_GiveMsec (void)
 	int			i;
 	client_t	*cl;
 
-	//int	diff;
+	int			diff;
 
 	if (sv.framenum & 15)
 		return;
@@ -2334,16 +2336,84 @@ static void SV_GiveMsec (void)
 				continue;
 			}
 
-			//new speed hack check, forget who thought of this but it works great, detects even 5% speed offset
-			//Com_Printf ("client: %d, server: %d, diff: %d\n", LOG_GENERAL, cl->totalMsecUsed, (sv.framenum - cl->enterFrame) * 100, );
+#ifdef _DEBUG
+			if (sv_timescale_check->intvalue)
+#else
+			if (dedicated->intvalue && sv_timescale_check->intvalue)
+#endif
+			{
+				//so initial msecs don't skew the results
+				if (!cl->initialRealTime)
+				{
+					cl->timeSkewLastDiff = 0;
+					cl->timeSkewSamples = 0;
+					cl->timeSkewTotal = 0;
+					cl->totalMsecUsed = 0;
+					cl->initialRealTime = svs.realtime;
+				}
 
-			//FIXME: use real time, fix for internet.
-			/*diff = (sv.framenum - cl->enterFrame) * 100 - cl->totalMsecUsed;
+				//FIXME: use real time, fix for internet.
+				diff = (svs.realtime - cl->initialRealTime) - cl->totalMsecUsed;
 
-			//allow one frame of slop
-			if (diff < -100)
-				Com_Printf ("WARNING: Negative time difference of %d for %s[%s], possible speed cheat.\n", LOG_WARNING|LOG_SERVER, diff, cl->name, NET_AdrToString (&cl->netchan.remote_address));*/
+				//Com_Printf ("client %d: %d, server: %d, diff: %d\n", LOG_GENERAL, i, cl->totalMsecUsed, (svs.realtime - cl->initialRealTime), diff);
 
+				//allow configurable slop
+				if (diff < -sv_timescale_check->intvalue)
+				{
+					if (sv_timescale_kick->intvalue && diff < -sv_timescale_kick->intvalue)
+						SV_KickClient (cl, "time skew (1)", NULL);
+					Com_Printf ("WARNING: Negative time difference of %d ms for %s[%s], possible speed cheat or server is overloaded!\n", LOG_WARNING|LOG_SERVER, diff, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+				}
+
+				//never let clients accumulate too much 'free' time from clock offsets
+				if (diff > 2000)
+				{
+					cl->timeSkewLastDiff = 0;
+					diff = 0;
+					cl->totalMsecUsed = (svs.realtime - cl->initialRealTime);
+				}
+				
+				//detect sudden bursts
+				if (sv_timescale_skew_check->intvalue && cl->timeSkewLastDiff)
+				{
+					if (diff - cl->timeSkewLastDiff < -sv_timescale_skew_check->intvalue)
+					{
+						if (sv_timescale_skew_kick->intvalue && diff - cl->timeSkewLastDiff < -sv_timescale_skew_kick->intvalue)
+							SV_KickClient (cl, "time skew (2)", NULL);
+						Com_Printf ("WARNING: Sudden time skew of %d ms for %s[%s], possible speed cheat / lag spike!\n", LOG_WARNING|LOG_SERVER, diff - cl->timeSkewLastDiff, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+					}
+				}
+
+				cl->timeSkewLastDiff = diff;
+			}
+
+				/*if (cl->timeSkewSamples > 10)
+			{
+				int	averageSkew;
+
+				averageSkew = cl->timeSkewTotal / cl->timeSkewSamples;
+
+				if (diff - cl->timeSkewLastDiff < -sv_timescale_skew_check->intvalue)
+				{
+					Com_Printf ("WARNING: Sudden time skew of %d (mean:%d) ms for %s[%s], possible speed cheat activated!\n", LOG_WARNING|LOG_SERVER, diff - cl->timeSkewLastDiff, averageSkew, cl->name, NET_AdrToString (&cl->netchan.remote_address));
+				}
+				else
+				{
+					//only record 'normal' samples
+					cl->timeSkewTotal += diff - cl->timeSkewLastDiff;
+					cl->timeSkewSamples++;
+				}
+
+				//Com_Printf ("client %d: average skew %d, last skew %d\n", LOG_GENERAL,i, averageSkew, diff - cl->timeSkewLastDiff);
+			}
+			else
+			{
+				//just hope these are good
+				cl->timeSkewTotal += diff - cl->timeSkewLastDiff;
+				cl->timeSkewSamples++;
+			}*/
+
+			
 		}
 
 		cl->commandMsec = sv_msecs->intvalue;		// 1600 + some slop
@@ -2468,6 +2538,7 @@ static void SV_ReadPackets (void)
 				{
 					Com_Printf ("SV_ReadPackets: Got a translated port for client %d (zombie) [%d->%d], freeing client (broken NAT router reconnect?)\n", LOG_SERVER|LOG_NOTICE, i, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
 					SV_CleanClient (cl);
+					cl->state = cs_free;
 					continue;
 				}
 				else
@@ -2886,8 +2957,8 @@ void SV_Frame (int msec)
 	//during server execution
 #ifndef DEDICATED_ONLY
 	//check the server is running proper Q2 physics model
-	if (!Sys_CheckFPUStatus ())
-		Com_Error (ERR_FATAL, "FPU control word is not set as expected, Quake II physics model will break.");
+	//if (!Sys_CheckFPUStatus ())
+	//	Com_Error (ERR_FATAL, "FPU control word is not set as expected, Quake II physics model will break.");
 #endif
 }
 
@@ -3469,10 +3540,17 @@ void SV_Init (void)
 	sv_disallow_download_sprites_hack = Cvar_Get ("sv_disallow_download_sprites_hack", "1", 0);
 	sv_disallow_download_sprites_hack->help = "Disallow downloads of sprites (.sp2) to protocol 34 clients. 3.20 and other clients do not fetch linked skins on sprites, which may cause a crash when trying to render them with missing skins. Default 1.\n";
 
-#ifdef _DEBUG
-	sv_ratbot_hack = Cvar_Get ("sv_ratbot_hack", "0", 0);
-	sv_ratbot_hack->help = "Use a technique designed to thwart attempts at using a ratbot on the server. Default 0.\n";
-#endif
+	sv_timescale_check = Cvar_Get ("sv_timescale_check", "0", 0);
+	sv_timescale_check->help = "Amount of milliseconds of time offset allowed by clients before a warning is issued or the client is kicked (depending on sv_timescale_kick). Default 0 (disabled).\n";
+
+	sv_timescale_kick = Cvar_Get ("sv_timescale_kick", "0", 0);
+	sv_timescale_kick->help = "Kick clients that exceed this many milliseconds of time offset. Default 0.\n";
+
+	sv_timescale_skew_check = Cvar_Get ("sv_timescale_skew_check", "0", 0);
+	sv_timescale_skew_check->help = "Amount of milliseconds of sudden time offset allowed by clients before a warning is issued or the client is kicked (depending on sv_timescale_skew_kick). Default 0 (disabled).\n";
+
+	sv_timescale_skew_kick = Cvar_Get ("sv_timescale_skew_kick", "0", 0);
+	sv_timescale_skew_kick->help = "Kick clients that exhibit sudden time skew exeeding this many milliseconds. Default 0.\n";
 
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);

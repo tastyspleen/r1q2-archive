@@ -219,6 +219,14 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 				SZ_Clear (&cl.demoBuff);
 				SZ_WriteByte (&cl.demoBuff, svc_nop);
 			}
+			else if (!cl.demoBuff.cursize)
+			{
+				Com_DPrintf ("Dropped a demo frame, no data to be written\n");
+				//never write zero length frames, they cause demo end
+				//we write a message regardless to keep in sync time-wise.
+				SZ_Clear (&cl.demoBuff);
+				SZ_WriteByte (&cl.demoBuff, svc_nop);
+			}
 
 			swlen = LittleLong(cl.demoBuff.cursize);
 			fwrite (&swlen, 4, 1, cls.demofile);

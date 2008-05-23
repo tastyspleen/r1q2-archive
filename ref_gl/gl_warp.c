@@ -640,13 +640,13 @@ R_SetSky
 ============
 */
 // 3dstudio environment map names
-char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
+static const char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
 void EXPORT R_SetSky (char *name, float rotate, vec3_t axis)
 {
 	int		i;
 	char	pathname[MAX_QPATH];
 
-	strncpy (skyname, name, sizeof(skyname)-1);
+	Q_strncpy (skyname, name, sizeof(skyname)-1);
 	skyrotate = rotate;
 	FastVectorCopy (*axis, skyaxis);
 

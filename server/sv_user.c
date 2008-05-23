@@ -298,13 +298,6 @@ static void SV_New_f (void)
 		}
 		else
 		{
-#ifdef _DEBUG
-			if (sv_client->ratbot_hack_pending)
-			{
-				sv_client->ratbot_hack_pending = false;
-				return;
-			}
-#endif
 			//shouldn't be here!
 			Com_DPrintf ("WARNING: Illegal 'new' from %s, client state %d. This shouldn't happen...\n", sv_client->name, sv_client->state);
 		}
@@ -989,7 +982,8 @@ void SV_ClientBegin (client_t *cl)
 
 	if (cl->cheaternet_message)
 	{
-		SV_BroadcastPrintf (PRINT_HIGH, "%s", cl->cheaternet_message);
+		if (cl->state > cs_zombie)
+			SV_BroadcastPrintf (PRINT_HIGH, "%s", cl->cheaternet_message);
 		Z_Free (cl->cheaternet_message);
 		cl->cheaternet_message = NULL;
 	}
@@ -1003,7 +997,7 @@ void SV_ClientBegin (client_t *cl)
 
 	cl->commandMsecOverflowCount = 0;
 	cl->totalMsecUsed = 0;
-	cl->enterFrame = sv.framenum;
+	cl->initialRealTime = 0;
 
 	//r1: this is in bad place
 	//Cbuf_InsertFromDefer ();
@@ -1034,16 +1028,6 @@ static void SV_Begin_f (void)
 		SV_New_f ();
 		return;
 	}
-
-#ifdef _DEBUG
-	if (sv_ratbot_hack->intvalue)
-	{
-		MSG_BeginWriting (svc_stufftext);
-		MSG_WriteString ("cmd new\n");
-		SV_AddMessage (sv_client, true);
-		sv_client->ratbot_hack_pending = true;
-	}
-#endif
 
 	sv_client->beginspawncount = atoi(Cmd_Argv(1));
 

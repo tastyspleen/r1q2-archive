@@ -85,7 +85,7 @@ int SV_FindIndex (const char *name, int start, int maxIndex, qboolean create)
 					fprintf (cs, "%i: %s\n", i, sv.configstrings[i]);
 
 				fprintf (cs, "\nCS_LIGHTS:\n");
-				for (i = CS_LIGHTS; i < CS_IMAGES+MAX_LIGHTSTYLES; i++)
+				for (i = CS_LIGHTS; i < CS_LIGHTS+MAX_LIGHTSTYLES; i++)
 					fprintf (cs, "%i: %s\n", i, sv.configstrings[i]);
 
 				fprintf (cs, "\nCS_GENERAL:\n");
@@ -675,8 +675,8 @@ void SV_Map (qboolean attractloop, const char *levelstring, qboolean loadgame)
 #endif
 
 	//check the server is running proper Q2 physics model
-	if (!Sys_CheckFPUStatus ())
-		Com_Error (ERR_FATAL, "FPU control word is not set as expected, Quake II physics model will break.");
+	//if (!Sys_CheckFPUStatus ())
+	//	Com_Error (ERR_FATAL, "FPU control word is not set as expected, Quake II physics model will break.");
 
 	SV_BroadcastCommand ("reconnect\n");
 	Z_Verify("SV_Map:END");

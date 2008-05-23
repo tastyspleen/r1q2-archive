@@ -1898,11 +1898,11 @@ void S_Play(void)
 	{
 		if (!strrchr(Cmd_Argv(i), '.'))
 		{
-			strncpy(name, Cmd_Argv(i), sizeof(name)-5);
+			Q_strncpy (name, Cmd_Argv(i), sizeof(name)-5);
 			strcat(name, ".wav");
 		}
 		else
-			strncpy(name, Cmd_Argv(i), sizeof(name)-1);
+			Q_strncpy (name, Cmd_Argv(i), sizeof(name)-1);
 
 		if (strstr(name, "..") || name[0] == '/' || name[0] == '\\') {
 			Com_Printf ("Bad filename %s\n", LOG_CLIENT, name);

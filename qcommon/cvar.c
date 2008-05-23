@@ -118,6 +118,11 @@ int Cvar_IntValue (const char *var_name)
 	return var->intvalue;
 }
 
+/*
+============
+Cvar_SetVar
+============
+*/
 static const char *Cvar_GetMetaVar (const char *var_name)
 {
 	static char dateBuff[32];
@@ -260,6 +265,9 @@ static cvar_t *Cvar_Add (const char *var_name, const char *var_value, int flags)
 	var->intvalue = (int)var->value;
 	var->flags = flags;
 	var->help = NULL;
+
+	if (var->flags & CVAR_USERINFO)
+		userinfo_modified = true;
 
 	//r1: fix 0 case
 	if (!var->intvalue && FLOAT_NE_ZERO(var->value))
@@ -503,7 +511,6 @@ cvar_t *Cvar_FullSet (const char *var_name, const char *value, int flags)
 		userinfo_modified = true;	// transmit at next oportunity
 
 	old_string = var->string;
-	
 
 	var->string = CopyString(value, TAGMALLOC_CVAR);
 	var->value = (float)atof (var->string);

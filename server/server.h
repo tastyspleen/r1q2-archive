@@ -237,7 +237,11 @@ typedef struct client_s
 
 	unsigned long				settings[CLSET_MAX];
 	unsigned					totalMsecUsed;
-	unsigned					enterFrame;
+	unsigned					initialRealTime;
+
+	int							timeSkewTotal;
+	int							timeSkewSamples;
+	int							timeSkewLastDiff;
 
 #ifdef ANTICHEAT
 	qboolean					anticheat_valid;
@@ -266,10 +270,6 @@ typedef struct client_s
 
 	//ugly hack for variable FPS support dropping s.event
 	int							entity_events[MAX_EDICTS];
-
-#ifdef _DEBUG
-	qboolean					ratbot_hack_pending;
-#endif
 } client_t;
 
 // a client can leave the server in one of four ways:
@@ -417,10 +417,6 @@ extern	cvar_t		*sv_disconnect_hack;
 extern	cvar_t		*sv_interpolated_pmove;
 
 extern	cvar_t		*sv_global_master;
-
-#ifdef _DEBUG
-extern	cvar_t		*sv_ratbot_hack;
-#endif
 
 #ifdef ANTICHEAT
 extern	cvar_t		*sv_require_anticheat;

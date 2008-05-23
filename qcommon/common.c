@@ -877,16 +877,16 @@ void MSG_WriteDeltaUsercmd (const usercmd_t *from, const usercmd_t *cmd, int pro
 	{
 		if (bits & CM_BUTTONS)
 		{
-			if ((bits & CM_FORWARD) && !(cmd->forwardmove % 5))
+			if ((bits & CM_FORWARD) && (cmd->forwardmove % 5) == 0)
 				buttons |= BUTTON_UCMD_DBLFORWARD;
-			if ((bits && CM_SIDE) && !(cmd->sidemove % 5))
+			if ((bits & CM_SIDE) && (cmd->sidemove % 5) == 0)
 				buttons |= BUTTON_UCMD_DBLSIDE;
-			if ((bits && CM_UP) && !(cmd->upmove % 5))
+			if ((bits & CM_UP) && (cmd->upmove % 5) == 0)
 				buttons |= BUTTON_UCMD_DBLUP;
 
-			if ((bits & CM_ANGLE1) && !(cmd->angles[0] % 64) && (abs(cmd->angles[0] / 64)) < 128)
+			if ((bits & CM_ANGLE1) && (cmd->angles[0] % 64) == 0 && (abs(cmd->angles[0] / 64)) < 128)
 				buttons |= BUTTON_UCMD_DBL_ANGLE1;
-			if ((bits & CM_ANGLE2) && !(cmd->angles[1] % 256))
+			if ((bits & CM_ANGLE2) && (cmd->angles[1] % 256) == 0)
 				buttons |= BUTTON_UCMD_DBL_ANGLE2;
 
 			MSG_WriteByte (buttons);
@@ -2140,7 +2140,7 @@ RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 
 	//malloc can crash if negative size is passed, woops.
 	if (size < 0)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Illegal allocation size of %d bytes from %p for tag %d", size,
+		Com_Error (ERR_DIE, "Z_TagMalloc: Illegal allocation size of %d bytes from 0x%p for tag %d", size,
 #if defined _WIN32
 		_ReturnAddress (),
 #elif defined LINUX
@@ -2154,7 +2154,7 @@ RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 	z = malloc(size);
 
 	if (!z)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for tag %d from %p (already %li bytes in %li blocks)", size, tag,
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for tag %d from 0x%p (already %li bytes in %li blocks)", size, tag,
 #if defined _WIN32
 		_ReturnAddress (),
 #elif defined LINUX
@@ -2229,6 +2229,9 @@ RESTRICT void * EXPORT Z_TagMallocGame (int size, int tag)
 	loc = &z_game_locations;
 	last = loc->next;
 	newentry = malloc (sizeof(*loc));
+	if (!newentry)
+		Com_Error (ERR_DIE, "Z_TagMallocGame: Out of memory.");
+
 	newentry->address = b;
 	newentry->size = size;
 	newentry->next = last;
@@ -2243,6 +2246,17 @@ void EXPORT Z_FreeGame (void *buf)
 {
 	z_memloc_t	*loc, *last;
 
+	void		*retAddr;
+
+#if defined _WIN32
+	retAddr = _ReturnAddress ();
+#elif defined LINUX
+	retAddr = __builtin_return_address (0);
+#else
+	//FIXME: other OSes/CCs
+	retAddr = 0;
+#endif
+
 	loc = last = &z_game_locations;
 
 	while (loc->next)
@@ -2253,7 +2267,7 @@ void EXPORT Z_FreeGame (void *buf)
 			if (*(int *)((byte *)buf + loc->size) != 0xFDFEFDFE)
 			{
 				Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago from code at 0x%p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
+				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at 0x%p (allocated %u ms ago from code at 0x%p), detected during free at 0x%p", loc->size, loc->address, curtime - loc->time, loc->allocationLocation, retAddr);
 			}
 			free_from_game = true;
 			Z_Free (buf);
@@ -2268,12 +2282,12 @@ void EXPORT Z_FreeGame (void *buf)
 
 	if (z_buggygame->intvalue)
 	{
-		Com_Printf ("ERROR: Game DLL tried to free non-existant/freed memory at %p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf);
+		Com_Printf ("ERROR: Game DLL tried to free non-existent/freed memory at 0x%p from code at 0x%p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf, retAddr);
 	}
 	else
 	{
 		Com_Printf ("Memory management problem detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existant/freed memory at %p", buf);
+		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existent/freed memory at 0x%p from code at 0x%p", buf, retAddr);
 	}
 }
 
@@ -2292,7 +2306,7 @@ void EXPORT Z_FreeTagsGame (int tag)
 		if (*(int *)((byte *)loc->address + loc->size) != 0xFDFEFDFE)
 		{
 			Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago from code at %p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
+			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at 0x%p (allocated %u ms ago from code at 0x%p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
 		}
 	}
 

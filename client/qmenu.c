@@ -200,7 +200,7 @@ qboolean Field_Key( menufield_s *f, int key )
 		{
 			strtok( cbd, "\n\r\b" );
 
-			strncpy( f->buffer, cbd, f->length - 1 );
+			Q_strncpy (f->buffer, cbd, sizeof(f->buffer)-1);
 			f->cursor = (int)strlen( f->buffer );
 			f->visible_offset = f->cursor - f->visible_length;
 			if ( f->visible_offset < 0 )

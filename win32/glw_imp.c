@@ -1273,7 +1273,7 @@ qboolean GLimp_InitGL (void)
 		wglGetExtensionsStringARB = (PFNWGLGETEXTENSIONSSTRINGARBPROC)qwglGetProcAddress("wglGetExtensionsStringARB");
 		wglGetExtensionsStringEXT = (PFNWGLGETEXTENSIONSSTRINGEXTPROC)qwglGetProcAddress("wglGetExtensionsStringEXT");
 
-		if (!wglGetExtensionsStringARB || !wglGetExtensionsStringARB)
+		if (!wglGetExtensionsStringARB)
 		{
 			ri.Con_Printf (PRINT_ALL, "GLimp_InitGL() - qwglGetProcAddress (wglGetExtensionsString) failed, falling back to regular PFD\n");
 			goto fail2;

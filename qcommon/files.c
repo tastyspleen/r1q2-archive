@@ -617,6 +617,12 @@ int EXPORT FS_FOpenFile (const char *filename, FILE **file, handlestyle_t openHa
 				if (openHandle == HANDLE_DUPE)
 				{
 					*file = fopen (cache->pak->filename, "rb");
+					if (!*file)
+					{
+						Com_Printf ("WARNING: Cached pak '%s' failed to open! Did you delete it?\n", LOG_WARNING|LOG_GENERAL, cache->pak->filename);
+						rbdelete (filename, rb);
+						return -1;
+					}
 					*closeHandle = true;
 				}
 				else

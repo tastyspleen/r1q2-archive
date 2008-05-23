@@ -361,7 +361,6 @@ typedef struct
 #define	CONTENTS_LADDER			0x20000000
 
 
-
 #define	SURF_LIGHT		0x1		// value will hold the light strength
 
 #define	SURF_SLICK		0x2		// effects game physics

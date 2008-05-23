@@ -42,6 +42,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef USE_CURL
 #define CURL_STATICLIB
+#define CURL_HIDDEN_SYMBOLS
+#define CURL_EXTERN_SYMBOL
+#define CURL_CALLING_CONVENTION __cdecl
 #include <curl/curl.h>
 #endif
 
@@ -750,10 +753,10 @@ void Sys_Init (void)
 
 	Sys_InitConsoleMutex ();
 
-#ifdef _DEBUG
-	sys_fpu_bits = Cvar_Get ("sys_fpu_bits", "0", CVAR_NOSET);
+#ifndef _DEBUG
+	sys_fpu_bits = Cvar_Get ("sys_fpu_bits", "2", CVAR_NOSET);
 #else
-	sys_fpu_bits = Cvar_Get ("sys_fpu_bits", "0", 0);
+	sys_fpu_bits = Cvar_Get ("sys_fpu_bits", "2", 0);
 #endif
 
 	//Cmd_AddCommand ("win_priority", Sys_SetQ2Priority);
@@ -1228,8 +1231,8 @@ void *Sys_GetGameAPI (void *parms, int baseq2DLL)
 	if (!game_library)
 		return NULL;
 
-	if (!Sys_CheckFPUStatus())
-		Com_Printf ("\2WARNING: The FPU control word was changed after loading %s!\n", LOG_GENERAL, name);
+	//if (!Sys_CheckFPUStatus())
+	//	Com_Printf ("\2WARNING: The FPU control word was changed after loading %s!\n", LOG_GENERAL, name);
 
 	GetGameAPI = (void *(IMPORT *)(void *))GetProcAddress (game_library, "GetGameAPI");
 	if (!GetGameAPI)
@@ -1429,8 +1432,8 @@ reInit:
 	if (!anticheat)
 		return 0;
 
-	if (!Sys_CheckFPUStatus ())
-		Com_Printf ("\2WARNING: The FPU control word has changed after loading anticheat!\n", LOG_GENERAL);
+	//if (!Sys_CheckFPUStatus ())
+	//	Com_Printf ("\2WARNING: The FPU control word has changed after loading anticheat!\n", LOG_GENERAL);
 
 	return 1;
 }
@@ -2322,7 +2325,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	__try
 	{
 		Sys_SetFPU (sys_fpu_bits->intvalue);
-		Sys_CheckFPUStatus ();
+		//Sys_CheckFPUStatus ();
 
 		Qcommon_Init (argc, argv);
 
@@ -2406,6 +2409,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 					}
 					newtime = Sys_Milliseconds ();
 					time = newtime - oldtime;
+					if (!time)
+						Sleep (0);
 					spins ++;
 				} while (time < 1);
 			}
@@ -2416,7 +2421,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				goodspins++;
 
 			Sys_SetFPU (sys_fpu_bits->intvalue);
-			Sys_CheckFPUStatus ();
+			//Sys_CheckFPUStatus ();
 			Qcommon_Frame (time);
 
 			oldtime = newtime;

@@ -1237,6 +1237,7 @@ void SV_BuildClientFrame (client_t *client)
 
 		// add it to the circular client_entities array
 		state = &svs.client_entities[svs.next_client_entities%svs.num_client_entities];
+
 		if (ent->s.number != e)
 		{
 			//Com_DPrintf ("FIXING ENT->S.NUMBER!!!\n");

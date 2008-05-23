@@ -923,9 +923,9 @@ static void CL_DemoDeltaPlayerstate (const frame_t *from, frame_t *to)
 	//
 	if (pflags & PS_VIEWOFFSET)
 	{
-		MSG_WriteChar (((int)ps->viewoffset[0]*4));
-		MSG_WriteChar (((int)ps->viewoffset[1]*4));
-		MSG_WriteChar (((int)ps->viewoffset[2]*4));
+		MSG_WriteChar (((int)(ps->viewoffset[0]*4)));
+		MSG_WriteChar (((int)(ps->viewoffset[1]*4)));
+		MSG_WriteChar (((int)(ps->viewoffset[2]*4)));
 	}
 
 	if (pflags & PS_VIEWANGLES)
@@ -937,9 +937,9 @@ static void CL_DemoDeltaPlayerstate (const frame_t *from, frame_t *to)
 
 	if (pflags & PS_KICKANGLES)
 	{
-		MSG_WriteChar (((int)ps->kick_angles[0]*4));
-		MSG_WriteChar (((int)ps->kick_angles[1]*4));
-		MSG_WriteChar (((int)ps->kick_angles[2]*4));
+		MSG_WriteChar (((int)(ps->kick_angles[0]*4)));
+		MSG_WriteChar (((int)(ps->kick_angles[1]*4)));
+		MSG_WriteChar (((int)(ps->kick_angles[2]*4)));
 	}
 
 	if (pflags & PS_WEAPONINDEX)
@@ -950,20 +950,20 @@ static void CL_DemoDeltaPlayerstate (const frame_t *from, frame_t *to)
 	if (pflags & PS_WEAPONFRAME)
 	{
 		MSG_WriteByte (ps->gunframe);
-		MSG_WriteChar (((int)ps->gunoffset[0]*4));
-		MSG_WriteChar (((int)ps->gunoffset[1]*4));
-		MSG_WriteChar (((int)ps->gunoffset[2]*4));
-		MSG_WriteChar (((int)ps->gunangles[0]*4));
-		MSG_WriteChar (((int)ps->gunangles[1]*4));
-		MSG_WriteChar (((int)ps->gunangles[2]*4));
+		MSG_WriteChar (((int)(ps->gunoffset[0]*4)));
+		MSG_WriteChar (((int)(ps->gunoffset[1]*4)));
+		MSG_WriteChar (((int)(ps->gunoffset[2]*4)));
+		MSG_WriteChar (((int)(ps->gunangles[0]*4)));
+		MSG_WriteChar (((int)(ps->gunangles[1]*4)));
+		MSG_WriteChar (((int)(ps->gunangles[2]*4)));
 	}
 
 	if (pflags & PS_BLEND)
 	{
-		MSG_WriteByte (((int)ps->blend[0]*255));
-		MSG_WriteByte (((int)ps->blend[1]*255));
-		MSG_WriteByte (((int)ps->blend[2]*255));
-		MSG_WriteByte (((int)ps->blend[3]*255));
+		MSG_WriteByte (((int)(ps->blend[0]*255)));
+		MSG_WriteByte (((int)(ps->blend[1]*255)));
+		MSG_WriteByte (((int)(ps->blend[2]*255)));
+		MSG_WriteByte (((int)(ps->blend[3]*255)));
 	}
 
 	if (pflags & PS_FOV)

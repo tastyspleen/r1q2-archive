@@ -525,7 +525,7 @@ qboolean SNDDMA_InitWav (void)
 					&format, 
 					0, 0L, CALLBACK_NULL)) != MMSYSERR_NOERROR)
 	{
-		if (hr != MMSYSERR_ALLOCATED)
+		if (!SUCCEEDED (hr))
 		{
 			Com_Printf ("failed\n", LOG_CLIENT);
 			return false;

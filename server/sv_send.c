@@ -1218,11 +1218,16 @@ void SV_SendClientMessages (void)
 			}
 			if (msglen > MAX_MSGLEN)
 				Com_Error (ERR_DROP, "SV_SendClientMessages: msglen %d > MAX_MSGLEN (%d)", msglen, MAX_MSGLEN);
-			r = fread (msgbuf, msglen, 1, sv.demofile);
-			if (r != 1)
+			else if (msglen == 0)
+				Com_DPrintf ("WARNING: Demo file contains zero byte message at 0x%lx, ignored.\n", ftell (sv.demofile) - 4);
+			else
 			{
-				SV_DemoCompleted ();
-				return;
+				r = fread (msgbuf, msglen, 1, sv.demofile);
+				if (r != 1)
+				{
+					SV_DemoCompleted ();
+					return;
+				}
 			}
 		}
 	}

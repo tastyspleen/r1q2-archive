@@ -50,8 +50,10 @@ void CL_CheckPredictionError (void)
 	else
 	{
 		if (cl_showmiss->intvalue && (delta[0] || delta[1] || delta[2]) )
-			Com_Printf ("prediction miss on %i: %i\n", LOG_CLIENT, cl.frame.serverframe, 
-			delta[0] + delta[1] + delta[2]);
+			Com_Printf ("prediction miss on %i: %i (%.2f %.2f %.2f) != (%.2f %.2f %.2f)\n", LOG_CLIENT, cl.frame.serverframe, 
+			delta[0] + delta[1] + delta[2],
+			cl.frame.playerstate.pmove.origin[0] * 0.125f, cl.frame.playerstate.pmove.origin[1] * 0.125f, cl.frame.playerstate.pmove.origin[2] * 0.125f,
+			cl.predicted_origins[frame][0] * 0.125f, cl.predicted_origins[frame][1] * 0.125f, cl.predicted_origins[frame][2] * 0.125f);
 
 		VectorCopy (cl.frame.playerstate.pmove.origin, cl.predicted_origins[frame]);
 

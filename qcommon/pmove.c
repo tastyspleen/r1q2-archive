@@ -539,17 +539,43 @@ static void PM_WaterMove (void)
 	float	wishspeed;
 	vec3_t	wishdir;
 
+	int		forwardmove, sidemove, upmove;
+
+	//r1: keep a local version of these values, this prevents a physics exploit where a ridiculously high
+	//forwardmove/sidemove can allow player to negate effects of water currents. value of 400 is still higher
+	//than maxvel (300), but 400 is the default q2 run speed, so we keep it for compatibility.
+	if (pm->cmd.forwardmove > 400)
+		forwardmove = 400;
+	else if (pm->cmd.forwardmove < -400)
+		forwardmove = -400;
+	else
+		forwardmove = pm->cmd.forwardmove;
+
+	if (pm->cmd.sidemove > 400)
+		sidemove = 400;
+	else if (pm->cmd.sidemove < -400)
+		sidemove = -400;
+	else
+		sidemove = pm->cmd.sidemove;
+
+	if (pm->cmd.upmove > 400)
+		upmove = 400;
+	else if (pm->cmd.upmove < -400)
+		upmove = -400;
+	else
+		upmove = pm->cmd.upmove;
+
 //
 // user intentions
 //
-	wishvel[0] = pml.forward[0]*pm->cmd.forwardmove + pml.right[0]*pm->cmd.sidemove;
-	wishvel[1] = pml.forward[1]*pm->cmd.forwardmove + pml.right[1]*pm->cmd.sidemove;
-	wishvel[2] = pml.forward[2]*pm->cmd.forwardmove + pml.right[2]*pm->cmd.sidemove;
+	wishvel[0] = pml.forward[0] * forwardmove + pml.right[0] * sidemove;
+	wishvel[1] = pml.forward[1] * forwardmove + pml.right[1] * sidemove;
+	wishvel[2] = pml.forward[2] * forwardmove + pml.right[2] * sidemove;
 
-	if (!pm->cmd.forwardmove && !pm->cmd.sidemove && !pm->cmd.upmove)
+	if (!forwardmove && !sidemove && !upmove)
 		wishvel[2] -= 60;		// drift towards bottom
 	else
-		wishvel[2] += pm->cmd.upmove;
+		wishvel[2] += upmove;
 
 	PM_AddCurrents (wishvel);
 
@@ -561,6 +587,7 @@ static void PM_WaterMove (void)
 		VectorScale (wishvel, pm_maxspeed/wishspeed, wishvel);
 		wishspeed = pm_maxspeed;
 	}
+
 	wishspeed *= 0.5f;
 
 	PM_Accelerate (wishdir, wishspeed, pm_wateraccelerate);

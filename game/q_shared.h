@@ -373,7 +373,7 @@ typedef union
 	*(int *)&(v1[2]) == *(int *)&(v2[2]))
 
 #define Float_ByteCompare(v1,v2) \
-	((int)(v1)*8==(int)(v2)*8)
+	((int)((v1)*8)==((int)((v2)*8)))
 
 #define Float_RoughCompare(v1,v2) \
 	(*(int *)&(v1) == *(int *)&(v2))
@@ -654,6 +654,7 @@ COLLISION DETECTION
 #define	CONTENTS_TRANSLUCENT	0x10000000	// auto set if any surface has trans
 #define	CONTENTS_LADDER			0x20000000
 
+#define	CONTENTS_ENT_NOCLIP		0x40000000	// r1q2 hack for non-velocity-changing clipping to solids
 
 
 #define	SURF_LIGHT		0x1		// value will hold the light strength

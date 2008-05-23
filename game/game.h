@@ -51,7 +51,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	SVF_NOCLIENT			0x00000001	// don't send entity to clients, even if it has effects
 #define	SVF_DEADMONSTER			0x00000002	// treat as CONTENTS_DEADMONSTER for collision
 #define	SVF_MONSTER				0x00000004	// treat as CONTENTS_MONSTER for collision
+
+//!!! r1q2 specific
 #define	SVF_NOPREDICTION		0x00000008	// send this as solid=0 to the client to ignore prediction
+//!!! r1q2 specific
 
 // edict->solid values
 

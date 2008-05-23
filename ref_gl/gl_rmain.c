@@ -1788,7 +1788,7 @@ retryQGL:
 		//if ( gl_ext_point_sprite->value ) {
 			qglPointParameterfARB = (void (__stdcall *)(GLenum,GLfloat))qwglGetProcAddress("glPointParameterfARB");
 			qglPointParameterfvARB = (void (__stdcall *)(GLenum,const GLfloat *))qwglGetProcAddress("glPointParameterfvARB");
-			if (!qglPointParameterfARB || !qglPointParameterfARB)
+			if (!qglPointParameterfARB)
 			{
 				ri.Con_Printf( PRINT_ALL, "!!! qglGetProcAddress for GL_ARB_point_sprite failed\n" );
 			}

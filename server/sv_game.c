@@ -336,7 +336,7 @@ void EXPORT PF_Configstring (int index, char *val)
 		if (sv_gamedebug->intvalue)
 			Com_Printf ("GAME WARNING: configstring index %i (%s) set before server startup will not be saved.\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, index, MakePrintable(val, 0));
 
-		if (sv_gamedebug->intvalue >= 1)
+		if (sv_gamedebug->intvalue >= 2)
 			Sys_DebugBreak ();
 	}
 
