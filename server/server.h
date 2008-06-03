@@ -292,6 +292,12 @@ typedef struct
 	uint32	 	time;
 } challenge_t;
 
+//extra struct for server-private entity information
+typedef struct
+{
+	int32	solid2;
+} sventity_t;
+
 typedef struct
 {
 	qboolean	initialized;				// sv_init has completed
@@ -330,6 +336,8 @@ typedef struct
 	unsigned long		r1q2CustomBytes;
 	unsigned long		r1q2AttnBytes;
 #endif
+
+	sventity_t			entities[MAX_EDICTS];
 } server_static_t;
 
 extern	cvar_t	*sv_ratelimit_status;

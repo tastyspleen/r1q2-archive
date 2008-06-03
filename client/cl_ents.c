@@ -170,7 +170,12 @@ void CL_ParseDelta (const entity_state_t *from, entity_state_t *to, int number, 
 		to->event = 0;
 
 	if (bits & U_SOLID)
-		to->solid = MSG_ReadShort (&net_message);
+	{
+		if (cls.protocolVersion >= MINOR_VERSION_R1Q2_32BIT_SOLID)
+			to->solid = MSG_ReadLong (&net_message);
+		else
+			to->solid = MSG_ReadShort (&net_message);
+	}
 
 	//if (cl.enhancedServer && bits & U_VELOCITY)
 	//	MSG_ReadPos (&net_message, to->velocity);

@@ -948,6 +948,8 @@ void SV_InitGameProgs (void)
 	if (!ge->edicts)
 		Com_Error (ERR_HARD, "Game failed to initialize globals.edicts");
 
+	memset (&svs.entities, 0, sizeof(svs.entities));
+
 	//r1: moved from SV_InitGame to here.
 	for (i=0 ; i<maxclients->intvalue ; i++)
 	{

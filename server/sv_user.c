@@ -655,7 +655,7 @@ plainLines:
 			if (base->number)
 			{
 				MSG_BeginWriting (svc_spawnbaseline);
-				MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol);
+				SV_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol, sv_client->protocol_version);
 				wrote += MSG_GetLength();
 				SV_AddMessage (sv_client, true);
 
@@ -708,7 +708,7 @@ plainLines:
 					if (base->number)
 					{
 						MSG_BeginWriting (svc_spawnbaseline);
-						MSG_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol);
+						SV_WriteDeltaEntity (&null_entity_state, base, true, true, sv_client->protocol, sv_client->protocol_version);
 						MSG_EndWriting (&zBuff);
 
 						if (zBuff.cursize >= 300 || z.total_out > sv_client->netchan.message.buffsize - 300)

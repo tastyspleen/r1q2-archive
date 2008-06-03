@@ -2325,7 +2325,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	__try
 	{
 		Sys_SetFPU (sys_fpu_bits->intvalue);
-		//Sys_CheckFPUStatus ();
+		Sys_CheckFPUStatus ();
 
 		Qcommon_Init (argc, argv);
 

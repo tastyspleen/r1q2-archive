@@ -194,6 +194,7 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	int			i, j, k;
 	int			area;
 	int			topnode;
+	int			edict_number;
 
 	if (!ent)
 	{
@@ -223,38 +224,111 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 
 	// set the size
 	VectorSubtract (ent->maxs, ent->mins, ent->size);
+
+	edict_number = NUM_FOR_EDICT(ent);
 	
 	// encode the size into the entity_state for client prediction
 	if (ent->solid == SOLID_BBOX && !((ent->svflags & SVF_DEADMONSTER) || (sv_new_entflags->intvalue && (ent->svflags & SVF_NOPREDICTION))))
-	{	// assume that x/y are equal and symetric
-		i = (int)(ent->maxs[0]/8);
-		if (i<1)
-			i = 1;
-		if (i>31)
-			i = 31;
+	{	
+		//special case projectile hack
+		if (VectorCompare (ent->mins, vec3_origin) && VectorCompare (ent->maxs, vec3_origin))
+		{
+			ent->s.solid = 0;
+			svs.entities[edict_number].solid2 = 0;
+		}
+		else
+		{
+			// assume that x/y are equal and symetric
+			i = (int)(ent->maxs[0]/8);
+			if (i<1)
+				i = 1;
+			if (i>31)
+				i = 31;
 
-		// z is not symetric
-		j = (int)((-ent->mins[2])/8);
-		if (j<1)
-			j = 1;
-		if (j>31)
-			j = 31;
+			if (sv_gamedebug->intvalue)			
+			{
+				if ((float)i != (ent->maxs[0]/8))
+				{
+					Com_Printf ("GAME WARNING: Entity %d x/y bounding box mins/maxs (%.2f) does not lie on a quantization boundary (%.2f != %.2f)\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number, ent->maxs[0], (ent->maxs[0]/8), (float)i);
+					if (sv_gamedebug->intvalue >= 5)
+						Sys_DebugBreak ();
+				}
 
-		// and z maxs can be negative...
-		k = (int)((ent->maxs[2]+32)/8);
-		if (k<1)
-			k = 1;
-		if (k>63)
-			k = 63;
+				if (fabs (ent->maxs[0]) != fabs(ent->maxs[1]) || fabs(ent->mins[0]) != fabs(ent->mins[1]) || fabs (ent->maxs[0]) != fabs(ent->mins[0]))
+				{
+					Com_Printf ("GAME WARNING: Entity %d x/y bounding box mins/maxs are not equal and symmetric\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number);
+					if (sv_gamedebug->intvalue >= 5)
+						Sys_DebugBreak ();
+				}
+			}
 
-		ent->s.solid = (k<<10) | (j<<5) | i;
+			// z is not symetric
+			j = (int)((-ent->mins[2])/8);
+			if (j<1)
+				j = 1;
+			if (j>31)
+				j = 31;
+
+			if (sv_gamedebug->intvalue && (float)j != (-ent->mins[2])/8)
+			{
+				Com_Printf ("GAME WARNING: Entity %d z bounding box mins (%.2f) does not lie on a quantization boundary (%.2f != %.2f)\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number, ent->mins[2], (-ent->mins[2])/8, (float)j);
+				if (sv_gamedebug->intvalue >= 5)
+					Sys_DebugBreak ();
+			}
+
+			// and z maxs can be negative...
+			k = (int)((ent->maxs[2]+32)/8);
+			if (k<1)
+				k = 1;
+			if (k>63)
+				k = 63;
+
+			if (sv_gamedebug->intvalue && (float)k != ((ent->maxs[2]+32)/8))
+			{
+				Com_Printf ("GAME WARNING: Entity %d z bounding box maxs (%.2f) does not lie on a quantization boundary (%.2f != %.2f)\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number, ent->maxs[2], ((ent->maxs[2]+32)/8), (float)k);
+				if (sv_gamedebug->intvalue >= 5)
+					Sys_DebugBreak ();
+			}
+
+			ent->s.solid = (k<<10) | (j<<5) | i;
+
+			//now calculate our special value for R1Q2 protocol for full precision bboxes. NASTY HACK! since we can't
+			//alter edict_t, there is a new private entity struct for the server :(.
+
+			// assume that x/y are equal and symetric
+			i = (int)(ent->maxs[0]);
+			if (i<1)
+				i = 1;
+			if (i>255)
+				i = 255;
+
+			// z is not symetric
+			j = (int)((-ent->mins[2]));
+			if (j<1)
+				j = 1;
+			if (j>255)
+				j = 255;
+
+			// and z maxs can be negative...
+			k = (int)((ent->maxs[2]+32768));
+			if (k<1)
+				k = 1;
+			if (k>65535)	//2 bytes enough precision? :D
+				k = 65535;
+
+			svs.entities[edict_number].solid2 = (k<<16) | (j<<8) | i;
+		}
 	}
 	else if (ent->solid == SOLID_BSP)
 	{
 		ent->s.solid = 31;		// a solid_bbox will never create this value
+		svs.entities[edict_number].solid2 = 31;
 	}
 	else
+	{
 		ent->s.solid = 0;
+		svs.entities[edict_number].solid2 = 0;
+	}
 
 	// set the abs box
 	if (ent->solid == SOLID_BSP && 

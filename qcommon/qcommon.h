@@ -221,8 +221,9 @@ void SZ_WriteLong (sizebuf_t *buf, int c);
 
 
 void MSG_WriteDeltaUsercmd (const struct usercmd_s *from, const struct usercmd_s /*@out@*/*cmd, int protocol);
-void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol);
 void MSG_WriteDir (vec3_t vector);
+
+void SV_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s /*@out@*/*to, qboolean force, qboolean newentity, int cl_protocol, int protocol_version);
 
 
 void	MSG_BeginReading (sizebuf_t *sb);
@@ -301,10 +302,11 @@ PROTOCOL
 #define	PROTOCOL_ORIGINAL	34
 #define	PROTOCOL_R1Q2		35
 
-#define	MINOR_VERSION_R1Q2				1904
+#define	MINOR_VERSION_R1Q2				1905
 
 //minimum versions for some features
 #define MINOR_VERSION_R1Q2_UCMD_UPDATES	1904
+#define	MINOR_VERSION_R1Q2_32BIT_SOLID	1905
 
 //=========================================
 
