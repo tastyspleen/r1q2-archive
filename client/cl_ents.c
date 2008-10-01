@@ -803,9 +803,9 @@ static void CL_DemoDeltaPlayerstate (const frame_t *from, frame_t *to)
 {
 	int				i;
 	int				pflags;
-	player_state_new	*ps;
-	const player_state_new *ops;
-	static player_state_new	dummy = {{0}};
+	player_state_t			*ps;
+	const player_state_t	*ops;
+	static player_state_t	dummy = {{0}};
 	int				statbits;
 
 	ps = &to->playerstate;
@@ -996,7 +996,7 @@ CL_ParsePlayerstate
 static void CL_ParsePlayerstate (const frame_t *oldframe, frame_t *newframe, int extraflags)
 {
 	int			flags;
-	player_state_new	*state;
+	player_state_t	*state;
 	int			i;
 	int			statbits;
 	qboolean	enhanced;
@@ -1130,6 +1130,7 @@ static void CL_ParsePlayerstate (const frame_t *oldframe, frame_t *newframe, int
 	//r1q2 extensions
 	if (enhanced)
 	{
+		/*
 		if (flags & PS_BBOX)
 		{
 			int x, zd, zu;
@@ -1146,7 +1147,7 @@ static void CL_ParsePlayerstate (const frame_t *oldframe, frame_t *newframe, int
 			state->mins[2] = -(float)zd;
 			state->maxs[2] = (float)zu;
 			Com_Printf ("received bbox from server: (%f, %f, %f), (%f, %f, %f)\n", LOG_CLIENT, state->mins[0], state->mins[1], state->mins[2], state->maxs[0], state->maxs[1], state->maxs[2]);
-		}
+		}*/
 	}
 
 	if (!enhanced)
@@ -2213,7 +2214,7 @@ lerp_time;*/
 CL_AddViewWeapon
 ==============
 */
-static void CL_AddViewWeapon (const player_state_new *ps, const player_state_new *ops)
+static void CL_AddViewWeapon (const player_state_t *ps, const player_state_t *ops)
 {
 	entity_t		gun;		// view model
 	int				i;
@@ -2343,7 +2344,7 @@ static void CL_CalcViewValues (void)
 	vec3_t		kicklerp_from, kicklerp_to;
 //	centity_t	*ent;
 	const frame_t		*oldframe;
-	const player_state_new	*ps, *ops;
+	const player_state_t	*ps, *ops;
 
 	// find the previous frame to interpolate from
 	ps = &cl.frame.playerstate;

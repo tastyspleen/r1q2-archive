@@ -480,8 +480,8 @@ void Cmd_Exec_f (void)
 		len = COMMAND_BUFFER_SIZE - 2;
 	}
 
-	FS_LoadFile (path, (void **)&f);
-	if (!f || !len)
+	len = FS_LoadFile (path, (void **)&f);
+	if (!f || len <= 0)
 	{
 		Com_Printf ("couldn't exec %s\n", LOG_GENERAL, path);
 		return;
@@ -659,6 +659,182 @@ void Cmd_Alias_f (void)
 	strcat (cmd, "\n");
 	
 	a->value = CopyString (cmd, TAGMALLOC_ALIAS);
+}
+
+/*
+=============================================================================
+
+					MESSAGE TRIGGERS
+
+=============================================================================
+*/
+
+typedef struct cmd_trigger_s
+{
+	char		*match;
+	char		*command;
+
+	struct cmd_trigger_s	*next;
+} cmd_trigger_t;
+
+static cmd_trigger_t	*cmd_triggers = NULL;
+
+/*
+============
+Cmd_Trigger_f
+============
+*/
+static void Cmd_Trigger_f( void )
+{
+	cmd_trigger_t *trigger;
+	const char *command, *match;
+	int cmdLen, matchLen;
+
+	if(Cmd_Argc() == 1)
+	{
+		Com_Printf ("Usage: %s <command> <match>\n", LOG_GENERAL, Cmd_Argv(0));
+		if(!cmd_triggers)
+		{
+			Com_Printf ("No current message triggers\n", LOG_GENERAL);
+			return;
+		}
+
+		Com_Printf ("Current message triggers:\n", LOG_GENERAL);
+		for (trigger = cmd_triggers; trigger; trigger = trigger->next)
+		{
+			Com_Printf ( "\"%s\" = \"%s\"\n", LOG_GENERAL, trigger->command, trigger->match);
+		}
+		return;
+	}
+
+	if (Cmd_Argc() < 3)
+	{
+		Com_Printf ("Usage: %s <command> <match>\n", LOG_GENERAL, Cmd_Argv(0));
+		return;
+	}
+
+	command = Cmd_Argv(1);
+	match = Cmd_Args2(2);
+
+	// don't create the same trigger twice
+	for( trigger=cmd_triggers; trigger; trigger=trigger->next )
+	{
+		if (!strcmp(trigger->command, command) && !strcmp(trigger->match, match))
+		{
+			//Com_Printf( "Exactly same trigger allready exists\n" );
+			return;
+		}
+	}
+
+	cmdLen = strlen(command) + 1;
+	matchLen = strlen(match) + 1;
+	if(matchLen < 4)
+	{
+		Com_Printf ("Match is too short.\n", LOG_GENERAL);
+		return;
+	}
+
+	//!!!!!!! FIXME HACK XXXXXXXX maniac you are insane
+	trigger = Z_TagMalloc( sizeof( cmd_trigger_t ) + cmdLen + matchLen, TAGMALLOC_TRIGGER);
+	trigger->command = (char *)((byte *)trigger + sizeof( cmd_trigger_t ));
+	trigger->match = trigger->command + cmdLen;
+	strcpy (trigger->command, command);
+	strcpy (trigger->match, match);
+	trigger->next = cmd_triggers;
+	cmd_triggers = trigger;
+}
+
+static void Cmd_UnTrigger_f( void )
+{
+	cmd_trigger_t *trigger, *next, **back;
+	const char *command, *match;
+	int count = 0;
+
+	if(!cmd_triggers)
+	{
+		Com_Printf ("No current message triggers\n", LOG_GENERAL);
+		return;
+	}
+
+	if (Cmd_Argc() == 1)
+	{
+		Com_Printf ("Usage: %s <command> <match>\n", LOG_GENERAL, Cmd_Argv(0));
+		Com_Printf ("Current message triggers:\n", LOG_GENERAL);
+
+		for (trigger = cmd_triggers; trigger; trigger = trigger->next)
+		{
+			Com_Printf ("\"%s\" = \"%s\"\n", LOG_GENERAL, trigger->command, trigger->match);
+		}
+		return;
+	}
+
+	if (Cmd_Argc() == 2)
+	{
+		if (!Q_stricmp(Cmd_Argv(1), "all"))
+		{
+			for(trigger = cmd_triggers; trigger; trigger = next)
+			{
+				next = trigger->next;
+				Z_Free(trigger);
+				count++;
+			}
+			cmd_triggers = NULL;
+
+			if(count)
+				Com_Printf("Removed all (%i) triggers\n", LOG_GENERAL, count);
+			return;
+		}
+
+		Com_Printf("Usage: %s <command> <match>\n", LOG_GENERAL, Cmd_Argv(0));
+		return;
+	}
+
+
+	command = Cmd_Argv (1);
+	match = Cmd_Args2 (2);
+
+	back = &cmd_triggers;
+	for(;;)
+	{
+		trigger = *back;
+		if(!trigger)
+		{
+			Com_Printf ("Cant find trigger \"%s\" = \"%s\".\n", LOG_GENERAL, command, match);
+			return;
+		}
+
+		if(!strcmp(trigger->command, command) && !strcmp(trigger->match, match))
+		{
+			*back = trigger->next;
+			Com_Printf ("Removed trigger \"%s\" = \"%s\"\n", LOG_GENERAL, trigger->command, trigger->match );
+			Z_Free (trigger);
+			return;
+		}
+		back = &trigger->next;
+	}
+}
+
+/*
+============
+Cmd_ExecTrigger
+============
+*/
+void Cmd_ExecTrigger (char *string)
+{
+	const cmd_trigger_t *trigger;
+	char				*text;
+
+	// execute matching triggers
+	for(trigger = cmd_triggers; trigger; trigger = trigger->next)
+	{
+		text = Cmd_MacroExpandString(trigger->match);
+
+		if (text && wildcardfit (text, string))
+		{
+			Cbuf_AddText(trigger->command);
+			Cbuf_AddText("\n");
+		}
+	}
 }
 
 /*
@@ -1349,6 +1525,8 @@ void Cmd_Init (void)
 //
 // register our commands
 //
+	Cmd_AddCommand ("trigger",Cmd_Trigger_f);
+	Cmd_AddCommand ("untrigger", Cmd_UnTrigger_f);
 	Cmd_AddCommand ("cmdlist",Cmd_List_f);
 	Cmd_AddCommand ("exec",Cmd_Exec_f);
 	Cmd_AddCommand ("echo",Cmd_Echo_f);

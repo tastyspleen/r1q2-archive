@@ -160,7 +160,7 @@ void EXPORT SV_UnlinkEdict (edict_t *ent)
 
 	if (!ent->area.prev)
 	{
-		if (ent->s.solid != SOLID_NOT)
+		if (ent->solid != SOLID_NOT)
 		{
 			if (sv_gamedebug->intvalue)
 			{
@@ -226,6 +226,19 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 	VectorSubtract (ent->maxs, ent->mins, ent->size);
 
 	edict_number = NUM_FOR_EDICT(ent);
+
+	//check the game dll didn't mix up s.solid / solid
+	if (sv_gamedebug->intvalue)
+	{
+		if (ent->s.solid == SOLID_BBOX || ent->s.solid == SOLID_BSP || ent->s.solid == SOLID_TRIGGER)
+		{
+			Com_Printf ("GAME WARNING: SV_LinkEdict: entity %d has unusual s.solid value, did you mean to assign to solid?\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number);
+
+			if (sv_gamedebug->intvalue >= 4)
+				Sys_DebugBreak ();
+		}
+	}
+
 	
 	// encode the size into the entity_state for client prediction
 	if (ent->solid == SOLID_BBOX && !((ent->svflags & SVF_DEADMONSTER) || (sv_new_entflags->intvalue && (ent->svflags & SVF_NOPREDICTION))))
@@ -285,9 +298,13 @@ void EXPORT SV_LinkEdict (edict_t *ent)
 
 			if (sv_gamedebug->intvalue && (float)k != ((ent->maxs[2]+32)/8))
 			{
-				Com_Printf ("GAME WARNING: Entity %d z bounding box maxs (%.2f) does not lie on a quantization boundary (%.2f != %.2f)\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number, ent->maxs[2], ((ent->maxs[2]+32)/8), (float)k);
-				if (sv_gamedebug->intvalue >= 5)
-					Sys_DebugBreak ();
+				//special hack to avoid spamming about crouched players
+				if (!(edict_number - 1 < maxclients->intvalue && ent->maxs[2] == 4.0f))
+				{
+					Com_Printf ("GAME WARNING: Entity %d z bounding box maxs (%.2f) does not lie on a quantization boundary (%.2f != %.2f)\n", LOG_SERVER|LOG_WARNING|LOG_GAMEDEBUG, edict_number, ent->maxs[2], ((ent->maxs[2]+32)/8), (float)k);
+					if (sv_gamedebug->intvalue >= 5)
+						Sys_DebugBreak ();
+				}
 			}
 
 			ent->s.solid = (k<<10) | (j<<5) | i;

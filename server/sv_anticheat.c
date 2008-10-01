@@ -818,12 +818,19 @@ static void SV_AntiCheat_ParseViolation (byte *buff, int bufflen)
 		}
 		else
 		{
+			int		method;
+
 			if (!cl->anticheat_valid)
 				return;
 
 			Com_Printf ("ANTICHEAT DISCONNECT: %s[%s] disconnected from anticheat server\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 
-			if (sv_anticheat_client_disconnect_action->intvalue == 1)
+			if (cl->anticheat_required == ANTICHEAT_REQUIRED)
+				method = sv_anticheat_forced_disconnect_action->intvalue;
+			else
+				method = sv_anticheat_client_disconnect_action->intvalue;
+
+			if (method == 1)
 			{
 				if (cl->state == cs_spawned)
 					SV_BroadcastPrintf (PRINT_HIGH, ANTICHEATMESSAGE " %s lost connection to anticheat server.\n", cl->name);

@@ -191,11 +191,15 @@ cvar_t	*sv_timescale_kick;
 cvar_t	*sv_timescale_skew_check;
 cvar_t	*sv_timescale_skew_kick;
 
+cvar_t	*sv_features;
+cvar_t	*g_features;
+
 #ifdef ANTICHEAT
 cvar_t	*sv_require_anticheat;
 cvar_t	*sv_anticheat_error_action;
 cvar_t	*sv_anticheat_message;
 cvar_t	*sv_anticheat_server_address;
+
 cvar_t	*sv_anticheat_badfile_action;
 cvar_t	*sv_anticheat_badfile_message;
 cvar_t	*sv_anticheat_badfile_max;
@@ -206,6 +210,7 @@ cvar_t	*sv_anticheat_nag_defer;
 
 cvar_t	*sv_anticheat_show_violation_reason;
 cvar_t	*sv_anticheat_client_disconnect_action;
+cvar_t	*sv_anticheat_forced_disconnect_action;
 
 cvar_t	*sv_anticheat_disable_play;
 cvar_t	*sv_anticheat_client_restrictions;
@@ -313,7 +318,7 @@ void SV_DropClient (client_t *drop, qboolean notify)
 		drop->messageListData = drop->msgListEnd = drop->msgListStart = NULL;
 	}
 
-	if (drop->state == cs_spawned)
+	if ((svs.game_features & GMF_WANT_ALL_DISCONNECTS) || drop->state == cs_spawned)
 	{
 		// call the prog function for removing a client
 		// this will remove the body, among other things
@@ -325,11 +330,7 @@ void SV_DropClient (client_t *drop, qboolean notify)
 #endif
 
 	//r1: fix for mods that don't clean score
-#ifdef ENHANCED_SERVER
-	((struct gclient_new_s *)(drop->edict->client))->ps.stats[STAT_FRAGS] = 0;
-#else
-	((struct gclient_old_s *)(drop->edict->client))->ps.stats[STAT_FRAGS] = 0;
-#endif
+	drop->edict->client->ps.stats[STAT_FRAGS] = 0;
 
 	drop->state = cs_zombie;
 	drop->name[0] = 0;
@@ -509,7 +510,7 @@ static const char *SV_StatusString (void)
 	client_t	*cl;
 	int		statusLength;
 	int		playerLength;
-//	player_state_new	*ps;
+//	player_state_t	*ps;
 
 	serverinfo = Cvar_Serverinfo();
 
@@ -654,13 +655,9 @@ static const char *SV_StatusString (void)
 			cl = &svs.clients[i];
 			if (cl->state >= cs_connected)
 			{
-	#ifdef ENHANCED_SERVER
-					Com_sprintf (player, sizeof(player), "%i %i \"%s\"\n", 
-						((struct gclient_new_s *)(cl->edict->client))->ps.stats[STAT_FRAGS], cl->ping, cl->name);
-	#else
-					Com_sprintf (player, sizeof(player), "%i %i \"%s\"\n", 
-						((struct gclient_old_s *)(cl->edict->client))->ps.stats[STAT_FRAGS], cl->ping, cl->name);
-	#endif
+				Com_sprintf (player, sizeof(player), "%i %i \"%s\"\n", 
+						cl->edict->client->ps.stats[STAT_FRAGS], cl->ping, cl->name);
+
 				playerLength = (int)strlen(player);
 				if (statusLength + playerLength >= sizeof(status) )
 					break;		// can't hold any more
@@ -2254,11 +2251,7 @@ static void SV_CalcPings (void)
 		}
 
 		// let the game dll know about the ping
-#ifdef ENHANCED_SERVER
-		((struct gclient_new_s *)(cl->edict->client))->ping = cl->ping;
-#else
-		((struct gclient_old_s *)(cl->edict->client))->ping = cl->ping;
-#endif
+		cl->edict->client->ping = cl->ping;
 	}
 }
 
@@ -3552,6 +3545,12 @@ void SV_Init (void)
 	sv_timescale_skew_kick = Cvar_Get ("sv_timescale_skew_kick", "0", 0);
 	sv_timescale_skew_kick->help = "Kick clients that exhibit sudden time skew exeeding this many milliseconds. Default 0.\n";
 
+	sv_features = Cvar_Get ("sv_features", va("%d", GMF_CLIENTNUM | GMF_WANT_ALL_DISCONNECTS | GMF_PROPERINUSE), CVAR_NOSET);
+	sv_features->help = "Read-only bitmask of extended server features for the Game DLL. Do not modify.\n";
+
+	g_features = Cvar_Get ("g_features", "0", CVAR_NOSET);
+	g_features->help = "Read-only bitmask of extended game features for the server. Do not modify.\n";
+
 #ifdef ANTICHEAT
 	sv_require_anticheat = Cvar_Get ("sv_anticheat_required", "0", CVAR_LATCH);
 	sv_require_anticheat->help = "Require use of the r1ch.net anticheat module by players. Default 0.\n0: Don't require any anticheat module.\n1: Optionally use the anticheat module.\n2: Require the anticheat module.\n";
@@ -3594,6 +3593,9 @@ void SV_Init (void)
 
 	sv_anticheat_client_disconnect_action = Cvar_Get ("sv_anticheat_client_disconnect_action", "0", 0);
 	sv_anticheat_client_disconnect_action->help = "Action to take when a client disconnects from the anticheat server mid-game. Default 0.\n0: Mark client as invalid.\n1: Kick client.\n";
+
+	sv_anticheat_forced_disconnect_action = Cvar_Get ("sv_anticheat_forced_disconnect_action", "0", 0);
+	sv_anticheat_forced_disconnect_action->help = "Action to take when a forced anticheat client disconnects from the anticheat server mid-game. Default 0.\n0: Mark client as invalid.\n1: Kick client.\n";
 
 	sv_anticheat_disable_play = Cvar_Get ("sv_anticheat_disable_play", "0", 0);
 	sv_anticheat_disable_play->help = "Disable the use of the 'play' command if a player is using anticheat. default 0.\n";

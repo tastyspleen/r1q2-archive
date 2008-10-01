@@ -501,9 +501,6 @@ enum clc_ops_e
 #define	U_SOUND		(1<<26)
 #define	U_SOLID		(1<<27)
 
-#if ENHANCED_SERVER || BUILDING_CLIENT
-#define U_VELOCITY	(1<<28)
-#endif
 //#define	U_COPYOLD	(1<<29)
 /*
 ==============================================================
@@ -625,6 +622,7 @@ void	Cmd_ForwardToServer (void);
 // things like godmode, noclip, etc, are commands directed to the server,
 // so when they are typed in at the console, they will need to be forwarded.
 
+void Cmd_ExecTrigger (char *string);
 
 /*
 ==============================================================
@@ -980,6 +978,8 @@ void	FS_CreatePath (char *path);
 
 int		Sys_FileLength (const char *path);
 qboolean Sys_CheckFPUStatus (void);
+void Sys_ShellExec (const char *cmd);
+void Sys_UpdateURLMenu (const char *s);
 /*
 ==============================================================
 
@@ -1058,6 +1058,7 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CMD,
 	TAGMALLOC_LOADMAP,
 	TAGMALLOC_ALIAS,
+	TAGMALLOC_TRIGGER,
 	TAGMALLOC_CVAR,
 	TAGMALLOC_FSCACHE,
 	TAGMALLOC_FSLOADFILE,

@@ -128,7 +128,7 @@ typedef struct
 {
 	int					areabytes;
 	byte				areabits[MAX_MAP_AREAS/8];		// portalarea visibility bits
-	player_state_new 	ps;
+	player_state_t 	ps;
 	int					num_entities;
 	int					first_entity;		// into the circular sv_packet_entities[]
 	int					senttime;			// for ping calculations
@@ -338,6 +338,8 @@ typedef struct
 #endif
 
 	sventity_t			entities[MAX_EDICTS];
+
+	int					game_features;
 } server_static_t;
 
 extern	cvar_t	*sv_ratelimit_status;
@@ -743,7 +745,7 @@ extern cvar_t	*sv_anticheat_nag_defer;
 
 extern cvar_t	*sv_anticheat_show_violation_reason;
 extern cvar_t	*sv_anticheat_client_disconnect_action;
-
+extern cvar_t	*sv_anticheat_forced_disconnect_action;
 extern cvar_t	*sv_anticheat_disable_play;
 extern cvar_t	*sv_anticheat_client_restrictions;
 extern cvar_t	*sv_anticheat_force_protocol35;
@@ -786,3 +788,18 @@ extern const char *anticheat_client_names[];
 
 void SV_ClientBegin (client_t *cl);
 void SV_SendPlayerUpdates (int msec_to_next_frame);
+
+extern cvar_t	*g_features;
+
+// server is able to read clientNum field from gclient_s struct and hide appropriate entity from client
+// game DLL fills clientNum with useful information (current POV index)
+#define GMF_CLIENTNUM   1
+
+// game DLL always sets 'inuse' flag properly allowing the server to reject entities quickly
+#define GMF_PROPERINUSE 2
+
+// server will set '\mvdspec\<version>' key/value pair in userinfo string if (and only if) client is dummy MVD client (this client represents all MVD spectators and is needed for scoreboard support, etc)
+#define GMF_MVDSPEC     4
+
+// inform game DLL of disconnects between level changes
+#define GMF_WANT_ALL_DISCONNECTS 8

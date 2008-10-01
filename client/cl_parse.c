@@ -1117,10 +1117,111 @@ static void CL_ParseSetting (void)
 		CL_ServerFPSChanged ();
 }
 
+static void CL_CheckForIP (const char *s)
+{
+	unsigned int	ip1, ip2, ip3, ip4;
+	unsigned int	port;
+
+	port = 0;
+
+	while (s[0])
+	{
+		if (sscanf (s, "%u.%u.%u.%u", &ip1, &ip2, &ip3, &ip4) == 4)
+		{
+			if (ip1 < 256 && ip2 < 256 && ip3 < 256 && ip4 < 256)
+			{
+				const char *p;
+				p = strrchr (s, ':');
+
+				if (p)
+				{
+					p++;
+					port = strtoul (p, NULL, 10);
+					if (port <= 1024 || port > 65535)
+						break;
+				}
+
+				if (port == 0)
+					port = PORT_SERVER;
+
+				Com_sprintf (cls.followHost, sizeof(cls.followHost), "%u.%u.%u.%u:%u", ip1, ip2, ip3, ip4, port);
+				break;
+			}
+		}
+		s++;
+	}
+}
+
+static void CL_CheckForURL (const char *s)
+{
+	char *p;
+
+	p = strstr (s, "http://");
+	if (p)
+	{
+		strncpy (cls.followURL, p, sizeof(cls.followURL)-1);
+		StripHighBits (cls.followURL, 1);
+		p = strchr (cls.followURL, ' ');
+		if (p)
+			p[0] = '\0';
+
+		Sys_UpdateURLMenu (cls.followURL);
+	}
+}
+
 void SHOWNET(const char *s)
 {
 	if (cl_shownet->intvalue>=2)
 		Com_Printf ("%3i:%s\n", LOG_CLIENT, net_message.readcount-1, s);
+}
+
+void CL_ParsePrint (void)
+{
+	int		i;
+	char	*s;
+
+	i = MSG_ReadByte (&net_message);
+	s = MSG_ReadString (&net_message);
+
+	if (i == PRINT_CHAT)
+	{
+		if (CL_IgnoreMatch (s))
+			return;
+
+		S_StartLocalSound ("misc/talk.wav");
+		if (cl_filterchat->intvalue)
+		{
+			StripHighBits(s, (int)cl_filterchat->intvalue == 2);
+			strcat (s, "\n");
+		}
+		con.ormask = 128;
+
+		CL_CheckForIP (s);
+		CL_CheckForURL (s);
+		SCR_AddChatMessage (s);
+
+		//r1: change !p_version to !version since p is for proxies
+		if ((strstr (s, "!r1q2_version") || strstr (s, "!version")) &&
+			(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
+			cls.spamTime = cls.realtime + (int)(random() * 1500);
+
+		Com_Printf ("%s", LOG_CLIENT|LOG_CHAT, s);
+	}
+	else
+	{
+		int		len;
+
+		Com_Printf ("%s", LOG_CLIENT, s);
+
+		//strip newline for trigger match
+		len = strlen(s);
+		if (s[len-1] == '\n')
+			s[len-1] = '\0';
+
+		Cmd_ExecTrigger (s); //Triggers
+	}
+	
+	con.ormask = 0;
 }
 
 /*
@@ -1132,7 +1233,7 @@ qboolean CL_ParseServerMessage (void)
 {
 	int			cmd, extrabits;
 	char		*s;
-	int			i, oldReadCount;
+	int			oldReadCount;
 	qboolean	gotFrame, ret;
 
 //
@@ -1218,20 +1319,8 @@ qboolean CL_ParseServerMessage (void)
 			break;
 			
 		case svc_disconnect:
-			//uuuuugly...
-			/*if (cls.serverProtocol != PROTOCOL_ORIGINAL && !cl.attractloop && cls.realtime - cls.connect_time < 30000)
-			{
-				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", LOG_CLIENT);
-				CL_Disconnect(false);
-				cls.serverProtocol = PROTOCOL_ORIGINAL;
-				CL_Reconnect_f ();
-				return;
-			}
-			else*/
 			CL_WriteDemoMessage (net_message.data + oldReadCount, net_message.readcount - oldReadCount, false);
-			{
-				Com_Error (ERR_DISCONNECT, "Server disconnected\n");
-			}
+			Com_Error (ERR_DISCONNECT, "Server disconnected\n");
 			break;
 
 		case svc_reconnect:
@@ -1252,49 +1341,9 @@ qboolean CL_ParseServerMessage (void)
 			break;
 
 		case svc_print:
-			i = MSG_ReadByte (&net_message);
-			s = MSG_ReadString (&net_message);
+			CL_ParsePrint ();
 			CL_WriteDemoMessage (net_message.data + oldReadCount, net_message.readcount - oldReadCount, false);
-			if (i == PRINT_CHAT)
-			{
-				if (CL_IgnoreMatch (s))
-					break;
-
-				S_StartLocalSound ("misc/talk.wav");
-				if (cl_filterchat->intvalue)
-				{
-					StripHighBits(s, (int)cl_filterchat->intvalue == 2);
-					strcat (s, "\n");
-				}
-				con.ormask = 128;
-
-				SCR_AddChatMessage (s);
-
-				//r1: change !p_version to !version since p is for proxies
-				if ((strstr (s, "!r1q2_version") || strstr (s, "!version")) &&
-					(cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 300000))
-					cls.spamTime = cls.realtime + (int)(random() * 1500);
-			}
-
-			// for getting debug info overnight :)
-/*#ifdef _DEBUG
-			{
-				char *p;
-				p = strstr (s, "was machinegunned by ");
-				if (p)
-				{
-					char *q;
-					p += 21;
-					q = strstr (p, ".");
-					if (q) *q = 0;
-					Cbuf_AddText ("chase ");
-					Cbuf_AddText (p);
-					Cbuf_AddText ("\n");
-				}
-			}
-#endif*/
-			Com_Printf ("%s", LOG_CLIENT|LOG_CHAT, s);
-			con.ormask = 0;
+			
 			break;
 
 		case svc_stufftext:

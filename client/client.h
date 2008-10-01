@@ -64,7 +64,7 @@ typedef struct
 	int				servertime;		// server time the message is valid for (in msec)
 	int				deltaframe;
 	byte			areabits[MAX_MAP_AREAS/8];		// portalarea visibility bits
-	player_state_new	playerstate;
+	player_state_t	playerstate;
 	int				num_entities;
 	int				parse_entities;	// non-masked index into cl_parse_entities array
 } frame_t;
@@ -386,6 +386,9 @@ typedef struct client_static_s
 	char			downloadServer[512];	//base url prefix to download from
 	char			downloadReferer[32];	//libcurl requires a static string :(
 #endif
+
+	char			followHost[32];
+	char			followURL[1024];
 } client_static_t;
 
 extern client_static_t	cls;

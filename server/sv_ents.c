@@ -229,11 +229,6 @@ void SV_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to, 
 		}
 	}
 
-#ifdef ENHANCED_SERVER
-	if (!VectorCompare (to->velocity, from->velocity) && cl_protocol == PROTOCOL_R1Q2)
-		bits |= U_VELOCITY;
-#endif
-
 	//
 	// write the message
 	//
@@ -344,15 +339,6 @@ void SV_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to, 
 		else
 			MSG_WriteShort (to->solid);
 	}
-
-#ifdef ENHANCED_SERVER
-	if (bits & U_VELOCITY)
-	{
-		MSG_WriteCoord (to->velocity[0]);
-		MSG_WriteCoord (to->velocity[1]);
-		MSG_WriteCoord (to->velocity[2]);
-	}
-#endif
 }
 
 /*
@@ -485,12 +471,12 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 {
 	int							i;
 	int							pflags;
-	static player_state_new		null_playerstate;
+	static player_state_t		null_playerstate;
 	int							statbits;
 	int							extraflags;
 	qboolean					enhanced;
-	player_state_new			*ps;
-	const player_state_new		*ops;
+	player_state_t			*ps;
+	const player_state_t		*ops;
 	qboolean					needViewAngleDeltas;
 
 	ps = &to->ps;
@@ -772,12 +758,6 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 #endif
 	}
 
-	//only possibly send bbox if the client supports it AND the game is supposed to send it
-#ifdef ENHANCED_SERVER
-	if (client->protocol == PROTOCOL_R1Q2 && (!VectorCompare (ps->mins, ops->mins) || !VectorCompare (ps->maxs, ops->maxs)))
-		pflags |= PS_BBOX;
-#endif
-
 	if (ps->gunindex != ops->gunindex)
 	{
 		if (!client->settings[CLSET_NOGUN] || client->settings[CLSET_RECORDING])
@@ -807,6 +787,8 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 #endif
 	}
 #endif
+
+	Com_DPrintf ("pflagss = %d\n", pflags);
 
 	MSG_WriteShort (pflags);
 
@@ -945,7 +927,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	if (pflags & PS_RDFLAGS)
 		MSG_WriteByte (ps->rdflags);
 
-	if (pflags & PS_BBOX)
+	/*if (pflags & PS_BBOX)
 	{
 		int j, k;
 		int solid;
@@ -973,7 +955,7 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 		solid = (k<<10) | (j<<5) | i;
 
 		MSG_WriteShort (solid);
-	}
+	}*/
 
 	// send stats
 	statbits = 0;
@@ -1264,18 +1246,13 @@ static qboolean SV_CheckPlayerVisible(vec3_t Angles, vec3_t start, const edict_t
 	
 	if ( predictEnt && ent->client ) {
 		for (i = 0; i < 3; i++)
-
-#ifdef ENHANCED_SERVER
-			entOrigin[i] += ((struct gclient_old_s *)(ent->client))->ps.pmove.velocity[i] * 0.125f * 0.15f;
-#else
-			entOrigin[i] += ((struct gclient_old_s *)(ent->client))->ps.pmove.velocity[i] * 0.125f * 0.15f;
-#endif
-
+			entOrigin[i] += ent->client->ps.pmove.velocity[i] * 0.125f * 0.15f;
 	}
 
 	FastVectorCopy (entOrigin, ends[0]);
 
-	if ( fullCheck ) {
+	if ( fullCheck )
+	{
 		vec3_t	right, up;
 
 		for (i = 1; i < 9; i++)
@@ -1357,7 +1334,7 @@ void SV_BuildClientFrame (client_t *client)
 	// ***********  NiceAss End  ************
 
 	//union player_state_t	*hax;
-	//player_state_new		*ps;
+	//player_state_t		*ps;
 
 	clent = client->edict;
 	if (!clent->client)
@@ -1379,17 +1356,14 @@ void SV_BuildClientFrame (client_t *client)
 	//hax = &clent->client->ps;
 
 	
-	//	ps = (player_state_new *)&hax->new_ps;
+	//	ps = (player_state_t *)&hax->new_ps;
 	//else
-	//	ps = (player_state_new *)&hax->old_ps;
+	//	ps = (player_state_t *)&hax->old_ps;
 
 	// find the client's PVS
-	for (i=0 ; i<3 ; i++) {
-#ifdef ENHANCED_SERVER
-			org[i] = ((struct gclient_new_s *)(clent->client))->ps.pmove.origin[i]*0.125 + ((struct gclient_new_s *)(clent->client))->ps.viewoffset[i];
-#else
-			org[i] = ((struct gclient_old_s *)(clent->client))->ps.pmove.origin[i]*0.125f + ((struct gclient_old_s *)(clent->client))->ps.viewoffset[i];
-#endif
+	for (i=0 ; i<3 ; i++)
+	{
+			org[i] = clent->client->ps.pmove.origin[i]*0.125f + clent->client->ps.viewoffset[i];
 	}
 
 	leafnum = CM_PointLeafnum (org);
@@ -1400,11 +1374,7 @@ void SV_BuildClientFrame (client_t *client)
 	frame->areabytes = CM_WriteAreaBits (frame->areabits, clientarea);
 
 	// grab the current player_state_t
-#ifdef ENHANCED_SERVER
-		frame->ps = ((struct gclient_new_s *)(clent->client))->ps;
-#else
-		memcpy (&frame->ps, &((struct gclient_new_s *)(clent->client))->ps, sizeof(player_state_old));
-#endif
+	frame->ps = clent->client->ps;
 
 	SV_FatPVS (org);
 	clientphs = CM_ClusterPHS (clientcluster);
@@ -1422,6 +1392,15 @@ void SV_BuildClientFrame (client_t *client)
 		// ignore ents without visible models
 		if (ent->svflags & SVF_NOCLIENT)
 			continue;
+
+		visible = true;
+
+		if (svs.game_features & GMF_CLIENTNUM)
+		{
+			//send player to himself when he's current POV, but not otherwise
+			if (e == client->edict->client->clientNum + 1 && clent != ent)
+				visible = false;
+		}
 
 		// ignore ents without visible models unless they have an effect
 		if (!ent->s.modelindex && !ent->s.effects && !ent->s.sound
@@ -1503,17 +1482,14 @@ void SV_BuildClientFrame (client_t *client)
 			}
 		}
 
-		if (sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP && ent->solid != SOLID_TRIGGER)
+		if (visible && sv_nc_visibilitycheck->intvalue && !(sv_nc_clientsonly->intvalue && !ent->client) && ent->solid != SOLID_BSP && ent->solid != SOLID_TRIGGER)
 		{
 			// *********** NiceAss Start ************
 			FastVectorCopy (org, start);
-#ifdef ENHANCED_SERVER
-			visible = SV_CheckPlayerVisible(((struct gclient_new_s *)(clent->client))->ps.viewangles, start, ent, true, false);
-#else
-			visible = SV_CheckPlayerVisible(((struct gclient_old_s *)(clent->client))->ps.viewangles, start, ent, true, false);
-#endif
+			visible = SV_CheckPlayerVisible (clent->client->ps.viewangles, start, ent, true, false);
 		
-			if (!visible) {
+			if (!visible)
+			{
 				FastVectorCopy (org, start);
 
 				// If the first direct check didn't see the player, check a little ahead
@@ -1521,30 +1497,18 @@ void SV_BuildClientFrame (client_t *client)
 				// This will compensate for clients predicting where they will be due to lag
 				// (cl_predict)
 				for (i = 0; i < 3; i++)
-#ifdef ENHANCED_SERVER
-					start[i] += ((struct gclient_new_s *)(clent->client))->ps.pmove.velocity[i] * 0.125f * ( 0.15f + (float)((struct gclient_new_s *)(clent->client))->ping * 0.001f );
-#else
-					start[i] += ((struct gclient_old_s *)(clent->client))->ps.pmove.velocity[i] * 0.125f * ( 0.15f + (float)((struct gclient_old_s *)(clent->client))->ping * 0.001f );
-#endif
+					start[i] += clent->client->ps.pmove.velocity[i] * 0.125f * ( 0.15f + (float)clent->client->ping * 0.001f );
 					
+				visible = SV_CheckPlayerVisible (clent->client->ps.viewangles, start, ent, false, true);
 
-#ifdef ENHANCED_SERVER
-			visible = SV_CheckPlayerVisible(((struct gclient_new_s *)(clent->client))->ps.viewangles, start, ent, false, true);
-#else
-			visible = SV_CheckPlayerVisible(((struct gclient_old_s *)(clent->client))->ps.viewangles, start, ent, false, true);
-#endif
-
-				if ( !visible ) {
+				if ( !visible )
+				{
 					FastVectorCopy (org, start);
 					// If the first/second direct check didn't see the player, check a little above
 					// of yourself based on your current velocity. This will compensate for
 					// clients predicting where they will be due to lag (cl_predict)
 					start[2] += ent->maxs[2];
-#ifdef ENHANCED_SERVER
-					visible = SV_CheckPlayerVisible(((struct gclient_new_s *)(clent->client))->ps.viewangles, start, ent, false, true);
-#else
-					visible = SV_CheckPlayerVisible(((struct gclient_old_s *)(clent->client))->ps.viewangles, start, ent, false, true);
-#endif
+					visible = SV_CheckPlayerVisible (clent->client->ps.viewangles, start, ent, false, true);
 				}
 			}
 
@@ -1557,11 +1521,8 @@ void SV_BuildClientFrame (client_t *client)
 			if (!visible && sv_nc_visibilitycheck->intvalue == 1 &&
 				!ent->s.effects && !ent->s.sound && !ent->s.event && !client->entity_events[e])
 				continue;
-		} else {
-			visible = true;
 		}
 		// ***********  NiceAss End  ************
-
 
 		// add it to the circular client_entities array
 		state = &svs.client_entities[svs.next_client_entities%svs.num_client_entities];
@@ -1588,7 +1549,8 @@ void SV_BuildClientFrame (client_t *client)
 		// *********** NiceAss Start ************
 		// Send the entity, but don't associate a model with it. Less secure than sv_nc_visibilitycheck 2
 		// but you can hear footsteps. Default functionality.
-		if (!visible && sv_nc_visibilitycheck->intvalue == 1) {
+		if (!visible)
+		{
 			// Remove any model associations. Invisible.
 			state->modelindex = state->modelindex2 = state->modelindex3 = state->modelindex4 = 0;
 	

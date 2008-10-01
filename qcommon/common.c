@@ -143,6 +143,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CMD, "CMD", 0},
 	{TAGMALLOC_LOADMAP, "LOADMAP", 0},
 	{TAGMALLOC_ALIAS, "ALIAS", 0},
+	{TAGMALLOC_TRIGGER, "TRIGGER", 0},
 	{TAGMALLOC_CVAR, "CVAR", 0},
 	{TAGMALLOC_FSCACHE, "FSCACHE", 0},
 	{TAGMALLOC_FSLOADFILE, "FSLOADFILE", 0},
@@ -1847,6 +1848,15 @@ RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 		tagmalloc_tags[tag].allocs++;
 
 	z_bytes += size;
+
+#if defined _WIN32
+	z->allocationLocation = _ReturnAddress ();
+#elif defined LINUX
+	z->allocationLocation = __builtin_return_address (0);
+#else
+	//FIXME: other OSes/CCs
+	z->allocationLocation = 0;
+#endif
 
 	z->magic = Z_MAGIC;
 	z->tag = tag;

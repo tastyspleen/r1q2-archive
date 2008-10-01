@@ -192,6 +192,8 @@ unsigned int __stdcall png_write_thread (byte *buffer)
 	png_write_info(png_ptr, info_ptr);
 
 	row_pointers = malloc(vid.height * sizeof(png_bytep));
+	if (!row_pointers)
+		ri.Sys_Error (ERR_FATAL, "png_write_thread: out of memory");
 
 	for (k = 0; k < vid.height; k++)
 		row_pointers[k] = buffer + (vid.height-1-k)*3*vid.width;

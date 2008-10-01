@@ -1134,6 +1134,11 @@ static int EXPORT pakcmp (const void *a, const void *b)
 	return -1;
 }
 
+static int EXPORT filecmp (const void *a, const void *b)
+{
+   return strcmp (*(char**)a, *(char**)b);
+}
+
 static void FS_LoadPaks (const char *dir, const char *ext)
 {
 	int				i;
@@ -1186,7 +1191,7 @@ static void FS_LoadPaks (const char *dir, const char *ext)
 	Sys_FindClose ();
 
 	//sort for filenames designed to override earlier pak files
-	qsort (filenames, total, sizeof(filenames[0]), (int (EXPORT *)(const void *, const void *))strcmp);
+	qsort (filenames, total, sizeof(filenames[0]), filecmp);
 	qsort (pakfiles, totalpaks, sizeof(pakfiles[0]), pakcmp);
 
 	//r1: load pak*.pak first

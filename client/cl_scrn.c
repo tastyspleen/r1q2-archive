@@ -67,6 +67,7 @@ cvar_t		*scr_chathud_colored;
 cvar_t		*scr_chathud_x;
 cvar_t		*scr_chathud_y;
 cvar_t		*scr_chathud_highlight;
+cvar_t		*scr_chathud_highlight_char;
 
 typedef struct
 {
@@ -241,6 +242,7 @@ for a few moments
 */
 void SCR_CenterPrint (char *str)
 {
+	int			len;
 	char		*s;
 	qboolean	itsTheSameAsBefore;
 
@@ -276,6 +278,13 @@ void SCR_CenterPrint (char *str)
 		}*/
 		Com_Printf ("%s\n", LOG_CLIENT, str);
 	}
+
+	//strip newline for trigger match
+	len = strlen(str);
+	if (str[len-1] == '\n')
+		str[len-1] = '\0';
+
+	Cmd_ExecTrigger (str); //Triggers
 
 	/*s = str;
 	do	
@@ -573,7 +582,7 @@ void SCR_AddChatMessage (const char *chat)
 			if (scr_chathud_highlight->intvalue & 4)
 				length++;
 
-			if (scr_chathud_highlight->intvalue & 2)
+			if (!(scr_chathud_highlight->intvalue & 2))
 			{
 				length += bestoffset;
 				start = 0;
@@ -583,6 +592,13 @@ void SCR_AddChatMessage (const char *chat)
 				start = bestoffset;
 			}
 
+			if (scr_chathud_highlight_char->string[0])
+			{
+				char *p = strchr (tempchat + start + length, scr_chathud_highlight_char->string[0]);
+				if (p)
+					length += p - (tempchat + start + length); 
+			}
+
 			if (scr_chathud_colored->intvalue)
 			{
 				for (j = start; j < start + length; j++)
@@ -590,7 +606,7 @@ void SCR_AddChatMessage (const char *chat)
 			}
 			else
 			{
-				for (j = start; j < length; j++)
+				for (j = start; j < start + length; j++)
 					tempchat[j] |= 128;
 			}
 		}
@@ -665,6 +681,7 @@ void SCR_Init (void)
 	scr_chathud_x = Cvar_Get ("scr_chathud_x", "0", 0);
 	scr_chathud_y = Cvar_Get ("scr_chathud_y", "0", 0);
 	scr_chathud_highlight = Cvar_Get ("scr_chathud_highlight", "0", 0);
+	scr_chathud_highlight_char = Cvar_Get ("scr_chathud_highlight_char", " ", 0);
 
 	scr_chathud_lines->changed = SCR_Chathud_Changed;
 	scr_chathud_lines->changed (scr_chathud_lines, scr_chathud_lines->string, scr_chathud_lines->string);

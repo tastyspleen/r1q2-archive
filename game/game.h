@@ -39,11 +39,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // game.h -- game dll information visible to server
 
-#ifdef ENHANCED_SERVER
-#define	GAME_API_VERSION			4
-#else
 #define GAME_API_VERSION			3
-#endif
 
 //#define	GAME_API_VERSION_ENHANCED	4
 // edict->svflags
@@ -76,31 +72,24 @@ typedef struct link_s
 
 #define	MAX_ENT_CLUSTERS	16
 
-
 typedef struct edict_s edict_t;
 
 #ifndef GAME_INCLUDE
 
-struct gclient_old_s
+struct gclient_s
 {
-	player_state_old	ps;		// communicated by server to clients
+	player_state_t		ps;		// communicated by server to clients
 	int					ping;
-	// the game dll can add anything it wants after
-	// this point in the structure
-};
 
-struct gclient_new_s
-{
-	player_state_new	ps;		// communicated by server to clients
-	int					ping;
 	// the game dll can add anything it wants after
 	// this point in the structure
+	int					clientNum;	//ONLY read if game dll gives permission through QUAKE2_GAME_FEATURES env var. current "pov" client to hide.
 };
 
 struct edict_s
 {
 	entity_state_t	s;
-	void		*client;
+	struct gclient_s	*client;
 	qboolean	inuse;
 	int			linkcount;
 
@@ -127,7 +116,7 @@ struct edict_s
 
 #else
 
-typedef player_state_old player_state_t;
+typedef struct player_state_s player_state_t;
 typedef struct gclient_s gclient_t;
 
 #endif		// GAME_INCLUDE

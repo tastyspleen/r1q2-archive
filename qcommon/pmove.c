@@ -1149,7 +1149,7 @@ static void PM_SnapPosition (void)
 	int		i, j, bits;
 	int16	base[3];
 	// try all single bits first
-	static int jitterbits[8] = {0,4,1,2,3,5,6,7};
+	const static int jitterbits[8] = {0,4,1,2,3,5,6,7};
 
 	// snap velocity to eigths
 	pm->s.velocity[0] = (int)(pml.velocity[0]*8);
@@ -1242,17 +1242,21 @@ static void PM_InitialSnapPosition(void)
 {
 	int        x, y, z;
 	int16      base[3];
-	static int offset[3] = { 0, -1, 1 };
+	const static int offset[3] = { 0, -1, 1 };
 
 	VectorCopy (pm->s.origin, base);
 
-	for ( z = 0; z < 3; z++ ) {
+	for ( z = 0; z < 3; z++ )
+	{
 		pm->s.origin[2] = base[2] + offset[ z ];
-		for ( y = 0; y < 3; y++ ) {
+		for ( y = 0; y < 3; y++ )
+		{
 			pm->s.origin[1] = base[1] + offset[ y ];
-			for ( x = 0; x < 3; x++ ) {
+			for ( x = 0; x < 3; x++ )
+			{
 				pm->s.origin[0] = base[0] + offset[ x ];
-				if (PM_GoodPosition ()) {
+				if (PM_GoodPosition ())
+				{
 					pml.origin[0] = pm->s.origin[0]*0.125f;
 					pml.origin[1] = pm->s.origin[1]*0.125f;
 					pml.origin[2] = pm->s.origin[2]*0.125f;

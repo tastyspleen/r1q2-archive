@@ -2153,6 +2153,42 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
+void Sys_ShellExec (const char *cmd)
+{
+	HMODULE shell;
+	shell = LoadLibrary ("SHELL32");
+	if (shell)
+	{
+		SHELLEXECUTEA fncOpen = (SHELLEXECUTEA)GetProcAddress (shell, "ShellExecuteA");
+		if (fncOpen)
+            fncOpen (NULL, NULL, cmd, NULL, NULL, SW_SHOWDEFAULT);
+
+		FreeLibrary (shell);
+	}
+}
+
+#ifndef DEDICATED_ONLY
+void Sys_UpdateURLMenu (const char *s)
+{
+	HMENU	menu;
+	CHAR	title[80];
+	CHAR	*dots;
+
+	GetSystemMenu (cl_hwnd, TRUE);
+
+	if (strlen (s) > 64)
+		dots = "...";
+	else
+		dots = "";
+
+	Com_sprintf (title, sizeof(title), "Open \"%.64s%s\"", s, dots);
+
+	menu = GetSystemMenu (cl_hwnd, FALSE);
+	InsertMenu (menu, 0,  MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
+	InsertMenu (menu, 0,  MF_BYPOSITION, 1234, title);
+}
+#endif
+
 const __int64 nano100SecInWeek= (__int64)10000000*60*60*24*7;
 const __int64 nano100SecInDay = (__int64)10000000*60*60*24;
 const __int64 nano100SecInHour= (__int64)10000000*60*60;

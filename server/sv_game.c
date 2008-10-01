@@ -758,6 +758,9 @@ void SV_ShutdownGameProgs (void)
 	Sys_UnloadGame ();
 	ge = NULL;
 
+	Cvar_ForceSet ("g_features", "0");
+	svs.game_features = 0;
+
 	//r1: check all memory from game was cleaned.
 	Z_CheckGameLeaks();
 }
@@ -947,6 +950,18 @@ void SV_InitGameProgs (void)
 	ge->Init ();
 	if (!ge->edicts)
 		Com_Error (ERR_HARD, "Game failed to initialize globals.edicts");
+
+	if (g_features->intvalue)
+	{
+		svs.game_features = g_features->intvalue;
+		Com_Printf ("Extended game features enabled:%s%s%s%s\n", LOG_SERVER,
+			svs.game_features & GMF_CLIENTNUM ? " GMF_CLIENTNUM" : "", 
+			svs.game_features & GMF_WANT_ALL_DISCONNECTS ? " GMF_WANT_ALL_DISCONNECTS" : "", 
+			svs.game_features & GMF_PROPERINUSE ? " GMF_PROPERINUSE" : "", 
+			svs.game_features & GMF_MVDSPEC ? " GMF_MVDSPEC" : "");
+	}
+	else
+		svs.game_features = 0;
 
 	memset (&svs.entities, 0, sizeof(svs.entities));
 

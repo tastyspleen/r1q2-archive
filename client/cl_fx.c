@@ -243,7 +243,7 @@ CL_ParseMuzzleFlash
 */
 void CL_ParseMuzzleFlash (void)
 {
-	vec3_t		fv, rv;
+	vec3_t		fv, rv, base_origin;
 	cdlight_t	*dl;
 	int			i, weapon;
 	centity_t	*pl;
@@ -263,7 +263,8 @@ void CL_ParseMuzzleFlash (void)
 
 	dl = CL_AllocDlight (i, true);
 	//VectorCopy (pl->current.origin,  dl->origin);
-	CL_GetEntityOrigin (i, dl->origin);
+	CL_GetEntityOrigin (i, base_origin);
+	FastVectorCopy (base_origin, dl->origin);
 	AngleVectors (pl->current.angles, fv, rv, NULL);
 	VectorMA (dl->origin, 18, fv, dl->origin);
 	VectorMA (dl->origin, 16, rv, dl->origin);
@@ -356,19 +357,19 @@ void CL_ParseMuzzleFlash (void)
 		dl->color[0] = 0;dl->color[1] = 1; dl->color[2] = 0;
 		dl->die = cl.time + 1;
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/grenlf1a.wav"), 1, ATTN_NORM, 0);
-		CL_LogoutEffect (pl->current.origin, weapon);
+		CL_LogoutEffect (base_origin, weapon);
 		break;
 	case MZ_LOGOUT:
 		dl->color[0] = 1;dl->color[1] = 0; dl->color[2] = 0;
 		dl->die = cl.time + 1;
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/grenlf1a.wav"), 1, ATTN_NORM, 0);
-		CL_LogoutEffect (pl->current.origin, weapon);
+		CL_LogoutEffect (base_origin, weapon);
 		break;
 	case MZ_RESPAWN:
 		dl->color[0] = 1;dl->color[1] = 1; dl->color[2] = 0;
 		dl->die = cl.time + 1;
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/grenlf1a.wav"), 1, ATTN_NORM, 0);
-		CL_LogoutEffect (pl->current.origin, weapon);
+		CL_LogoutEffect (base_origin, weapon);
 		break;
 	// RAFAEL
 	case MZ_PHALANX:

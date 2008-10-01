@@ -562,9 +562,18 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_SYSCOMMAND:
+
 		if ( wParam == SC_SCREENSAVE )
 			return 0;
+
+		if ( wParam == 1234)
+		{
+			Sys_ShellExec (cls.followURL);
+			return 0;
+		}
+
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
+
 	case WM_SYSKEYDOWN:
 		if ( wParam == 13 )
 		{

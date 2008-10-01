@@ -46,8 +46,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 #endif
 
-//#define ENHANCED_SERVER 1
-
 // q_shared.h -- included first by ALL program modules
 
 #ifdef _WIN32
@@ -451,6 +449,11 @@ const char *COM_Parse (char **data_p);
 int Com_sprintf (char /*@out@*/*dest, int size, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 
 void Com_PageInMemory (byte *buffer, int size);
+
+int wildcardfit (char *wildcard, char *test);
+/* this function implements the UN*X wildcards and returns  */
+/* 0  if *wildcard does not match *test                     */
+/* 1  if *wildcard matches *test                            */
 
 #ifdef ANTICHEAT
 int Sys_GetAntiCheatAPI (void);
@@ -1496,6 +1499,12 @@ typedef struct entity_state_s
 
 //==============================================
 
+
+// player_state_t is the information needed in addition to pmove_state_t
+// to rendered a view.  There will only be 10 player_state_t sent each second,
+// but the number of pmove_state_t changes will be reletive to client
+// frame rates
+
 typedef struct
 {
 	pmove_state_t	pmove;		// for prediction
@@ -1520,104 +1529,7 @@ typedef struct
 	int			rdflags;		// refdef flags
 
 	int16		stats[MAX_STATS];		// fast status bar updates
-
-	vec3_t		mins;
-	vec3_t		maxs;
-} player_state_new;
-
-typedef struct
-{
-	pmove_state_t	pmove;		// for prediction
-
-	// these fields do not need to be communicated bit-precise
-
-	vec3_t		viewangles;		// for fixed views
-	vec3_t		viewoffset;		// add to pmovestate->origin
-	vec3_t		kick_angles;	// add to view direction to get render angles
-								// set by weapon kicks, pain effects, etc
-
-	vec3_t		gunangles;
-	vec3_t		gunoffset;
-
-	int			gunindex;
-	int			gunframe;
-
-	float		blend[4];		// rgba full screen effect
-	
-	float		fov;			// horizontal field of view
-
-	int			rdflags;		// refdef flags
-
-	int16		stats[MAX_STATS];		// fast status bar updates
-} player_state_old;
-
-/*typedef struct
-{
-	pmove_state_t	pmove;		// for prediction
-
-	// these fields do not need to be communicated bit-precise
-
-	vec3_t		viewangles;		// for fixed views
-	vec3_t		viewoffset;		// add to pmovestate->origin
-	vec3_t		kick_angles;	// add to view direction to get render angles
-								// set by weapon kicks, pain effects, etc
-
-	vec3_t		gunangles;
-	vec3_t		gunoffset;
-
-	int			gunindex;
-	int			gunframe;
-
-	float		blend[4];		// rgba full screen effect
-	
-	float		fov;			// horizontal field of view
-
-	int			rdflags;		// refdef flags
-
-	int16		stats[MAX_STATS];		// fast status bar updates
-
-	vec3_t		mins;
-	vec3_t		maxs;
-} player_state_new;*/
-
-// player_state_t is the information needed in addition to pmove_state_t
-// to rendered a view.  There will only be 10 player_state_t sent each second,
-// but the number of pmove_state_t changes will be reletive to client
-// frame rates
-
-
-// player_state_t is the information needed in addition to pmove_state_t
-// to rendered a view.  There will only be 10 player_state_t sent each second,
-// but the number of pmove_state_t changes will be reletive to client
-// frame rates
-/*typedef struct
-{
-	pmove_state_t	pmove;		// for prediction
-
-	// these fields do not need to be communicated bit-precise
-
-	vec3_t		viewangles;		// for fixed views
-	vec3_t		viewoffset;		// add to pmovestate->origin
-	vec3_t		kick_angles;	// add to view direction to get render angles
-								// set by weapon kicks, pain effects, etc
-
-	vec3_t		gunangles;
-	vec3_t		gunoffset;
-
-	vec3_t		mins;
-	vec3_t		maxs;
-
-	int			gunindex;
-	int			gunframe;
-
-	float		blend[4];		// rgba full screen effect
-	
-	float		fov;			// horizontal field of view
-
-	int			rdflags;		// refdef flags
-
-	int16		stats[MAX_STATS];		// fast status bar updates
-} player_state_old_t;*/
+} player_state_t;
 
 // ==================
 // PGM 

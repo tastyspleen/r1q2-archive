@@ -477,11 +477,7 @@ static void SV_New_f (void)
 	if (sv_client->protocol == PROTOCOL_R1Q2)
 	{
 		//are we enhanced?
-#ifdef ENHANCED_SERVER
-		MSG_WriteByte (1);
-#else
 		MSG_WriteByte (0);
-#endif
 
 		//forced protocol breakage for 34 fallback
 		MSG_WriteShort (MINOR_VERSION_R1Q2);
@@ -862,6 +858,7 @@ void SV_ClientBegin (client_t *cl)
 						SV_AntiCheat_QueryClient (cl);
 						return;
 					}
+
 					//anticheat connection is UP, client is STILL INVALID AFTER QUERY, anticheat is REQUIRED
 					Com_Printf ("ANTICHEAT: Rejected connecting client %s[%s], no anticheat response.\n", LOG_SERVER|LOG_ANTICHEAT, cl->name, NET_AdrToString (&cl->netchan.remote_address));
 					SV_ClientPrintf (cl, PRINT_HIGH, "%s\n", sv_anticheat_message->string);
@@ -2693,7 +2690,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 	usercmd_t	oldest, oldcmd, newcmd;
 	int			net_drop;
 	int			userinfoCount;
-	qboolean	move_issued;
+	qboolean	move_issued, interpolating;
 	int			lastframe;
 	vec3_t		oldorigin;
 
@@ -2911,10 +2908,13 @@ void SV_ExecuteClientMessage (client_t *cl)
 			if (move_issued)
 				Com_Printf ("WARNING: Out-of-order stringcmd '%.32s...' from %s\n", LOG_SERVER|LOG_WARNING, s, cl->name);
 
-			if (sv_interpolated_pmove->intvalue)
+			interpolating = false;
+
+			if (sv_interpolated_pmove->intvalue && cl->current_move.elapsed < cl->current_move.msec)
 			{
 				FastVectorCopy (cl->edict->s.origin, oldorigin);
 				FastVectorCopy (cl->current_move.origin_end, cl->edict->s.origin);
+				interpolating = true;
 			}
 
 			// malicious users may try using too many string commands
@@ -2923,7 +2923,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 			//a stringcmd messed with the origin, cancel the interpolation and let
 			//it continue as normal for this move
-			if (sv_interpolated_pmove->intvalue)
+			if (interpolating)
 			{
 				if (Vec_RoughCompare (cl->edict->s.origin, cl->current_move.origin_end))
 				{

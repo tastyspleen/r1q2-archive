@@ -698,3 +698,12 @@ qboolean Sys_CheckFPUStatus (void)
 	return true;
 }
 
+void Sys_ShellExec (const char *cmd)
+{
+	//FIXME
+}
+
+void Sys_UpdateURLMenu (const char *s)
+{
+	//FIXME
+}

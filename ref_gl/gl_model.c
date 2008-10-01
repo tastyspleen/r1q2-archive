@@ -343,6 +343,8 @@ model_t *Mod_ForName (char *name, qboolean crash)
 		loadmodel->extradatasize = Hunk_End ();
 
 		model_size = malloc (sizeof(*model_size));
+		if (!model_size)
+			ri.Sys_Error (ERR_FATAL, "Mod_ForName: out of memory");
 		strcpy (model_size->name, mod->name);
 		model_size->size = loadmodel->extradatasize;
 		model_size->hash_next = model_size_cache[hash];

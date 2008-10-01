@@ -63,17 +63,14 @@ IDI_ICON2               ICON                    "icon2.ico"
 //
 
 IDD_SERVER_GUI DIALOGEX 0, 0, 357, 222
-STYLE DS_SETFONT | DS_CENTER | WS_MINIMIZEBOX | WS_VISIBLE | WS_CAPTION | 
-    WS_SYSMENU
+STYLE DS_SETFONT | DS_CENTER | WS_MINIMIZEBOX | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_APPWINDOW
 CAPTION "r1q2 server console (hostname)"
 FONT 10, "Courier New", 0, 0, 0x0
 BEGIN
     EDITTEXT        IDC_COMMAND,0,210,305,12,ES_AUTOHSCROLL
     DEFPUSHBUTTON   "Send",IDOK,307,210,50,12
-     CONTROL         "",IDC_CONSOLE,"RichEdit20A",ES_MULTILINE | 
-                    ES_AUTOVSCROLL | WS_BORDER | WS_VSCROLL | WS_TABSTOP,0,0,
-                    357,208
+    CONTROL         "",IDC_CONSOLE,"RichEdit20A",ES_MULTILINE | ES_AUTOVSCROLL | WS_BORDER | WS_VSCROLL | WS_TABSTOP,0,0,357,208
 END
 
 #endif    // English (U.S.) resources
@@ -95,13 +92,13 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 7,7,5,9
- PRODUCTVERSION 7,7,5,9
+ FILEVERSION 7,8,6,4
+ PRODUCTVERSION 7,8,6,4
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
- FILEFLAGS 0x3L
+ FILEFLAGS 0x1L
 #else
- FILEFLAGS 0x2L
+ FILEFLAGS 0x0L
 #endif
  FILEOS 0x4L
  FILETYPE 0x1L
@@ -114,9 +111,9 @@ BEGIN
             VALUE "Comments", "http://www.r1ch.net/stuff/r1q2/"
             VALUE "CompanyName", "r1ch.net"
             VALUE "FileDescription", "R1Q2 - Enhanced Quake II Client/Server"
-            VALUE "FileVersion", "7, 7, 5, 9"
+            VALUE "FileVersion", "7, 8, 6, 4"
             VALUE "InternalName", "r1q2"
-            VALUE "LegalCopyright", "Copyright (C) 2002-2004"
+            VALUE "LegalCopyright", "Copyright (C) 2002-2008"
             VALUE "OriginalFilename", "r1q2.exe"
             VALUE "ProductName", "Quake II"
             VALUE "ProductVersion", "Release"

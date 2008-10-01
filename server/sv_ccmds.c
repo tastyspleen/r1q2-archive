@@ -2113,7 +2113,7 @@ static void SV_Status_f (void)
 	int			ping;
 	int			statusMethod;
 
-//	player_state_new		*ps;
+//	player_state_t		*ps;
 	//union player_state_t	*ps;
 
 	if (!svs.clients)
@@ -2173,16 +2173,7 @@ static void SV_Status_f (void)
 				break;
 		}
 
-		/*if (ge->apiversion == GAME_API_VERSION_ENHANCED)
-			ps = (player_state_new *)&cl->edict->client->ps.new_ps;
-		else
-			ps = (player_state_new *)&cl->edict->client->ps.old_ps;*/
-
-#ifdef ENHANCED_SERVER
-			Com_Printf ("%3i %5i ", LOG_GENERAL, i, ((struct gclient_new_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
-#else
-			Com_Printf ("%3i %5i ", LOG_GENERAL, i, ((struct gclient_old_s *)(cl->edict->client))->ps.stats[STAT_FRAGS]);
-#endif
+		Com_Printf ("%3i %5i ", LOG_GENERAL, i, cl->edict->client->ps.stats[STAT_FRAGS]);
 
 		if (cl->state == cs_connected || cl->state == cs_spawning) {
 			if (cl->download)

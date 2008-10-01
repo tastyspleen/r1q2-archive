@@ -1674,7 +1674,14 @@ safe:
 			SCR_UpdateScreen ();
 			SCR_UpdateScreen ();
 			if (!Sys_GetAntiCheatAPI ())
-				Com_Printf ("anticheat failed to load, trying to connect without it.\n", LOG_GENERAL);
+				Com_Printf ("        ERROR: anticheat.dll failed to load\n"
+							"Either the file is missing, or something is preventing\n"
+							"it from loading or connecting to the anticheat server.\n"
+							"This is commonly caused by over-aggressive anti-virus\n"
+							"software. Try disabling any anti-virus or other security\n"
+							"software or add an exception for anticheat.dll.\n"
+							"\n"
+							"Trying to connect without anticheat support.\n", LOG_GENERAL);
 		}
 #endif
 		p = strchr (buff, ':');
@@ -3220,6 +3227,17 @@ void _protocol_changed (cvar_t *var, char *oldValue, char *newValue)
 		cls.serverProtocol = 0;
 }
 
+void CL_FollowIP_f (void)
+{
+	if (!cls.followHost[0])
+	{
+		Com_Printf ("No IP to follow.\n", LOG_GENERAL);
+		return;
+	}
+
+	Cbuf_AddText (va("connect \"%s\"\n", cls.followHost));
+}
+
 void CL_IndexStats_f (void)
 {
 	int	i;
@@ -3558,8 +3576,11 @@ void CL_InitLocal (void)
 	//
 
 	//r1: r1q2 stuff goes here so it never overrides autocomplete order for base q2 cmds
-	//r1: allow passive connects
+
+	Cmd_AddCommand ("followip", CL_FollowIP_f);
 	Cmd_AddCommand ("indexstats", CL_IndexStats_f);
+
+	//r1: allow passive connects
 	Cmd_AddCommand ("passive", CL_Passive_f);
 
 	//r1: toggle cvar
@@ -3689,7 +3710,7 @@ CL_FixCvarCheats
 typedef struct
 {
 	char	*name;
-	int		value;
+	float	value;
 	float	setval;
 	cvar_t	*var;
 } cheatvar_t;
@@ -3728,7 +3749,7 @@ void _cheatcvar_changed (cvar_t *cvar, char *oldValue, char *newValue)
 
 	for (i=0, var = cheatvars ; i<numcheatvars ; i++, var++)
 	{
-		if (var->var == cvar && var->value != cvar->intvalue)
+		if (var->var == cvar && var->value != cvar->value)
 		{
 			Com_Printf ("%s is cheat protected.\n", LOG_GENERAL, var->name);
 			Cvar_SetValue (var->name, var->setval);
@@ -3760,7 +3781,7 @@ void CL_FixCvarCheats (void)
 	// make sure they are all set to the proper values
 	for (i=0, var = cheatvars ; i<numcheatvars ; i++, var++)
 	{
-		if (var->var->intvalue != var->value)
+		if (var->var->value != var->value)
 		{
 			Cvar_SetValue (var->name, var->setval);
 		}

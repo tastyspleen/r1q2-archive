@@ -305,8 +305,8 @@ void CL_PredictMovement (void)
 
 	if (cl.enhancedServer)
 	{
-		FastVectorCopy (cl.frame.playerstate.mins, pm.mins);
-		FastVectorCopy (cl.frame.playerstate.maxs, pm.maxs);
+		//FastVectorCopy (cl.frame.playerstate.mins, pm.mins);
+		//FastVectorCopy (cl.frame.playerstate.maxs, pm.maxs);
 	}
 	else
 	{

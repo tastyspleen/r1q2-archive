@@ -1591,7 +1591,7 @@ void CL_AddPlayerBeams (void)
 	
 	float		hand_multiplier;
 	frame_t		*oldframe;
-	player_state_new	*ps, *ops;
+	player_state_t	*ps, *ops;
 
 //PMM
 	if (hand)

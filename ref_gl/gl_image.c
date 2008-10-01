@@ -485,7 +485,7 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
 	int		len;
 	int		picSize;
 	int		dataByte, runLength;
-	byte	*out, *pix;
+	byte	*out, *pix, *base;
 
 	*pic = NULL;
 	*palette = NULL;
@@ -494,9 +494,9 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
 	// load the file
 	//
 	len = ri.FS_LoadFile (filename, (void **)&raw);
-	if (!raw)
+	if (!raw || len < sizeof(pcx_t))
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Bad pcx file %s\n", filename);
+		ri.Con_Printf (PRINT_DEVELOPER, "Bad/missing PCX file: %s\n", filename);
 		return;
 	}
 
@@ -514,6 +514,7 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
     pcx->bytes_per_line = LittleShort(pcx->bytes_per_line);
     pcx->palette_type = LittleShort(pcx->palette_type);
 
+	base = raw;
 	raw = &pcx->data;
 
 	if (pcx->manufacturer != 0x0a
@@ -521,15 +522,22 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
 		|| pcx->encoding != 1
 		|| pcx->bits_per_pixel != 8
 		|| pcx->xmax >= 640
-		|| pcx->ymax >= 480)
+		|| pcx->ymax >= 480
+		|| pcx->data >= len)
 	{
-		ri.Con_Printf (PRINT_ALL, "Bad pcx file %s\n", filename);
+		ri.Con_Printf (PRINT_ALL, "Bad PCX file: %s\n", filename);
+		ri.FS_FreeFile (pcx);
 		return;
 	}
 
 	picSize = (pcx->ymax+1) * (pcx->xmax+1);
 
 	out = malloc ( picSize );
+	if (!out)
+	{
+		ri.Con_Printf (PRINT_ALL, "Not enough memory for PCX data: %s (%d bytes)\n", filename, picSize);
+		goto abortload;
+	}
 
 	*pic = out;
 
@@ -537,7 +545,19 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
 
 	if (palette)
 	{
+		if (len < 768)
+		{
+			ri.Con_Printf (PRINT_ALL, "Bad PCX file (not enough data for palette): %s\n", filename);
+			goto abortload;
+		}
+
 		*palette = malloc(768);
+		if (!*palette)
+		{
+			ri.Con_Printf (PRINT_ALL, "Not enough memory for PCX palette: %s\n", filename);
+			goto abortload;
+		}
+
 		memcpy (*palette, (byte *)pcx + len - 768, 768);
 	}
 
@@ -554,11 +574,22 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
 	{
 		for (x=0 ; x<=pcx->xmax ; )
 		{
+			if (raw - base >= len)
+			{
+				ri.Con_Printf (PRINT_ALL, "Malformed PCX file (not enough data): %s\n", filename);
+				goto abortload;
+			}
+
 			dataByte = *raw++;
 
-			if((dataByte & 0xC0) == 0xC0)
+			if ((dataByte & 0xC0) == 0xC0)
 			{
 				runLength = dataByte & 0x3F;
+				if (raw - base >= len)
+				{
+					ri.Con_Printf (PRINT_ALL, "Malformed PCX file (not enough data): %s\n", filename);
+					goto abortload;
+				}
 				dataByte = *raw++;
 			}
 			else
@@ -566,22 +597,35 @@ void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int 
 
 			while(runLength-- > 0)
 			{
-				pix[x++] = dataByte;
-				if (x > pcx->xmax)
+				if (x >= pcx->xmax + 1)
 				{
-					if (runLength)
-						ri.Con_Printf (PRINT_DEVELOPER, "WARNING: PCX file %s: runlength exceeds width (%d bytes still in run)\n", filename, runLength);
-					break;
+					ri.Con_Printf (PRINT_ALL, "Malformed PCX file (bad runlength encoding): %s\n", filename);
+					goto abortload;
 				}
+				pix[x++] = dataByte;
 			}
 		}
 	}
 
-	if ( raw - (byte *)pcx > len)
+	//end of data should coincide with start of palette
+	if (raw - base != len - 769)
+		ri.Con_Printf (PRINT_DEVELOPER, "Empty space in PCX file: %s\n", filename);
+
+	ri.FS_FreeFile (pcx);
+	return;
+
+abortload:
+
+	if (*pic)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "PCX file %s was malformed", filename);
 		free (*pic);
 		*pic = NULL;
+	}
+
+	if (palette && *palette)
+	{
+		free (*palette);
+		*palette = NULL;
 	}
 
 	ri.FS_FreeFile (pcx);
@@ -1412,6 +1456,21 @@ breakOut:;
 		}
 	}
 
+	if (targa_header.attributes & 0x20)
+	{
+		byte *temp;
+		temp = malloc (numPixels);
+		if (!temp)
+			ri.Sys_Error (ERR_FATAL, "LoadTGA: not enough memory");
+		ri.Con_Printf (PRINT_DEVELOPER, "LoadTGA: Bottom-to-top TGA file (slow): %s\n", name);
+		memcpy (temp, targa_rgba, numPixels);
+		for (row = 0; row < rows; row++)
+		{
+			memcpy (targa_rgba + (row * columns * 4), temp + (rows - row - 1) * columns * 4, columns * 4);
+		}
+		free (temp);
+	}
+
 	ri.FS_FreeFile (buffer);
 }
 #endif
@@ -2108,6 +2167,9 @@ void GL_ResampleTexture24(unsigned *in, int inwidth, int inheight, unsigned *out
 	tmp=malloc(inheight*inwidth*4);
 	tmp2=malloc(outwidth*outheight*4);
 
+	if (!tmp || !tmp2)
+		ri.Sys_Error (ERR_FATAL, "GL_ResampleTexture24: out of memory");
+
 	b2=(byte*)tmp;
 	b1=(byte*)in;
 
@@ -2242,7 +2304,11 @@ static void GL_MipMapLinear (unsigned *in, int inWidth, int inHeight)
 		temp = mipmap_buffer;
 	}
 	else
+	{
 		temp = malloc (outWidth * outHeight * sizeof(int));
+		if (!temp)
+			ri.Sys_Error (ERR_DROP, "GL_MipMapLinear: Out of memory");
+	}
 
 	inWidthMask = inWidth - 1;
 	inHeightMask = inHeight - 1;
