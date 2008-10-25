@@ -388,7 +388,6 @@ typedef struct client_static_s
 #endif
 
 	char			followHost[32];
-	char			followURL[1024];
 } client_static_t;
 
 extern client_static_t	cls;
@@ -479,7 +478,9 @@ extern	cvar_t	*cl_player_updates;
 
 extern	cvar_t	*fov;
 
-extern	cvar_t *vid_fullscreen;
+extern	cvar_t	*vid_fullscreen;
+
+extern	cvar_t	*cl_quietstartup;
 
 #ifndef DEDICATED_ONLY
 extern	qboolean send_packet_now;

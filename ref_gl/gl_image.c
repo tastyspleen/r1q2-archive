@@ -31,8 +31,12 @@ static	byte			gammatable[256];
 static	byte			gammaintensitytable[256];
 
 cvar_t		*intensity;
+cvar_t		*gl_contrast;
+cvar_t		*gl_saturation;
+cvar_t		*gl_texture_lighting_mode;
 
 unsigned	d_8to24table[256];
+vec4_t		d_8to24float[256];
 
 qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, image_t *image);
 qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, int bpp, image_t *image);
@@ -129,6 +133,8 @@ void GL_EnableMultitexture( qboolean enable )
 	else
 		qglDisable( GL_TEXTURE_2D );	
 
+	GL_CheckForError ();
+
 	GL_TexEnv( GL_REPLACE );
 
 	GL_SelectTexture( GL_TEXTURE0 );
@@ -157,11 +163,15 @@ void GL_SelectTexture( GLenum texture )
 	if ( qglSelectTextureSGIS )
 	{
 		qglSelectTextureSGIS( texture );
+		GL_CheckForError ();
 	}
 	else if ( qglActiveTextureARB )
 	{
 		qglActiveTextureARB( texture );
+		GL_CheckForError ();
+
 		qglClientActiveTextureARB( texture );
+		GL_CheckForError ();
 	}
 }
 
@@ -173,6 +183,7 @@ void GL_TexEnv( GLenum mode )
 	{
 		qglTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, mode );
 		lastmodes[gl_state.currenttmu] = mode;
+		GL_CheckForError ();
 	}
 }
 
@@ -181,10 +192,14 @@ void GL_Bind (unsigned int texnum)
 #ifdef _DEBUG
 	extern	image_t	*draw_chars;
 
-	if (FLOAT_NE_ZERO(gl_nobind->value)) {
-		if (gl_nobind->value == 2) {
+	if (FLOAT_NE_ZERO(gl_nobind->value))
+	{
+		if (gl_nobind->value == 2)
+		{
 			texnum = TEXNUM_SCRAPS;
-		} else {
+		}
+		else
+		{
 			if (draw_chars)		// performance evaluation option
 				texnum = draw_chars->texnum;
 		}
@@ -196,6 +211,7 @@ void GL_Bind (unsigned int texnum)
 	gl_state.currenttextures[gl_state.currenttmu] = texnum;
 
 	qglBindTexture (GL_TEXTURE_2D, texnum);
+	GL_CheckForError ();
 }
 
 void GL_MBind( GLenum target, unsigned int texnum )
@@ -215,6 +231,7 @@ void GL_MBind( GLenum target, unsigned int texnum )
 	}
 
 	GL_Bind( texnum );
+	GL_CheckForError ();
 }
 
 typedef struct
@@ -300,7 +317,10 @@ void GL_TextureMode( char *string )
 		{
 			GL_Bind (glt->texnum);
 			qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
+			GL_CheckForError ();
+
 			qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+			GL_CheckForError ();
 		}
 	}
 }
@@ -2197,6 +2217,95 @@ void GL_ResampleTexture24(unsigned *in, int inwidth, int inheight, unsigned *out
 }
 
 /*
+VectorMix
+*/
+void VectorMix(const vec3_t v1, const vec3_t v2, float mix, vec3_t out)
+{
+	int i;
+
+	for(i = 0; i < 3; i++)
+		out[i] = v1[i] * (1.0f - mix) + v2[i] * mix;
+}
+
+/*
+R_FilterTexture
+
+Applies brightness and contrast to the specified image while optionally computing
+the image's average color.  Also handles image inversion and monochrome.  This is
+all munged into one function to reduce loops on level load.
+*/
+void R_FilterTexture (unsigned *in, int width, int height, imagetype_t type)
+{
+	vec3_t texture_intensity, temp;
+	int i, j, c;
+	byte *p;
+	float max, d;
+	static const vec3_t luminosity = {0.2125f, 0.7154f, 0.0721f};
+
+	p = (byte *)in;
+	c = width * height;
+
+	for (i = 0; i < c; i++, p+= 4)
+	{
+		VectorScale (p, 1.0f / 255.0f, temp);  // convert to float
+
+		if (type == it_pic)  // apply brightness
+			VectorScale (temp, 1.6 / vid_gamma_pics->value, temp);
+		else
+			VectorScale (temp, 1.6f / vid_gamma->value, temp);
+
+		max = 0.0f;  // determine brightest component
+
+		for (j = 0; j < 3; j++)
+		{
+
+			if (temp[j] > max)
+				max = temp[j];
+
+			if (temp[j] < 0.0f)  // enforcing positive values
+				temp[j] = 0.0f;
+		}
+
+		if (max > 1.0f)  // clamp without changing hue
+			VectorScale(temp, 1.0f / max, temp);
+
+		for (j = 0; j < 3; j++)
+		{  
+			// apply contrast
+
+			temp[j] -= 0.5f;  // normalize to -0.5 through 0.5
+
+			temp[j] *= gl_contrast->value;  // scale
+
+			temp[j] += 0.5f;
+
+			if (temp[j] > 1.0f)  // clamp
+				temp[j] = 1.0f;
+			else if (temp[j] < 0)
+				temp[j] = 0;
+		}
+
+		// finally saturation, which requires rgb
+		d = DotProduct (temp, luminosity);
+
+		VectorSet (texture_intensity, d, d, d);
+		VectorMix (texture_intensity, temp, gl_saturation->value, temp);
+
+		for (j = 0; j < 3; j++)
+		{
+			temp[j] *= 255;  // back to byte
+
+			if (temp[j] > 255)  // clamp
+				temp[j] = 255;
+			else if (temp[j] < 0)
+				temp[j] = 0;
+
+			p[j] = (byte)temp[j];
+		}
+	}
+}
+
+/*
 ================
 GL_LightScaleTexture
 
@@ -2395,9 +2504,6 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 	//byte		*scan;
 	int comp;
 
-	//if (strstr (current_texture_filename, "conback"))
-	//	_asm int 3;
-
 	if (gl_config.r1gl_GL_ARB_texture_non_power_of_two)
 	{
 		scaled_width = width;
@@ -2512,7 +2618,12 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 	}
 
 	if (image && (image->type != it_pic || FLOAT_NE_ZERO(vid_gamma_pics->value)))
-		GL_LightScaleTexture (scaled, scaled_width, scaled_height, !mipmap );
+	{
+		if (FLOAT_EQ_ZERO(gl_texture_lighting_mode->value))
+			GL_LightScaleTexture (scaled, scaled_width, scaled_height, !mipmap);
+		else
+			R_FilterTexture (scaled, scaled_width, scaled_height, image->type);
+	}
 
 	//r1ch: hardware/driver mipmap generation
 	//0.1.5: removed due to shitty drivers breaking it, thx ati
@@ -2526,6 +2637,7 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 	}*/
 
 	qglTexImage2D (GL_TEXTURE_2D, 0, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);
+	GL_CheckForError ();
 
 	//if (mipmap && !(gl_config.r1gl_GL_SGIS_generate_mipmap))
 	if (mipmap)
@@ -2554,6 +2666,7 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 				scaled_height = 1;
 			miplevel++;
 			qglTexImage2D (GL_TEXTURE_2D, miplevel, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);;
+			GL_CheckForError ();
 		}
 	}
 done: ;
@@ -2562,16 +2675,30 @@ done: ;
 	if (mipmap)
 	{
 		if (gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
+		{
 			qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (int)gl_ext_max_anisotropy->value);
+			GL_CheckForError ();
+		}
+
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
+		GL_CheckForError ();
+
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+		GL_CheckForError ();
 	}
 	else
 	{
 		if (gl_config.r1gl_GL_EXT_texture_filter_anisotropic)
+		{
 			qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
+			GL_CheckForError ();
+		}
+
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		GL_CheckForError ();
+
 		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		GL_CheckForError ();
 	}
 
 	if (!r_registering)
@@ -2727,6 +2854,7 @@ image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagety
 			for (i=0 ; i<image->height ; i++)
 				for (j=0 ; j<image->width ; j++, k++)
 					scrap_texels[texnum][(y+i)*BLOCK_WIDTH + x + j] = pic[k];
+
 			image->texnum = TEXNUM_SCRAPS + texnum;
 			//image->scrap = true;
 			image->has_alpha = true;
@@ -2915,6 +3043,7 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 	pic = NULL;
 	palette = NULL;
 	current_texture_filename = name;
+
 	if (!strcmp(name+len-4, ".pcx"))
 	{
 		static char png_name[MAX_QPATH];
@@ -3221,6 +3350,11 @@ int Draw_GetPalette (void)
 		
 		v = (255<<24) + (r<<0) + (g<<8) + (b<<16);
 		d_8to24table[i] = LittleLong(v);
+
+		d_8to24float[i][0] = r / 255.0f;
+		d_8to24float[i][1] = g / 255.0f;
+		d_8to24float[i][2] = b / 255.0f;
+		d_8to24float[i][3] = 0;
 	}
 
 	d_8to24table[255] &= LittleLong(0xffffff);	// 255 is transparent
@@ -3251,8 +3385,17 @@ void	GL_InitImages (void)
 	// init intensity conversions
 	intensity = ri.Cvar_Get ("intensity", "2", CVAR_ARCHIVE);
 
+	gl_contrast = ri.Cvar_Get ("gl_contrast", "0.8", 0);
+	gl_saturation = ri.Cvar_Get ("gl_saturation", "1", 0);
+	gl_texture_lighting_mode = ri.Cvar_Get ("gl_texture_lighting_mode", "0", 0);
+
 	if ( intensity->value <= 1 )
 		ri.Cvar_Set( "intensity", "1" );
+
+	if (gl_contrast->value < 0.5f)
+		ri.Cvar_SetValue ("gl_contrast", 0.5f);
+	else if (gl_contrast->value > 1.5f)
+		ri.Cvar_SetValue ("gl_contrast", 1.5f);
 
 	if (FLOAT_NE_ZERO(gl_overbrights->value))
 		g = 1.0;

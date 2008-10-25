@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.40"
+#define	REF_VERSION	"R1GL 0.1.5.41"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif
@@ -336,6 +336,7 @@ unsigned int hashify (const char *S);
 extern	model_t	*r_worldmodel;
 
 extern	unsigned	d_8to24table[256];
+extern	vec4_t		d_8to24float[256];
 
 extern	int		registration_sequence;
 
@@ -420,7 +421,7 @@ void GL_TextureSolidMode( char *string );
 /*
 ** GL extension emulation functions
 */
-void GL_DrawParticles( int n, const particle_t particles[], const unsigned colortable[768] );
+void GL_DrawParticles( int n, const particle_t particles[] );
 
 void EmptyImageCache (void);
 
@@ -570,3 +571,5 @@ void	EXPORT	GLimp_AppActivate( qboolean active );
 void		GLimp_EnableLogging( qboolean enable );
 void		GLimp_LogNewFrame( void );
 
+
+void GL_CheckForError (void);

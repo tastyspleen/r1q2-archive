@@ -825,18 +825,24 @@ badskin:
 	}
 
 	// weapon file
-	for (i = 0; i < num_cl_weaponmodels; i++) {
+	for (i = 0; i < num_cl_weaponmodels; i++)
+	{
 		Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/%s/%s", model_name, cl_weaponmodels[i]);
 		ci->weaponmodel[i] = re.RegisterModel(weapon_filename);
-		if (!ci->weaponmodel[i]) {
+
+		if (!ci->weaponmodel[i])
+		{
 			//Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/%s.pcx", original_model_name, cl_weaponmodels[i]);
 			ci->deferred = true;
 		}
-		if (!ci->weaponmodel[i] && strcmp(model_name, "cyborg") == 0) {
+
+		if (!ci->weaponmodel[i] && strcmp(model_name, "cyborg") == 0)
+		{
 			// try male
 			Com_sprintf (weapon_filename, sizeof(weapon_filename), "players/male/%s", cl_weaponmodels[i]);
 			ci->weaponmodel[i] = re.RegisterModel(weapon_filename);
 		}
+
 		if (!cl_vwep->intvalue)
 			break; // only one when vwep is off
 	}
@@ -1154,18 +1160,19 @@ static void CL_CheckForIP (const char *s)
 
 static void CL_CheckForURL (const char *s)
 {
-	char *p;
+	char	followURL[1024];
+	char	*p;
 
 	p = strstr (s, "http://");
 	if (p)
 	{
-		strncpy (cls.followURL, p, sizeof(cls.followURL)-1);
-		StripHighBits (cls.followURL, 1);
-		p = strchr (cls.followURL, ' ');
+		Q_strncpy (followURL, p, sizeof(followURL)-1);
+		StripHighBits (followURL, 1);
+		p = strchr (followURL, ' ');
 		if (p)
 			p[0] = '\0';
 
-		Sys_UpdateURLMenu (cls.followURL);
+		Sys_UpdateURLMenu (followURL);
 	}
 }
 

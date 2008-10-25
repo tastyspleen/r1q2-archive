@@ -341,17 +341,20 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	// add dynamic lights
 	//
 	//light = 0;
-	dl = r_newrefdef.dlights;
-	for (lnum=0 ; lnum<r_newrefdef.num_dlights ; lnum++, dl++)
+	if (FLOAT_NE_ZERO (gl_dynamic->value))
 	{
-		VectorSubtract (currententity->origin,
-						dl->origin,
-						dist);
-		add = dl->intensity - VectorLength(dist);
-		add *= (1.0f/256);
-		if (FLOAT_GT_ZERO(add))
+		dl = r_newrefdef.dlights;
+		for (lnum=0 ; lnum<r_newrefdef.num_dlights ; lnum++, dl++)
 		{
-			VectorMA (color, add, dl->color, color);
+			VectorSubtract (currententity->origin,
+							dl->origin,
+							dist);
+			add = dl->intensity - VectorLength(dist);
+			add *= (1.0f/256);
+			if (FLOAT_GT_ZERO(add))
+			{
+				VectorMA (color, add, dl->color, color);
+			}
 		}
 	}
 

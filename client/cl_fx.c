@@ -921,6 +921,9 @@ void CL_ClearParticles (int num)
 	free_particles = &particles[0];
 	active_particles = NULL;
 
+	if (!num)
+		return;
+
 	for (i = 0; i < num - 1; i++)
 	{
 		particles[i].next = &particles[i+1];

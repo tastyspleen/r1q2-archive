@@ -37,6 +37,7 @@ int		history_line=0;
 char		*keybindings[256];
 qboolean	consolekeys[256];	// if true, can't be rebound while in console
 qboolean	menubound[256];	// if true, can't be rebound while in menu
+qboolean	buttondown[256];
 int			keyshift[256];		// key to map to if shift held down in console
 int			key_repeats[256];	// if > 1, it is autorepeating
 int			keydown[256];
@@ -1338,8 +1339,8 @@ void Key_Event (int key, qboolean down, uint32 time)
 //
 	if (!down)
 	{
-		//r1ch: don't run buttons in console/chat/menu
-		if (cls.key_dest == key_game)
+		//r1ch: only generate -events if key was down (prevents -binds in menu / messagemode)
+		if (buttondown[key])
 		{
 			kb = keybindings[key];
 			if (kb && kb[0] == '+')
@@ -1356,6 +1357,7 @@ void Key_Event (int key, qboolean down, uint32 time)
 					Cbuf_AddText (cmd);
 				}
 			}
+			buttondown[key] = false;
 		}
 		return;
 	}
@@ -1371,11 +1373,13 @@ void Key_Event (int key, qboolean down, uint32 time)
 		if (kb && kb[0])
 		{
 			if (kb[0] == '+')
-			{	// button commands add keynum and time as a parm
+			{	
+				// button commands add keynum and time as a parm
 				if (cls.key_dest != key_game) //r1: don't run buttons in console
 					return;
 				Com_sprintf (cmd, sizeof(cmd), "%s %i %u\n", kb, key, time);
 				Cbuf_AddText (cmd);
+				buttondown[key] = true;
 			}
 			else
 			{

@@ -105,6 +105,7 @@ void Draw_AddText (void)
 	}
 
 	qglEnd ();
+	GL_CheckForError ();
 
 	drawcharsindex = 0;
 }
@@ -166,6 +167,7 @@ void EXPORT Draw_Char (int x, int y, int num)
 	qglTexCoord2f (fcol, frowbottom);
 	qglVertex2i (x, y+8);
 	qglEnd ();
+	GL_CheckForError ();
 }
 
 
@@ -232,12 +234,19 @@ void EXPORT Draw_StretchPic (int x, int y, int w, int h, char *pic)
 		Scrap_Upload ();
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	{
 		qglDisable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 
 	if (gl->has_alpha)
 	{
 		qglDisable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
 		qglEnable(GL_BLEND);
+		GL_CheckForError ();
+
 		GL_TexEnv(GL_MODULATE);
 	}
 
@@ -253,15 +262,24 @@ void EXPORT Draw_StretchPic (int x, int y, int w, int h, char *pic)
 	qglVertex2i (x, y+h);
 	qglEnd ();
 
+	GL_CheckForError ();
+
 	if (gl->has_alpha)
 	{
 		GL_TexEnv (GL_REPLACE);
+		
 		qglEnable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
 		qglDisable(GL_BLEND);
+		GL_CheckForError ();
 	}
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	{
 		qglEnable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 }
 
 
@@ -286,12 +304,19 @@ void EXPORT Draw_Pic (int x, int y, char *pic)
 		Scrap_Upload ();
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	{
 		qglDisable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 
 	if (gl->has_alpha)
 	{
 		qglDisable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
 		qglEnable(GL_BLEND);
+		GL_CheckForError ();
+
 		GL_TexEnv(GL_MODULATE);
 	}
 
@@ -308,15 +333,22 @@ void EXPORT Draw_Pic (int x, int y, char *pic)
 	qglVertex2i (x, y+gl->height);
 	qglEnd ();
 
+	GL_CheckForError ();
+
 	if (gl->has_alpha)
 	{
 		GL_TexEnv (GL_REPLACE);
 		qglEnable(GL_ALPHA_TEST);
+		GL_CheckForError ();
 		qglDisable(GL_BLEND);
+		GL_CheckForError ();
 	}
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !gl->has_alpha)
+	{
 		qglEnable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 }
 
 /*
@@ -340,7 +372,10 @@ void EXPORT Draw_TileClear (int x, int y, int w, int h, char *pic)
 	}
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !image->has_alpha)
+	{
 		qglDisable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 
 	GL_Bind (image->texnum);
 	qglBegin (GL_QUADS);
@@ -353,9 +388,13 @@ void EXPORT Draw_TileClear (int x, int y, int w, int h, char *pic)
 	qglTexCoord2f ( x/64.0f, (y+h)/64.0f );
 	qglVertex2i (x, y+h);
 	qglEnd ();
+	GL_CheckForError ();
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !image->has_alpha)
+	{
 		qglEnable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 }
 
 
@@ -378,6 +417,7 @@ void EXPORT Draw_Fill (int x, int y, int w, int h, int c)
 		ri.Sys_Error (ERR_FATAL, "Draw_Fill: bad color");
 
 	qglDisable (GL_TEXTURE_2D);
+	GL_CheckForError ();
 
 	color.c = d_8to24table[c];
 	qglColor3f (color.v[0]/255.0f,
@@ -392,8 +432,13 @@ void EXPORT Draw_Fill (int x, int y, int w, int h, int c)
 	qglVertex2i (x, y+h);
 
 	qglEnd ();
+	GL_CheckForError ();
+
 	qglColor3f (1,1,1);
+	GL_CheckForError ();
+
 	qglEnable (GL_TEXTURE_2D);
+	GL_CheckForError ();
 }
 
 //=============================================================================
@@ -407,8 +452,14 @@ Draw_FadeScreen
 void EXPORT Draw_FadeScreen (void)
 {
 	qglEnable (GL_BLEND);
+	GL_CheckForError ();
+
 	qglDisable (GL_TEXTURE_2D);
+	GL_CheckForError ();
+
 	qglColor4f (0, 0, 0, 0.8f);
+	GL_CheckForError ();
+
 	qglBegin (GL_QUADS);
 
 	qglVertex2i (0,0);
@@ -417,9 +468,16 @@ void EXPORT Draw_FadeScreen (void)
 	qglVertex2i (0, vid.height);
 
 	qglEnd ();
+	GL_CheckForError ();
+
 	qglColor4fv(colorWhite);
+	GL_CheckForError ();
+
 	qglEnable (GL_TEXTURE_2D);
+	GL_CheckForError ();
+
 	qglDisable (GL_BLEND);
+	GL_CheckForError ();
 }
 
 
@@ -479,6 +537,7 @@ void EXPORT Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byt
 		}
 
 		qglTexImage2D (GL_TEXTURE_2D, 0, gl_tex_solid_format, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, image32);
+		GL_CheckForError ();
 	}
 	else
 	{
@@ -508,12 +567,19 @@ void EXPORT Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byt
 					   GL_COLOR_INDEX, 
 					   GL_UNSIGNED_BYTE, 
 					   image8 );
+		GL_CheckForError ();
 	}
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	GL_CheckForError ();
+
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	GL_CheckForError ();
 
 	if ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) 
+	{
 		qglDisable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 
 	qglBegin (GL_QUADS);
 	qglTexCoord2f (0, 0);
@@ -525,8 +591,12 @@ void EXPORT Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byt
 	qglTexCoord2f (0, t);
 	qglVertex2i (x, y+h);
 	qglEnd ();
+	GL_CheckForError ();
 
 	if ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) 
+	{
 		qglEnable (GL_ALPHA_TEST);
+		GL_CheckForError ();
+	}
 }
 

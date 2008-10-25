@@ -1729,6 +1729,29 @@ VOID R1Q2UploadCrashDump (LPCSTR crashDump, LPCSTR crashText)
 }
 #endif
 
+BOOL IsOpenGLValid (VOID)
+{
+	HMODULE	hOpenGL;
+
+	hOpenGL = GetModuleHandle ("OPENGL32");
+	if (hOpenGL)
+	{
+		CHAR	openglPath[MAX_PATH];
+		CHAR	systemPath[MAX_PATH];
+
+		GetModuleFileName (hOpenGL, openglPath, sizeof(openglPath)-1);
+		GetSystemDirectory (systemPath, sizeof(systemPath)-1);
+
+		strlwr (openglPath);
+		strlwr (systemPath);
+		
+		if (strstr (openglPath, systemPath))
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
 DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionInfo)
 {
 	FILE	*fhReport;
@@ -1920,35 +1943,47 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 	strlwr (szModuleName);
 
-	if (strstr (szModuleName, "gamex86"))
+	if (strstr (szModuleName, "gamex86.dll"))
 	{
 		gameMsg = 
-			"\r\nIt is very likely that the Game DLL you are using for the mod you run is at fault.\r\n"
+			"It is very likely that the Game DLL you are using for the mod you run is at fault.\r\n"
 			"Please send this crash report to the author(s) of the mod you are running.";
 		wantUpload = FALSE;
 	}
-	else if (strstr (szModuleName, "ref_soft"))
+	else if (strstr (szModuleName, "ref_soft.dll"))
 	{
 		gameMsg = 
-			"\r\nIt is very likely that the software renderer (ref_soft) is at fault. Software\r\n"
+			"It is very likely that the software renderer (ref_soft) is at fault. Software\r\n"
 			"rendering in Q2 has always been unreliable. If possible, please use OpenGL to avoid\r\n"
-			"crashes.";
+			"crashes. Consider using the modified ref_soft.dll available on the r1ch.net forums to\r\n"
+			"fix some small bugs if you are not using it already.";
 		wantUpload = FALSE;
 	}
-	else if (strstr (szModuleName, "ref_gl") && !versionedGL)
+	else if (strstr (szModuleName, "opengl32.dll"))
+	{
+		if (!IsOpenGLValid ())
+		{
+			gameMsg = 
+				"You have an OPENGL32.DLL file in your Quake II folder. This is overriding the correct\r\n"
+				"DLL from your Windows system folder. Delete the OPENGL32.DLL in your Quake II folder to\r\n"
+				"ensure the correct version of OPENGL is loaded.";
+			wantUpload = FALSE;
+		}
+	}
+	else if (strstr (szModuleName, "ref_gl.dll") && !versionedGL)
 	{
 		gameMsg = 
-			"\r\nSince the crash occured in ref_gl and you aren't using R1GL, it is unlikely that\r\n"
-			"this exception can be debugged. Please consider switching to R1GL for improved crash\r\n"
-			"reporting, speed and stability. If you are using R1GL, please make sure you have updated\r\n"
-			"to the latest version.";
+			"This crash occured in ref_gl and you aren't using R1GL. It is unlikely that\r\n"
+			"this crash can be fixed. Consider switching to R1GL for improved crash\r\n"
+			"reporting, speed and stability. The original ref_gl has known crash bugs that\r\n"
+			"cannot be fixed so you will continue to crash unless you use R1GL.";
 		wantUpload = FALSE;
 	}
 	else if (strstr (szModuleName, "r1q2.exe") || strstr (szModuleName, "ref_r1gl.dll") || strstr (szModuleName, "dedicated.exe"))
 	{
 #ifdef USE_CURL
 		gameMsg = 
-		"\r\nSince this crash appears to be inside R1Q2 or R1GL, it would be very helpful\r\n"
+		"Since this crash appears to be inside R1Q2 or R1GL, it would be very helpful\r\n"
 		"if when prompted, you submitted the crash report to r1ch.net. This will aid in\r\n"
 		"finding the fault that caused this exception.";
 #else
@@ -1961,7 +1996,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	else
 	{
 		gameMsg =
-		"\r\nPlease note, unless you are using both R1Q2 and R1GL, any crashes will be much\r\n"
+		"Please note, unless you are using both R1Q2 and R1GL, any crashes will be much\r\n"
 		"harder to diagnose. If you are still using ref_gl, please consider using R1GL for\r\n"
 		"an accurate crash report.";
 	}
@@ -1975,7 +2010,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		"\r\n"
 		"     PLEASE MAKE SURE YOU ARE USING THE LATEST VERSIONS OF R1Q2/R1GL/ETC!\r\n"
 		"\r\n"
-		"This crash appears to have occured in the '%s' module.%s\r\n\r\n", szModuleName, gameMsg);
+		"This crash appears to have occured in the '%s' module.\r\n%s\r\n\r\n", szModuleName, gameMsg);
 #else
 	fprintf (fhReport,
 		PRODUCTNAME " encountered an unhandled exception and has terminated. If you are able to\r\n"
@@ -2003,6 +2038,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	{
 		strcpy (szModuleName, "<unknown>");
 		fnEnumerateLoadedModules64 (hProcess, (PENUMLOADED_MODULES_CALLBACK64)EnumerateLoadedModulesProcInfo, (VOID *)frame.AddrPC.Offset);
+		strlwr (szModuleName);
 
 		p = strrchr (szModuleName, '\\');
 		if (p)
@@ -2012,6 +2048,45 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 		else
 		{
 			p = szModuleName;
+		}
+
+		if (strstr (p, "ref_gl.dll") && !versionedGL)
+		{
+			gameMsg = 
+				"This crash occured in ref_gl and you aren't using R1GL. It is unlikely that "
+				"this crash can be fixed. Consider switching to R1GL for improved stability, speed "
+				"and crash reporting capabilities. The original ref_gl has known crash bugs that "
+				"cannot be fixed so you will continue to crash unless you use R1GL.";
+			wantUpload = FALSE;
+		}
+		else if (strstr (p, "ref_ncgl.dll"))
+		{
+			gameMsg = 
+				"This crash occured in ref_ncgl.dll. It is unlikely that this crash can be fixed. "
+				"Consider switching to R1GL for improved stability, speed and crash reporting capabilities. "
+				"NoCheat GL has known crash bugs that are not fixed so you will continue to crash unless you "
+				"use R1GL.";
+			wantUpload = FALSE;
+		}
+		else if (strstr (p, "atioglxx.dll"))
+		{
+			gameMsg = 
+				"This crash occured in the ATI GL drivers. The ATI drivers are optimized in such "
+				"a way that makes debugging very difficult. Please make sure you are using the latest "
+				"ATI drivers and that you do not have any OPENGL32.DLL or ATIOGLXX.DLL files in your Q2 "
+				"folder.";
+			wantUpload = FALSE;
+		}
+		else if (strstr (p, "opengl32.dll"))
+		{
+			if (!IsOpenGLValid ())
+			{
+				gameMsg = 
+					"You have an OPENGL32.DLL file in your Quake II folder. This is overriding the correct "
+					"DLL from your Windows system folder. Delete the OPENGL32.DLL in your Quake II folder to "
+					"ensure the correct version of OPENGL is loaded.";
+				wantUpload = FALSE;
+			}
 		}
 
 #ifdef _M_AMD64
@@ -2121,7 +2196,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	if (wantUpload)
 	{
 		if (!win_silentexceptionhandler->intvalue)
-			ret = MessageBox (NULL, "Would you like to upload this crash report to r1ch.net for analysis? If you are able to reproduce this crash exactly, please do not submit multiple reports as this will only delay processing.", "Unhandled Exception", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2);
+			ret = MessageBox (NULL, "Would you like to upload this crash report to r1ch.net to help improve R1Q2? If you are able to reproduce this crash, please do not submit multiple reports as this will only delay processing.\r\n\r\nIf you would like feedback on this crash, please post the crash report and .dmp file on the r1ch.net forums.", "Unhandled Exception", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2);
 		else
 			ret = IDYES;
 
@@ -2131,9 +2206,9 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 	else
 	{
 		CHAR message[1024], *s;
-		strcpy (message, "This crash report will not be uploaded due to the following reason:");
+		strcpy (message, "Crash analysis:\r\n\r\n");
 		strcat (message, gameMsg);
-		s = message + sizeof("This crash report will not be uploaded due to the following reason:");
+		s = message + sizeof("Crash analysis:\r\n\r\n");
 		while (s[0])
 		{
 			if (s[0] == '\n')
@@ -2142,6 +2217,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 				s[0] = ' ';
 			s++;
 		}
+
 		MessageBox (NULL, message, "Unhandled Exception", MB_OK | MB_ICONEXCLAMATION);
 	}
 #endif
@@ -2152,6 +2228,10 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 
 	return EXCEPTION_EXECUTE_HANDLER;
 }
+
+#ifndef DEDICATED_ONLY
+
+char	sys_url_location[1024];
 
 void Sys_ShellExec (const char *cmd)
 {
@@ -2167,7 +2247,11 @@ void Sys_ShellExec (const char *cmd)
 	}
 }
 
-#ifndef DEDICATED_ONLY
+void Sys_OpenURL (void)
+{
+	Sys_ShellExec (sys_url_location);
+}
+
 void Sys_UpdateURLMenu (const char *s)
 {
 	HMENU	menu;
@@ -2180,6 +2264,8 @@ void Sys_UpdateURLMenu (const char *s)
 		dots = "...";
 	else
 		dots = "";
+
+	strncpy (sys_url_location, s, sizeof(sys_url_location)-1);
 
 	Com_sprintf (title, sizeof(title), "Open \"%.64s%s\"", s, dots);
 

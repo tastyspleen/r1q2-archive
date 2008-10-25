@@ -302,7 +302,9 @@ void CL_PrepRefresh (void)
 	// register models, pics, and skins
 	Com_Printf ("Map: %s\r", LOG_CLIENT, mapname); 
 	SCR_UpdateScreen ();
+
 	re.BeginRegistration (mapname);
+
 	Com_Printf ("                                     \r", LOG_CLIENT);
 
 	Sys_SendKeyEvents ();
@@ -397,6 +399,9 @@ void CL_PrepRefresh (void)
 	Com_Printf ("clients\r", LOG_CLIENT);
 	SCR_UpdateScreen ();
 
+	//must be zeroed to flush out old model pointers
+	memset (&cl.clientinfo, 0, sizeof(cl.clientinfo));
+
 	for (i=0 ; i<maxclients ; i++)
 	{
 		if (!cl.configstrings[CS_PLAYERSKINS+i][0])
@@ -444,8 +449,10 @@ void CL_PrepRefresh (void)
 	//reset current list
 	cl.refdef.num_entities = 0;
 	cl.refdef.entities = NULL;
+
 	cl.refdef.num_particles = 0;
 	cl.refdef.particles = NULL;
+
 	cl.refdef.num_dlights = 0;
 	cl.refdef.dlights = NULL;
 	//cl.refdef.lightstyles = 0;
@@ -802,11 +809,26 @@ void OnCrossHairChange (cvar_t *self, char *old, char *newValue)
 //ick
 extern cparticle_t	*particles;
 void CL_ClearParticles (int num);
+static int num_particles;
 void _particlecount_changed (cvar_t *self, char *old, char *newValue)
 {
+	int		count;
+
+	//update cvar if we had to cap
+	if (self->intvalue < 1024)
+	{
+		Cvar_Set (self->name, "1024");
+		return;
+	}
+	else if (self->intvalue > 1048576)
+	{
+		Cvar_Set (self->name, "1048576");
+		return;
+	}
+
 	if (particles)
 	{
-		CL_ClearParticles (atoi(old));
+		CL_ClearParticles (num_particles);
 		Z_Free (particles);
 	}
 
@@ -816,24 +838,15 @@ void _particlecount_changed (cvar_t *self, char *old, char *newValue)
 		Z_Free (r_particles);
 	}
 
-	particles = Z_TagMalloc (self->intvalue * sizeof(*particles), TAGMALLOC_CL_PARTICLES);
-	r_particles = Z_TagMalloc (self->intvalue * sizeof(*r_particles), TAGMALLOC_CL_PARTICLES);
+	count = self->intvalue;
+
+	particles = Z_TagMalloc (count * sizeof(*particles), TAGMALLOC_CL_PARTICLES);
+	r_particles = Z_TagMalloc (count * sizeof(*r_particles), TAGMALLOC_CL_PARTICLES);
 
 	//allocated uninit
-	CL_ClearParticles (cl_particlecount->intvalue);
+	CL_ClearParticles (count);
 
-	//don't allow disabling from here
-	if (self->intvalue < 1024)
-	{
-		Cvar_Set (self->name, "1024");
-		return;
-	}
-	else if (self->intvalue > 1048576)
-	{
-		//prevent forced crashes etc by setting this insane
-		Cvar_Set (self->name, "1048576");
-		return;
-	}
+	num_particles = count;
 }
 
 /*

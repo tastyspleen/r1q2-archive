@@ -703,6 +703,11 @@ void Sys_ShellExec (const char *cmd)
 	//FIXME
 }
 
+void Sys_OpenURL (void)
+{
+	//FIXME
+}
+
 void Sys_UpdateURLMenu (const char *s)
 {
 	//FIXME

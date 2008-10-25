@@ -206,6 +206,7 @@ qboolean load_png_wals = true;
 qboolean load_tga_wals = true;
 qboolean load_jpg_wals = true;
 
+extern cvar_t		*gl_contrast;
 
 /*
 =================
@@ -619,13 +620,14 @@ void R_DrawEntitiesOnList (void)
 ** GL_DrawParticles
 **
 */
-void GL_DrawParticles( int num_particles, const particle_t particles[], const unsigned colortable[768] )
+void GL_DrawParticles( int num_particles, const particle_t particles[])
 {
 	const particle_t *p;
 	int				i;
 	vec3_t			up, right;
 	float			scale;
-	byte			color[4];
+	//byte			color[4];
+	vec4_t			colorf;
 
     GL_Bind(r_particletexture->texnum);
 	qglDepthMask( GL_FALSE );		// no z buffering
@@ -633,8 +635,8 @@ void GL_DrawParticles( int num_particles, const particle_t particles[], const un
 	GL_TexEnv( GL_MODULATE );
 	qglBegin( GL_TRIANGLES );
 
-	VectorScale (vup, 1.5, up);
-	VectorScale (vright, 1.5, right);
+	VectorScale (vup, 1.5f, up);
+	VectorScale (vright, 1.5f, right);
 
 	for ( p = particles, i=0 ; i < num_particles ; i++,p++)
 	{
@@ -648,20 +650,23 @@ void GL_DrawParticles( int num_particles, const particle_t particles[], const un
 		else
 			scale = 1 + scale * 0.004f;
 
-		*(int *)color = colortable[p->color];
-		color[3] = (byte)Q_ftol(p->alpha*255);
+		//*(int *)color = colortable[p->color];
+		//color[3] = (byte)Q_ftol(p->alpha*255);
 
-		qglColor4ubv( color );
+		FastVectorCopy (d_8to24float[p->color], colorf);
+		colorf[3] = p->alpha;
 
-		qglTexCoord2f( 0.0625, 0.0625 );
+		qglColor4fv( colorf );
+
+		qglTexCoord2f( 0.0625f, 0.0625f );
 		qglVertex3fv( p->origin );
 
-		qglTexCoord2f( 1.0625, 0.0625 );
+		qglTexCoord2f( 1.0625f, 0.0625f );
 		qglVertex3f( p->origin[0] + up[0]*scale, 
 			         p->origin[1] + up[1]*scale, 
 					 p->origin[2] + up[2]*scale);
 
-		qglTexCoord2f( 0.0625, 1.0625 );
+		qglTexCoord2f( 0.0625f, 1.0625f );
 		qglVertex3f( p->origin[0] + right[0]*scale, 
 			         p->origin[1] + right[1]*scale, 
 					 p->origin[2] + right[2]*scale);
@@ -719,14 +724,20 @@ void R_DrawParticles (void)
 		{
 			const particle_t *p;
 			int i;
-			unsigned char color[4];
+			//unsigned char color[4];
+			vec4_t	colorf;
 
 			for ( i = 0, p = r_newrefdef.particles; i < r_newrefdef.num_particles; i++, p++ )
 			{
-				*(int *)color = d_8to24table[p->color];
-				color[3] = (byte)Q_ftol(p->alpha*255);
+				//*(int *)color = d_8to24table[p->color];
+				//color[3] = (byte)Q_ftol(p->alpha*255);
 
-				qglColor4ubv( color );
+				//qglColor4ubv( color );
+				
+				FastVectorCopy (d_8to24float[p->color], colorf);
+				colorf[3] = p->alpha;
+				qglColor4fv( colorf );
+				
 				qglVertex3fv( p->origin );
 			}
 		}
@@ -743,7 +754,8 @@ void R_DrawParticles (void)
 	else if ( qglPointParameterfEXT && FLOAT_NE_ZERO(gl_ext_pointparameters->value))
 	{
 		int i;
-		unsigned char color[4];
+		vec4_t			colorf;
+		//unsigned char color[4];
 		const particle_t *p;
 
 		qglDepthMask( GL_FALSE );
@@ -756,9 +768,15 @@ void R_DrawParticles (void)
 
 		for ( i = 0, p = r_newrefdef.particles; i < r_newrefdef.num_particles; i++, p++ )
 		{
-			*(int *)color = d_8to24table[p->color];
-			color[3] = (byte)Q_ftol (p->alpha * 255);
-			qglColor4ubv( color );
+			//*(vec4_t **)&colorf = *(vec4_t *)&d_8to24float[p->color];
+			//memcpy (colorf, d_8to24float[p->color], sizeof(colorf));
+			FastVectorCopy (d_8to24float[p->color], colorf);
+			colorf[3] = p->alpha;
+
+			//*(int *)color = d_8to24table[p->color];
+			//color[3] = (byte)Q_ftol (p->alpha * 255);
+			//qglColor4ubv( color );
+			qglColor4fv( colorf );
 			qglVertex3fv( p->origin );
 		}
 
@@ -772,7 +790,7 @@ void R_DrawParticles (void)
 	}
 	else
 	{
-		GL_DrawParticles( r_newrefdef.num_particles, r_newrefdef.particles, d_8to24table );
+		GL_DrawParticles( r_newrefdef.num_particles, r_newrefdef.particles );
 	}
 }
 
@@ -1061,10 +1079,15 @@ void R_Clear (void)
 	{
 		static int trickframe;
 
-		if (FLOAT_NE_ZERO(gl_clear->value)) {
+		if (FLOAT_NE_ZERO(gl_clear->value))
+		{
 			if (gl_clear->value == 2)
+			{
 				qglClearColor (ref_frand(), ref_frand(), ref_frand(), 1.0);
+				GL_CheckForError ();
+			}
 			qglClear (GL_COLOR_BUFFER_BIT);
+			GL_CheckForError ();
 		}
 
 		trickframe++;
@@ -1073,30 +1096,43 @@ void R_Clear (void)
 			gldepthmin = 0;
 			gldepthmax = 0.49999;
 			qglDepthFunc (GL_LEQUAL);
+			GL_CheckForError ();
 		}
 		else
 		{
 			gldepthmin = 1;
 			gldepthmax = 0.5;
 			qglDepthFunc (GL_GEQUAL);
+			GL_CheckForError ();
 		}
 	}
 	else
 	{
-		if (FLOAT_NE_ZERO(gl_clear->value)) {
+		if (FLOAT_NE_ZERO(gl_clear->value))
+		{
 			if (gl_clear->value == 2)
+			{
 				qglClearColor (ref_frand(), ref_frand(), ref_frand(), 1.0);
+				GL_CheckForError ();
+			}
+
 			qglClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		} else {
-			qglClear (GL_DEPTH_BUFFER_BIT);
+			GL_CheckForError ();
 		}
+		else
+		{
+			qglClear (GL_DEPTH_BUFFER_BIT);
+			GL_CheckForError ();
+		}
+
 		gldepthmin = 0;
 		gldepthmax = 1;
 		qglDepthFunc (GL_LEQUAL);
+		GL_CheckForError ();
 	}
 
 	qglDepthRange (gldepthmin, gldepthmax);
-
+	GL_CheckForError ();
 }
 
 /*void R_Flash( void )
@@ -1312,7 +1348,7 @@ void R_Register( void )
 	gl_particle_att_b = ri.Cvar_Get( "gl_particle_att_b", "0.0", CVAR_ARCHIVE );
 	gl_particle_att_c = ri.Cvar_Get( "gl_particle_att_c", "0.01", CVAR_ARCHIVE );
 
-	gl_modulate = ri.Cvar_Get ("gl_modulate", "1", CVAR_ARCHIVE );
+	gl_modulate = ri.Cvar_Get ("gl_modulate", "2", CVAR_ARCHIVE );
 	//gl_log = ri.Cvar_Get( "gl_log", "0", 0 );
 	gl_bitdepth = ri.Cvar_Get( "gl_bitdepth", "0", 0 );
 	gl_mode = ri.Cvar_Get( "gl_mode", "3", CVAR_ARCHIVE );
@@ -1373,7 +1409,7 @@ void R_Register( void )
 	
 	gl_r1gl_test = ri.Cvar_Get ("gl_r1gl_test", "0", 0);
 	gl_doublelight_entities = ri.Cvar_Get ("gl_doublelight_entities", "1", 0);
-	gl_noscrap = ri.Cvar_Get ("gl_noscrap", "0", 0);
+	gl_noscrap = ri.Cvar_Get ("gl_noscrap", "1", 0);
 	gl_overbrights = ri.Cvar_Get ("gl_overbrights", "0", 0);
 	gl_linear_mipmaps = ri.Cvar_Get ("gl_linear_mipmaps", "0", 0);
 
@@ -1404,7 +1440,7 @@ void R_Register( void )
 
 	vid_fullscreen = ri.Cvar_Get( "vid_fullscreen", "0", CVAR_ARCHIVE );
 	vid_gamma = ri.Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
-	vid_ref = ri.Cvar_Get( "vid_ref", "soft", CVAR_ARCHIVE );
+	vid_ref = ri.Cvar_Get( "vid_ref", "r1gl", CVAR_ARCHIVE );
 
 	gl_texture_formats = ri.Cvar_Get ("gl_texture_formats", "png jpg tga", 0);
 	gl_pic_formats = ri.Cvar_Get ("gl_pic_formats", "png jpg tga", 0);
@@ -1681,12 +1717,12 @@ retryQGL:
 
 	if ( strstr( gl_config.extensions_string, "GL_EXT_point_parameters" ) )
 	{
-		if ( gl_config.renderer == GL_RENDERER_ATI)
+		if (gl_config.renderer == GL_RENDERER_ATI)
 			gl_ext_pointparameters = ri.Cvar_Get( "gl_ext_pointparameters", "0", CVAR_ARCHIVE );
 		else
 			gl_ext_pointparameters = ri.Cvar_Get( "gl_ext_pointparameters", "1", CVAR_ARCHIVE );
 
-		if ( FLOAT_NE_ZERO(gl_ext_pointparameters->value) )
+		if ( FLOAT_NE_ZERO(gl_ext_pointparameters->value) && (gl_config.renderer != GL_RENDERER_ATI || gl_ext_pointparameters->value == 2) )
 		{
 			qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qwglGetProcAddress( "glPointParameterfEXT" );
 			qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qwglGetProcAddress( "glPointParameterfvEXT" );
@@ -1988,16 +2024,30 @@ void EXPORT R_BeginFrame( float camera_separation )
 		GLimp_LogNewFrame();
 	}*/
 
-	if (gl_ext_nv_multisample_filter_hint->modified) {
+	if (gl_ext_nv_multisample_filter_hint->modified)
+	{
 		gl_ext_nv_multisample_filter_hint->modified = false;
 
-		if (gl_config.r1gl_GL_EXT_nv_multisample_filter_hint) {
+		if (gl_config.r1gl_GL_EXT_nv_multisample_filter_hint)
+		{
 			if (!strcmp (gl_ext_nv_multisample_filter_hint->string, "nicest"))
 				qglHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST);
 			else
 				qglHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_FASTEST);
 		}
 	}
+
+	if (gl_contrast->modified)
+	{
+		if (gl_contrast->value < 0.5f)
+			ri.Cvar_SetValue ("gl_contrast", 0.5f);
+		else if (gl_contrast->value > 1.5f)
+			ri.Cvar_SetValue ("gl_contrast", 1.5f);
+
+		gl_contrast->modified = false;
+	}
+
+
 
 	/*
 	** update 3Dfx gamma -- it is expected that a user will do a vid_restart

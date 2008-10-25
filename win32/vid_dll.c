@@ -48,6 +48,7 @@ cvar_t		*vid_ref;			// Name of Refresh DLL loaded
 cvar_t		*vid_xpos;			// X coordinate of window position
 cvar_t		*vid_ypos;			// Y coordinate of window position
 cvar_t		*vid_fullscreen;
+cvar_t		*vid_quietload;
 
 cvar_t		*vid_noexceptionhandler = &uninitialized_cvar;
 
@@ -119,6 +120,7 @@ DLL GLUE
 
 ==========================================================================
 */
+int ignore_vidprintf = 0;
 
 #define	MAXPRINTMSG	4096
 void EXPORT VID_Printf (int print_level, const char *fmt, ...)
@@ -126,6 +128,9 @@ void EXPORT VID_Printf (int print_level, const char *fmt, ...)
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
 	//static qboolean	inupdate;
+
+	if (ignore_vidprintf)
+		return;
 	
 	va_start (argptr,fmt);
 	vsnprintf (msg, sizeof(msg)-1, fmt, argptr);
@@ -568,7 +573,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		if ( wParam == 1234)
 		{
-			Sys_ShellExec (cls.followURL);
+			Sys_OpenURL();
 			return 0;
 		}
 
@@ -794,7 +799,8 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 		closing_reflib = false;
 	}
 
-	Com_Printf( "------- Loading %s -------\n", LOG_CLIENT, name );
+	if (!cl_quietstartup->intvalue)
+		Com_Printf( "------- Loading %s -------\n", LOG_CLIENT, name );
 
 	if ( ( reflib_library = LoadLibrary( name ) ) == 0 )
 	{
@@ -920,7 +926,8 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 
 	Com_DPrintf ("renderer initialized.\n");
 
-	Com_Printf( "------------------------------------\n", LOG_CLIENT);
+	if (!cl_quietstartup->intvalue)
+		Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	reflib_active = true;
 
 	//if (!Sys_CheckFPUStatus())
@@ -986,8 +993,13 @@ void VID_ReloadRefresh (void)
 		Com_sprintf( name, sizeof(name), "ref_%s.dll", vid_ref->string );
 
 		errMessage[0] = 0;
+
+		if (vid_quietload->intvalue)
+			ignore_vidprintf = 1;
+
 		if ( !VID_LoadRefresh( name, errMessage ) )
 		{
+			ignore_vidprintf = 0;
 			cl_hwnd = NULL;
 			Com_Printf ("\2Failed to load %s: %s\n", LOG_GENERAL, name, errMessage);
 			if (attempted[0])
@@ -1012,6 +1024,8 @@ void VID_ReloadRefresh (void)
 				Con_ToggleConsole_f();
 			}
 		}
+
+		ignore_vidprintf = 0;
 
 		{
 			HICON icon;
@@ -1142,6 +1156,7 @@ void VID_Init (void)
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
 	vid_gamma = Cvar_Get( "vid_gamma", "1", CVAR_ARCHIVE );
+	vid_quietload = Cvar_Get ("vid_quietload", "1", 0);
 	win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
 	win_disablewinkey = Cvar_Get ("win_disablewinkey", "0", 0);
 	//win_nopriority = Cvar_Get ("win_nopriority", "0", CVAR_ARCHIVE);

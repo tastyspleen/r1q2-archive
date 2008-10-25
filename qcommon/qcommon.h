@@ -978,7 +978,8 @@ void	FS_CreatePath (char *path);
 
 int		Sys_FileLength (const char *path);
 qboolean Sys_CheckFPUStatus (void);
-void Sys_ShellExec (const char *cmd);
+//void Sys_ShellExec (const char *cmd);
+void Sys_OpenURL (void);
 void Sys_UpdateURLMenu (const char *s);
 /*
 ==============================================================

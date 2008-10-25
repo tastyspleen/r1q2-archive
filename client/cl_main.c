@@ -3769,7 +3769,7 @@ void CL_FixCvarCheats (void)
 		while (cheatvars[numcheatvars].name)
 		{
 			cheatvars[numcheatvars].var = Cvar_Get (cheatvars[numcheatvars].name,
-					va("%d", cheatvars[numcheatvars].value), 0);
+					va("%g", cheatvars[numcheatvars].value), 0);
 			cheatvars[numcheatvars].var->changed = _cheatcvar_changed;
 			numcheatvars++;
 		}

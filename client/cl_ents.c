@@ -202,7 +202,8 @@ static void CL_SetEntState (centity_t *ent, entity_state_t *state)
 	}
 
 	if (ent->serverframe != cl.frame.serverframe - 1)
-	{	// wasn't in last update, so initialize some things
+	{	
+		// wasn't in last update, so initialize some things
 		ent->trailcount = 1024;		// for diminishing rocket / grenade trails
 		// duplicate the current state so lerping doesn't hurt anything
 		ent->prev = *state;
@@ -1988,13 +1989,15 @@ lerp_time;*/
 		if (s1->modelindex2)
 		{
 			if (s1->modelindex2 == 255)
-			{	// custom weapon
+			{	
+				// custom weapon
 				ci = &cl.clientinfo[s1->skinnum & 0xff];
 				i = (s1->skinnum >> 8); // 0 is default weapon model
 				if (!cl_vwep->intvalue || i > MAX_CLIENTWEAPONMODELS - 1)
 					i = 0;
 				ent.model = ci->weaponmodel[i];
-				if (!ent.model) {
+				if (!ent.model)
+				{
 					if (i != 0)
 						ent.model = ci->weaponmodel[0];
 					if (!ent.model)
@@ -2020,11 +2023,13 @@ lerp_time;*/
 			ent.alpha = 0;
 			//PGM
 		}
+
 		if (s1->modelindex3)
 		{
 			ent.model = cl.model_draw[s1->modelindex3];
 			V_AddEntity (&ent);
 		}
+
 		if (s1->modelindex4)
 		{
 			ent.model = cl.model_draw[s1->modelindex4];

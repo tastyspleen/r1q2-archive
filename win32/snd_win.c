@@ -258,7 +258,8 @@ static qboolean DS_CreateBuffers( void )
 	pDSBuf->lpVtbl->Play(pDSBuf, 0, 0, DSBPLAY_LOOPING);
 
 	if (snd_firsttime)
-		Com_Printf("   %d channel(s)\n"
+		if (!cl_quietstartup->intvalue)
+			Com_Printf("   %d channel(s)\n"
 		               "   %d bits/sample\n"
 					   "   %d bytes/sec\n", LOG_CLIENT|LOG_NOTICE,
 					   dma.channels, dma.samplebits, dma.speed);
@@ -406,7 +407,8 @@ sndinitstat SNDDMA_InitDirect (void)
 	else
 		dma.speed = 11025;
 
-	Com_Printf( "Initializing DirectSound\n", LOG_CLIENT|LOG_NOTICE);
+	if (!cl_quietstartup->intvalue)
+		Com_Printf( "Initializing DirectSound\n", LOG_CLIENT|LOG_NOTICE);
 
 	/*if ( !hInstDS )
 	{
@@ -449,7 +451,7 @@ sndinitstat SNDDMA_InitDirect (void)
 						"Sound not available",
 						MB_RETRYCANCEL | MB_SETFOREGROUND | MB_ICONEXCLAMATION) != IDRETRY)
 		{
-			Com_Printf ("failed, hardware already in use\n", LOG_CLIENT );
+			Com_Printf ("failed to setup directsound, hardware already in use\n", LOG_CLIENT );
 			return SIS_NOTAVAIL;
 		}
 	}
@@ -663,7 +665,8 @@ int SNDDMA_Init (int fullInit)
 				snd_isdirect = true;
 
 				if (snd_firsttime)
-					Com_Printf ("dsound init succeeded\n", LOG_CLIENT|LOG_NOTICE );
+					if (!cl_quietstartup->intvalue)
+						Com_Printf ("dsound init succeeded\n", LOG_CLIENT|LOG_NOTICE );
 			}
 			else
 			{

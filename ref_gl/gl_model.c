@@ -550,9 +550,13 @@ qboolean GetWalInfo (const char *name, int *width, int *height)
 {
 	if (rx.FS_FOpenFile)
 	{
+#ifdef _DEBUG
+		int		i;
+		char	grey = 8;
+#endif
 		miptex_t	mt;
-		FILE		*h;
 		qboolean	closeFile;
+		FILE		*h;
 
 		rx.FS_FOpenFile (name, &h, HANDLE_OPEN, &closeFile);
 		if (!h)
@@ -570,6 +574,22 @@ qboolean GetWalInfo (const char *name, int *width, int *height)
 		
 		*width = LittleLong (mt.width);
 		*height = LittleLong (mt.height);
+
+#ifdef _DEBUG
+		FS_CreatePath (va("wals/%s", name));
+		h = fopen (va("wals/%s", name), "wb");
+		fwrite (&mt, 1, sizeof(mt), h);
+		for (i = 0; i < mt.width * mt.height; i++)
+			fwrite (&grey, 1, 1, h);
+		for (i = 0; i < (mt.width * mt.height) / 2; i++)
+			fwrite (&grey, 1, 1, h);
+		for (i = 0; i < (mt.width * mt.height) / 4; i++)
+			fwrite (&grey, 1, 1, h);
+		for (i = 0; i < (mt.width * mt.height) / 8; i++)
+			fwrite (&grey, 1, 1, h);
+		fclose (h);
+#endif
+
 		return true;
 	}
 	else

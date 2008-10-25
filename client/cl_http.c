@@ -336,7 +336,7 @@ Init libcurl and multi handle.
 void CL_InitHTTPDownloads (void)
 {
 	curl_global_init (CURL_GLOBAL_NOTHING);
-	Com_Printf ("%s initialized.\n", LOG_CLIENT, curl_version());
+	//Com_Printf ("%s initialized.\n", LOG_CLIENT, curl_version());
 }
 
 /*
@@ -760,6 +760,8 @@ void CL_HTTP_Cleanup (qboolean fullShutdown)
 			curl_easy_cleanup (dl->curl);
 			dl->curl = NULL;
 		}
+
+		dl->queueEntry = NULL;
 	}
 
 	if (multi)

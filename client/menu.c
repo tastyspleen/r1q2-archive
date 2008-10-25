@@ -2783,7 +2783,7 @@ static void StartServerActionFunc( void *self )
 	}
 	else
 	{
-		Cbuf_AddText (va("map %s\n", startmap));
+		Cbuf_AddText (va("killserver\nmap %s\n", startmap));
 	}
 
 	M_ForceMenuOff ();
@@ -2896,6 +2896,7 @@ static void StartServer_MenuInit( void )
 	s_startmap_list.generic.y	= 0;
 	s_startmap_list.generic.name	= "initial map";
 	s_startmap_list.itemnames = (const char **)mapnames;
+	s_startmap_list.curvalue = 0;
 
 	s_rules_box.generic.type = MTYPE_SPINCONTROL;
 	s_rules_box.generic.x	= 0;

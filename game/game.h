@@ -116,7 +116,6 @@ struct edict_s
 
 #else
 
-typedef struct player_state_s player_state_t;
 typedef struct gclient_s gclient_t;
 
 #endif		// GAME_INCLUDE

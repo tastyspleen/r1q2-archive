@@ -43,6 +43,8 @@ cvar_t			*z_debug;
 cvar_t			*z_buggygame;
 cvar_t			*z_allowcorruption;
 
+cvar_t			*cl_quietstartup;
+
 static int		com_argc;
 static char	*com_argv[MAX_NUM_ARGVS+1];
 
@@ -2287,6 +2289,8 @@ void Qcommon_Init (int argc, char **argv)
 	z_buggygame = Cvar_Get ("z_buggygame", "0", 0);
 	z_allowcorruption = Cvar_Get ("z_allowcorruption", "0", 0);
 
+	cl_quietstartup = Cvar_Get ("cl_quietstartup", "1", 0);
+
 	z_debug->changed = _z_debug_changed;
 	if (z_debug->intvalue)
 	{
@@ -2389,12 +2393,26 @@ void Qcommon_Init (int argc, char **argv)
 
 	// add + commands from command line
 	if (!Cbuf_AddLateCommands ())
-	{	// if the user didn't give any commands, run default action
+	{	
+		// if the user didn't give any commands, run default action
 #ifndef NO_SERVER
 		if (!dedicated->intvalue)
+		{
 #endif
 			Cbuf_AddText ("toggleconsole\n");
+
+			Com_Printf (
+				"Welcome to R1Q2.\n"
+				"\n"
+				"  Press <ESC> to open the menu.\n"
+				"  Type connect <host> to connect to a server.\n"
+				"  View the readme at http://www.r1ch.net/forum/index.php?board=8.0\n"
+				"\n", LOG_GENERAL);
+
+			Sys_UpdateURLMenu ("http://www.r1ch.net/forum/index.php?board=8.0");
+
 #ifndef NO_SERVER
+		}
 		else
 			Cbuf_AddText ("dedicated_start\n");
 #endif
@@ -2402,7 +2420,8 @@ void Qcommon_Init (int argc, char **argv)
 	}
 #ifndef DEDICATED_ONLY
 	else
-	{	// the user asked for something explicit
+	{	
+		// the user asked for something explicit
 		// so drop the loading plaque
 		SCR_EndLoadingPlaque ();
 	}
