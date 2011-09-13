@@ -178,7 +178,7 @@ tagmalloc_tag_t tagmalloc_tags[] =
 };
 
 void (EXPORT *Z_Free)(const void *buf);
-RESTRICT void *(EXPORT *Z_TagMalloc)(int size, int tag);
+void *(EXPORT *Z_TagMalloc)(int size, int tag);
 
 /*
 ============================================================================
@@ -1820,7 +1820,7 @@ RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 
 	//malloc can crash if negative size is passed, woops.
 	if (size < 0)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Illegal allocation size of %d bytes from 0x%p for tag %d", size,
+		Com_Error (ERR_DIE, "Z_TagMalloc: Illegal allocation size of %d bytes from %p for tag %d", size,
 #if defined _WIN32
 		_ReturnAddress (),
 #elif defined LINUX
@@ -1834,7 +1834,7 @@ RESTRICT void * EXPORT Z_TagMallocRelease (int size, int tag)
 	z = malloc(size);
 
 	if (!z)
-		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for tag %d from 0x%p (already %li bytes in %li blocks)", size, tag,
+		Com_Error (ERR_DIE, "Z_TagMalloc: Out of memory. Couldn't allocate %i bytes for tag %d from %p (already %li bytes in %li blocks)", size, tag,
 #if defined _WIN32
 		_ReturnAddress (),
 #elif defined LINUX
@@ -1896,12 +1896,12 @@ RESTRICT void * EXPORT Z_TagMallocGame (int size, int tag)
 	{
 		if (z_buggygame->intvalue)
 		{
-			Com_Printf ("ERROR: Game DLL tried to allocate 0 bytes at 0x%p. Giving it 1 byte of 0x00\n", LOG_ERROR|LOG_SERVER|LOG_GAME, retAddr);
+			Com_Printf ("ERROR: Game DLL tried to allocate 0 bytes at %p. Giving it 1 byte of 0x00\n", LOG_ERROR|LOG_SERVER|LOG_GAME, retAddr);
 			size = 1;
 		}
 		else
 		{
-			Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes from code at 0x%p!", retAddr);
+			Com_Error (ERR_DIE, "Game DLL tried to allocate 0 bytes from code at %p!", retAddr);
 		}
 	}
 
@@ -1956,7 +1956,7 @@ void EXPORT Z_FreeGame (void *buf)
 			if (*(int *)((byte *)buf + loc->size) != 0xFDFEFDFE)
 			{
 				Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at 0x%p (allocated %u ms ago from code at 0x%p), detected during free at 0x%p", loc->size, loc->address, curtime - loc->time, loc->allocationLocation, retAddr);
+				Com_Error (ERR_DIE, "Z_FreeGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago from code at %p), detected during free at %p", loc->size, loc->address, curtime - loc->time, loc->allocationLocation, retAddr);
 			}
 			free_from_game = true;
 			Z_Free (buf);
@@ -1971,12 +1971,12 @@ void EXPORT Z_FreeGame (void *buf)
 
 	if (z_buggygame->intvalue)
 	{
-		Com_Printf ("ERROR: Game DLL tried to free non-existent/freed memory at 0x%p from code at 0x%p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf, retAddr);
+		Com_Printf ("ERROR: Game DLL tried to free non-existent/freed memory at %p from code at %p, ignored.", LOG_ERROR|LOG_SERVER|LOG_GAME, buf, retAddr);
 	}
 	else
 	{
 		Com_Printf ("Memory management problem detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existent/freed memory at 0x%p from code at 0x%p", buf, retAddr);
+		Com_Error (ERR_DIE, "Z_FreeGame: Game DLL tried to free non-existent/freed memory at %p from code at %p", buf, retAddr);
 	}
 }
 
@@ -1995,7 +1995,7 @@ void EXPORT Z_FreeTagsGame (int tag)
 		if (*(int *)((byte *)loc->address + loc->size) != 0xFDFEFDFE)
 		{
 			Com_Printf ("Memory corruption detected within the Game DLL. Please contact the mod author and inform them that they are not managing dynamically allocated memory correctly.\n", LOG_GENERAL);
-			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at 0x%p (allocated %u ms ago from code at 0x%p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
+			Com_Error (ERR_DIE, "Z_FreeTagsGame: Game DLL corrupted a memory block of size %d at %p (allocated %u ms ago from code at %p)", loc->size, loc->address, curtime - loc->time, loc->allocationLocation);
 		}
 	}
 
@@ -2399,6 +2399,8 @@ void Qcommon_Init (int argc, char **argv)
 		if (!dedicated->intvalue)
 		{
 #endif
+
+#ifndef DEDICATED_ONLY
 			Cbuf_AddText ("toggleconsole\n");
 
 			Com_Printf (
@@ -2410,6 +2412,7 @@ void Qcommon_Init (int argc, char **argv)
 				"\n", LOG_GENERAL);
 
 			Sys_UpdateURLMenu ("http://www.r1ch.net/forum/index.php?board=8.0");
+#endif
 
 #ifndef NO_SERVER
 		}
@@ -2489,11 +2492,11 @@ void Qcommon_Frame (int msec)
 		msec = (int)(msec * timescale->value);
 
 		//r1: allow server to run zero msec frames to avoid spinloop
-		if (!dedicated->intvalue)
+		/*if (!dedicated->intvalue)
 		{
 			if (msec < 1)
 				msec = 1;
-		}
+		}*/
 	}
 
 #ifndef DEDICATED_ONLY

@@ -303,6 +303,9 @@ void CL_PrepRefresh (void)
 	Com_Printf ("Map: %s\r", LOG_CLIENT, mapname); 
 	SCR_UpdateScreen ();
 
+	// clear tents - dangling model pointers
+	CL_ClearTEnts ();
+
 	re.BeginRegistration (mapname);
 
 	Com_Printf ("                                     \r", LOG_CLIENT);
@@ -318,6 +321,7 @@ void CL_PrepRefresh (void)
 	//Com_Printf ("                                     \r", LOG_CLIENT);
 
 	Com_Printf ("models\r", LOG_CLIENT); 
+	SCR_UpdateScreen ();
 	CL_RegisterTEntModels ();
 
 	num_cl_weaponmodels = 1;
@@ -379,7 +383,7 @@ void CL_PrepRefresh (void)
 			}
 
 			Com_Printf ("%s                         \r", LOG_CLIENT, cl.configstrings[CS_MODELS+i]); 
-			SCR_UpdateScreen ();
+			//SCR_UpdateScreen ();
 			Sys_SendKeyEvents ();
 		}
 	}

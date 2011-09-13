@@ -894,6 +894,7 @@ static void CL_FinishHTTPDownload (void)
 				}
 
 				//every other code is treated as fatal, fallthrough here
+				Com_Printf ("Bad HTTP response code %d for %s, aborting HTTP downloading.\n", LOG_CLIENT, responseCode, dl->queueEntry->quakePath);
 
 			//fatal error, disable http
 			case CURLE_COULDNT_RESOLVE_HOST:

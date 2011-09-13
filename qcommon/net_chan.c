@@ -148,6 +148,48 @@ void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, const char *format, 
 	Netchan_OutOfBand (net_socket, adr, (int)strlen(string), (byte *)string);
 }
 
+/*
+===============
+Netchan_OutOfBandProxy
+
+Sends an out-of-band datagram
+================
+*/
+void Netchan_OutOfBandProxy (int net_socket, netadr_t *adr, int length, const byte *data)
+{
+	sizebuf_t	send;
+	byte		send_buf[MAX_MSGLEN];
+	//byte		send_buf[MAX_MSGLEN*4+32];
+
+// write the packet header
+	SZ_Init (&send, send_buf, sizeof(send_buf));
+	
+	SZ_WriteLong (&send, -2);	// -1 sequence means out of band
+	SZ_Write (&send, data, length);
+
+// send the datagram
+	NET_SendPacket (net_socket, send.cursize, send.data, adr);
+}
+
+/*
+===============
+Netchan_OutOfBandProxyPrint
+
+Sends a text message in an out-of-band datagram
+================
+*/
+void Netchan_OutOfBandProxyPrint (int net_socket, netadr_t *adr, const char *format, ...)
+{
+	va_list		argptr;
+	static char		string[MAX_MSGLEN - 4];
+	
+	va_start (argptr, format);
+	if (Q_vsnprintf (string, sizeof(string)-1, format,argptr) < 0)
+		Com_Printf ("WARNING: Netchan_OutOfBandProxyPrint: message overflow.\n", LOG_NET);
+	va_end (argptr);
+
+	Netchan_OutOfBandProxy (net_socket, adr, (int)strlen(string), (byte *)string);
+}
 
 /*
 ==============

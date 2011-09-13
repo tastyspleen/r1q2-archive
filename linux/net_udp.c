@@ -330,6 +330,7 @@ int	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 	return 1;
 }
 
+
 //=============================================================================
 
 int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)

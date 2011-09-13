@@ -32,6 +32,9 @@ static	cvar_t	*net_ignore_icmp;
 void Net_Restart_f (void);
 void Net_Stats_f (void);
 
+netadr_t	net_proxy_addr;
+qboolean	net_proxy_active;
+
 void NET_Common_Init (void)
 {
 	net_ignore_icmp = Cvar_Get ("net_ignore_icmp", "0", 0);
@@ -242,6 +245,16 @@ int	NET_Config (int toOpen)
 	return i;
 }
 
+void NET_SetProxy (netadr_t *proxy)
+{
+	if (proxy)
+	{
+		net_proxy_addr = *proxy;
+		net_proxy_active = true;
+	}
+	else
+		net_proxy_active = false;
+}
 
 /*
 ====================

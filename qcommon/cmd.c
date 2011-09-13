@@ -214,6 +214,7 @@ void EXPORT Cbuf_ExecuteText (int exec_when, char *text)
 	{
 	case EXEC_NOW:
 		Cmd_ExecuteString (text);
+		Cbuf_Execute ();
 		break;
 	case EXEC_INSERT:
 		Cbuf_InsertText (text);
@@ -391,6 +392,13 @@ qboolean Cbuf_AddLateCommands (void)
 		if (i != argc-1)
 			strcat (text, " ");
 	}
+
+	//awful hack to prevent arbitrary cmd execution with quake2:// links due to q2s bad quote parser
+	if (!strncmp (text, "+connect \"quake2://", 19))
+	{
+		if (strchr (text + 1, '+'))
+			Com_Error (ERR_FATAL, "Attempt to use multiple commands in a quake2:// protocol handler:\n\n%s", text);
+	}
 	
 	// pull out the commands
 	build = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
@@ -483,7 +491,9 @@ void Cmd_Exec_f (void)
 	len = FS_LoadFile (path, (void **)&f);
 	if (!f || len <= 0)
 	{
-		Com_Printf ("couldn't exec %s\n", LOG_GENERAL, path);
+		//ugly hack to avoid printing missing config errors before startup finishes
+		if (q2_initialized)
+			Com_Printf ("couldn't exec %s\n", LOG_GENERAL, path);
 		return;
 	}
 

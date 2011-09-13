@@ -281,6 +281,7 @@ typedef struct client_state_s
 
 	byte			demoFrame[1400];
 	sizebuf_t		demoBuff;
+	frame_t			*demoLastFrame;
 
 	unsigned		settings[SVSET_MAX];
 	int				player_update_time;
@@ -320,6 +321,12 @@ typedef enum {
 	dl_skin,
 	dl_single
 } dltype_t;		// download type*/
+
+typedef enum {
+	ps_none,
+	ps_pending,
+	ps_active
+} proxystate_t;
 
 typedef enum {key_game, key_console, key_message, key_menu} keydest_t;
 
@@ -388,6 +395,8 @@ typedef struct client_static_s
 #endif
 
 	char			followHost[32];
+	proxystate_t	proxyState;
+	netadr_t		proxyAddr;
 } client_static_t;
 
 extern client_static_t	cls;

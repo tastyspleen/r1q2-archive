@@ -2285,11 +2285,14 @@ void R_FilterTexture (unsigned *in, int width, int height, imagetype_t type)
 				temp[j] = 0;
 		}
 
-		// finally saturation, which requires rgb
-		d = DotProduct (temp, luminosity);
+		if (type == it_wall)
+		{
+			// finally saturation, which requires rgb
+			d = DotProduct (temp, luminosity);
 
-		VectorSet (texture_intensity, d, d, d);
-		VectorMix (texture_intensity, temp, gl_saturation->value, temp);
+			VectorSet (texture_intensity, d, d, d);
+			VectorMix (texture_intensity, temp, gl_saturation->value, temp);
+		}
 
 		for (j = 0; j < 3; j++)
 		{
@@ -2300,7 +2303,7 @@ void R_FilterTexture (unsigned *in, int width, int height, imagetype_t type)
 			else if (temp[j] < 0)
 				temp[j] = 0;
 
-			p[j] = (byte)temp[j];
+			p[j] = (byte)Q_ftol (temp[j]);
 		}
 	}
 }
@@ -2644,6 +2647,9 @@ qboolean GL_Upload32 (unsigned *data, int width, int height, qboolean mipmap, in
 	{
 		int		miplevel;
 
+		//if (scaled_width & 1)
+		//	Sys_DebugBreak ();
+
 		miplevel = 0;
 		while (scaled_width > 1 || scaled_height > 1)
 		{
@@ -2915,7 +2921,7 @@ GL_LoadWal
 image_t *GL_LoadWal (const char *name)
 {
 	miptex_t	*mt;
-	int			width, height, ofs, len;
+	int			width, height, ofs, len, required;
 	image_t		*image;
 
 	len = ri.FS_LoadFile (name, (void **)&mt);
@@ -2928,6 +2934,18 @@ image_t *GL_LoadWal (const char *name)
 	width = LittleLong (mt->width);
 	height = LittleLong (mt->height);
 	ofs = LittleLong (mt->offsets[0]);
+
+	required = width * height + ((width >> 1) * (height >> 1)) + ((width >> 2) * (height >> 2)) + ((width >> 3) * (height >> 3)) + sizeof(*mt);
+
+	if (len < required)
+	{
+		ri.Con_Printf (PRINT_HIGH, "Bad texture '%s', %d bytes is less than %d required\n", name, len, required);
+		return NULL;
+	}
+	else if (len != required)
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "Warning, texture '%s' has funny size (length %d != calculated %d)\n", name, len, required);
+	}
 
 	if (ofs < sizeof(*mt) || ofs >= len)
 		ri.Sys_Error (ERR_DROP, "Bad texture offset %d in %s", ofs, name);
@@ -3121,6 +3139,8 @@ image_t	*GL_FindImage (const char *name, const char *basename, imagetype_t type)
 	else if (!strcmp(name+len-4, ".wal"))
 	{
 		image = GL_LoadWal (name);
+		if (!image)
+			return NULL;
 	}
 	else if (!strcmp(name+len-4, ".jpg"))
 	{

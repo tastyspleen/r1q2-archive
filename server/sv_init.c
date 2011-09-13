@@ -461,7 +461,7 @@ void SV_InitGame (void)
 		Cvar_FullSet ("maxclients", "1", CVAR_SERVERINFO | CVAR_LATCH);
 	}
 
-	svs.ratelimit_badrcon.period = 500;
+	svs.ratelimit_badrcon.period = 1000;
 	svs.ratelimit_status.period = 1000;
 
 	svs.spawncount = randomMT()&0x7FFFFFFF;

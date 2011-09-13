@@ -1451,13 +1451,13 @@ qboolean CL_ParseServerMessage (void)
 		}
 	}
 
-	//flush this frame
-	CL_WriteDemoMessage (NULL, 0, true);
-
 	if (!gotFrame)
 		noFrameFromServerPacket++;
 	else
 		noFrameFromServerPacket = 0;
+
+	//flush this frame
+	CL_WriteDemoMessage (NULL, 0, true);
 
 	return ret;
 }

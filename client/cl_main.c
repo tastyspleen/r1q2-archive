@@ -154,6 +154,8 @@ cvar_t	*cl_default_location = &uninitialized_cvar;
 cvar_t	*cl_player_updates;
 cvar_t	*cl_updaterate;
 
+cvar_t	*cl_proxy;
+
 #ifdef NO_SERVER
 cvar_t	*allow_download;
 cvar_t *allow_download_players;
@@ -209,7 +211,10 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 	{
 		if (!cls.demowaiting)
 		{
-			int	swlen;
+			qboolean	dropped_frame;
+			int			swlen;
+
+			dropped_frame = false;
 
 			if (cl.demoBuff.overflowed)
 			{
@@ -218,6 +223,7 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 				//we write a message regardless to keep in sync time-wise.
 				SZ_Clear (&cl.demoBuff);
 				SZ_WriteByte (&cl.demoBuff, svc_nop);
+				dropped_frame = true;
 			}
 			else if (!cl.demoBuff.cursize)
 			{
@@ -226,11 +232,16 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 				//we write a message regardless to keep in sync time-wise.
 				SZ_Clear (&cl.demoBuff);
 				SZ_WriteByte (&cl.demoBuff, svc_nop);
+				dropped_frame = true;
 			}
 
 			swlen = LittleLong(cl.demoBuff.cursize);
 			fwrite (&swlen, 4, 1, cls.demofile);
 			fwrite (cl.demoFrame, cl.demoBuff.cursize, 1, cls.demofile);
+
+			//fixme: this is ugly
+			if (noFrameFromServerPacket == 0 && !dropped_frame)
+				cl.demoLastFrame = &cl.frames[cl.frame.serverframe & UPDATE_MASK];
 		}
 		SZ_Clear (&cl.demoBuff);
 	}
@@ -368,6 +379,10 @@ void CL_EndRecording(void)
 
 	cls.demofile = NULL;
 	cls.demorecording = false;
+
+	// reset delta demo state
+	SZ_Clear (&cl.demoBuff);
+	cl.demoLastFrame = NULL;
 }
 
 /*
@@ -710,6 +725,9 @@ void CL_Drop (qboolean skipdisconnect, qboolean nonerror)
 	if (cls.disable_servercount != -1)
 		SCR_EndLoadingPlaque ();	// get rid of loading plaque
 
+	//reset if we crashed a menu
+	M_ForceMenuOff ();
+
 	if (!nonerror)
 		cls.serverProtocol = 0;
 }
@@ -748,7 +766,7 @@ void CL_SendConnectPacket (int useProtocol)
 	if (adr.port == 0)
 		adr.port = ShortSwap (PORT_SERVER);
 
-	if (qport->intvalue == -1)
+	if (qport->intvalue == -1 || cls.proxyState == ps_active)
 		port = (int)(random() * 0xFFFF);
 	else
 		port = qport->intvalue;
@@ -876,22 +894,48 @@ void CL_CheckForResend (void)
 	if (cls.realtime - cls.connect_time < 3000)
 		return;
 
-	if (!NET_StringToAdr (cls.servername, &adr))
+	if (cl_proxy->string[0] && cls.proxyState != ps_active)
 	{
-		Com_Printf ("Bad server address: %s\n", LOG_CLIENT, cls.servername);
-		cls.state = ca_disconnected;
-		return;
-	}
+		if (!NET_StringToAdr (cl_proxy->string, &cls.proxyAddr))
+		{
+			Com_Printf ("Bad proxy address: %s\n", LOG_CLIENT, cl_proxy->string);
+			cls.state = ca_disconnected;
+			cls.proxyState = ps_none;
+			return;
+		}
+	
+		if (cls.proxyAddr.port == 0)
+			cls.proxyAddr.port = ShortSwap (27999);
 
-	if (adr.port == 0)
-		adr.port = ShortSwap (PORT_SERVER);
+		cls.proxyState = ps_pending;
+	}
+	else
+	{
+		if (!NET_StringToAdr (cls.servername, &adr))
+		{
+			Com_Printf ("Bad server address: %s\n", LOG_CLIENT, cls.servername);
+			cls.state = ca_disconnected;
+			cls.proxyState = ps_none;
+			return;
+		}
+	
+		if (adr.port == 0)
+			adr.port = ShortSwap (PORT_SERVER);
+	}
 
 	cls.connect_time = cls.realtime;	// for retransmit requests
 
 	//_asm int 3;
-	Com_Printf ("Connecting to %s...\n", LOG_CLIENT, cls.servername);
-
-	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "getchallenge\n");
+	if (cls.proxyState == ps_pending)
+	{
+		Com_Printf ("Connecting to %s...\n", LOG_CLIENT, NET_AdrToString(&cls.proxyAddr));
+		Netchan_OutOfBandProxyPrint (NS_CLIENT, &cls.proxyAddr, "proxygetchallenge\n");
+	}
+	else
+	{
+		Com_Printf ("Connecting to %s...\n", LOG_CLIENT, cls.servername);
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "getchallenge\n");
+	}
 }
 
 
@@ -1145,7 +1189,7 @@ void CL_Disconnect (qboolean skipdisconnect)
 		
 		time = Sys_Milliseconds () - cl.timedemo_start;
 		if (time > 0)
-			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", LOG_CLIENT, cl.timedemo_frames,
+			Com_Printf ("%i frames, %3.2f seconds: %3.1f fps\n", LOG_CLIENT, cl.timedemo_frames,
 			time/1000.0f, cl.timedemo_frames*1000.0f / time);
 	}
 
@@ -1194,6 +1238,7 @@ void CL_Disconnect (qboolean skipdisconnect)
 	cls.downloadposition = 0;
 
 	cls.state = ca_disconnected;
+	cls.proxyState = ps_none;
 	cls.servername[0] = 0;
 
 	Cvar_ForceSet ("$mapname", "");
@@ -1203,6 +1248,7 @@ void CL_Disconnect (qboolean skipdisconnect)
 	//r1: swap games if needed
 	Cvar_GetLatchedVars();
 
+	NET_SetProxy (NULL);
 	MSG_Clear();
 }
 
@@ -1508,6 +1554,51 @@ void CL_Skins_f (void)
 	//Com_Printf ("Precached all skins.\n", LOG_CLIENT);
 }
 
+void CL_ProxyPacket (void)
+{
+	char	*s;
+	char	*c;
+	
+	if (cls.proxyState != ps_pending)
+		return;
+
+	MSG_BeginReading (&net_message);
+	MSG_ReadLong (&net_message);	// skip the -2
+
+	s = MSG_ReadStringLine (&net_message);
+
+	Cmd_TokenizeString (s, false);
+
+	c = Cmd_Argv(0);
+
+	if (!strcmp (c, "proxychallenge"))
+	{
+		netadr_t	remote_addr;
+		unsigned long challenge = strtoul(Cmd_Argv(1), NULL, 10);
+
+		if (!NET_StringToAdr (cls.servername, &remote_addr))
+			return;
+
+		if (remote_addr.port == 0)
+			remote_addr.port = ShortSwap (PORT_SERVER);
+
+		Netchan_OutOfBandProxyPrint (NS_CLIENT, &cls.proxyAddr, "proxyconnect %lu %s\n", challenge, NET_AdrToString (&remote_addr));
+	}
+	else if (!strcmp (c, "proxyactive"))
+	{
+		int	port;
+		
+		port = atoi (Cmd_Argv(1));
+
+		if (port >= 1024)
+			net_from.port = ShortSwap(port);
+
+		NET_SetProxy (&net_from);
+		cls.proxyAddr = net_from;
+		cls.proxyState = ps_active;
+		cls.connect_time = -99999; // fire immediately
+	}
+}
 
 /*
 =================
@@ -1580,7 +1671,7 @@ void CL_ConnectionlessPacket (void)
 		}
 	}
 
-	if (!NET_CompareBaseAdr (&net_from, remote))
+	if (!NET_CompareBaseAdr (&net_from, remote) && !NET_CompareBaseAdr (&net_from, &cls.proxyAddr))
 	{
 		Com_DPrintf ("Illegal %s from %s.  Ignored.\n", c, NET_AdrToString (&net_from));
 		return;
@@ -1679,7 +1770,9 @@ safe:
 							"it from loading or connecting to the anticheat server.\n"
 							"This is commonly caused by over-aggressive anti-virus\n"
 							"software. Try disabling any anti-virus or other security\n"
-							"software or add an exception for anticheat.dll.\n"
+							"software or add an exception for anticheat.dll. Make sure\n"
+							"your system date/time is set correctly as this can prevent\n"
+							"anticheat from working.\n"
 							"\n"
 							"Trying to connect without anticheat support.\n", LOG_GENERAL);
 		}
@@ -1957,6 +2050,11 @@ void CL_ReadPackets (void)
 				Com_Printf ("Port unreachable from %s\n", LOG_CLIENT|LOG_NOTICE, NET_AdrToString (&net_from));
 			else
 				CL_ConnectionlessPacket ();
+			continue;
+		}
+		else if (*(int *)net_message_buffer == -2)
+		{
+			CL_ProxyPacket ();
 			continue;
 		}
 
@@ -3214,8 +3312,8 @@ void _async_changed (cvar_t *var, char *oldValue, char *newValue)
 
 void _railtrail_changed (cvar_t *var, char *oldValue, char *newValue)
 {
-	if (var->intvalue > 255)
-		Cvar_Set (var->name, "255");
+	if (var->intvalue > 254)
+		Cvar_Set (var->name, "254");
 	else if (var->intvalue < 0)
 		Cvar_Set (var->name, "0");
 }
@@ -3342,13 +3440,14 @@ void CL_IndexStats_f (void)
 
 void _cl_http_max_connections_changed (cvar_t *c, char *old, char *new)
 {
-	if (c->intvalue > 4)
-		Cvar_Set (c->name, "4");
+	if (c->intvalue > 8)
+		Cvar_Set (c->name, "8");
 	else if (c->intvalue < 1)
 		Cvar_Set (c->name, "1");
 
-	if (c->intvalue > 2)
-		Com_Printf ("WARNING: Changing the maximum connections higher than 2 violates the HTTP specification recommendations. Doing so may result in you being blocked from the remote system and offers no performance benefits unless you are on a very high latency link (ie, satellite)\n", LOG_GENERAL);
+	//not really needed any more, hopefully no one still uses apache...
+	//if (c->intvalue > 2)
+	//	Com_Printf ("WARNING: Changing the maximum connections higher than 2 violates the HTTP specification recommendations. Doing so may result in you being blocked from the remote system and offers no performance benefits unless you are on a very high latency link (ie, satellite)\n", LOG_GENERAL);
 }
 
 void _gun_changed (cvar_t *c, char *old, char *new)
@@ -3404,6 +3503,7 @@ void CL_InitLocal (void)
 {
 	const char	*glVersion;
 
+	cls.proxyState = ps_none;
 	cls.state = ca_disconnected;
 	cls.realtime = Sys_Milliseconds ();
 
@@ -3551,9 +3651,11 @@ void CL_InitLocal (void)
 	cl_http_proxy = Cvar_Get ("cl_http_proxy", "", 0);
 	cl_http_filelists = Cvar_Get ("cl_http_filelists", "1", 0);
 	cl_http_downloads = Cvar_Get ("cl_http_downloads", "1", 0);
-	cl_http_max_connections = Cvar_Get ("cl_http_max_connections", "2", 0);
+	cl_http_max_connections = Cvar_Get ("cl_http_max_connections", "4", 0);
 	cl_http_max_connections->changed = _cl_http_max_connections_changed;
 #endif
+
+	cl_proxy = Cvar_Get ("cl_proxy", "", 0);
 
 	//haxx
 	glVersion = Cvar_VariableString ("cl_version");

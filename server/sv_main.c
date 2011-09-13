@@ -159,6 +159,7 @@ cvar_t	*sv_badcvarcheck;
 
 cvar_t	*sv_rcon_buffsize;
 cvar_t	*sv_rcon_showoutput;
+cvar_t	*sv_rcon_ratelimit;
 
 cvar_t	*sv_show_name_changes;
 
@@ -643,6 +644,9 @@ static const char *SV_StatusString (void)
 
 	//r1: hide reserved slots
 	Info_SetValueForKey (serverinfo, "maxclients", va("%d", maxclients->intvalue - sv_reserved_slots->intvalue));
+
+	//r1: set port to help nat traversal
+	Info_SetValueForKey (serverinfo, "port", va("%d", server_port));
 
 	strcpy (status, serverinfo);
 	strcat (status, "\n");
@@ -1864,11 +1868,14 @@ static void SVC_RemoteCommand (void)
 	int		i;
 	char	remaining[2048];
 
-	//only bad passwords get rate limited
-	if (RateLimited (&svs.ratelimit_badrcon, 1))
+	if (sv_rcon_ratelimit->intvalue)
 	{
-		Com_DPrintf ("SVC_RemoteCommand: Dropped rcon request from %s\n", NET_AdrToString (&net_from));
-		return;
+		//only bad passwords get rate limited
+		if (RateLimited (&svs.ratelimit_badrcon, sv_rcon_ratelimit->intvalue))
+		{
+			Com_DPrintf ("SVC_RemoteCommand: Dropped rcon request from %s\n", NET_AdrToString (&net_from));
+			return;
+		}
 	}
 
 	i = Rcon_Validate ();
@@ -2527,17 +2534,41 @@ static void SV_ReadPackets (void)
 
 			if (cl->netchan.remote_address.port != net_from.port)
 			{
-				if (cl->state == cs_zombie)
+				qboolean	fixedup;
+				client_t	*test;
+
+				fixedup = false;
+
+				//verify user isn't misusing qport
+				for (test = svs.clients; test < svs.clients + maxclients->intvalue; test++)
 				{
-					Com_Printf ("SV_ReadPackets: Got a translated port for client %d (zombie) [%d->%d], freeing client (broken NAT router reconnect?)\n", LOG_SERVER|LOG_NOTICE, i, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
-					SV_CleanClient (cl);
-					cl->state = cs_free;
-					continue;
+					if (test->state <= cs_zombie)
+						continue;
+
+					if (test != cl && NET_CompareAdr (&test->netchan.remote_address, &net_from))
+					{
+						fixedup = true;
+						Com_Printf ("SV_ReadPackets: bad qport for client %d (%s[%s]), matched %s (%s)\n", LOG_SERVER|LOG_NOTICE, i, test->name, NET_AdrToString (&test->netchan.remote_address), NET_AdrToString (&cl->netchan.remote_address), cl->name);
+						SV_ClientPrintf (test, PRINT_HIGH, "Warning, server found another client (%s) from your IP, please check your qport is set properly.\n", NET_AdrToString (&cl->netchan.remote_address));
+						cl = test;
+						break;
+					}
 				}
-				else
+
+				if (!fixedup)
 				{
-					Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
-					cl->netchan.remote_address.port = net_from.port;
+					if (cl->state == cs_zombie)
+					{
+						Com_Printf ("SV_ReadPackets: Got a translated port for client %d (zombie) [%d->%d], freeing client (broken NAT router reconnect?)\n", LOG_SERVER|LOG_NOTICE, i, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
+						SV_CleanClient (cl);
+						cl->state = cs_free;
+						continue;
+					}
+					else
+					{
+						Com_Printf ("SV_ReadPackets: fixing up a translated port for client %d (%s) [%d->%d]\n", LOG_SERVER|LOG_NOTICE, i, cl->name, (uint16)(ShortSwap(cl->netchan.remote_address.port)), (uint16)(ShortSwap(net_from.port)));
+						cl->netchan.remote_address.port = net_from.port;
+					}
 				}
 			}
 
@@ -3474,6 +3505,9 @@ void SV_Init (void)
 	//r1: show output of rcon in console?
 	sv_rcon_showoutput = Cvar_Get ("sv_rcon_showoutput", "0", 0);
 	sv_rcon_showoutput->help = "Display output of rcon commands in the server console. Default 0.\n";
+
+	sv_rcon_ratelimit = Cvar_Get ("sv_rcon_ratelimit", "2", 0);
+	sv_rcon_ratelimit->help = "Number of rcon attempts to accept per second. 0 to disable rate limiting. Default 2.\n";
 
 	//r1: broadcast name changes?
 	sv_show_name_changes = Cvar_Get ("sv_show_name_changes", "0", 0);

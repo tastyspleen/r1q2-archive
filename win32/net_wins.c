@@ -20,8 +20,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // net_wins.c
 
 #define WIN32_LEAN_AND_MEAN
-#include "winsock.h"
+//#include "winsock.h"
 //#include "wsipx.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
 #include "../qcommon/qcommon.h"
 
 static int net_inittime;
@@ -76,7 +79,6 @@ LOOPBACK BUFFERS FOR LOCAL PLAYER
 
 =============================================================================
 */
-
 
 //=============================================================================
 
@@ -178,6 +180,9 @@ int NET_SendPacket (netsrc_t sock, int length, const void *data, netadr_t *to)
 	}
 	else
 		Com_Error (ERR_FATAL, "NET_SendPacket: bad address type");
+
+	if (sock == NS_CLIENT && net_proxy_active)
+		to = &net_proxy_addr;
 
 	NetadrToSockadr (to, &addr);
 

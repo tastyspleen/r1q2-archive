@@ -767,6 +767,7 @@ qboolean	NET_StringToAdr (const char *s, netadr_t *a);
 void		NET_Sleep(int msec);
 #endif
 int NET_Client_Sleep (int msec);
+void NET_SetProxy (netadr_t *proxy);
 
 uint32 NET_htonl (uint32 ip);
 uint32 NET_ntohl (uint32 ip);
@@ -828,6 +829,8 @@ qboolean Netchan_NeedReliable (netchan_t *chan);
 int	 Netchan_Transmit (netchan_t *chan, int length, const byte /*@null@*/*data);
 void Netchan_OutOfBand (int net_socket, netadr_t *adr, int length, const byte *data);
 void Netchan_OutOfBandPrint (int net_socket, netadr_t *adr, const char *format, ...);
+void Netchan_OutOfBandProxy (int net_socket, netadr_t *adr, int length, const byte *data);
+void Netchan_OutOfBandProxyPrint (int net_socket, netadr_t *adr, const char *format, ...);
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg);
 
 //qboolean Netchan_CanReliable (netchan_t *chan);

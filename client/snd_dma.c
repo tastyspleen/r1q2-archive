@@ -165,7 +165,7 @@ void S_Init (int fullInit)
 {
 	cvar_t	*cv;
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf("\n------- sound initialization -------\n", LOG_CLIENT|LOG_NOTICE);
 
 	knownsounds = rbinit ((int (EXPORT *)(const void *, const void *))strcmp, 0);
@@ -238,14 +238,14 @@ void S_Init (int fullInit)
 			soundtime = 0;
 			paintedtime = 0;
 
-			if (!cl_quietstartup->intvalue)
+			if (!cl_quietstartup->intvalue || developer->intvalue)
 				Com_Printf ("sound sampling rate: %i\n", LOG_CLIENT|LOG_NOTICE, dma.speed);
 
 			S_StopAllSounds ();
 		}
 	}
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf("------------------------------------\n", LOG_CLIENT|LOG_NOTICE);
 }
 

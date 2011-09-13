@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define R1GL_RELEASE 1
 
 #ifdef R1GL_RELEASE
-#define	REF_VERSION	"R1GL 0.1.5.41"
+#define	REF_VERSION	"R1GL 0.1.5.42"
 #else
 #define REF_VERSION "R1GL015-modified"
 #endif

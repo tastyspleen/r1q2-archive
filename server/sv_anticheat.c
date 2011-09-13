@@ -914,7 +914,7 @@ static void SV_AntiCheat_ParseFileViolation (byte *buff, int bufflen)
 			{
 				if (f->flags & ACH_REQUIRED)
 				{
-					action = 1;
+					action = 0;
 					break;
 				}
 			}

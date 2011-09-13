@@ -1969,6 +1969,13 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 				"ensure the correct version of OPENGL is loaded.";
 			wantUpload = FALSE;
 		}
+		else
+		{
+			gameMsg = 
+				"This crash occured in OpenGL. Make sure you are using the latest video drivers and\r\n"
+				"the latest version of R1GL. If you are using software mode, consider switching to\r\n"
+				"OpenGL for better performance.";
+		}
 	}
 	else if (strstr (szModuleName, "ref_gl.dll") && !versionedGL)
 	{
@@ -2068,7 +2075,7 @@ DWORD R1Q2ExceptionHandler (DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionI
 				"use R1GL.";
 			wantUpload = FALSE;
 		}
-		else if (strstr (p, "atioglxx.dll"))
+		else if (strstr (p, "atioglxx.dll") || strstr (p, "atioglx2.dll"))
 		{
 			gameMsg = 
 				"This crash occured in the ATI GL drivers. The ATI drivers are optimized in such "
@@ -2334,6 +2341,8 @@ void Sys_Spinstats_f (void)
 	Com_Printf ("%u fast spins, %u slow spins, %.2f%% slow.\n", LOG_GENERAL, goodspins, badspins, ((float)badspins / (float)(goodspins+badspins)) * 100.0f);
 }
 
+#ifdef _M_IX86
+
 __declspec(naked) unsigned short Sys_GetFPUStatus (void)
 {
 	__asm
@@ -2393,6 +2402,7 @@ qboolean Sys_CheckFPUStatus (void)
 	last_word = fpu_control_word;
 	return true;
 }
+#endif
 
 /*
 ==================
@@ -2534,7 +2544,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 					if (!time)
 						Sleep (0);
 					spins ++;
-				} while (time < 1);
+				} while (0 && time < 1);
 			}
 
 			if (spins > 500)

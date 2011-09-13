@@ -76,6 +76,17 @@ void Draw_AddText (void)
 	if (!drawcharsindex)
 		return;
 
+	if (draw_chars->has_alpha)
+	{
+		qglDisable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
+		qglEnable(GL_BLEND);
+		GL_CheckForError ();
+
+		GL_TexEnv(GL_MODULATE);
+	}
+
 	GL_Bind (draw_chars->texnum);
 	qglBegin (GL_QUADS);
 
@@ -106,6 +117,17 @@ void Draw_AddText (void)
 
 	qglEnd ();
 	GL_CheckForError ();
+
+	if (draw_chars->has_alpha)
+	{
+		GL_TexEnv (GL_REPLACE);
+		
+		qglEnable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
+		qglDisable(GL_BLEND);
+		GL_CheckForError ();
+	}
 
 	drawcharsindex = 0;
 }
@@ -157,6 +179,17 @@ void EXPORT Draw_Char (int x, int y, int num)
 
 	GL_Bind (draw_chars->texnum);
 
+	if (draw_chars->has_alpha)
+	{
+		qglDisable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
+		qglEnable(GL_BLEND);
+		GL_CheckForError ();
+
+		GL_TexEnv(GL_MODULATE);
+	}
+
 	qglBegin (GL_QUADS);
 	qglTexCoord2f (fcol, frow);
 	qglVertex2i (x, y);
@@ -168,6 +201,17 @@ void EXPORT Draw_Char (int x, int y, int num)
 	qglVertex2i (x, y+8);
 	qglEnd ();
 	GL_CheckForError ();
+
+	if (draw_chars->has_alpha)
+	{
+		GL_TexEnv (GL_REPLACE);
+		
+		qglEnable(GL_ALPHA_TEST);
+		GL_CheckForError ();
+
+		qglDisable(GL_BLEND);
+		GL_CheckForError ();
+	}
 }
 
 

@@ -258,7 +258,7 @@ static qboolean DS_CreateBuffers( void )
 	pDSBuf->lpVtbl->Play(pDSBuf, 0, 0, DSBPLAY_LOOPING);
 
 	if (snd_firsttime)
-		if (!cl_quietstartup->intvalue)
+		if (!cl_quietstartup->intvalue || developer->intvalue)
 			Com_Printf("   %d channel(s)\n"
 		               "   %d bits/sample\n"
 					   "   %d bytes/sec\n", LOG_CLIENT|LOG_NOTICE,
@@ -407,7 +407,7 @@ sndinitstat SNDDMA_InitDirect (void)
 	else
 		dma.speed = 11025;
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf( "Initializing DirectSound\n", LOG_CLIENT|LOG_NOTICE);
 
 	/*if ( !hInstDS )
@@ -665,7 +665,7 @@ int SNDDMA_Init (int fullInit)
 				snd_isdirect = true;
 
 				if (snd_firsttime)
-					if (!cl_quietstartup->intvalue)
+					if (!cl_quietstartup->intvalue || developer->intvalue)
 						Com_Printf ("dsound init succeeded\n", LOG_CLIENT|LOG_NOTICE );
 			}
 			else

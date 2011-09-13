@@ -238,12 +238,19 @@ int GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboole
 
 	ri.Con_Printf( PRINT_ALL, "Initializing OpenGL display\n");
 
-	ri.Con_Printf (PRINT_ALL, "...setting mode %d:", mode );
-
-	if ( !ri.Vid_GetModeInfo( &width, &height, mode ) )
+	if (mode == -1)
 	{
-		ri.Con_Printf( PRINT_ALL, " invalid mode\n" );
-		return VID_ERR_INVALID_MODE;
+		ri.Con_Printf (PRINT_ALL, "...ignoring gl_mode, using forced width / height:");
+	}
+	else
+	{
+		ri.Con_Printf (PRINT_ALL, "...setting gl_mode %d:", mode );
+
+		if ( !ri.Vid_GetModeInfo( &width, &height, mode ) )
+		{
+			ri.Con_Printf( PRINT_ALL, " invalid gl_mode\n" );
+			return VID_ERR_INVALID_MODE;
+		}
 	}
 
 	if (FLOAT_NE_ZERO(gl_forcewidth->value))
@@ -361,7 +368,7 @@ int GLimp_SetMode( unsigned int *pwidth, unsigned int *pheight, int mode, qboole
 			if (originalDesktopMode.dmFields & DM_DISPLAYFREQUENCY)
 			{
 				if (fullScreenMode.dmDisplayFrequency < bestFrequency)
-					ri.Con_Printf (PRINT_ALL, "\2NOTE: You are currently using a refresh rate of %d Hz. Your monitor can support up to %d Hz at %dx%d. Consider increasing your refresh rate for better performance by setting vid_optimalrefresh 1\n", fullScreenMode.dmDisplayFrequency, bestFrequency, fullScreenMode.dmPelsWidth, fullScreenMode.dmPelsHeight);
+					ri.Con_Printf (PRINT_ALL, "\2NOTE: You are currently using a refresh rate of %d Hz. Your monitor claims to support up to %d Hz at %dx%d. Consider increasing your refresh rate for better performance by setting vid_optimalrefresh 1\n", fullScreenMode.dmDisplayFrequency, bestFrequency, fullScreenMode.dmPelsWidth, fullScreenMode.dmPelsHeight);
 			}
 			ri.Con_Printf (PRINT_DEVELOPER, "ok\n");
 

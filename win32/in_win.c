@@ -181,7 +181,7 @@ void IN_InitDInput (void)
 		Com_Error (ERR_FATAL, "Trying to init DirectInput when already initialized!");
 
     // Create a DInput object
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf ("...initializing DirectInput: ", LOG_CLIENT);
 	
 	//extern HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf, LPVOID *ppvOut, LPUNKNOWN punkOuter);
@@ -193,7 +193,7 @@ void IN_InitDInput (void)
     }
 	else
 	{
-		if (!cl_quietstartup->intvalue)
+		if (!cl_quietstartup->intvalue || developer->intvalue)
 			Com_Printf ("ok\n", LOG_CLIENT);
 	}
 }
@@ -265,7 +265,7 @@ int IN_InitDInputKeyboard (void)
 
 	if (!in_dinputkeyboard->intvalue)
 	{
-		if (!cl_quietstartup->intvalue)
+		if (!cl_quietstartup->intvalue || developer->intvalue)
 			Com_Printf ("...ignoring DirectInput keyboard\n", LOG_CLIENT);
 		return 0;
 	}
@@ -301,7 +301,7 @@ int IN_InitDInputKeyboard (void)
     if( bDisableWindowsKey && !bExclusive && bForeground )
         dwCoopFlags |= DISCL_NOWINKEY;
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
    		Com_Printf ("...creating keyboard device interface: ", LOG_CLIENT);
     // Obtain an interface to the system keyboard device.
     if( FAILED( hr = IDirectInput_CreateDevice (g_pDI, (const GUID *)&GUID_SysKeyboard, &g_pKeyboard, NULL ) ) )
@@ -309,7 +309,7 @@ int IN_InitDInputKeyboard (void)
 		Com_Printf ("failed to create dinput keyboard: %d\n", LOG_CLIENT, hr);
         return 0;
     }
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf ("ok\n", LOG_CLIENT);
 
     // Set the data format to "keyboard format" - a predefined data format 
@@ -453,7 +453,7 @@ int IN_InitDInputMouse (void)
 
 	if (!g_pDI)
 	{
-		if (!cl_quietstartup->intvalue)
+		if (!cl_quietstartup->intvalue || developer->intvalue)
 			Com_Printf ("DirectInput unavailable.\n", LOG_CLIENT);
 		return 0;
 	}
@@ -479,14 +479,14 @@ int IN_InitDInputMouse (void)
         dwCoopFlags |= DISCL_BACKGROUND;
     
     // Obtain an interface to the system mouse device.
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf ("...creating mouse device interface: ", LOG_CLIENT);
     if( FAILED( hr = IDirectInput_CreateDevice(g_pDI, (const GUID *)&GUID_SysMouse, &g_pMouse, NULL ) ) )
     {
 		Com_Printf ("failed to create dinput mouse: %d\n", LOG_CLIENT, hr);
         return 0;
     }
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf ("ok\n", LOG_CLIENT);
     
     // Set the data format to "mouse format" - a predefined data format 
@@ -1068,7 +1068,8 @@ void IN_StartupMouse (void)
 	if ( !cv->value ) 
 		return; */
 
-	Com_Printf ("...ignoring DirectInput mouse\n", LOG_CLIENT);
+	if (!cl_quietstartup->intvalue || developer->intvalue)
+		Com_Printf ("...ignoring DirectInput mouse\n", LOG_CLIENT);
 	mouseinitialized = true;
 	
 	//mouse_buttons = MAX_MOUSE_BUTTONS;
@@ -1084,7 +1085,7 @@ void IN_Restart_f (void)
 	mouseactive = false;
 	mouseinitialized = false;
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf("------- input initialization -------\n", LOG_CLIENT|LOG_NOTICE);
 
 	Key_ClearStates ();
@@ -1100,7 +1101,7 @@ void IN_Restart_f (void)
 	IN_StartupMouse ();
 
 	input_active = true;
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf("------------------------------------\n", LOG_CLIENT|LOG_NOTICE);
 }
 
@@ -1300,7 +1301,7 @@ void IN_Init (void)
 
 	Cmd_AddCommand ("in_restart", IN_Restart_f);
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf("\n------- input initialization -------\n", LOG_CLIENT|LOG_NOTICE);
 
 #ifdef JOYSTICK
@@ -1316,7 +1317,7 @@ void IN_Init (void)
 	IN_StartupMouse ();
 
 	input_active = true;
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf("------------------------------------\n", LOG_CLIENT|LOG_NOTICE);
 }
 

@@ -1437,8 +1437,14 @@ void FS_SetGamedir (const char *dir)
 #ifndef DEDICATED_ONLY
 #ifndef NO_SERVER
 	if (!dedicated->intvalue)
+	{
 #endif
-		Cbuf_AddText ("vid_restart\nsnd_restart\n");
+		//Cbuf_AddText ("vid_restart\nsnd_restart\n");
+		Cmd_ExecuteString ("vid_restart");
+		Cmd_ExecuteString ("snd_restart");
+#ifndef NO_SERVER
+	}
+#endif
 #endif
 
 	if (!strcmp(dir,BASEDIRNAME) || (*dir == 0))

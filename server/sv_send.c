@@ -1216,6 +1216,7 @@ void SV_SendClientMessages (void)
 				SV_DemoCompleted ();
 				return;
 			}
+
 			if (msglen > MAX_MSGLEN)
 				Com_Error (ERR_DROP, "SV_SendClientMessages: msglen %d > MAX_MSGLEN (%d)", msglen, MAX_MSGLEN);
 			else if (msglen == 0)

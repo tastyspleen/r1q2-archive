@@ -799,7 +799,7 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 		closing_reflib = false;
 	}
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf( "------- Loading %s -------\n", LOG_CLIENT, name );
 
 	if ( ( reflib_library = LoadLibrary( name ) ) == 0 )
@@ -926,7 +926,7 @@ qboolean VID_LoadRefresh( char *name, char *errstr )
 
 	Com_DPrintf ("renderer initialized.\n");
 
-	if (!cl_quietstartup->intvalue)
+	if (!cl_quietstartup->intvalue || developer->intvalue)
 		Com_Printf( "------------------------------------\n", LOG_CLIENT);
 	reflib_active = true;
 
@@ -994,7 +994,7 @@ void VID_ReloadRefresh (void)
 
 		errMessage[0] = 0;
 
-		if (vid_quietload->intvalue)
+		if (vid_quietload->intvalue && !developer->intvalue)
 			ignore_vidprintf = 1;
 
 		if ( !VID_LoadRefresh( name, errMessage ) )

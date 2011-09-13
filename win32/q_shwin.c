@@ -193,7 +193,7 @@ int Hunk_End (void)
 #endif
 #ifdef VIRTUAL_ALLOC_PROFILE
 	total_allocated += bytes_allocated;
-	Com_Printf ("Allocated %d pages (%d bytes) for hunk 0x%p, %d hits, total = %.2f MiB\n", LOG_GENERAL, bytes_allocated / pagesize, bytes_allocated, membase, small_hits, (float)total_allocated / 1024.0f / 1024.0f);
+	Com_Printf ("Allocated %d pages (%d bytes) for hunk %p, %d hits, total = %.2f MiB\n", LOG_GENERAL, bytes_allocated / pagesize, bytes_allocated, membase, small_hits, (float)total_allocated / 1024.0f / 1024.0f);
 #endif
 #else
 	/**base = realloc (membase, cursize);

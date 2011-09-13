@@ -1376,6 +1376,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 //
 // load the frames
 //
+
 	for (i=0 ; i<pheader->num_frames ; i++)
 	{
 		pinframe = (daliasframe_t *) ((byte *)pinmodel 
@@ -1398,7 +1399,6 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 		memcpy (poutframe, pinframe, sizeof(daliasframe_t)-4);
 		memcpy (poutframe->verts, pinframe->verts, pheader->num_xyz*sizeof(dtrivertx_t));
 #endif
-
 	}
 
 	mod->type = mod_alias;

@@ -1409,7 +1409,7 @@ void CL_ParseFrame (int extrabits)
 	CL_ParsePacketEntities (old, &cl.frame);
 
 	//r1: now write protocol 34 compatible delta from our localstate for demo.
-	if (cls.demorecording && cls.serverProtocol != PROTOCOL_ORIGINAL)
+	if (!cls.demowaiting && cls.demorecording && cls.serverProtocol != PROTOCOL_ORIGINAL)
 	{
 		sizebuf_t	fakeMsg;
 		byte		fakeDemoFrame[1300];
@@ -1420,8 +1420,43 @@ void CL_ParseFrame (int extrabits)
 
 		//svc_frame header shit
 		SZ_WriteByte (&fakeMsg, svc_frame);
+
 		SZ_WriteLong (&fakeMsg, cl.frame.serverframe);
-		SZ_WriteLong (&fakeMsg, cl.frame.deltaframe);
+
+		if (!cl.demoLastFrame)
+		{
+			//no valid demo frame yet, use whatever the server gave us
+			SZ_WriteLong (&fakeMsg, cl.frame.deltaframe);
+		}
+		else
+		{
+			//we have a valid last demo delta, lets try to write our state from it
+			if (!cl.demoLastFrame->valid)
+			{	
+				// should never happen
+				Com_Printf ("Demo delta from invalid frame (not supposed to happen!).\n", LOG_CLIENT);
+				cl.demoLastFrame = NULL;
+			}
+			if (cl.demoLastFrame->serverframe <= cl.frame.deltaframe - UPDATE_BACKUP)
+			{	
+				// the frame that we planned to delta from is long gone
+				Com_DPrintf ("Demo delta frame too old.\n");
+				cl.demoLastFrame = NULL;
+			}
+			else if (cl.parse_entities - cl.demoLastFrame->parse_entities > MAX_PARSE_ENTITIES-128)
+			{
+				// or the entities in that frame are long gone
+				Com_DPrintf ("Demo delta parse_entities too old.\n");
+				cl.demoLastFrame = NULL;
+			}
+
+			//delta if possible, if not just write uncompressed message
+			if (cl.demoLastFrame)
+				SZ_WriteLong (&fakeMsg, cl.demoLastFrame->serverframe);
+			else
+				SZ_WriteLong (&fakeMsg, -1);
+		}
+
 		SZ_WriteByte (&fakeMsg, cl.surpressCount);
 
 		//areabits
@@ -1429,11 +1464,11 @@ void CL_ParseFrame (int extrabits)
 		SZ_Write (&fakeMsg, &cl.frame.areabits, len);
 
 		//delta ps
-		CL_DemoDeltaPlayerstate (old, &cl.frame);
+		CL_DemoDeltaPlayerstate (cl.demoLastFrame, &cl.frame);
 		MSG_EndWriting (&fakeMsg);
 
 		//delta pe
-		CL_DemoPacketEntities (old, &cl.frame);
+		CL_DemoPacketEntities (cl.demoLastFrame, &cl.frame);
 		MSG_EndWriting (&fakeMsg);
 
 		//copy to demobuff

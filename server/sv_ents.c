@@ -788,8 +788,6 @@ static int SV_WritePlayerstateToClient (const client_frame_t /*@null@*/*from, cl
 	}
 #endif
 
-	Com_DPrintf ("pflagss = %d\n", pflags);
-
 	MSG_WriteShort (pflags);
 
 	//
